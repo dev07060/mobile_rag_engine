@@ -6,7 +6,10 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
+import 'api/bm25_search.dart';
 import 'api/hnsw_index.dart';
+import 'api/hybrid_search.dart';
+import 'api/incremental_index.dart';
 import 'api/semantic_chunker.dart';
 import 'api/simple.dart';
 import 'api/simple_rag.dart';
@@ -38,7 +41,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AddSourceResult dco_decode_add_source_result(dynamic raw);
 
   @protected
+  Bm25SearchResult dco_decode_bm_25_search_result(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  RrfConfig dco_decode_box_autoadd_rrf_config(dynamic raw);
+
+  @protected
+  BufferStats dco_decode_buffer_stats(dynamic raw);
 
   @protected
   ChunkData dco_decode_chunk_data(dynamic raw);
@@ -59,13 +71,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   HnswSearchResult dco_decode_hnsw_search_result(dynamic raw);
 
   @protected
+  HybridSearchResult dco_decode_hybrid_search_result(dynamic raw);
+
+  @protected
   int dco_decode_i_32(dynamic raw);
 
   @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
+  IncrementalSearchResult dco_decode_incremental_search_result(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<Bm25SearchResult> dco_decode_list_bm_25_search_result(dynamic raw);
 
   @protected
   List<ChunkData> dco_decode_list_chunk_data(dynamic raw);
@@ -75,6 +96,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<HnswSearchResult> dco_decode_list_hnsw_search_result(dynamic raw);
+
+  @protected
+  List<HybridSearchResult> dco_decode_list_hybrid_search_result(dynamic raw);
+
+  @protected
+  List<IncrementalSearchResult> dco_decode_list_incremental_search_result(
+    dynamic raw,
+  );
 
   @protected
   List<double> dco_decode_list_prim_f_32_loose(dynamic raw);
@@ -96,15 +125,27 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_list_record_i_64_list_prim_f_32_strict(dynamic raw);
 
   @protected
+  List<(PlatformInt64, String)> dco_decode_list_record_i_64_string(dynamic raw);
+
+  @protected
   List<SemanticChunk> dco_decode_list_semantic_chunk(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  RrfConfig? dco_decode_opt_box_autoadd_rrf_config(dynamic raw);
+
+  @protected
   (PlatformInt64, Float32List) dco_decode_record_i_64_list_prim_f_32_strict(
     dynamic raw,
   );
+
+  @protected
+  (PlatformInt64, String) dco_decode_record_i_64_string(dynamic raw);
+
+  @protected
+  RrfConfig dco_decode_rrf_config(dynamic raw);
 
   @protected
   SemanticChunk dco_decode_semantic_chunk(dynamic raw);
@@ -139,7 +180,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AddSourceResult sse_decode_add_source_result(SseDeserializer deserializer);
 
   @protected
+  Bm25SearchResult sse_decode_bm_25_search_result(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  RrfConfig sse_decode_box_autoadd_rrf_config(SseDeserializer deserializer);
+
+  @protected
+  BufferStats sse_decode_buffer_stats(SseDeserializer deserializer);
 
   @protected
   ChunkData sse_decode_chunk_data(SseDeserializer deserializer);
@@ -162,13 +212,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   HnswSearchResult sse_decode_hnsw_search_result(SseDeserializer deserializer);
 
   @protected
+  HybridSearchResult sse_decode_hybrid_search_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
+  IncrementalSearchResult sse_decode_incremental_search_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<Bm25SearchResult> sse_decode_list_bm_25_search_result(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<ChunkData> sse_decode_list_chunk_data(SseDeserializer deserializer);
@@ -180,6 +245,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<HnswSearchResult> sse_decode_list_hnsw_search_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<HybridSearchResult> sse_decode_list_hybrid_search_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<IncrementalSearchResult> sse_decode_list_incremental_search_result(
     SseDeserializer deserializer,
   );
 
@@ -205,6 +280,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(PlatformInt64, String)> sse_decode_list_record_i_64_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<SemanticChunk> sse_decode_list_semantic_chunk(
     SseDeserializer deserializer,
   );
@@ -213,9 +293,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  RrfConfig? sse_decode_opt_box_autoadd_rrf_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   (PlatformInt64, Float32List) sse_decode_record_i_64_list_prim_f_32_strict(
     SseDeserializer deserializer,
   );
+
+  @protected
+  (PlatformInt64, String) sse_decode_record_i_64_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RrfConfig sse_decode_rrf_config(SseDeserializer deserializer);
 
   @protected
   SemanticChunk sse_decode_semantic_chunk(SseDeserializer deserializer);
@@ -257,7 +350,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_bm_25_search_result(
+    Bm25SearchResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_rrf_config(
+    RrfConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_buffer_stats(BufferStats self, SseSerializer serializer);
 
   @protected
   void sse_encode_chunk_data(ChunkData self, SseSerializer serializer);
@@ -287,13 +395,31 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_hybrid_search_result(
+    HybridSearchResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_incremental_search_result(
+    IncrementalSearchResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_bm_25_search_result(
+    List<Bm25SearchResult> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_chunk_data(
@@ -310,6 +436,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_hnsw_search_result(
     List<HnswSearchResult> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_hybrid_search_result(
+    List<HybridSearchResult> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_incremental_search_result(
+    List<IncrementalSearchResult> self,
     SseSerializer serializer,
   );
 
@@ -350,6 +488,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_i_64_string(
+    List<(PlatformInt64, String)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_semantic_chunk(
     List<SemanticChunk> self,
     SseSerializer serializer,
@@ -359,10 +503,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_rrf_config(
+    RrfConfig? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_record_i_64_list_prim_f_32_strict(
     (PlatformInt64, Float32List) self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_record_i_64_string(
+    (PlatformInt64, String) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rrf_config(RrfConfig self, SseSerializer serializer);
 
   @protected
   void sse_encode_semantic_chunk(SemanticChunk self, SseSerializer serializer);

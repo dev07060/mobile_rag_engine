@@ -3,7 +3,10 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/bm25_search.dart';
 import 'api/hnsw_index.dart';
+import 'api/hybrid_search.dart';
+import 'api/incremental_index.dart';
 import 'api/semantic_chunker.dart';
 import 'api/simple.dart';
 import 'api/simple_rag.dart';
@@ -71,7 +74,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 923808550;
+  int get rustContentHash => -1384293846;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -106,6 +109,28 @@ abstract class RustLibApi extends BaseApi {
     String? metadata,
   });
 
+  Future<void> crateApiBm25SearchBm25AddDocument({
+    required PlatformInt64 docId,
+    required String content,
+  });
+
+  Future<void> crateApiBm25SearchBm25AddDocuments({
+    required List<(PlatformInt64, String)> docs,
+  });
+
+  Future<void> crateApiBm25SearchBm25ClearIndex();
+
+  Future<BigInt> crateApiBm25SearchBm25GetDocumentCount();
+
+  Future<void> crateApiBm25SearchBm25RemoveDocument({
+    required PlatformInt64 docId,
+  });
+
+  Future<List<Bm25SearchResult>> crateApiBm25SearchBm25Search({
+    required String query,
+    required int topK,
+  });
+
   Future<void> crateApiHnswIndexBuildHnswIndex({
     required List<(PlatformInt64, Float32List)> points,
   });
@@ -116,6 +141,8 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<void> crateApiSimpleRagClearAllDocuments({required String dbPath});
+
+  Future<void> crateApiIncrementalIndexClearBuffer();
 
   Future<void> crateApiHnswIndexClearHnswIndex();
 
@@ -130,6 +157,11 @@ abstract class RustLibApi extends BaseApi {
     required PlatformInt64 id,
     required List<double> embedding,
   });
+
+  Future<List<(PlatformInt64, Float32List)>>
+  crateApiIncrementalIndexGetBufferForMerge();
+
+  Future<BufferStats> crateApiIncrementalIndexGetBufferStats();
 
   Future<PlatformInt64> crateApiSimpleRagGetDocumentCount({
     required String dbPath,
@@ -151,6 +183,25 @@ abstract class RustLibApi extends BaseApi {
 
   String crateApiSimpleGreet({required String name});
 
+  Future<void> crateApiIncrementalIndexIncrementalAdd({
+    required PlatformInt64 docId,
+    required List<double> embedding,
+  });
+
+  Future<void> crateApiIncrementalIndexIncrementalAddBatch({
+    required List<(PlatformInt64, Float32List)> docs,
+  });
+
+  Future<void> crateApiIncrementalIndexIncrementalRemove({
+    required PlatformInt64 docId,
+  });
+
+  Future<List<IncrementalSearchResult>>
+  crateApiIncrementalIndexIncrementalSearch({
+    required List<double> queryEmbedding,
+    required BigInt topK,
+  });
+
   Future<void> crateApiSimpleInitApp();
 
   Future<void> crateApiSimpleRagInitDb({required String dbPath});
@@ -159,11 +210,19 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiTokenizerInitTokenizer({required String tokenizerPath});
 
+  Future<bool> crateApiBm25SearchIsBm25IndexLoaded();
+
   Future<bool> crateApiHnswIndexIsHnswIndexLoaded();
+
+  Future<bool> crateApiIncrementalIndexNeedsMerge();
+
+  Future<void> crateApiSimpleRagRebuildBm25Index({required String dbPath});
 
   Future<void> crateApiSourceRagRebuildChunkHnswIndex({required String dbPath});
 
   Future<void> crateApiSimpleRagRebuildHnswIndex({required String dbPath});
+
+  Future<RrfConfig> crateApiHybridSearchRrfConfigDefault();
 
   Future<List<ChunkSearchResult>> crateApiSourceRagSearchChunks({
     required String dbPath,
@@ -174,6 +233,30 @@ abstract class RustLibApi extends BaseApi {
   Future<List<HnswSearchResult>> crateApiHnswIndexSearchHnsw({
     required List<double> queryEmbedding,
     required BigInt topK,
+  });
+
+  Future<List<HybridSearchResult>> crateApiHybridSearchSearchHybrid({
+    required String dbPath,
+    required String queryText,
+    required List<double> queryEmbedding,
+    required int topK,
+    RrfConfig? config,
+  });
+
+  Future<List<String>> crateApiHybridSearchSearchHybridSimple({
+    required String dbPath,
+    required String queryText,
+    required List<double> queryEmbedding,
+    required int topK,
+  });
+
+  Future<List<HybridSearchResult>> crateApiHybridSearchSearchHybridWeighted({
+    required String dbPath,
+    required String queryText,
+    required List<double> queryEmbedding,
+    required int topK,
+    required double vectorWeight,
+    required double bm25Weight,
   });
 
   Future<List<String>> crateApiSimpleRagSearchSimilar({
@@ -351,6 +434,193 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<void> crateApiBm25SearchBm25AddDocument({
+    required PlatformInt64 docId,
+    required String content,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(docId, serializer);
+          sse_encode_String(content, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiBm25SearchBm25AddDocumentConstMeta,
+        argValues: [docId, content],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiBm25SearchBm25AddDocumentConstMeta =>
+      const TaskConstMeta(
+        debugName: "bm25_add_document",
+        argNames: ["docId", "content"],
+      );
+
+  @override
+  Future<void> crateApiBm25SearchBm25AddDocuments({
+    required List<(PlatformInt64, String)> docs,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_record_i_64_string(docs, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiBm25SearchBm25AddDocumentsConstMeta,
+        argValues: [docs],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiBm25SearchBm25AddDocumentsConstMeta =>
+      const TaskConstMeta(debugName: "bm25_add_documents", argNames: ["docs"]);
+
+  @override
+  Future<void> crateApiBm25SearchBm25ClearIndex() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiBm25SearchBm25ClearIndexConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiBm25SearchBm25ClearIndexConstMeta =>
+      const TaskConstMeta(debugName: "bm25_clear_index", argNames: []);
+
+  @override
+  Future<BigInt> crateApiBm25SearchBm25GetDocumentCount() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_usize,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiBm25SearchBm25GetDocumentCountConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiBm25SearchBm25GetDocumentCountConstMeta =>
+      const TaskConstMeta(debugName: "bm25_get_document_count", argNames: []);
+
+  @override
+  Future<void> crateApiBm25SearchBm25RemoveDocument({
+    required PlatformInt64 docId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(docId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiBm25SearchBm25RemoveDocumentConstMeta,
+        argValues: [docId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiBm25SearchBm25RemoveDocumentConstMeta =>
+      const TaskConstMeta(
+        debugName: "bm25_remove_document",
+        argNames: ["docId"],
+      );
+
+  @override
+  Future<List<Bm25SearchResult>> crateApiBm25SearchBm25Search({
+    required String query,
+    required int topK,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(query, serializer);
+          sse_encode_u_32(topK, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_bm_25_search_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiBm25SearchBm25SearchConstMeta,
+        argValues: [query, topK],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiBm25SearchBm25SearchConstMeta =>
+      const TaskConstMeta(
+        debugName: "bm25_search",
+        argNames: ["query", "topK"],
+      );
+
+  @override
   Future<void> crateApiHnswIndexBuildHnswIndex({
     required List<(PlatformInt64, Float32List)> points,
   }) {
@@ -362,7 +632,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 11,
             port: port_,
           );
         },
@@ -391,7 +661,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_f_32_loose(vecA, serializer);
           sse_encode_list_prim_f_32_loose(vecB, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_f_64,
@@ -420,7 +690,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 13,
             port: port_,
           );
         },
@@ -442,6 +712,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiIncrementalIndexClearBuffer() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 14,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiIncrementalIndexClearBufferConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiIncrementalIndexClearBufferConstMeta =>
+      const TaskConstMeta(debugName: "clear_buffer", argNames: []);
+
+  @override
   Future<void> crateApiHnswIndexClearHnswIndex() {
     return handler.executeNormal(
       NormalTask(
@@ -450,7 +747,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 15,
             port: port_,
           );
         },
@@ -475,7 +772,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_32_loose(tokenIds, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -505,7 +802,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 17,
             port: port_,
           );
         },
@@ -540,7 +837,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 18,
             port: port_,
           );
         },
@@ -562,6 +859,61 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<(PlatformInt64, Float32List)>>
+  crateApiIncrementalIndexGetBufferForMerge() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 19,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_record_i_64_list_prim_f_32_strict,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiIncrementalIndexGetBufferForMergeConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiIncrementalIndexGetBufferForMergeConstMeta =>
+      const TaskConstMeta(debugName: "get_buffer_for_merge", argNames: []);
+
+  @override
+  Future<BufferStats> crateApiIncrementalIndexGetBufferStats() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 20,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_buffer_stats,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiIncrementalIndexGetBufferStatsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiIncrementalIndexGetBufferStatsConstMeta =>
+      const TaskConstMeta(debugName: "get_buffer_stats", argNames: []);
+
+  @override
   Future<PlatformInt64> crateApiSimpleRagGetDocumentCount({
     required String dbPath,
   }) {
@@ -573,7 +925,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 21,
             port: port_,
           );
         },
@@ -608,7 +960,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 22,
             port: port_,
           );
         },
@@ -642,7 +994,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 23,
             port: port_,
           );
         },
@@ -675,7 +1027,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 24,
             port: port_,
           );
         },
@@ -699,7 +1051,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_u_32,
@@ -722,7 +1074,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(name, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -739,6 +1091,140 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "greet", argNames: ["name"]);
 
   @override
+  Future<void> crateApiIncrementalIndexIncrementalAdd({
+    required PlatformInt64 docId,
+    required List<double> embedding,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(docId, serializer);
+          sse_encode_list_prim_f_32_loose(embedding, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 27,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiIncrementalIndexIncrementalAddConstMeta,
+        argValues: [docId, embedding],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiIncrementalIndexIncrementalAddConstMeta =>
+      const TaskConstMeta(
+        debugName: "incremental_add",
+        argNames: ["docId", "embedding"],
+      );
+
+  @override
+  Future<void> crateApiIncrementalIndexIncrementalAddBatch({
+    required List<(PlatformInt64, Float32List)> docs,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_record_i_64_list_prim_f_32_strict(docs, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 28,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiIncrementalIndexIncrementalAddBatchConstMeta,
+        argValues: [docs],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiIncrementalIndexIncrementalAddBatchConstMeta =>
+      const TaskConstMeta(
+        debugName: "incremental_add_batch",
+        argNames: ["docs"],
+      );
+
+  @override
+  Future<void> crateApiIncrementalIndexIncrementalRemove({
+    required PlatformInt64 docId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(docId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 29,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiIncrementalIndexIncrementalRemoveConstMeta,
+        argValues: [docId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiIncrementalIndexIncrementalRemoveConstMeta =>
+      const TaskConstMeta(debugName: "incremental_remove", argNames: ["docId"]);
+
+  @override
+  Future<List<IncrementalSearchResult>>
+  crateApiIncrementalIndexIncrementalSearch({
+    required List<double> queryEmbedding,
+    required BigInt topK,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_f_32_loose(queryEmbedding, serializer);
+          sse_encode_usize(topK, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 30,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_incremental_search_result,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiIncrementalIndexIncrementalSearchConstMeta,
+        argValues: [queryEmbedding, topK],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiIncrementalIndexIncrementalSearchConstMeta =>
+      const TaskConstMeta(
+        debugName: "incremental_search",
+        argNames: ["queryEmbedding", "topK"],
+      );
+
+  @override
   Future<void> crateApiSimpleInitApp() {
     return handler.executeNormal(
       NormalTask(
@@ -747,7 +1233,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 31,
             port: port_,
           );
         },
@@ -775,7 +1261,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 32,
             port: port_,
           );
         },
@@ -803,7 +1289,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 33,
             port: port_,
           );
         },
@@ -831,7 +1317,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 34,
             port: port_,
           );
         },
@@ -853,6 +1339,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<bool> crateApiBm25SearchIsBm25IndexLoaded() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 35,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiBm25SearchIsBm25IndexLoadedConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiBm25SearchIsBm25IndexLoadedConstMeta =>
+      const TaskConstMeta(debugName: "is_bm25_index_loaded", argNames: []);
+
+  @override
   Future<bool> crateApiHnswIndexIsHnswIndexLoaded() {
     return handler.executeNormal(
       NormalTask(
@@ -861,7 +1374,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 36,
             port: port_,
           );
         },
@@ -880,6 +1393,64 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "is_hnsw_index_loaded", argNames: []);
 
   @override
+  Future<bool> crateApiIncrementalIndexNeedsMerge() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 37,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiIncrementalIndexNeedsMergeConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiIncrementalIndexNeedsMergeConstMeta =>
+      const TaskConstMeta(debugName: "needs_merge", argNames: []);
+
+  @override
+  Future<void> crateApiSimpleRagRebuildBm25Index({required String dbPath}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dbPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 38,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiSimpleRagRebuildBm25IndexConstMeta,
+        argValues: [dbPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleRagRebuildBm25IndexConstMeta =>
+      const TaskConstMeta(
+        debugName: "rebuild_bm25_index",
+        argNames: ["dbPath"],
+      );
+
+  @override
   Future<void> crateApiSourceRagRebuildChunkHnswIndex({
     required String dbPath,
   }) {
@@ -891,7 +1462,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 39,
             port: port_,
           );
         },
@@ -922,7 +1493,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 40,
             port: port_,
           );
         },
@@ -944,6 +1515,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<RrfConfig> crateApiHybridSearchRrfConfigDefault() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 41,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rrf_config,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiHybridSearchRrfConfigDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiHybridSearchRrfConfigDefaultConstMeta =>
+      const TaskConstMeta(debugName: "rrf_config_default", argNames: []);
+
+  @override
   Future<List<ChunkSearchResult>> crateApiSourceRagSearchChunks({
     required String dbPath,
     required List<double> queryEmbedding,
@@ -959,7 +1557,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 42,
             port: port_,
           );
         },
@@ -994,7 +1592,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 43,
             port: port_,
           );
         },
@@ -1016,6 +1614,143 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<HybridSearchResult>> crateApiHybridSearchSearchHybrid({
+    required String dbPath,
+    required String queryText,
+    required List<double> queryEmbedding,
+    required int topK,
+    RrfConfig? config,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dbPath, serializer);
+          sse_encode_String(queryText, serializer);
+          sse_encode_list_prim_f_32_loose(queryEmbedding, serializer);
+          sse_encode_u_32(topK, serializer);
+          sse_encode_opt_box_autoadd_rrf_config(config, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 44,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_hybrid_search_result,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiHybridSearchSearchHybridConstMeta,
+        argValues: [dbPath, queryText, queryEmbedding, topK, config],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiHybridSearchSearchHybridConstMeta =>
+      const TaskConstMeta(
+        debugName: "search_hybrid",
+        argNames: ["dbPath", "queryText", "queryEmbedding", "topK", "config"],
+      );
+
+  @override
+  Future<List<String>> crateApiHybridSearchSearchHybridSimple({
+    required String dbPath,
+    required String queryText,
+    required List<double> queryEmbedding,
+    required int topK,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dbPath, serializer);
+          sse_encode_String(queryText, serializer);
+          sse_encode_list_prim_f_32_loose(queryEmbedding, serializer);
+          sse_encode_u_32(topK, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 45,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiHybridSearchSearchHybridSimpleConstMeta,
+        argValues: [dbPath, queryText, queryEmbedding, topK],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiHybridSearchSearchHybridSimpleConstMeta =>
+      const TaskConstMeta(
+        debugName: "search_hybrid_simple",
+        argNames: ["dbPath", "queryText", "queryEmbedding", "topK"],
+      );
+
+  @override
+  Future<List<HybridSearchResult>> crateApiHybridSearchSearchHybridWeighted({
+    required String dbPath,
+    required String queryText,
+    required List<double> queryEmbedding,
+    required int topK,
+    required double vectorWeight,
+    required double bm25Weight,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dbPath, serializer);
+          sse_encode_String(queryText, serializer);
+          sse_encode_list_prim_f_32_loose(queryEmbedding, serializer);
+          sse_encode_u_32(topK, serializer);
+          sse_encode_f_64(vectorWeight, serializer);
+          sse_encode_f_64(bm25Weight, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 46,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_hybrid_search_result,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiHybridSearchSearchHybridWeightedConstMeta,
+        argValues: [
+          dbPath,
+          queryText,
+          queryEmbedding,
+          topK,
+          vectorWeight,
+          bm25Weight,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiHybridSearchSearchHybridWeightedConstMeta =>
+      const TaskConstMeta(
+        debugName: "search_hybrid_weighted",
+        argNames: [
+          "dbPath",
+          "queryText",
+          "queryEmbedding",
+          "topK",
+          "vectorWeight",
+          "bm25Weight",
+        ],
+      );
+
+  @override
   Future<List<String>> crateApiSimpleRagSearchSimilar({
     required String dbPath,
     required List<double> queryEmbedding,
@@ -1031,7 +1766,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 47,
             port: port_,
           );
         },
@@ -1063,7 +1798,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(text, serializer);
           sse_encode_i_32(maxChars, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 48)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_semantic_chunk,
@@ -1095,7 +1830,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(text, serializer);
           sse_encode_i_32(maxChars, serializer);
           sse_encode_i_32(overlapChars, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 49)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_semantic_chunk,
@@ -1121,7 +1856,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(text, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 50)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_32_strict,
@@ -1177,9 +1912,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Bm25SearchResult dco_decode_bm_25_search_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return Bm25SearchResult(
+      docId: dco_decode_i_64(arr[0]),
+      score: dco_decode_f_64(arr[1]),
+    );
+  }
+
+  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
+  }
+
+  @protected
+  RrfConfig dco_decode_box_autoadd_rrf_config(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_rrf_config(raw);
+  }
+
+  @protected
+  BufferStats dco_decode_buffer_stats(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return BufferStats(
+      bufferSize: dco_decode_usize(arr[0]),
+      threshold: dco_decode_usize(arr[1]),
+      hnswLoaded: dco_decode_bool(arr[2]),
+    );
   }
 
   @protected
@@ -1250,6 +2016,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  HybridSearchResult dco_decode_hybrid_search_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return HybridSearchResult(
+      docId: dco_decode_i_64(arr[0]),
+      content: dco_decode_String(arr[1]),
+      score: dco_decode_f_64(arr[2]),
+      vectorRank: dco_decode_u_32(arr[3]),
+      bm25Rank: dco_decode_u_32(arr[4]),
+    );
+  }
+
+  @protected
   int dco_decode_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -1262,9 +2043,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  IncrementalSearchResult dco_decode_incremental_search_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return IncrementalSearchResult(
+      docId: dco_decode_i_64(arr[0]),
+      distance: dco_decode_f_32(arr[1]),
+      source: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<Bm25SearchResult> dco_decode_list_bm_25_search_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_bm_25_search_result).toList();
   }
 
   @protected
@@ -1283,6 +2083,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<HnswSearchResult> dco_decode_list_hnsw_search_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_hnsw_search_result).toList();
+  }
+
+  @protected
+  List<HybridSearchResult> dco_decode_list_hybrid_search_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_hybrid_search_result).toList();
+  }
+
+  @protected
+  List<IncrementalSearchResult> dco_decode_list_incremental_search_result(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_incremental_search_result)
+        .toList();
   }
 
   @protected
@@ -1325,6 +2141,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<(PlatformInt64, String)> dco_decode_list_record_i_64_string(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_record_i_64_string).toList();
+  }
+
+  @protected
   List<SemanticChunk> dco_decode_list_semantic_chunk(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_semantic_chunk).toList();
@@ -1337,6 +2161,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RrfConfig? dco_decode_opt_box_autoadd_rrf_config(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_rrf_config(raw);
+  }
+
+  @protected
   (PlatformInt64, Float32List) dco_decode_record_i_64_list_prim_f_32_strict(
     dynamic raw,
   ) {
@@ -1346,6 +2176,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('Expected 2 elements, got ${arr.length}');
     }
     return (dco_decode_i_64(arr[0]), dco_decode_list_prim_f_32_strict(arr[1]));
+  }
+
+  @protected
+  (PlatformInt64, String) dco_decode_record_i_64_string(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (dco_decode_i_64(arr[0]), dco_decode_String(arr[1]));
+  }
+
+  @protected
+  RrfConfig dco_decode_rrf_config(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return RrfConfig(
+      k: dco_decode_u_32(arr[0]),
+      vectorWeight: dco_decode_f_64(arr[1]),
+      bm25Weight: dco_decode_f_64(arr[2]),
+    );
   }
 
   @protected
@@ -1443,9 +2296,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Bm25SearchResult sse_decode_bm_25_search_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_docId = sse_decode_i_64(deserializer);
+    var var_score = sse_decode_f_64(deserializer);
+    return Bm25SearchResult(docId: var_docId, score: var_score);
+  }
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  RrfConfig sse_decode_box_autoadd_rrf_config(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_rrf_config(deserializer));
+  }
+
+  @protected
+  BufferStats sse_decode_buffer_stats(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_bufferSize = sse_decode_usize(deserializer);
+    var var_threshold = sse_decode_usize(deserializer);
+    var var_hnswLoaded = sse_decode_bool(deserializer);
+    return BufferStats(
+      bufferSize: var_bufferSize,
+      threshold: var_threshold,
+      hnswLoaded: var_hnswLoaded,
+    );
   }
 
   @protected
@@ -1514,6 +2396,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  HybridSearchResult sse_decode_hybrid_search_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_docId = sse_decode_i_64(deserializer);
+    var var_content = sse_decode_String(deserializer);
+    var var_score = sse_decode_f_64(deserializer);
+    var var_vectorRank = sse_decode_u_32(deserializer);
+    var var_bm25Rank = sse_decode_u_32(deserializer);
+    return HybridSearchResult(
+      docId: var_docId,
+      content: var_content,
+      score: var_score,
+      vectorRank: var_vectorRank,
+      bm25Rank: var_bm25Rank,
+    );
+  }
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
@@ -1526,6 +2427,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  IncrementalSearchResult sse_decode_incremental_search_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_docId = sse_decode_i_64(deserializer);
+    var var_distance = sse_decode_f_32(deserializer);
+    var var_source = sse_decode_String(deserializer);
+    return IncrementalSearchResult(
+      docId: var_docId,
+      distance: var_distance,
+      source: var_source,
+    );
+  }
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -1533,6 +2449,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <String>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<Bm25SearchResult> sse_decode_list_bm_25_search_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <Bm25SearchResult>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_bm_25_search_result(deserializer));
     }
     return ans_;
   }
@@ -1573,6 +2503,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <HnswSearchResult>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_hnsw_search_result(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<HybridSearchResult> sse_decode_list_hybrid_search_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <HybridSearchResult>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_hybrid_search_result(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<IncrementalSearchResult> sse_decode_list_incremental_search_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <IncrementalSearchResult>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_incremental_search_result(deserializer));
     }
     return ans_;
   }
@@ -1628,6 +2586,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<(PlatformInt64, String)> sse_decode_list_record_i_64_string(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(PlatformInt64, String)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_record_i_64_string(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<SemanticChunk> sse_decode_list_semantic_chunk(
     SseDeserializer deserializer,
   ) {
@@ -1653,6 +2625,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RrfConfig? sse_decode_opt_box_autoadd_rrf_config(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_rrf_config(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   (PlatformInt64, Float32List) sse_decode_record_i_64_list_prim_f_32_strict(
     SseDeserializer deserializer,
   ) {
@@ -1660,6 +2645,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_field0 = sse_decode_i_64(deserializer);
     var var_field1 = sse_decode_list_prim_f_32_strict(deserializer);
     return (var_field0, var_field1);
+  }
+
+  @protected
+  (PlatformInt64, String) sse_decode_record_i_64_string(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_i_64(deserializer);
+    var var_field1 = sse_decode_String(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
+  RrfConfig sse_decode_rrf_config(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_k = sse_decode_u_32(deserializer);
+    var var_vectorWeight = sse_decode_f_64(deserializer);
+    var var_bm25Weight = sse_decode_f_64(deserializer);
+    return RrfConfig(
+      k: var_k,
+      vectorWeight: var_vectorWeight,
+      bm25Weight: var_bm25Weight,
+    );
   }
 
   @protected
@@ -1750,9 +2758,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_bm_25_search_result(
+    Bm25SearchResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.docId, serializer);
+    sse_encode_f_64(self.score, serializer);
+  }
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_rrf_config(
+    RrfConfig self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_rrf_config(self, serializer);
+  }
+
+  @protected
+  void sse_encode_buffer_stats(BufferStats self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(self.bufferSize, serializer);
+    sse_encode_usize(self.threshold, serializer);
+    sse_encode_bool(self.hnswLoaded, serializer);
   }
 
   @protected
@@ -1812,6 +2847,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_hybrid_search_result(
+    HybridSearchResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.docId, serializer);
+    sse_encode_String(self.content, serializer);
+    sse_encode_f_64(self.score, serializer);
+    sse_encode_u_32(self.vectorRank, serializer);
+    sse_encode_u_32(self.bm25Rank, serializer);
+  }
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
@@ -1824,11 +2872,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_incremental_search_result(
+    IncrementalSearchResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.docId, serializer);
+    sse_encode_f_32(self.distance, serializer);
+    sse_encode_String(self.source, serializer);
+  }
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_bm_25_search_result(
+    List<Bm25SearchResult> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_bm_25_search_result(item, serializer);
     }
   }
 
@@ -1865,6 +2936,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_hnsw_search_result(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_hybrid_search_result(
+    List<HybridSearchResult> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_hybrid_search_result(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_incremental_search_result(
+    List<IncrementalSearchResult> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_incremental_search_result(item, serializer);
     }
   }
 
@@ -1935,6 +3030,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_record_i_64_string(
+    List<(PlatformInt64, String)> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_i_64_string(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_semantic_chunk(
     List<SemanticChunk> self,
     SseSerializer serializer,
@@ -1957,6 +3064,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_rrf_config(
+    RrfConfig? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_rrf_config(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_record_i_64_list_prim_f_32_strict(
     (PlatformInt64, Float32List) self,
     SseSerializer serializer,
@@ -1964,6 +3084,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self.$1, serializer);
     sse_encode_list_prim_f_32_strict(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_record_i_64_string(
+    (PlatformInt64, String) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.$1, serializer);
+    sse_encode_String(self.$2, serializer);
+  }
+
+  @protected
+  void sse_encode_rrf_config(RrfConfig self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.k, serializer);
+    sse_encode_f_64(self.vectorWeight, serializer);
+    sse_encode_f_64(self.bm25Weight, serializer);
   }
 
   @protected

@@ -6,6 +6,8 @@ use ndarray::Array1;
 use log::{info, warn, error, debug};
 use sha2::{Sha256, Digest};
 use crate::api::hnsw_index::{build_hnsw_index, search_hnsw, is_hnsw_index_loaded, clear_hnsw_index};
+use crate::api::bm25_search::{bm25_add_document, bm25_add_documents, bm25_clear_index};
+use crate::api::incremental_index::{incremental_add, clear_buffer};
 
 /// Safely truncate string (UTF-8 character boundary safe)
 fn truncate_str(s: &str, max_chars: usize) -> &str {
@@ -98,7 +100,10 @@ pub fn init_db(db_path: String) -> anyhow::Result<()> {
     // Initialize HNSW index (load existing data)
     rebuild_hnsw_index_internal(&conn)?;
     
-    info!("[init_db] docs table and HNSW index initialized");
+    // Initialize BM25 index (load existing data)
+    rebuild_bm25_index_internal(&conn)?;
+    
+    info!("[init_db] docs table, HNSW index, and BM25 index initialized");
     Ok(())
 }
 
@@ -133,6 +138,36 @@ pub fn rebuild_hnsw_index(db_path: String) -> anyhow::Result<()> {
     let conn = Connection::open(&db_path)?;
     rebuild_hnsw_index_internal(&conn)?;
     info!("[rebuild_hnsw] Index rebuild complete");
+    Ok(())
+}
+
+/// Internal: Rebuild BM25 index from DB
+fn rebuild_bm25_index_internal(conn: &Connection) -> anyhow::Result<()> {
+    let mut stmt = conn.prepare("SELECT id, content FROM docs")?;
+    
+    let docs: Vec<(i64, String)> = stmt.query_map([], |row| {
+        let id: i64 = row.get(0)?;
+        let content: String = row.get(1)?;
+        Ok((id, content))
+    })?
+    .filter_map(|r| r.ok())
+    .collect();
+    
+    if !docs.is_empty() {
+        info!("[bm25] Building index from {} documents", docs.len());
+        bm25_add_documents(docs);
+    }
+    
+    Ok(())
+}
+
+/// Rebuild BM25 index (public API)
+pub fn rebuild_bm25_index(db_path: String) -> anyhow::Result<()> {
+    info!("[rebuild_bm25] Starting index rebuild");
+    let conn = Connection::open(&db_path)?;
+    bm25_clear_index();
+    rebuild_bm25_index_internal(&conn)?;
+    info!("[rebuild_bm25] Index rebuild complete");
     Ok(())
 }
 
@@ -197,7 +232,16 @@ pub fn add_document(db_path: String, content: String, embedding: Vec<f32>) -> an
         params![content, content_hash, embedding_bytes],
     )?;
     
-    info!("[add_document] Document saved: {}...", truncate_str(&content, 15));
+    // Get the inserted document ID
+    let doc_id = conn.last_insert_rowid();
+    
+    // Add to BM25 index for hybrid search
+    bm25_add_document(doc_id, content.clone());
+    
+    // Add to incremental index for immediate searchability
+    incremental_add(doc_id, embedding);
+    
+    info!("[add_document] Document saved (id={}): {}...", doc_id, truncate_str(&content, 15));
     Ok(AddDocumentResult {
         success: true,
         is_duplicate: false,
@@ -346,6 +390,8 @@ pub fn clear_all_documents(db_path: String) -> anyhow::Result<()> {
     let conn = Connection::open(&db_path)?;
     conn.execute("DELETE FROM docs", [])?;
     clear_hnsw_index();
-    info!("[clear] All documents deleted");
+    bm25_clear_index();
+    clear_buffer();  // Clear incremental search buffer
+    info!("[clear] All documents and indexes deleted");
     Ok(())
 }

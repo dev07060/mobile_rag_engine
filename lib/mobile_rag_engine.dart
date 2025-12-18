@@ -53,6 +53,8 @@ export 'src/rust/api/tokenizer.dart';
 // Services
 export 'services/embedding_service.dart';
 export 'src/rust/api/semantic_chunker.dart'; // Rust-based semantic chunking
+export 'src/rust/api/hybrid_search.dart'; // Hybrid search (Vector + BM25)
+export 'src/rust/api/bm25_search.dart'; // BM25 keyword search
 export 'services/context_builder.dart';
 export 'services/source_rag_service.dart';
 

@@ -5,10 +5,12 @@
 /// - EmbeddingService for vector generation
 /// - Rust source_rag APIs for storage and search
 /// - ContextBuilder for LLM context assembly
+/// - Hybrid search combining vector and BM25 keyword search
 
 import 'dart:typed_data';
 import '../src/rust/api/source_rag.dart';
 import '../src/rust/api/semantic_chunker.dart';
+import '../src/rust/api/hybrid_search.dart' as hybrid;
 import 'context_builder.dart';
 import 'embedding_service.dart';
 
@@ -192,4 +194,85 @@ class SourceRagService {
       context: result.context,
     );
   }
+
+  /// Hybrid search combining vector and keyword (BM25) search.
+  ///
+  /// This method uses Reciprocal Rank Fusion (RRF) to combine:
+  /// - Vector search: semantic similarity using embeddings
+  /// - BM25 search: keyword matching for exact terms
+  ///
+  /// Use this for better results when searching for:
+  /// - Proper nouns (names, product models)
+  /// - Technical terms or code snippets
+  /// - Exact keyword matches
+  ///
+  /// Parameters:
+  /// - [query]: The search query text
+  /// - [topK]: Number of results to return (default: 10)
+  /// - [vectorWeight]: Weight for vector search (0.0-1.0, default: 0.5)
+  /// - [bm25Weight]: Weight for BM25 search (0.0-1.0, default: 0.5)
+  Future<List<hybrid.HybridSearchResult>> searchHybrid(
+    String query, {
+    int topK = 10,
+    double vectorWeight = 0.5,
+    double bm25Weight = 0.5,
+  }) async {
+    // 1. Generate query embedding
+    final queryEmbedding = await EmbeddingService.embed(query);
+
+    // 2. Perform hybrid search with RRF fusion
+    final results = await hybrid.searchHybridWeighted(
+      dbPath: dbPath,
+      queryText: query,
+      queryEmbedding: queryEmbedding,
+      topK: topK,
+      vectorWeight: vectorWeight,
+      bm25Weight: bm25Weight,
+    );
+
+    return results;
+  }
+
+  /// Hybrid search with context assembly for LLM.
+  ///
+  /// Similar to [search] but uses hybrid (vector + BM25) search.
+  Future<RagSearchResult> searchHybridWithContext(
+    String query, {
+    int topK = 10,
+    int tokenBudget = 2000,
+    ContextStrategy strategy = ContextStrategy.relevanceFirst,
+    double vectorWeight = 0.5,
+    double bm25Weight = 0.5,
+  }) async {
+    // 1. Get hybrid search results
+    final hybridResults = await searchHybrid(
+      query,
+      topK: topK,
+      vectorWeight: vectorWeight,
+      bm25Weight: bm25Weight,
+    );
+
+    // 2. Convert to ChunkSearchResult format for context building
+    // Note: Hybrid search returns content directly, so we create minimal chunks
+    final chunks = hybridResults.map((r) => ChunkSearchResult(
+      chunkId: r.docId,
+      sourceId: r.docId,  // Same as chunk ID for simple docs
+      content: r.content,
+      chunkIndex: 0,
+      similarity: r.score,  // RRF score as similarity
+    )).toList();
+
+    // 3. Assemble context
+    final context = ContextBuilder.build(
+      searchResults: chunks,
+      tokenBudget: tokenBudget,
+      strategy: strategy,
+    );
+
+    return RagSearchResult(
+      chunks: chunks,
+      context: context,
+    );
+  }
 }
+
