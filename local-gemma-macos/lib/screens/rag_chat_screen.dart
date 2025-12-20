@@ -18,6 +18,11 @@ class ChatMessage {
   final DateTime timestamp;
   final List<ChunkSearchResult>? retrievedChunks;
   final int? tokensUsed;
+  
+  // Timing metrics for debug
+  final Duration? ragSearchTime;
+  final Duration? llmGenerationTime;
+  final Duration? totalTime;
 
   ChatMessage({
     required this.content,
@@ -25,6 +30,9 @@ class ChatMessage {
     DateTime? timestamp,
     this.retrievedChunks,
     this.tokensUsed,
+    this.ragSearchTime,
+    this.llmGenerationTime,
+    this.totalTime,
   }) : timestamp = timestamp ?? DateTime.now();
 }
 
@@ -159,14 +167,21 @@ class _RagChatScreenState extends State<RagChatScreen> {
     });
 
     try {
-      // 1. RAG Search
+      final totalStopwatch = Stopwatch()..start();
+      
+      // 1. RAG Search with timing
+      final ragStopwatch = Stopwatch()..start();
       final ragResult = await _ragService!.search(
         text,
         topK: 5,
         tokenBudget: 1500,
         strategy: ContextStrategy.relevanceFirst,
       );
+      ragStopwatch.stop();
+      final ragSearchTime = ragStopwatch.elapsed;
 
+      // 2. LLM Generation with timing
+      final llmStopwatch = Stopwatch()..start();
       String response;
       if (widget.mockLlm) {
         // Mock mode - just show the context
@@ -175,14 +190,21 @@ class _RagChatScreenState extends State<RagChatScreen> {
         // Real LLM generation with Ollama
         response = await _generateOllamaResponse(text, ragResult);
       }
+      llmStopwatch.stop();
+      final llmGenerationTime = llmStopwatch.elapsed;
+      
+      totalStopwatch.stop();
 
-      // Add AI response
+      // Add AI response with timing metrics
       setState(() {
         _messages.insert(0, ChatMessage(
           content: response,
           isUser: false,
           retrievedChunks: ragResult.chunks,
           tokensUsed: ragResult.context.estimatedTokens,
+          ragSearchTime: ragSearchTime,
+          llmGenerationTime: llmGenerationTime,
+          totalTime: totalStopwatch.elapsed,
         ));
       });
     } catch (e) {
@@ -610,12 +632,28 @@ text completions and chat responses.''',
                 if (!isUser && _showDebugInfo && message.tokensUsed != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      '~${message.tokensUsed} tokens • ${message.retrievedChunks?.length ?? 0} chunks',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey[500],
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '~${message.tokensUsed} tokens • ${message.retrievedChunks?.length ?? 0} chunks',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                        if (message.ragSearchTime != null)
+                          Text(
+                            '⚡ RAG: ${message.ragSearchTime!.inMilliseconds}ms • '
+                            'LLM: ${message.llmGenerationTime?.inMilliseconds ?? 0}ms • '
+                            'Total: ${message.totalTime?.inMilliseconds ?? 0}ms',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.blue[400],
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 // Timestamp
