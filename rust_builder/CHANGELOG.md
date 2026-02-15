@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.0
+* **Logger Stability (Hot Restart)**:
+  - Reworked Dart log sink ownership to `Arc<StreamSink<_>>` for safer cross-thread access.
+  - Avoided holding logger locks while sending logs to Dart stream.
+  - Switched log stream teardown to non-blocking cleanup to prevent restart deadlocks.
+  - Added stale sink recovery on stream send failures.
+
 ## 0.11.0
 * **Hybrid Search**:
   - Improved source-filter exact-scan path to keep scoped BM25 ranking.
