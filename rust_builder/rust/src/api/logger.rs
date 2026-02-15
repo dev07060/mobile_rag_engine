@@ -1,11 +1,11 @@
 use flutter_rust_bridge::frb;
 use crate::frb_generated::StreamSink;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
 use lazy_static::lazy_static;
 
 lazy_static! {
-    static ref DART_LOG_SINK: RwLock<Option<StreamSink<String>>> = RwLock::new(None);
+    static ref DART_LOG_SINK: RwLock<Option<Arc<StreamSink<String>>>> = RwLock::new(None);
 }
 
 /// Track whether the logger has been initialized to avoid double initialization errors.
@@ -82,7 +82,7 @@ pub fn init_logger() -> anyhow::Result<()> {
 #[frb(sync)]
 pub fn init_log_stream(sink: StreamSink<String>) -> anyhow::Result<()> {
     let mut guard = DART_LOG_SINK.write().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
-    *guard = Some(sink);
+    *guard = Some(Arc::new(sink));
     Ok(())
 }
 
@@ -90,26 +90,42 @@ pub fn init_log_stream(sink: StreamSink<String>) -> anyhow::Result<()> {
 /// Call this when disposing the log subscription to prevent memory leaks.
 #[frb(sync)]
 pub fn close_log_stream() -> anyhow::Result<()> {
-    let mut guard = DART_LOG_SINK.write().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
-    *guard = None;
+    // Hot-restart safety: avoid blocking on a long-held read lock.
+    // Best effort cleanup is enough because a new sink can still be attached.
+    if let Ok(mut guard) = DART_LOG_SINK.try_write() {
+        *guard = None;
+        return Ok(());
+    }
+    #[cfg(debug_assertions)]
+    eprintln!("[logger] close_log_stream skipped (sink lock busy)");
     Ok(())
 }
 
 /// Try to send a log message to Dart if the stream is active.
 /// Returns true if sent, false otherwise.
 fn try_send_log_to_dart(msg: &str) -> bool {
-    match DART_LOG_SINK.read() {
-        Ok(guard) => {
-            if let Some(sink) = &*guard {
-                let _ = sink.add(msg.to_string());
-                true
-            } else {
-                false
-            }
-        }
+    let sink = match DART_LOG_SINK.read() {
+        Ok(guard) => guard.as_ref().cloned(),
         Err(_) => {
             #[cfg(debug_assertions)]
             eprintln!("[WARNING] Dart log sink lock is poisoned");
+            None
+        }
+    };
+
+    let Some(sink) = sink else {
+        return false;
+    };
+
+    // Do not hold the sink lock while calling add(); add() may block
+    // during hot-restart stream transitions.
+    match sink.add(msg.to_string()) {
+        Ok(()) => true,
+        Err(_) => {
+            // Drop stale sink if possible so logger can fallback to stdout.
+            if let Ok(mut guard) = DART_LOG_SINK.try_write() {
+                *guard = None;
+            }
             false
         }
     }

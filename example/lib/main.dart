@@ -17,6 +17,7 @@ Future<void> main() async {
     tokenizerAsset: 'assets/tokenizer.json',
     modelAsset: 'assets/model.onnx',
     databaseName: 'rag_db.sqlite',
+    deferIndexWarmup: true,
     threadLevel: ThreadUseLevel.medium, // Default: ~40% of cores
   );
 

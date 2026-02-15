@@ -123,20 +123,52 @@ class SourceRagService {
     return result;
   }
 
+  String get _dbPathWithoutExtension {
+    const knownDbExtensions = ['.sqlite3', '.sqlite', '.db'];
+    final lower = dbPath.toLowerCase();
+    for (final ext in knownDbExtensions) {
+      if (lower.endsWith(ext)) {
+        return dbPath.substring(0, dbPath.length - ext.length);
+      }
+    }
+    return dbPath;
+  }
+
   /// Get the HNSW index path (derived from dbPath)
-  String get _indexPath => dbPath.replaceAll('.db', '_hnsw');
+  String get _indexPath => '${_dbPathWithoutExtension}_hnsw';
 
   /// File marker to indicate if the index is dirty (needs rebuild).
   /// This persists across app restarts for crash recovery.
-  File get _dirtyMarkerFile => File('${dbPath.replaceAll('.db', '')}.dirty');
+  File get _dirtyMarkerFile => File('$_dbPathWithoutExtension.dirty');
 
   /// Memory flag to track dirty state alongside the file marker.
   bool _needsRebuild = false;
+  int _dirtyVersion = 0;
+
+  /// Whether all retrieval indexes are ready for full-quality search.
+  bool _isIndexReady = false;
+
+  /// Completes when the latest index warmup/rebuild task has finished.
+  Future<void> _warmupFuture = Future.value();
+
+  /// Serializes index tasks to avoid overlapping rebuild/load operations.
+  Future<void> _indexTaskQueue = Future.value();
+
+  bool get isIndexReady => _isIndexReady;
+  Future<void> get warmupFuture => _warmupFuture;
+
+  Future<void> _enqueueIndexTask(Future<void> Function() task) {
+    final queued = _indexTaskQueue.then((_) => task());
+    _indexTaskQueue = queued.catchError((_) {});
+    return queued;
+  }
 
   /// Mark the index as dirty (needs rebuild).
   /// Creates a persistent marker file.
   Future<void> _markDirty() async {
     _needsRebuild = true;
+    _dirtyVersion++;
+    _isIndexReady = false;
     try {
       if (!await _dirtyMarkerFile.exists()) {
         await _dirtyMarkerFile.create();
@@ -148,7 +180,13 @@ class SourceRagService {
 
   /// Mark the index as clean (rebuild complete).
   /// Deletes the persistent marker file.
-  Future<void> _markClean() async {
+  Future<void> _markClean({int? expectedVersion}) async {
+    if (expectedVersion != null && expectedVersion != _dirtyVersion) {
+      debugPrint(
+        '[SourceRagService] Index changed during build; keeping dirty marker.',
+      );
+      return;
+    }
     _needsRebuild = false;
     try {
       if (await _dirtyMarkerFile.exists()) {
@@ -159,8 +197,45 @@ class SourceRagService {
     }
   }
 
+  Future<void> _runIndexWarmup() async {
+    _isIndexReady = false;
+    final startDirtyVersion = _dirtyVersion;
+
+    // BM25 is currently in-memory only and fast to rebuild from SQLite
+    debugPrint('[SourceRagService] init: Rebuilding BM25 index...');
+    await rust_rag.rebuildChunkBm25Index();
+
+    // HNSW can be slow to rebuild for large datasets, so we try loading from disk first
+    debugPrint(
+      '[SourceRagService] init: Attempting to load HNSW index from disk...',
+    );
+    final loaded = await tryLoadCachedIndex();
+
+    if (loaded && !_needsRebuild) {
+      debugPrint(
+        '[SourceRagService] init: HNSW index loaded successfully from cache.',
+      );
+    } else {
+      if (_needsRebuild) {
+        debugPrint(
+          '[SourceRagService] init: Dirty marker found, forcing HNSW rebuild.',
+        );
+      } else {
+        debugPrint(
+          '[SourceRagService] init: No cached HNSW index found, rebuilding from DB.',
+        );
+      }
+      await rust_rag.rebuildChunkHnswIndex();
+      // Save the newly built index for next time
+      await saveIndex();
+    }
+
+    await _markClean(expectedVersion: startDirtyVersion);
+    _isIndexReady = !_needsRebuild;
+  }
+
   /// Initialize the source database.
-  Future<void> init() async {
+  Future<void> init({bool deferIndexWarmup = false}) async {
     try {
       debugPrint('[SourceRagService] init: Starting...');
 
@@ -195,37 +270,28 @@ class SourceRagService {
           '[SourceRagService] Found dirty marker. Previous session might have crashed.',
         );
         debugPrint('[SourceRagService] Index will be rebuilt automatically.');
-        _needsRebuild = true;
+        if (!_needsRebuild) {
+          _needsRebuild = true;
+          _dirtyVersion++;
+        }
       }
 
-      // 5. Load or Rebuild indexes
-      // BM25 is currently in-memory only and fast to rebuild from SQLite
-      debugPrint('[SourceRagService] init: Rebuilding BM25 index...');
-      await rust_rag.rebuildChunkBm25Index();
+      // 5. Load or rebuild indexes.
+      final warmup = _enqueueIndexTask(_runIndexWarmup);
+      _warmupFuture = warmup;
 
-      // HNSW can be slow to rebuild for large datasets, so we try loading from disk first
-      debugPrint(
-        '[SourceRagService] init: Attempting to load HNSW index from disk...',
-      );
-      final loaded = await tryLoadCachedIndex();
-
-      if (loaded && !_needsRebuild) {
+      if (deferIndexWarmup) {
         debugPrint(
-          '[SourceRagService] init: HNSW index loaded successfully from cache.',
+          '[SourceRagService] init: deferIndexWarmup=true, continuing while index warms up in background.',
+        );
+        unawaited(
+          warmup.catchError((error, _) {
+            debugPrint('[SourceRagService] Background warmup failed: $error');
+            _isIndexReady = false;
+          }),
         );
       } else {
-        if (_needsRebuild) {
-          debugPrint(
-            '[SourceRagService] init: Dirty marker found, forcing HNSW rebuild.',
-          );
-        } else {
-          debugPrint(
-            '[SourceRagService] init: No cached HNSW index found, rebuilding from DB.',
-          );
-        }
-        await rust_rag.rebuildChunkHnswIndex();
-        // Save the newly built index for next time
-        await saveIndex();
+        await warmup;
       }
 
       debugPrint('[SourceRagService] init: Done!');
@@ -411,36 +477,48 @@ class SourceRagService {
 
   /// Rebuild the HNSW and BM25 indexes after adding sources.
   /// [force] - If true, rebuilds even if no changes were detected (default: false).
-  Future<void> rebuildIndex({bool force = false}) async {
+  Future<void> rebuildIndex({bool force = false}) {
     if (!force && !_needsRebuild) {
       debugPrint(
         '[SourceRagService] Index is already up to date. Skipping rebuild.',
       );
-      return;
+      return _warmupFuture;
     }
-    try {
-      // Rebuild HNSW for vector search
-      await rust_rag.rebuildChunkHnswIndex();
-      await saveIndex(); // Persist to disk immediately
+    _isIndexReady = false;
+    final startDirtyVersion = _dirtyVersion;
 
-      // Rebuild BM25 for keyword search (critical for hybrid search!)
-      await rust_rag.rebuildChunkBm25Index();
+    final rebuildFuture = _enqueueIndexTask(() async {
+      try {
+        // Rebuild HNSW for vector search
+        await rust_rag.rebuildChunkHnswIndex();
+        await saveIndex(); // Persist to disk immediately
 
-      await _markClean(); // Mark index as clean (Persistent)
-    } on RagError catch (e) {
-      e.when(
-        databaseError: (msg) =>
-            debugPrint('[SmartError] DB error rebuilding index: $msg'),
-        ioError: (msg) =>
-            debugPrint('[SmartError] IO error rebuilding index: $msg'),
-        modelLoadError: (_) {},
-        invalidInput: (_) {},
-        internalError: (msg) =>
-            debugPrint('[SmartError] Internal error rebuilding indexes: $msg'),
-        unknown: (_) {},
-      );
-      rethrow;
-    }
+        // Rebuild BM25 for keyword search (critical for hybrid search!)
+        await rust_rag.rebuildChunkBm25Index();
+
+        await _markClean(
+          expectedVersion: startDirtyVersion,
+        ); // Mark index as clean (Persistent)
+        _isIndexReady = !_needsRebuild;
+      } on RagError catch (e) {
+        _isIndexReady = false;
+        e.when(
+          databaseError: (msg) =>
+              debugPrint('[SmartError] DB error rebuilding index: $msg'),
+          ioError: (msg) =>
+              debugPrint('[SmartError] IO error rebuilding index: $msg'),
+          modelLoadError: (_) {},
+          invalidInput: (_) {},
+          internalError: (msg) =>
+              debugPrint('[SmartError] Internal error rebuilding indexes: $msg'),
+          unknown: (_) {},
+        );
+        rethrow;
+      }
+    });
+
+    _warmupFuture = rebuildFuture;
+    return rebuildFuture;
   }
 
   /// Regenerate embeddings for all existing chunks using the current model.
