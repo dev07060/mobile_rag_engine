@@ -16,8 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Normalized index/dirty marker paths for `.sqlite3`, `.sqlite`, and `.db` database names.
   - Expanded `clearAllData()` cleanup to remove legacy/new HNSW artifact naming patterns.
   - Preserved defer policy when reinitializing service after `clearAllData()`.
-* **Documentation**:
-  - Added Multi-Collection v1 detailed design doc at `docs/guides/multi_collection_v1_design.md`.
 
 ## 0.11.0+1
 * **Fix Pub readme**:
