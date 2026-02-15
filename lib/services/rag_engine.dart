@@ -73,12 +73,15 @@ class RagEngine {
 
   /// Vocabulary size of the loaded tokenizer.
   final int vocabSize;
+  final bool _deferIndexWarmup;
 
   RagEngine._({
     required SourceRagService ragService,
     required this.dbPath,
     required this.vocabSize,
-  }) : _ragService = ragService;
+    required bool deferIndexWarmup,
+  }) : _ragService = ragService,
+       _deferIndexWarmup = deferIndexWarmup;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Auto-Indexing Strategy (Active Tracking + Debounce + Flush-on-Search)
@@ -239,13 +242,14 @@ class RagEngine {
       maxChunkChars: config.maxChunkChars,
       overlapChars: config.overlapChars,
     );
-    await ragService.init();
+    await ragService.init(deferIndexWarmup: config.deferIndexWarmup);
 
     onProgress?.call('Ready!');
     return RagEngine._(
       ragService: ragService,
       dbPath: dbPath,
       vocabSize: vocabSize,
+      deferIndexWarmup: config.deferIndexWarmup,
     );
   }
 
@@ -260,6 +264,23 @@ class RagEngine {
       await file.writeAsBytes(data.buffer.asUint8List());
     }
   }
+
+  static String _stripDbExtension(String path) {
+    const knownDbExtensions = ['.sqlite3', '.sqlite', '.db'];
+    final lower = path.toLowerCase();
+    for (final ext in knownDbExtensions) {
+      if (lower.endsWith(ext)) {
+        return path.substring(0, path.length - ext.length);
+      }
+    }
+    return path;
+  }
+
+  /// Whether all retrieval indexes are ready for full-quality search.
+  bool get isIndexReady => _ragService.isIndexReady;
+
+  /// Completes when the latest index warmup/rebuild task has finished.
+  Future<void> get warmupFuture => _ragService.warmupFuture;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Delegated methods from SourceRagService
@@ -483,17 +504,22 @@ class RagEngine {
       debugPrint('[RagEngine] clearAllData: DB file not found.');
     }
 
-    // 3. Delete HNSW index file (and lock file if exists)
-    final indexFile = File('${dbPath.replaceAll('.db', '')}_hnsw');
-    if (await indexFile.exists()) {
-      debugPrint('[RagEngine] clearAllData: Deleting index file...');
-      await indexFile.delete();
-    }
-    // Also try checking for .pbin if naming convention varies
-    final indexFileAlt = File('${dbPath.replaceAll('.db', '')}_hnsw.pbin');
-    if (await indexFileAlt.exists()) {
-      debugPrint('[RagEngine] clearAllData: Deleting alt index file...');
-      await indexFileAlt.delete();
+    // 3. Delete index artifacts (new and legacy naming patterns)
+    final baseNoExt = _stripDbExtension(dbPath);
+    final indexStems = <String>{baseNoExt, '${baseNoExt}_hnsw'};
+    final indexCandidates = <String>{
+      for (final stem in indexStems) stem,
+      for (final stem in indexStems) '$stem.pbin',
+      for (final stem in indexStems) '$stem.hnsw.data',
+      for (final stem in indexStems) '$stem.hnsw.graph',
+    };
+
+    for (final path in indexCandidates) {
+      final file = File(path);
+      if (await file.exists()) {
+        debugPrint('[RagEngine] clearAllData: Deleting index artifact: $path');
+        await file.delete();
+      }
     }
 
     // 4. Re-initialize DB pool
@@ -503,7 +529,7 @@ class RagEngine {
 
     // 5. Re-initialize service
     debugPrint('[RagEngine] clearAllData: Re-initializing service...');
-    await _ragService.init();
+    await _ragService.init(deferIndexWarmup: _deferIndexWarmup);
     debugPrint('[RagEngine] clearAllData: Service initialized. Done.');
   }
 

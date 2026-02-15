@@ -74,6 +74,8 @@ class MobileRag {
   ///   **Mutually exclusive with [threadLevel].**
   /// - [threadLevel] - High-level thread usage: `low` (~20%), `medium` (~40%), `high` (~80%).
   ///   **Mutually exclusive with [embeddingIntraOpNumThreads].**
+  /// - [deferIndexWarmup] - If true, returns before BM25/HNSW warmup completes.
+  ///   Use [isIndexReady] or [warmupFuture] to gate search quality.
   /// - [onProgress] - Callback for initialization progress updates
   ///
   /// **Thread Configuration:**
@@ -101,6 +103,7 @@ class MobileRag {
     int overlapChars = 50,
     int? embeddingIntraOpNumThreads,
     ThreadUseLevel? threadLevel,
+    bool deferIndexWarmup = false,
     void Function(String status)? onProgress,
   }) async {
     if (_instance != null) {
@@ -117,6 +120,7 @@ class MobileRag {
         overlapChars: overlapChars,
         embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
         threadLevel: threadLevel,
+        deferIndexWarmup: deferIndexWarmup,
       ),
       onProgress: onProgress,
     );
@@ -158,6 +162,12 @@ class MobileRag {
 
   /// Vocabulary size of the loaded tokenizer.
   int get vocabSize => _engine!.vocabSize;
+
+  /// Whether all retrieval indexes are ready for full-quality search.
+  bool get isIndexReady => _engine!.isIndexReady;
+
+  /// Completes when BM25/HNSW warmup has finished.
+  Future<void> get warmupFuture => _engine!.warmupFuture;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Convenience instance methods (delegate to RagEngine)

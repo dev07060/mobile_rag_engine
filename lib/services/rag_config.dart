@@ -58,6 +58,15 @@ class RagConfig {
   /// If specified, this takes precedence over [embeddingIntraOpNumThreads].
   final ThreadUseLevel? threadLevel;
 
+  /// Whether to defer index warmup during initialization.
+  ///
+  /// If true, [RagEngine.initialize] returns after DB setup and starts
+  /// BM25/HNSW warmup in background. UI can render faster on low-end devices.
+  ///
+  /// Search quality should be gated by [RagEngine.isIndexReady] or
+  /// awaiting [RagEngine.warmupFuture].
+  final bool deferIndexWarmup;
+
   /// Creates a RagConfig with all options.
   const RagConfig({
     required this.tokenizerAsset,
@@ -67,6 +76,7 @@ class RagConfig {
     this.overlapChars = 50,
     this.embeddingIntraOpNumThreads,
     this.threadLevel,
+    this.deferIndexWarmup = false,
   }) : assert(
          embeddingIntraOpNumThreads == null || threadLevel == null,
          'Cannot set both [embeddingIntraOpNumThreads] and [threadLevel]. Choose one.',
@@ -90,6 +100,7 @@ class RagConfig {
     int overlapChars = 50,
     int? embeddingIntraOpNumThreads,
     ThreadUseLevel? threadLevel,
+    bool deferIndexWarmup = false,
   }) => RagConfig(
     tokenizerAsset: tokenizerAsset,
     modelAsset: modelAsset,
@@ -98,5 +109,6 @@ class RagConfig {
     overlapChars: overlapChars,
     embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
     threadLevel: threadLevel,
+    deferIndexWarmup: deferIndexWarmup,
   );
 }

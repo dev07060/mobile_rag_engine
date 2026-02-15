@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.12.0
+* **Initialization & DX**:
+  - Added `deferIndexWarmup` to `MobileRag.initialize(...)` and `RagConfig`.
+  - Added `isIndexReady` and `warmupFuture` to `MobileRag`/`RagEngine` for explicit warmup gating.
+  - Enabled non-blocking startup path so UI can render before BM25/HNSW warmup completes.
+* **Index Lifecycle Reliability**:
+  - Serialized index warmup/rebuild tasks to prevent overlapping rebuild operations.
+  - Added dirty-version tracking to avoid stale clean-state during concurrent mutations.
+  - Normalized index/dirty marker paths for `.sqlite3`, `.sqlite`, and `.db` database names.
+  - Expanded `clearAllData()` cleanup to remove legacy/new HNSW artifact naming patterns.
+  - Preserved defer policy when reinitializing service after `clearAllData()`.
+
+## 0.11.0+1
+* **Fix Pub readme**:
+  - Fix Broken Readme on Pub.dev
+
 ## 0.11.0
 * **Retrieval Quality**:
   - Applied `overlapChars` in semantic chunk overlap path.
