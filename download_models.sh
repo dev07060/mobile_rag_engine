@@ -5,15 +5,15 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ASSETS_DIR="$SCRIPT_DIR/assets"
+ASSETS_DIR="$SCRIPT_DIR/example/assets"
 
 # Model URLs from Hugging Face
 BGE_M3_ONNX_URL="https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx"
 BGE_M3_TOKENIZER_URL="https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer.json"
 
 # Output file names
-ONNX_FILE="$ASSETS_DIR/bge-m3-int8.onnx"
-TOKENIZER_FILE="$ASSETS_DIR/bge-m3-tokenizer.json"
+ONNX_FILE="$ASSETS_DIR/model.onnx"
+TOKENIZER_FILE="$ASSETS_DIR/tokenizer.json"
 
 echo "📦 BGE-m3 Embedding Model Downloader"
 echo "======================================"

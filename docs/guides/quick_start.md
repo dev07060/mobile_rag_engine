@@ -58,6 +58,8 @@ Future<void> initializeRAG() async {
     tokenizerAsset: 'assets/tokenizer.json',
     modelAsset: 'assets/model.onnx',
     threadLevel: ThreadUseLevel.medium, // Recommended for most apps
+    // Optional: return before BM25/HNSW warmup finishes
+    deferIndexWarmup: true,
   );
 }
 ```
@@ -73,9 +75,22 @@ Future<void> initializeRAG() async {
 | `overlapChars` | `50` | Overlap between chunks for context |
 | `threadLevel` | `null` | CPU usage level: `low` (~20%), `medium` (~40%), `high` (~80%) |
 | `embeddingIntraOpNumThreads` | `null` | Precise thread count (⚠️ mutually exclusive with `threadLevel`) |
+| `deferIndexWarmup` | `false` | If `true`, initialization returns before BM25/HNSW warmup completes |
 | `onProgress` | `null` | Callback for initialization status |
 
 > **Note:** Choose either `threadLevel` OR `embeddingIntraOpNumThreads`, not both. Setting both will throw an error.
+
+### When to use `deferIndexWarmup`
+
+- Use `false` (default) when your app must allow full-quality search immediately after startup.
+- Use `true` when faster first UI render is more important (low-end device, debug/hot-restart loops, large local corpus).
+- With `true`, block search until warmup completes:
+
+```dart
+if (!MobileRag.instance.isIndexReady) {
+  await MobileRag.instance.warmupFuture;
+}
+```
 
 ## Step 4: Add Documents
 
@@ -246,6 +261,11 @@ Instead of rebuilding the index every time, you can load a previously cached ind
 
 ```dart
 await MobileRag.initialize(...);
+
+// If initialized with deferIndexWarmup: true, wait before first search
+if (!MobileRag.instance.isIndexReady) {
+  await MobileRag.instance.warmupFuture;
+}
 
 // Try to load existing index from disk (much faster)
 bool loaded = await MobileRag.instance.tryLoadCachedIndex();

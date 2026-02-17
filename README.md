@@ -116,35 +116,22 @@ curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/resolve/main/token
 
 Initialize the engine once in your `main()` function:
 
+
+
+### Initialization Parameters 
+
 ```dart
-import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+await MobileRag.initialize(
+  tokenizerAsset: 'assets/tokenizer.json',
+  modelAsset: 'assets/model.onnx',
+  deferIndexWarmup: true,
+);
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // 1. Initialize (Just 1 step!)
-  await MobileRag.initialize(
-    tokenizerAsset: 'assets/tokenizer.json',
-    modelAsset: 'assets/model.onnx',
-    threadLevel: ThreadUseLevel.medium, // CPU usage control
-  );
-
-  runApp(const MyApp());
+// Before first search:
+if (!MobileRag.instance.isIndexReady) {
+  await MobileRag.instance.warmupFuture;
 }
 ```
-
-### Initialization Parameters
-
-| Parameter | Default | Description |
-|:----------|:--------|:------------|
-| `tokenizerAsset` | (required) | Path to tokenizer.json |
-| `modelAsset` | (required) | Path to ONNX model |
-| `databaseName` | `'rag.sqlite'` | SQLite file name |
-| `maxChunkChars` | `500` | Max characters per chunk |
-| `overlapChars` | `50` | Overlap between chunks |
-| `threadLevel` | `null` | CPU usage: `low` (20%), `medium` (40%), `high` (80%) |
-| `embeddingIntraOpNumThreads` | `null` | Precise thread count (mutually exclusive with `threadLevel`) |
-| `onProgress` | `null` | Progress callback |
 
 
 Then use it anywhere in your app:
@@ -174,39 +161,6 @@ class MySearchScreen extends StatelessWidget {
 ```
 
 > **Advanced Usage:** For fine-grained control, you can still use the low-level APIs (`initTokenizer`, `EmbeddingService`, `SourceRagService`) directly. See the [API Reference](https://pub.dev/documentation/mobile_rag_engine/latest/).
-
----
-
-## PDF/DOCX Import
-
-Extract text from documents and add to RAG:
-
-```dart
-import 'dart:io';
-import 'package:file_picker/file_picker.dart';
-import 'package:mobile_rag_engine/mobile_rag_engine.dart';
-
-Future<void> importDocument() async {
-  // Pick file
-  final result = await FilePicker.platform.pickFiles(
-    type: FileType.custom,
-    allowedExtensions: ['pdf', 'docx'],
-  );
-  if (result == null) return;
-
-  // Extract text (handles hyphenation, page numbers automatically)
-  final bytes = await File(result.files.single.path!).readAsBytes();
-  final text = await extractTextFromDocument(fileBytes: bytes.toList());
-
-  // Add to RAG with auto-chunking
-  await MobileRag.instance.addDocument(text, filePath: result.files.single.path);
-  // Add to RAG with auto-chunking
-  await MobileRag.instance.addDocument(text, filePath: result.files.single.path);
-  // await MobileRag.instance.rebuildIndex(); // Optional: Force immediate update
-}
-```
-
-> **Note:** `file_picker` is optional. You can obtain file bytes from any source (network, camera, etc.) and pass to `extractTextFromDocument()`.
 
 ---
 
