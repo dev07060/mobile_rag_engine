@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0
+* **Multi-Collection Core**:
+  - Added collection-scoped schema and lifecycle support (`collection_id` on sources/chunks, collection index state).
+  - Added collection-aware source/chunk APIs for list/add/delete/stats/rebuild/search paths.
+  - Preserved legacy compatibility through default collection mapping.
+* **Hybrid Search Isolation**:
+  - Extended `SearchFilter` with `collection_id`.
+  - Updated exact-scan switching rules to trigger on source/metadata filters while preserving collection post-filter behavior.
+  - Added collection-scoped activation hook to align BM25/HNSW in-memory indexes before hybrid search.
+* **Reliability & Recovery**:
+  - Improved collection activation and index-state transitions for load/rebuild flows.
+  - Added/expanded tests for collection isolation, scoped dedupe, and filter semantics.
+
 ## 0.12.0
 * **Logger Stability (Hot Restart)**:
   - Reworked Dart log sink ownership to `Arc<StreamSink<_>>` for safer cross-thread access.
