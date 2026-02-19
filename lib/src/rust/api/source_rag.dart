@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `hash_content`, `search_chunks_linear`
+// These functions are ignored because they are not marked as `pub`: `ensure_collection_row`, `hash_content`, `is_active_bm25_collection`, `is_active_hnsw_collection`, `mark_collection_bm25_clean`, `mark_collection_dirty`, `mark_collection_hnsw_clean`, `normalize_collection_id`, `search_chunks_linear_in_collection`, `search_chunks_linear`, `set_active_bm25_collection`, `set_active_hnsw_collection`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Initialize database with sources and chunks tables.
@@ -25,6 +25,19 @@ Future<AddSourceResult> addSource({
   name: name,
 );
 
+/// Add a source document to a specific collection (chunks added separately via add_chunks).
+Future<AddSourceResult> addSourceInCollection({
+  required String collectionId,
+  required String content,
+  String? metadata,
+  String? name,
+}) => RustLib.instance.api.crateApiSourceRagAddSourceInCollection(
+  collectionId: collectionId,
+  content: content,
+  metadata: metadata,
+  name: name,
+);
+
 /// Update processing status of a source (e.g., 'pending', 'processing', 'completed', 'failed').
 Future<void> updateSourceStatus({
   required PlatformInt64 sourceId,
@@ -36,6 +49,12 @@ Future<void> updateSourceStatus({
 
 Future<List<SourceEntry>> listSources() =>
     RustLib.instance.api.crateApiSourceRagListSources();
+
+Future<List<SourceEntry>> listSourcesInCollection({
+  required String collectionId,
+}) => RustLib.instance.api.crateApiSourceRagListSourcesInCollection(
+  collectionId: collectionId,
+);
 
 /// Add chunks for a source (uses transaction for atomicity).
 Future<int> addChunks({
@@ -50,19 +69,74 @@ Future<int> addChunks({
 Future<void> rebuildChunkHnswIndex() =>
     RustLib.instance.api.crateApiSourceRagRebuildChunkHnswIndex();
 
+/// Rebuild HNSW index from chunks table for a specific collection.
+Future<void> rebuildChunkHnswIndexForCollection({
+  required String collectionId,
+}) => RustLib.instance.api.crateApiSourceRagRebuildChunkHnswIndexForCollection(
+  collectionId: collectionId,
+);
+
 /// Rebuild BM25 index from chunks table.
 Future<void> rebuildChunkBm25Index() =>
     RustLib.instance.api.crateApiSourceRagRebuildChunkBm25Index();
 
+/// Rebuild BM25 index from chunks table for a specific collection.
+Future<void> rebuildChunkBm25IndexForCollection({
+  required String collectionId,
+}) => RustLib.instance.api.crateApiSourceRagRebuildChunkBm25IndexForCollection(
+  collectionId: collectionId,
+);
+
 /// Check if BM25 index is loaded for chunks.
 Future<bool> isChunkBm25IndexLoaded() =>
     RustLib.instance.api.crateApiSourceRagIsChunkBm25IndexLoaded();
+
+/// Save currently loaded HNSW index for a collection.
+Future<void> saveCollectionHnswIndex({
+  required String collectionId,
+  required String basePath,
+}) => RustLib.instance.api.crateApiSourceRagSaveCollectionHnswIndex(
+  collectionId: collectionId,
+  basePath: basePath,
+);
+
+/// Load HNSW index from disk and mark the collection as active.
+Future<bool> loadCollectionHnswIndex({
+  required String collectionId,
+  required String basePath,
+}) => RustLib.instance.api.crateApiSourceRagLoadCollectionHnswIndex(
+  collectionId: collectionId,
+  basePath: basePath,
+);
+
+/// Ensure the in-memory hybrid search indexes are switched to the target collection.
+///
+/// BM25 is rebuilt for the collection when not active, and HNSW is loaded (or rebuilt)
+/// from the collection-specific path as needed.
+Future<void> activateCollectionForHybridSearch({
+  required String collectionId,
+  required String basePath,
+}) => RustLib.instance.api.crateApiSourceRagActivateCollectionForHybridSearch(
+  collectionId: collectionId,
+  basePath: basePath,
+);
 
 /// Search chunks by embedding similarity.
 Future<List<ChunkSearchResult>> searchChunks({
   required List<double> queryEmbedding,
   required int topK,
 }) => RustLib.instance.api.crateApiSourceRagSearchChunks(
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
+
+/// Search chunks by embedding similarity in a specific collection.
+Future<List<ChunkSearchResult>> searchChunksInCollection({
+  required String collectionId,
+  required List<double> queryEmbedding,
+  required int topK,
+}) => RustLib.instance.api.crateApiSourceRagSearchChunksInCollection(
+  collectionId: collectionId,
   queryEmbedding: queryEmbedding,
   topK: topK,
 );
@@ -90,6 +164,15 @@ Future<List<ChunkSearchResult>> getAdjacentChunks({
 Future<void> deleteSource({required PlatformInt64 sourceId}) =>
     RustLib.instance.api.crateApiSourceRagDeleteSource(sourceId: sourceId);
 
+/// Delete a source and all its chunks in a specific collection.
+Future<void> deleteSourceInCollection({
+  required String collectionId,
+  required PlatformInt64 sourceId,
+}) => RustLib.instance.api.crateApiSourceRagDeleteSourceInCollection(
+  collectionId: collectionId,
+  sourceId: sourceId,
+);
+
 /// Get the number of chunks for a specific source.
 Future<int> getSourceChunkCount({required PlatformInt64 sourceId}) => RustLib
     .instance
@@ -99,9 +182,22 @@ Future<int> getSourceChunkCount({required PlatformInt64 sourceId}) => RustLib
 Future<SourceStats> getSourceStats() =>
     RustLib.instance.api.crateApiSourceRagGetSourceStats();
 
+Future<SourceStats> getSourceStatsInCollection({
+  required String collectionId,
+}) => RustLib.instance.api.crateApiSourceRagGetSourceStatsInCollection(
+  collectionId: collectionId,
+);
+
 /// Get all chunk IDs and contents for re-embedding.
 Future<List<ChunkForReembedding>> getAllChunkIdsAndContents() =>
     RustLib.instance.api.crateApiSourceRagGetAllChunkIdsAndContents();
+
+Future<List<ChunkForReembedding>> getAllChunkIdsAndContentsInCollection({
+  required String collectionId,
+}) =>
+    RustLib.instance.api.crateApiSourceRagGetAllChunkIdsAndContentsInCollection(
+      collectionId: collectionId,
+    );
 
 /// Update embedding for a single chunk.
 Future<void> updateChunkEmbedding({
@@ -249,6 +345,7 @@ class SourceEntry {
   final PlatformInt64 createdAt;
   final String? metadata;
   final String? status;
+  final String collectionId;
 
   const SourceEntry({
     required this.id,
@@ -256,6 +353,7 @@ class SourceEntry {
     required this.createdAt,
     this.metadata,
     this.status,
+    required this.collectionId,
   });
 
   @override
@@ -264,7 +362,8 @@ class SourceEntry {
       name.hashCode ^
       createdAt.hashCode ^
       metadata.hashCode ^
-      status.hashCode;
+      status.hashCode ^
+      collectionId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -275,7 +374,8 @@ class SourceEntry {
           name == other.name &&
           createdAt == other.createdAt &&
           metadata == other.metadata &&
-          status == other.status;
+          status == other.status &&
+          collectionId == other.collectionId;
 }
 
 class SourceStats {

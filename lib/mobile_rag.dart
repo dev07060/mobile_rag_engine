@@ -169,6 +169,10 @@ class MobileRag {
   /// Completes when BM25/HNSW warmup has finished.
   Future<void> get warmupFuture => _engine!.warmupFuture;
 
+  /// Get a collection-scoped facade.
+  CollectionRag inCollection(String collectionId) =>
+      CollectionRag._(_engine!, collectionId);
+
   // ─────────────────────────────────────────────────────────────────────────
   // Convenience instance methods (delegate to RagEngine)
   // ─────────────────────────────────────────────────────────────────────────
@@ -337,4 +341,110 @@ class MobileRag {
     _engine = null;
     _instance = null;
   }
+}
+
+/// Collection-scoped facade for Multi-Collection workflows.
+class CollectionRag {
+  final RagEngine _engine;
+  final String _collectionId;
+
+  CollectionRag._(this._engine, String collectionId)
+    : _collectionId = collectionId.trim().isEmpty
+          ? SourceRagService.defaultCollectionId
+          : collectionId.trim();
+
+  String get collectionId => _collectionId;
+
+  bool get isIndexReady => _engine.isCollectionIndexReady(_collectionId);
+  Future<void> get warmupFuture => _engine.collectionWarmupFuture(_collectionId);
+
+  Future<SourceAddResult> addDocument(
+    String content, {
+    String? metadata,
+    String? name,
+    String? filePath,
+    ChunkingStrategy? strategy,
+    Duration? chunkDelay,
+    void Function(int done, int total)? onProgress,
+  }) => _engine.addDocument(
+    content,
+    metadata: metadata,
+    name: name,
+    filePath: filePath,
+    strategy: strategy,
+    chunkDelay: chunkDelay,
+    onProgress: onProgress,
+    collectionId: _collectionId,
+  );
+
+  Future<List<SourceEntry>> listSources() =>
+      _engine.listSources(collectionId: _collectionId);
+
+  Future<void> removeSource(int sourceId) =>
+      _engine.removeSource(sourceId, collectionId: _collectionId);
+
+  Future<RagSearchResult> search(
+    String query, {
+    int topK = 10,
+    int tokenBudget = 2000,
+    ContextStrategy strategy = ContextStrategy.relevanceFirst,
+    int adjacentChunks = 0,
+    bool singleSourceMode = false,
+    List<int>? sourceIds,
+  }) => _engine.search(
+    query,
+    topK: topK,
+    tokenBudget: tokenBudget,
+    strategy: strategy,
+    adjacentChunks: adjacentChunks,
+    singleSourceMode: singleSourceMode,
+    sourceIds: sourceIds,
+    collectionId: _collectionId,
+  );
+
+  Future<List<hybrid.HybridSearchResult>> searchHybrid(
+    String query, {
+    int topK = 10,
+    double vectorWeight = 0.2,
+    double bm25Weight = 0.8,
+    List<int>? sourceIds,
+  }) => _engine.searchHybrid(
+    query,
+    topK: topK,
+    vectorWeight: vectorWeight,
+    bm25Weight: bm25Weight,
+    sourceIds: sourceIds,
+    collectionId: _collectionId,
+  );
+
+  Future<RagSearchResult> searchHybridWithContext(
+    String query, {
+    int topK = 10,
+    int tokenBudget = 2000,
+    ContextStrategy strategy = ContextStrategy.relevanceFirst,
+    int adjacentChunks = 0,
+    double vectorWeight = 0.2,
+    double bm25Weight = 0.8,
+    bool singleSourceMode = false,
+    List<int>? sourceIds,
+  }) => _engine.searchHybridWithContext(
+    query,
+    topK: topK,
+    tokenBudget: tokenBudget,
+    strategy: strategy,
+    adjacentChunks: adjacentChunks,
+    vectorWeight: vectorWeight,
+    bm25Weight: bm25Weight,
+    singleSourceMode: singleSourceMode,
+    sourceIds: sourceIds,
+    collectionId: _collectionId,
+  );
+
+  Future<void> rebuildIndex({bool force = false}) =>
+      _engine.rebuildIndex(force: force, collectionId: _collectionId);
+
+  Future<SourceStats> getStats() => _engine.getStats(collectionId: _collectionId);
+
+  String formatPrompt(String query, RagSearchResult result) =>
+      _engine.formatPrompt(query, result);
 }

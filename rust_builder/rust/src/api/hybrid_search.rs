@@ -29,6 +29,7 @@ use ndarray::Array1;
 pub struct SearchFilter {
     pub source_ids: Option<Vec<i64>>,
     pub metadata_like: Option<String>, // SQL LIKE pattern
+    pub collection_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -115,164 +116,196 @@ pub fn search_hybrid(
     );
 
     // 2. Filter-Aware Search Strategy
-    // If filtering by source_id, performing a global HNSW search and then filtering is inefficient
-    // and prone to low recall (if source is small/obscure).
-    // Instead, perform an exact scan over the target source's chunks and compute
-    // both vector and BM25 ranks in that scoped set.
+    // If filtering by source_id or metadata, performing a global candidate search and
+    // post-filtering can be inefficient and low-recall for small scoped subsets.
+    // In that case, perform an exact scan over the scoped chunks and compute
+    // both vector and BM25 ranks directly.
     let mut used_exact_source_scan = false;
     if let Some(f) = &filter {
-        if let Some(sids) = &f.source_ids {
-            if !sids.is_empty() {
-                used_exact_source_scan = true;
-                info!(
-                    "[hybrid] Source filter active ({:?}), switching to exact scan",
-                    sids
+        let has_source_filter = f
+            .source_ids
+            .as_ref()
+            .map(|sids| !sids.is_empty())
+            .unwrap_or(false);
+        let has_metadata_filter = f
+            .metadata_like
+            .as_ref()
+            .map(|pattern| !pattern.trim().is_empty())
+            .unwrap_or(false);
+
+        if has_source_filter || has_metadata_filter {
+            used_exact_source_scan = true;
+            info!(
+                    "[hybrid] Scoped exact filter active (source_ids={:?}, metadata_like={:?}), switching to exact scan",
+                    f.source_ids, f.metadata_like
                 );
 
-                let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
-                let sids_str = sids
-                    .iter()
-                    .map(|id| id.to_string())
-                    .collect::<Vec<_>>()
-                    .join(",");
+            let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+            let mut exact_conditions = Vec::new();
 
-                // Fetch ALL chunks for these sources for scoped vector + BM25 scoring.
-                let query = format!(
-                    "SELECT c.id, c.embedding, c.content FROM chunks c WHERE c.source_id IN ({})",
-                    sids_str
-                );
+            if let Some(collection_id) = &f.collection_id {
+                if !collection_id.trim().is_empty() {
+                    exact_conditions.push(format!(
+                        "c.collection_id = '{}'",
+                        collection_id.replace("'", "''")
+                    ));
+                }
+            }
 
-                let mut stmt = conn
-                    .prepare(&query)
-                    .map_err(|e| RagError::DatabaseError(e.to_string()))?;
-                let chunk_iter = stmt
-                    .query_map([], |row| {
-                        Ok((
-                            row.get::<_, i64>(0)?,
-                            row.get::<_, Vec<u8>>(1)?,
-                            row.get::<_, String>(2)?,
-                        ))
-                    })
-                    .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+            if let Some(sids) = &f.source_ids {
+                if !sids.is_empty() {
+                    let sids_str = sids
+                        .iter()
+                        .map(|id| id.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    exact_conditions.push(format!("c.source_id IN ({})", sids_str));
+                }
+            }
 
-                let query_vec = Array1::from(query_embedding.clone());
-                let query_norm = query_vec.mapv(|x| x * x).sum().sqrt();
-                let query_tokens = tokenize_for_bm25(&query_text);
-                let query_token_set: HashSet<String> = query_tokens.iter().cloned().collect();
+            if let Some(pattern) = &f.metadata_like {
+                exact_conditions.push(format!("s.metadata LIKE '{}'", pattern.replace("'", "''")));
+            }
 
-                let mut scoped_doc_count = 0usize;
-                let mut scoped_total_doc_length = 0usize;
-                let mut scoped_doc_lengths: HashMap<i64, usize> = HashMap::new();
-                let mut scoped_doc_freqs: HashMap<String, usize> = HashMap::new();
-                let mut scoped_term_freqs: HashMap<i64, HashMap<String, u32>> = HashMap::new();
+            // Fetch ALL chunks for this scoped set for exact vector + BM25 scoring.
+            let query = format!(
+                "SELECT c.id, c.embedding, c.content
+                     FROM chunks c
+                     LEFT JOIN sources s ON c.source_id = s.id
+                     WHERE {}",
+                exact_conditions.join(" AND ")
+            );
 
-                // Replace global candidate sets with scoped exact scan results.
-                vector_results.clear();
-                bm25_results.clear();
+            let mut stmt = conn
+                .prepare(&query)
+                .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+            let chunk_iter = stmt
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Vec<u8>>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                })
+                .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
-                for row in chunk_iter {
-                    if let Ok((id, embedding_blob, content)) = row {
-                        let embedding: Vec<f32> = embedding_blob
-                            .chunks(4)
-                            .map(|c| f32::from_ne_bytes(c.try_into().unwrap()))
-                            .collect();
+            let query_vec = Array1::from(query_embedding.clone());
+            let query_norm = query_vec.mapv(|x| x * x).sum().sqrt();
+            let query_tokens = tokenize_for_bm25(&query_text);
+            let query_token_set: HashSet<String> = query_tokens.iter().cloned().collect();
 
-                        if embedding.len() == query_embedding.len() {
-                            let target_vec = Array1::from(embedding);
-                            let target_norm = target_vec.mapv(|x| x * x).sum().sqrt();
-                            let dot = query_vec.dot(&target_vec);
-                            let sim = if query_norm == 0.0 || target_norm == 0.0 {
-                                0.0
-                            } else {
-                                dot / (query_norm * target_norm)
-                            };
+            let mut scoped_doc_count = 0usize;
+            let mut scoped_total_doc_length = 0usize;
+            let mut scoped_doc_lengths: HashMap<i64, usize> = HashMap::new();
+            let mut scoped_doc_freqs: HashMap<String, usize> = HashMap::new();
+            let mut scoped_term_freqs: HashMap<i64, HashMap<String, u32>> = HashMap::new();
 
-                            vector_results.push(HnswSearchResult {
-                                id,
-                                distance: (1.0 - sim) as f32, // lower is better
-                            });
-                        }
+            // Replace global candidate sets with scoped exact scan results.
+            vector_results.clear();
+            bm25_results.clear();
 
-                        if !query_token_set.is_empty() {
-                            let doc_tokens = tokenize_for_bm25(&content);
-                            let doc_length = doc_tokens.len();
-                            if doc_length > 0 {
-                                scoped_doc_count += 1;
-                                scoped_total_doc_length += doc_length;
-                                scoped_doc_lengths.insert(id, doc_length);
+            for row in chunk_iter {
+                if let Ok((id, embedding_blob, content)) = row {
+                    let embedding: Vec<f32> = embedding_blob
+                        .chunks(4)
+                        .map(|c| f32::from_ne_bytes(c.try_into().unwrap()))
+                        .collect();
 
-                                let mut term_freqs: HashMap<String, u32> = HashMap::new();
-                                for token in doc_tokens {
-                                    if query_token_set.contains(&token) {
-                                        *term_freqs.entry(token).or_insert(0) += 1;
-                                    }
+                    if embedding.len() == query_embedding.len() {
+                        let target_vec = Array1::from(embedding);
+                        let target_norm = target_vec.mapv(|x| x * x).sum().sqrt();
+                        let dot = query_vec.dot(&target_vec);
+                        let sim = if query_norm == 0.0 || target_norm == 0.0 {
+                            0.0
+                        } else {
+                            dot / (query_norm * target_norm)
+                        };
+
+                        vector_results.push(HnswSearchResult {
+                            id,
+                            distance: (1.0 - sim) as f32, // lower is better
+                        });
+                    }
+
+                    if !query_token_set.is_empty() {
+                        let doc_tokens = tokenize_for_bm25(&content);
+                        let doc_length = doc_tokens.len();
+                        if doc_length > 0 {
+                            scoped_doc_count += 1;
+                            scoped_total_doc_length += doc_length;
+                            scoped_doc_lengths.insert(id, doc_length);
+
+                            let mut term_freqs: HashMap<String, u32> = HashMap::new();
+                            for token in doc_tokens {
+                                if query_token_set.contains(&token) {
+                                    *term_freqs.entry(token).or_insert(0) += 1;
                                 }
-                                for term in term_freqs.keys() {
-                                    *scoped_doc_freqs.entry(term.clone()).or_insert(0) += 1;
-                                }
-                                scoped_term_freqs.insert(id, term_freqs);
                             }
+                            for term in term_freqs.keys() {
+                                *scoped_doc_freqs.entry(term.clone()).or_insert(0) += 1;
+                            }
+                            scoped_term_freqs.insert(id, term_freqs);
                         }
                     }
                 }
+            }
 
-                // Sort by distance ASCENDING (best match first)
-                vector_results.sort_by(|a, b| {
-                    a.distance
-                        .partial_cmp(&b.distance)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
-                vector_results.truncate(candidate_k);
+            // Sort by distance ASCENDING (best match first)
+            vector_results.sort_by(|a, b| {
+                a.distance
+                    .partial_cmp(&b.distance)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            vector_results.truncate(candidate_k);
 
-                if !query_tokens.is_empty() && scoped_doc_count > 0 {
-                    let avg_doc_length = scoped_total_doc_length as f64 / scoped_doc_count as f64;
-                    let k1 = 1.2;
-                    let b = 0.75;
-                    let mut scoped_bm25_scores: Vec<Bm25SearchResult> = Vec::new();
+            if !query_tokens.is_empty() && scoped_doc_count > 0 {
+                let avg_doc_length = scoped_total_doc_length as f64 / scoped_doc_count as f64;
+                let k1 = 1.2;
+                let b = 0.75;
+                let mut scoped_bm25_scores: Vec<Bm25SearchResult> = Vec::new();
 
-                    for (doc_id, term_freqs) in scoped_term_freqs {
-                        let Some(doc_len) = scoped_doc_lengths.get(&doc_id) else {
+                for (doc_id, term_freqs) in scoped_term_freqs {
+                    let Some(doc_len) = scoped_doc_lengths.get(&doc_id) else {
+                        continue;
+                    };
+                    let mut score = 0.0;
+                    for token in &query_tokens {
+                        let Some(tf) = term_freqs.get(token) else {
                             continue;
                         };
-                        let mut score = 0.0;
-                        for token in &query_tokens {
-                            let Some(tf) = term_freqs.get(token) else {
-                                continue;
-                            };
-                            let Some(df) = scoped_doc_freqs.get(token) else {
-                                continue;
-                            };
+                        let Some(df) = scoped_doc_freqs.get(token) else {
+                            continue;
+                        };
 
-                            let n = *df as f64;
-                            let idf = ((scoped_doc_count as f64 - n + 0.5) / (n + 0.5) + 1.0).ln();
-                            let tf_f = *tf as f64;
-                            let doc_len_f = *doc_len as f64;
-                            let tf_component = (tf_f * (k1 + 1.0))
-                                / (tf_f
-                                    + k1 * (1.0 - b + b * (doc_len_f / avg_doc_length.max(1.0))));
-                            score += idf * tf_component;
-                        }
-                        if score > 0.0 {
-                            scoped_bm25_scores.push(Bm25SearchResult { doc_id, score });
-                        }
+                        let n = *df as f64;
+                        let idf = ((scoped_doc_count as f64 - n + 0.5) / (n + 0.5) + 1.0).ln();
+                        let tf_f = *tf as f64;
+                        let doc_len_f = *doc_len as f64;
+                        let tf_component = (tf_f * (k1 + 1.0))
+                            / (tf_f + k1 * (1.0 - b + b * (doc_len_f / avg_doc_length.max(1.0))));
+                        score += idf * tf_component;
                     }
-
-                    scoped_bm25_scores.sort_by(|a, b| {
-                        b.score
-                            .partial_cmp(&a.score)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    });
-                    scoped_bm25_scores.truncate(candidate_k);
-                    bm25_results = scoped_bm25_scores;
+                    if score > 0.0 {
+                        scoped_bm25_scores.push(Bm25SearchResult { doc_id, score });
+                    }
                 }
 
-                info!(
-                    "[hybrid] Exact scan candidates from sources {:?} - Vector: {}, BM25: {}",
-                    sids,
+                scoped_bm25_scores.sort_by(|a, b| {
+                    b.score
+                        .partial_cmp(&a.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+                scoped_bm25_scores.truncate(candidate_k);
+                bm25_results = scoped_bm25_scores;
+            }
+
+            info!(
+                    "[hybrid] Exact scan candidates (collection={:?}, source_ids={:?}) - Vector: {}, BM25: {}",
+                    f.collection_id,
+                    f.source_ids,
                     vector_results.len(),
                     bm25_results.len()
                 );
-            }
         }
     }
 
@@ -312,6 +345,15 @@ pub fn search_hybrid(
                 if let Some(pattern) = &f.metadata_like {
                     sql_conditions
                         .push(format!("s.metadata LIKE '{}'", pattern.replace("'", "''")));
+                }
+
+                if let Some(collection_id) = &f.collection_id {
+                    if !collection_id.trim().is_empty() {
+                        sql_conditions.push(format!(
+                            "c.collection_id = '{}'",
+                            collection_id.replace("'", "''")
+                        ));
+                    }
                 }
 
                 let query = format!(
@@ -672,6 +714,7 @@ mod tests {
             Some(SearchFilter {
                 source_ids: Some(vec![1]),
                 metadata_like: None,
+                collection_id: None,
             }),
         )
         .unwrap();
@@ -682,6 +725,55 @@ mod tests {
             results.iter().any(|r| r.bm25_rank > 0),
             "Scoped source filter path should keep BM25 ranks for exact-keyword matching"
         );
+
+        close_db_pool();
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn test_collection_filter_only_uses_post_filter_not_exact_scan() {
+        let db_path = std::env::temp_dir().join("test_hybrid_collection_filter_mode.db");
+        let _ = std::fs::remove_file(&db_path);
+
+        init_db_pool(db_path.to_str().unwrap().to_string(), 1).unwrap();
+        init_source_db().unwrap();
+        clear_hnsw_index();
+        bm25_clear_index();
+
+        {
+            let conn = get_connection().unwrap();
+
+            conn.execute(
+                "INSERT INTO sources (id, content, content_hash, metadata, name, status, collection_id)
+                 VALUES (1, 'travel source', 'h_t', NULL, 'travel', 'completed', 'travel')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO chunks (id, source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding)
+                 VALUES (?1, 1, 'travel', 0, 'apple c', 0, 7, 'general', ?2)",
+                params![101_i64, embedding_to_blob(&[1.0_f32, 0.0_f32])],
+            )
+            .unwrap();
+        }
+
+        // With only collection filter, hybrid search should rely on loaded indexes.
+        // Since both HNSW and BM25 are empty here, results should be empty.
+        // (If collection filter incorrectly triggers exact scan, this would return hits.)
+        let results = search_hybrid(
+            "apple".to_string(),
+            vec![1.0, 0.0],
+            5,
+            None,
+            Some(SearchFilter {
+                source_ids: None,
+                metadata_like: None,
+                collection_id: Some("travel".to_string()),
+            }),
+        )
+        .unwrap();
+
+        assert!(results.is_empty());
 
         close_db_pool();
         let _ = std::fs::remove_file(db_path);

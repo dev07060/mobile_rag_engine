@@ -67,6 +67,9 @@ class RagEngine {
   }
 
   final SourceRagService _ragService;
+  final Map<String, SourceRagService> _collectionServices;
+  final Set<String> _initializedCollections;
+  final Map<String, Future<void>> _collectionInitInFlight;
 
   /// Path to the SQLite database.
   final String dbPath;
@@ -81,7 +84,58 @@ class RagEngine {
     required this.vocabSize,
     required bool deferIndexWarmup,
   }) : _ragService = ragService,
-       _deferIndexWarmup = deferIndexWarmup;
+       _deferIndexWarmup = deferIndexWarmup,
+       _collectionServices = {SourceRagService.defaultCollectionId: ragService},
+       _initializedCollections = {SourceRagService.defaultCollectionId},
+       _collectionInitInFlight = {};
+
+  String _normalizeCollectionId(String? collectionId) {
+    final trimmed = collectionId?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return SourceRagService.defaultCollectionId;
+    }
+    return trimmed;
+  }
+
+  Future<SourceRagService> _serviceForCollection(String? collectionId) async {
+    final normalized = _normalizeCollectionId(collectionId);
+    final service = _collectionServices.putIfAbsent(
+      normalized,
+      () => _ragService.inCollection(normalized),
+    );
+
+    await _ensureCollectionInitialized(normalized, service);
+    return service;
+  }
+
+  Future<void> _ensureCollectionInitialized(
+    String collectionId,
+    SourceRagService service,
+  ) async {
+    if (_initializedCollections.contains(collectionId)) {
+      return;
+    }
+
+    final inFlight = _collectionInitInFlight[collectionId];
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+
+    final initFuture = () async {
+      await service.init(deferIndexWarmup: _deferIndexWarmup);
+      _initializedCollections.add(collectionId);
+    }();
+
+    _collectionInitInFlight[collectionId] = initFuture;
+    try {
+      await initFuture;
+    } finally {
+      if (identical(_collectionInitInFlight[collectionId], initFuture)) {
+        _collectionInitInFlight.remove(collectionId);
+      }
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Auto-Indexing Strategy (Active Tracking + Debounce + Flush-on-Search)
@@ -128,7 +182,14 @@ class RagEngine {
 
   /// Flushes any pending index rebuilds properly BEFORE a search.
   /// checks both the timer AND active operations.
-  Future<void> _flushIndex() async {
+  Future<void> _flushIndex({String? collectionId}) async {
+    final normalized = _normalizeCollectionId(collectionId);
+    if (normalized != SourceRagService.defaultCollectionId) {
+      final service = await _serviceForCollection(normalized);
+      await service.rebuildIndex();
+      return;
+    }
+
     // If timer is pending, cancel and run immediately
     if (_indexDebounceTimer != null && _indexDebounceTimer!.isActive) {
       debugPrint('[RagEngine] Flushing pending index rebuild before search...');
@@ -282,6 +343,20 @@ class RagEngine {
   /// Completes when the latest index warmup/rebuild task has finished.
   Future<void> get warmupFuture => _ragService.warmupFuture;
 
+  /// Whether a specific collection index is ready for full-quality search.
+  bool isCollectionIndexReady(String collectionId) {
+    final normalized = _normalizeCollectionId(collectionId);
+    final service = _collectionServices[normalized];
+    if (service == null) return false;
+    return service.isIndexReady;
+  }
+
+  /// Completes when a specific collection warmup/rebuild task has finished.
+  Future<void> collectionWarmupFuture(String collectionId) async {
+    final service = await _serviceForCollection(collectionId);
+    await service.warmupFuture;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Delegated methods from SourceRagService
   // ─────────────────────────────────────────────────────────────────────────
@@ -303,10 +378,16 @@ class RagEngine {
     ChunkingStrategy? strategy,
     Duration? chunkDelay,
     void Function(int done, int total)? onProgress,
+    String? collectionId,
   }) async {
-    _startOperation(); // Start tracking
+    final normalized = _normalizeCollectionId(collectionId);
+    final service = await _serviceForCollection(normalized);
+
+    if (normalized == SourceRagService.defaultCollectionId) {
+      _startOperation(); // Start tracking
+    }
     try {
-      final result = await _ragService.addSourceWithChunking(
+      final result = await service.addSourceWithChunking(
         content,
         metadata: metadata,
         name: name,
@@ -317,7 +398,9 @@ class RagEngine {
       );
       return result;
     } finally {
-      _endOperation(); // End tracking -> Schedule debounce
+      if (normalized == SourceRagService.defaultCollectionId) {
+        _endOperation(); // End tracking -> Schedule debounce
+      }
     }
   }
 
@@ -337,9 +420,13 @@ class RagEngine {
     int adjacentChunks = 0,
     bool singleSourceMode = false,
     List<int>? sourceIds,
+    String? collectionId,
   }) async {
-    await _flushIndex(); // Ensure index is up-to-date before searching
-    return _ragService.search(
+    final service = await _serviceForCollection(collectionId);
+    await _flushIndex(
+      collectionId: collectionId,
+    ); // Ensure index is up-to-date before searching
+    return service.search(
       query,
       topK: topK,
       tokenBudget: tokenBudget,
@@ -359,9 +446,13 @@ class RagEngine {
     double vectorWeight = 0.2,
     double bm25Weight = 0.8,
     List<int>? sourceIds,
+    String? collectionId,
   }) async {
-    await _flushIndex(); // Ensure index is up-to-date before searching
-    return _ragService.searchHybrid(
+    final service = await _serviceForCollection(collectionId);
+    await _flushIndex(
+      collectionId: collectionId,
+    ); // Ensure index is up-to-date before searching
+    return service.searchHybrid(
       query,
       topK: topK,
       vectorWeight: vectorWeight,
@@ -384,9 +475,13 @@ class RagEngine {
     List<int>? sourceIds,
     int adjacentChunks = 0,
     bool singleSourceMode = false,
+    String? collectionId,
   }) async {
-    await _flushIndex(); // Ensure index is up-to-date before searching
-    return _ragService.searchHybridWithContext(
+    final service = await _serviceForCollection(collectionId);
+    await _flushIndex(
+      collectionId: collectionId,
+    ); // Ensure index is up-to-date before searching
+    return service.searchHybridWithContext(
       query,
       topK: topK,
       tokenBudget: tokenBudget,
@@ -404,38 +499,60 @@ class RagEngine {
   /// Call this after adding one or more documents for optimal search
   /// performance. The index enables fast approximate nearest neighbor search.
   /// [force] - If true, rebuilds even if no changes were detected (default: false).
-  Future<void> rebuildIndex({bool force = false}) {
-    _indexDebounceTimer
-        ?.cancel(); // Cancel any pending auto-rebuild since we are doing it now
-    _indexDebounceTimer = null;
-    return _ragService.rebuildIndex(
-      force: force,
-    ); // Service handles dirty check
+  Future<void> rebuildIndex({bool force = false, String? collectionId}) async {
+    final normalized = _normalizeCollectionId(collectionId);
+    final service = await _serviceForCollection(normalized);
+
+    if (normalized == SourceRagService.defaultCollectionId) {
+      _indexDebounceTimer
+          ?.cancel(); // Cancel any pending auto-rebuild since we are doing it now
+      _indexDebounceTimer = null;
+    }
+
+    return service.rebuildIndex(force: force); // Service handles dirty check
   }
 
   /// Try to load a cached HNSW index from disk.
   ///
   /// Returns true if a previously built index exists.
-  Future<bool> tryLoadCachedIndex() => _ragService.tryLoadCachedIndex();
+  Future<bool> tryLoadCachedIndex({String? collectionId}) async {
+    final service = await _serviceForCollection(collectionId);
+    return service.tryLoadCachedIndex();
+  }
 
   /// Save the HNSW index marker to disk.
-  Future<void> saveIndex() => _ragService.saveIndex();
+  Future<void> saveIndex({String? collectionId}) async {
+    final service = await _serviceForCollection(collectionId);
+    return service.saveIndex();
+  }
 
   /// Get statistics about stored sources and chunks.
-  Future<SourceStats> getStats() => _ragService.getStats();
+  Future<SourceStats> getStats({String? collectionId}) async {
+    final service = await _serviceForCollection(collectionId);
+    return service.getStats();
+  }
 
   /// Remove a source and all its chunks from the database.
-  Future<void> removeSource(int sourceId) async {
-    _startOperation();
+  Future<void> removeSource(int sourceId, {String? collectionId}) async {
+    final normalized = _normalizeCollectionId(collectionId);
+    final service = await _serviceForCollection(normalized);
+    if (normalized == SourceRagService.defaultCollectionId) {
+      _startOperation();
+    }
     try {
-      await _ragService.removeSource(sourceId);
+      await service.removeSource(sourceId);
     } finally {
-      _endOperation();
+      if (normalized == SourceRagService.defaultCollectionId) {
+        _endOperation();
+      }
     }
   }
 
   /// Get a list of all stored sources.
-  Future<List<SourceEntry>> listSources() => _ragService.listSources();
+  Future<List<SourceEntry>> listSources({String? collectionId}) async {
+    final service = await _serviceForCollection(collectionId);
+    return service.listSources();
+  }
 
   /// Get all chunk texts for a specific source.
   ///
@@ -478,7 +595,11 @@ class RagEngine {
   /// Use this when the embedding model has been updated.
   Future<void> regenerateAllEmbeddings({
     void Function(int done, int total)? onProgress,
-  }) => _ragService.regenerateAllEmbeddings(onProgress: onProgress);
+    String? collectionId,
+  }) async {
+    final service = await _serviceForCollection(collectionId);
+    return service.regenerateAllEmbeddings(onProgress: onProgress);
+  }
 
   /// Clear all data (database and index files) and reset the engine.
   ///
@@ -530,6 +651,13 @@ class RagEngine {
     // 5. Re-initialize service
     debugPrint('[RagEngine] clearAllData: Re-initializing service...');
     await _ragService.init(deferIndexWarmup: _deferIndexWarmup);
+    _collectionServices
+      ..clear()
+      ..[SourceRagService.defaultCollectionId] = _ragService;
+    _initializedCollections
+      ..clear()
+      ..add(SourceRagService.defaultCollectionId);
+    _collectionInitInFlight.clear();
     debugPrint('[RagEngine] clearAllData: Service initialized. Done.');
   }
 

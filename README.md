@@ -52,6 +52,7 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 | **Chunking** | Semantic chunking, Markdown structure-aware, header path inheritance |
 | **Search** | HNSW vector + BM25 keyword hybrid search with RRF fusion |
 | **Storage** | SQLite persistence, HNSW Index persistence (fast startup), connection pooling, resumable indexing |
+| **Collections** | Collection-scoped ingest/search/rebuild via `inCollection('id')` |
 | **Performance** | Rust core, 10x faster tokenization, thread control, memory optimized |
 | **Context** | Token budget, adjacent chunk expansion, single source mode |
 
@@ -105,6 +106,8 @@ curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/resolve/main/token
 
 ### Guides
 *   [Quick Start](docs/guides/quick_start.md) - Setup in 5 minutes.
+*   [Graph v2.1 Design](docs/guides/graph_v2_1_implementation_design.md) - Graph-enhanced retrieval implementation plan.
+*   [Graph v2.1 Risk Register](docs/guides/graph_v2_1_risk_register.md) - Predicted risks and mitigation assumptions.
 *   [Model Setup](docs/guides/model_setup.md) - Choosing and downloading models.
 *   [Troubleshooting](docs/guides/troubleshooting.md) - Common fixes.
 *   [FAQ](docs/guides/faq.md) - Frequently asked questions.
@@ -159,6 +162,27 @@ class MySearchScreen extends StatelessWidget {
   }
 }
 ```
+
+### Multi-Collection (v1)
+
+Use collection scopes when you want independent rebuild boundaries per category.
+
+```dart
+final business = MobileRag.instance.inCollection('business');
+final travel = MobileRag.instance.inCollection('travel');
+
+await business.addDocument('Quarterly planning memo...');
+await travel.addDocument('Kyoto itinerary...');
+
+if (!travel.isIndexReady) {
+  await travel.warmupFuture;
+}
+final travelHits = await travel.searchHybrid('itinerary');
+print(travelHits.length);
+```
+
+If you do not specify a collection, the engine uses the default `__default__`
+collection for backward compatibility.
 
 > **Advanced Usage:** For fine-grained control, you can still use the low-level APIs (`initTokenizer`, `EmbeddingService`, `SourceRagService`) directly. See the [API Reference](https://pub.dev/documentation/mobile_rag_engine/latest/).
 
