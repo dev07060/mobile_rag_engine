@@ -20,7 +20,6 @@ import '../src/rust/api/source_rag.dart'
     show SourceStats, ChunkSearchResult, ChunkData, SourceEntry;
 import '../src/rust/api/semantic_chunker.dart';
 import '../src/rust/api/hybrid_search.dart' as hybrid;
-import '../src/rust/api/hnsw_index.dart' as hnsw;
 import 'context_builder.dart';
 import 'embedding_service.dart';
 import '../utils/error_utils.dart';
@@ -79,6 +78,8 @@ class RagSearchResult {
 
 /// High-level service for source-based RAG operations.
 class SourceRagService {
+  static const String defaultCollectionId = '__default__';
+
   final String dbPath;
 
   /// Maximum characters per chunk (default: 500)
@@ -89,13 +90,23 @@ class SourceRagService {
 
   /// Path to the ONNX model file.
   final String? modelPath;
+  final String collectionId;
 
   SourceRagService({
     required this.dbPath,
     this.modelPath,
     this.maxChunkChars = 500,
     this.overlapChars = 50,
+    this.collectionId = defaultCollectionId,
   });
+
+  SourceRagService inCollection(String id) => SourceRagService(
+    dbPath: dbPath,
+    modelPath: modelPath,
+    maxChunkChars: maxChunkChars,
+    overlapChars: overlapChars,
+    collectionId: id.trim().isEmpty ? defaultCollectionId : id.trim(),
+  );
 
   /// Detect the appropriate chunking strategy based on file extension.
   static ChunkingStrategy detectChunkingStrategy(String? filePath) {
@@ -108,7 +119,8 @@ class SourceRagService {
     };
   }
 
-  StreamSubscription<String>? _logSubscription;
+  // Shared logger stream across all collection-scoped service instances.
+  static StreamSubscription<String>? _logSubscription;
 
   /// Helper to convert `List<int>` to the specific `Int64List` type required by FRB.
   /// We do this manually because frb.Int64List.fromList() might return a native
@@ -134,12 +146,28 @@ class SourceRagService {
     return dbPath;
   }
 
-  /// Get the HNSW index path (derived from dbPath)
-  String get _indexPath => '${_dbPathWithoutExtension}_hnsw';
+  bool get _isDefaultCollection => collectionId == defaultCollectionId;
+
+  String get _collectionFileSuffix {
+    // Deterministic FNV-1a 32-bit hash for stable file names.
+    var hash = 0x811C9DC5;
+    for (final codeUnit in collectionId.codeUnits) {
+      hash ^= codeUnit;
+      hash = (hash * 0x01000193) & 0xFFFFFFFF;
+    }
+    return hash.toRadixString(16).padLeft(8, '0');
+  }
+
+  /// Get the HNSW index path (derived from dbPath + collectionId)
+  String get _indexPath => _isDefaultCollection
+      ? '${_dbPathWithoutExtension}_hnsw'
+      : '${_dbPathWithoutExtension}_hnsw_$_collectionFileSuffix';
 
   /// File marker to indicate if the index is dirty (needs rebuild).
   /// This persists across app restarts for crash recovery.
-  File get _dirtyMarkerFile => File('$_dbPathWithoutExtension.dirty');
+  File get _dirtyMarkerFile => _isDefaultCollection
+      ? File('$_dbPathWithoutExtension.dirty')
+      : File('$_dbPathWithoutExtension.$_collectionFileSuffix.dirty');
 
   /// Memory flag to track dirty state alongside the file marker.
   bool _needsRebuild = false;
@@ -203,7 +231,9 @@ class SourceRagService {
 
     // BM25 is currently in-memory only and fast to rebuild from SQLite
     debugPrint('[SourceRagService] init: Rebuilding BM25 index...');
-    await rust_rag.rebuildChunkBm25Index();
+    await rust_rag.rebuildChunkBm25IndexForCollection(
+      collectionId: collectionId,
+    );
 
     // HNSW can be slow to rebuild for large datasets, so we try loading from disk first
     debugPrint(
@@ -225,7 +255,9 @@ class SourceRagService {
           '[SourceRagService] init: No cached HNSW index found, rebuilding from DB.',
         );
       }
-      await rust_rag.rebuildChunkHnswIndex();
+      await rust_rag.rebuildChunkHnswIndexForCollection(
+        collectionId: collectionId,
+      );
       // Save the newly built index for next time
       await saveIndex();
     }
@@ -335,7 +367,10 @@ class SourceRagService {
   /// }
   /// ```
   Future<bool> tryLoadCachedIndex() async {
-    final exists = await hnsw.loadHnswIndex(basePath: _indexPath);
+    final exists = await rust_rag.loadCollectionHnswIndex(
+      collectionId: collectionId,
+      basePath: _indexPath,
+    );
     return exists;
   }
 
@@ -344,7 +379,10 @@ class SourceRagService {
   /// Call this after [rebuildIndex] to mark that an index was built.
   /// This allows faster startup detection on next app launch.
   Future<void> saveIndex() async {
-    await hnsw.saveHnswIndex(basePath: _indexPath);
+    await rust_rag.saveCollectionHnswIndex(
+      collectionId: collectionId,
+      basePath: _indexPath,
+    );
   }
 
   /// Add a source document with automatic chunking and embedding.
@@ -393,7 +431,39 @@ class SourceRagService {
             ? ChunkingStrategy.markdown
             : ChunkingStrategy.recursive);
 
-    // 3. Process in background isolate with progress reporting
+    // 3. Create source row first for crash recovery visibility.
+    // This ensures unfinished ingests remain visible as pending/failed states.
+    final sourceEntry = await rust_rag.addSourceInCollection(
+      collectionId: collectionId,
+      content: content,
+      metadata: metadata,
+      name: name ?? filePath, // Use available identifier
+    );
+    final sourceId = sourceEntry.sourceId;
+
+    // If already indexed in this collection, skip expensive embed/chunk pipeline.
+    if (sourceEntry.isDuplicate) {
+      final existingChunkCount = await rust_rag.getSourceChunkCount(
+        sourceId: sourceId,
+      );
+      if (existingChunkCount > 0) {
+        await rust_rag.updateSourceStatus(
+          sourceId: sourceId,
+          status: 'completed',
+        );
+        return SourceAddResult(
+          sourceId: sourceId.toInt(),
+          isDuplicate: true,
+          chunkCount: 0,
+          message: sourceEntry.message,
+        );
+      }
+    }
+
+    // Mark dirty early so abrupt termination still leaves a recovery hint.
+    await _markDirty();
+
+    // 4. Process in background isolate with progress reporting
     debugPrint('[SourceRagService] Offloading processing to isolate...');
 
     final receivePort = ReceivePort();
@@ -437,39 +507,25 @@ class SourceRagService {
 
       final chunks = result.chunks;
 
-      // 4. Add source document to DB
-      final res = await rust_rag.addSource(
-        content: content,
-        metadata: metadata,
-        name: name ?? filePath, // Use available identifier
+      // 5. Save chunks to DB.
+      await rust_rag.addChunks(sourceId: sourceId, chunks: chunks);
+      await rust_rag.updateSourceStatus(
+        sourceId: sourceId,
+        status: 'completed',
       );
-
-      // 5. Save chunks to DB (if not duplicate)
-      if (!res.isDuplicate) {
-        await rust_rag.addChunks(sourceId: res.sourceId, chunks: chunks);
-        // Mark as completed
-        await rust_rag.updateSourceStatus(
-          sourceId: res.sourceId,
-          status: 'completed',
-        );
-      } else {
-        // Even if duplicate, ensure it's marked completed if it was stuck
-        await rust_rag.updateSourceStatus(
-          sourceId: res.sourceId,
-          status: 'completed',
-        );
-      }
-
-      // 6. Mark index dirty
-      await _markDirty();
 
       return SourceAddResult(
-        sourceId: res.sourceId.toInt(),
-        isDuplicate: res.isDuplicate,
+        sourceId: sourceId.toInt(),
+        isDuplicate: false,
         chunkCount: chunks.length,
-        message: res.message,
+        message: sourceEntry.isDuplicate
+            ? 'Source resumed and completed'
+            : sourceEntry.message,
       );
     } catch (e) {
+      try {
+        await rust_rag.updateSourceStatus(sourceId: sourceId, status: 'failed');
+      } catch (_) {}
       receivePort.close();
       rethrow;
     }
@@ -490,11 +546,15 @@ class SourceRagService {
     final rebuildFuture = _enqueueIndexTask(() async {
       try {
         // Rebuild HNSW for vector search
-        await rust_rag.rebuildChunkHnswIndex();
+        await rust_rag.rebuildChunkHnswIndexForCollection(
+          collectionId: collectionId,
+        );
         await saveIndex(); // Persist to disk immediately
 
         // Rebuild BM25 for keyword search (critical for hybrid search!)
-        await rust_rag.rebuildChunkBm25Index();
+        await rust_rag.rebuildChunkBm25IndexForCollection(
+          collectionId: collectionId,
+        );
 
         await _markClean(
           expectedVersion: startDirtyVersion,
@@ -509,8 +569,9 @@ class SourceRagService {
               debugPrint('[SmartError] IO error rebuilding index: $msg'),
           modelLoadError: (_) {},
           invalidInput: (_) {},
-          internalError: (msg) =>
-              debugPrint('[SmartError] Internal error rebuilding indexes: $msg'),
+          internalError: (msg) => debugPrint(
+            '[SmartError] Internal error rebuilding indexes: $msg',
+          ),
           unknown: (_) {},
         );
         rethrow;
@@ -527,7 +588,9 @@ class SourceRagService {
     void Function(int done, int total)? onProgress,
   }) async {
     // 1. Get total stats for progress tracking
-    final stats = await rust_rag.getSourceStats();
+    final stats = await rust_rag.getSourceStatsInCollection(
+      collectionId: collectionId,
+    );
     final totalChunks = stats.chunkCount.toInt();
 
     debugPrint(
@@ -536,7 +599,9 @@ class SourceRagService {
 
     // 2. Iterate by Source to ensure memory safety
     // Instead of loading all chunks (which could be huge), we process source by source
-    final sources = await rust_rag.listSources();
+    final sources = await rust_rag.listSourcesInCollection(
+      collectionId: collectionId,
+    );
     int processedCount = 0;
 
     for (final source in sources) {
@@ -667,7 +732,8 @@ class SourceRagService {
             )
             .toList();
       } else {
-        chunks = await rust_rag.searchChunks(
+        chunks = await rust_rag.searchChunksInCollection(
+          collectionId: collectionId,
           queryEmbedding: queryEmbedding,
           topK: topK,
         );
@@ -885,7 +951,9 @@ class SourceRagService {
 
   /// Get statistics about stored sources and chunks.
   Future<SourceStats> getStats() async {
-    return await rust_rag.getSourceStats();
+    return await rust_rag.getSourceStatsInCollection(
+      collectionId: collectionId,
+    );
   }
 
   /// Format search results as an LLM prompt.
@@ -898,13 +966,16 @@ class SourceRagService {
 
   /// Get a list of all stored sources.
   Future<List<SourceEntry>> listSources() async {
-    return await rust_rag.listSources();
+    return await rust_rag.listSourcesInCollection(collectionId: collectionId);
   }
 
   /// Remove a source and all its chunks from the database.
   Future<void> removeSource(int sourceId) async {
     try {
-      await rust_rag.deleteSource(sourceId: sourceId);
+      await rust_rag.deleteSourceInCollection(
+        collectionId: collectionId,
+        sourceId: sourceId,
+      );
       await _markDirty(); // Mark index as dirty (Persistent)
     } on RagError catch (e) {
       debugPrint(
@@ -942,7 +1013,13 @@ class SourceRagService {
     // 1. Generate query embedding
     final queryEmbedding = await EmbeddingService.embed(query);
 
-    // 2. Perform hybrid search with RRF fusion
+    // 2. Ensure hybrid indexes are switched to this collection.
+    await rust_rag.activateCollectionForHybridSearch(
+      collectionId: collectionId,
+      basePath: _indexPath,
+    );
+
+    // 3. Perform hybrid search with RRF fusion
     late List<hybrid.HybridSearchResult> results;
     try {
       // Improve post-filtering recall:
@@ -961,9 +1038,10 @@ class SourceRagService {
           vectorWeight: vectorWeight,
           bm25Weight: bm25Weight,
         ),
-        filter: sourceIds != null
-            ? hybrid.SearchFilter(sourceIds: _toInt64List(sourceIds))
-            : null,
+        filter: hybrid.SearchFilter(
+          sourceIds: sourceIds != null ? _toInt64List(sourceIds) : null,
+          collectionId: collectionId,
+        ),
       );
     } on RagError catch (e) {
       e.when(

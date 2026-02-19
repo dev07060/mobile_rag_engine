@@ -206,7 +206,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.11.0+1"
+    version: "0.12.0+1"
   onnxruntime:
     dependency: transitive
     description:
@@ -293,7 +293,7 @@ packages:
       path: "../rust_builder"
       relative: true
     source: path
-    version: "0.11.0"
+    version: "0.12.0"
   sky_engine:
     dependency: transitive
     description: flutter

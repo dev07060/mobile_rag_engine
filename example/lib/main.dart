@@ -8,6 +8,8 @@ import 'screens/benchmark_screen.dart';
 import 'screens/quality_test_screen.dart';
 import 'screens/chunking_test_screen.dart';
 
+enum _FeatureMenuAction { chunkingTest, benchmark, qualityTest }
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -43,6 +45,21 @@ class _MyAppState extends State<MyApp> {
   List<SourceEntry> _sources = [];
   int? _selectedSourceId; // Selected source for filtering
   int _topK = 5; // Adjustable topK for search
+  final TextEditingController _collectionController = TextEditingController(
+    text: SourceRagService.defaultCollectionId,
+  );
+  String _activeCollectionId = SourceRagService.defaultCollectionId;
+  final Set<String> _knownCollectionIds = {
+    SourceRagService.defaultCollectionId,
+    'business',
+    'travel',
+    'personal',
+  };
+
+  bool get _isDefaultCollection =>
+      _activeCollectionId == SourceRagService.defaultCollectionId;
+  CollectionRag get _activeCollection =>
+      MobileRag.instance.inCollection(_activeCollectionId);
 
   @override
   void initState() {
@@ -58,9 +75,38 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  String _normalizeCollectionId(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      return SourceRagService.defaultCollectionId;
+    }
+    return trimmed;
+  }
+
+  Future<void> _switchCollection(String rawCollectionId) async {
+    final normalized = _normalizeCollectionId(rawCollectionId);
+    setState(() {
+      _isLoading = true;
+      _activeCollectionId = normalized;
+      _knownCollectionIds.add(normalized);
+      _collectionController.text = normalized;
+      _selectedSourceId = null;
+      _searchResults.clear();
+      _status = 'Switching to collection "$normalized"...';
+    });
+    await _loadSources();
+    setState(() {
+      _status =
+          '✅ Active collection: "$_activeCollectionId" (${_sources.length} sources)';
+      _isLoading = false;
+    });
+  }
+
   Future<void> _loadSources() async {
     try {
-      final sources = await MobileRag.instance.listSources();
+      final sources = _isDefaultCollection
+          ? await MobileRag.instance.listSources()
+          : await _activeCollection.listSources();
       setState(() {
         _sources = sources;
       });
@@ -76,21 +122,34 @@ class _MyAppState extends State<MyApp> {
 
     setState(() {
       _isLoading = true;
-      _status = "Processing document (chunking + embedding)...";
+      _status =
+          'Processing document in "$_activeCollectionId" (chunking + embedding)...';
     });
 
     try {
       // Add document with automatic chunking and embedding
-      final result = await MobileRag.instance.addDocument(
-        text,
-        name: "Manual Entry ${DateTime.now().toIso8601String()}",
-        onProgress: (done, total) {
-          if (done % 10 == 0 || done == total) {
-            debugPrint('Embedding progress: $done/$total');
-          }
-          setState(() => _status = "Embedding chunks: $done/$total");
-        },
-      );
+      final result = _isDefaultCollection
+          ? await MobileRag.instance.addDocument(
+              text,
+              name: "Manual Entry ${DateTime.now().toIso8601String()}",
+              onProgress: (done, total) {
+                if (done % 10 == 0 || done == total) {
+                  debugPrint('Embedding progress: $done/$total');
+                }
+                setState(() => _status = "Embedding chunks: $done/$total");
+              },
+            )
+          : await _activeCollection.addDocument(
+              text,
+              name:
+                  "[$_activeCollectionId] Manual Entry ${DateTime.now().toIso8601String()}",
+              onProgress: (done, total) {
+                if (done % 10 == 0 || done == total) {
+                  debugPrint('Embedding progress: $done/$total');
+                }
+                setState(() => _status = "Embedding chunks: $done/$total");
+              },
+            );
 
       if (result.isDuplicate) {
         setState(() {
@@ -100,7 +159,11 @@ class _MyAppState extends State<MyApp> {
         });
       } else {
         // Rebuild HNSW index after adding
-        await MobileRag.instance.rebuildIndex();
+        if (_isDefaultCollection) {
+          await MobileRag.instance.rebuildIndex();
+        } else {
+          await _activeCollection.rebuildIndex();
+        }
         await _loadSources();
 
         setState(() {
@@ -128,16 +191,26 @@ class _MyAppState extends State<MyApp> {
 
     setState(() {
       _isLoading = true;
-      _status = "Searching chunks (Hybrid)...";
+      _status = 'Searching "$_activeCollectionId" chunks (Hybrid)...';
     });
 
     try {
       // Use Hybrid Search for enriched results (Vector + BM25 + Metadata)
-      final results = await MobileRag.instance.searchHybrid(
-        query,
-        topK: _topK,
-        sourceIds: _selectedSourceId != null ? [_selectedSourceId!] : null,
-      );
+      final results = _isDefaultCollection
+          ? await MobileRag.instance.searchHybrid(
+              query,
+              topK: _topK,
+              sourceIds: _selectedSourceId != null
+                  ? [_selectedSourceId!]
+                  : null,
+            )
+          : await _activeCollection.searchHybrid(
+              query,
+              topK: _topK,
+              sourceIds: _selectedSourceId != null
+                  ? [_selectedSourceId!]
+                  : null,
+            );
 
       setState(() {
         _searchResults = results;
@@ -220,18 +293,31 @@ class _MyAppState extends State<MyApp> {
       );
 
       // Add to RAG with chunking and embedding (auto-detect strategy from filePath)
-      final addResult = await MobileRag.instance.addDocument(
-        extractedText,
-        metadata: '{"filename": "${file.name}"}',
-        name: file.name,
-        filePath: filePath, // <-- Auto-detect chunking strategy
-        onProgress: (done, total) {
-          if (done % 10 == 0 || done == total) {
-            debugPrint('Embedding progress: $done/$total');
-          }
-          setState(() => _status = "Embedding chunks: $done/$total");
-        },
-      );
+      final addResult = _isDefaultCollection
+          ? await MobileRag.instance.addDocument(
+              extractedText,
+              metadata: '{"filename": "${file.name}"}',
+              name: file.name,
+              filePath: filePath, // <-- Auto-detect chunking strategy
+              onProgress: (done, total) {
+                if (done % 10 == 0 || done == total) {
+                  debugPrint('Embedding progress: $done/$total');
+                }
+                setState(() => _status = "Embedding chunks: $done/$total");
+              },
+            )
+          : await _activeCollection.addDocument(
+              extractedText,
+              metadata: '{"filename": "${file.name}"}',
+              name: "[$_activeCollectionId] ${file.name}",
+              filePath: filePath, // <-- Auto-detect chunking strategy
+              onProgress: (done, total) {
+                if (done % 10 == 0 || done == total) {
+                  debugPrint('Embedding progress: $done/$total');
+                }
+                setState(() => _status = "Embedding chunks: $done/$total");
+              },
+            );
 
       if (addResult.isDuplicate) {
         // Since we now support resuming, "duplicate" might mean "fully processed" or "resumed and finished".
@@ -241,7 +327,11 @@ class _MyAppState extends State<MyApp> {
         // If chunkCount == 0, it means it was already fully complete.
 
         if (addResult.chunkCount > 0) {
-          await MobileRag.instance.rebuildIndex();
+          if (_isDefaultCollection) {
+            await MobileRag.instance.rebuildIndex();
+          } else {
+            await _activeCollection.rebuildIndex();
+          }
           await _loadSources();
           setState(() {
             _status =
@@ -258,7 +348,11 @@ class _MyAppState extends State<MyApp> {
         }
       } else {
         // Rebuild HNSW index
-        await MobileRag.instance.rebuildIndex();
+        if (_isDefaultCollection) {
+          await MobileRag.instance.rebuildIndex();
+        } else {
+          await _activeCollection.rebuildIndex();
+        }
         await _loadSources();
 
         setState(() {
@@ -321,12 +415,20 @@ class _MyAppState extends State<MyApp> {
 
     setState(() => _isLoading = true);
     try {
-      await MobileRag.instance.removeSource(sourceId);
+      if (_isDefaultCollection) {
+        await MobileRag.instance.removeSource(sourceId);
+      } else {
+        await _activeCollection.removeSource(sourceId);
+      }
       // HNSW index update is recommended but not strictly required for deletion
       // But for consistency we can rebuild or just accept it's gone from DB
       // Rebuild is expensive, so maybe skip or do it
       // Let's rebuild to be safe
-      await MobileRag.instance.rebuildIndex();
+      if (_isDefaultCollection) {
+        await MobileRag.instance.rebuildIndex();
+      } else {
+        await _activeCollection.rebuildIndex();
+      }
       await _loadSources();
       setState(() {
         _status = "✅ Deleted source $sourceId";
@@ -340,6 +442,27 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  void _openFeatureMenuAction(BuildContext context, _FeatureMenuAction action) {
+    if (!_isReady) return;
+    switch (action) {
+      case _FeatureMenuAction.chunkingTest:
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const ChunkingTestScreen()));
+        break;
+      case _FeatureMenuAction.benchmark:
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const BenchmarkScreen()));
+        break;
+      case _FeatureMenuAction.qualityTest:
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const QualityTestScreen()));
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -350,44 +473,24 @@ class _MyAppState extends State<MyApp> {
             title: const Text('🔍 Local RAG Engine'),
             centerTitle: true,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.science),
-                tooltip: 'Chunking Test',
-                onPressed: _isReady
-                    ? () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const ChunkingTestScreen(),
-                          ),
-                        );
-                      }
-                    : null,
-              ),
-              IconButton(
-                icon: const Icon(Icons.speed),
-                tooltip: 'Benchmark',
-                onPressed: _isReady
-                    ? () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const BenchmarkScreen(),
-                          ),
-                        );
-                      }
-                    : null,
-              ),
-              IconButton(
-                icon: const Icon(Icons.checklist),
-                tooltip: 'Quality Test',
-                onPressed: _isReady
-                    ? () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const QualityTestScreen(),
-                          ),
-                        );
-                      }
-                    : null,
+              PopupMenuButton<_FeatureMenuAction>(
+                tooltip: 'Feature Menu',
+                icon: const Icon(Icons.apps),
+                onSelected: (action) => _openFeatureMenuAction(context, action),
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: _FeatureMenuAction.chunkingTest,
+                    child: Text('Chunking Test'),
+                  ),
+                  PopupMenuItem(
+                    value: _FeatureMenuAction.benchmark,
+                    child: Text('Benchmark'),
+                  ),
+                  PopupMenuItem(
+                    value: _FeatureMenuAction.qualityTest,
+                    child: Text('Quality Test'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -427,6 +530,130 @@ class _MyAppState extends State<MyApp> {
 
                 const SizedBox(height: 24),
 
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          '🧩 Collection Test Mode',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _collectionController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Collection ID',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                enabled: _isReady && !_isLoading,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: _isReady && !_isLoading
+                                  ? () => _switchCollection(
+                                      _collectionController.text,
+                                    )
+                                  : null,
+                              child: const Text('Apply'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            for (final id in _knownCollectionIds)
+                              ActionChip(
+                                label: Text(id),
+                                onPressed: _isReady && !_isLoading
+                                    ? () => _switchCollection(id)
+                                    : null,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Active: $_activeCollectionId',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: _isReady && !_isLoading
+                                  ? () async {
+                                      setState(() {
+                                        _isLoading = true;
+                                        _status =
+                                            'Waiting warmup for "$_activeCollectionId"...';
+                                      });
+                                      try {
+                                        await _activeCollection.warmupFuture;
+                                        setState(() {
+                                          _status =
+                                              '✅ Warmup done for "$_activeCollectionId".';
+                                          _isLoading = false;
+                                        });
+                                      } catch (e) {
+                                        setState(() {
+                                          _status = '❌ Warmup error: $e';
+                                          _isLoading = false;
+                                        });
+                                      }
+                                    }
+                                  : null,
+                              icon: const Icon(Icons.hourglass_bottom),
+                              label: const Text('Wait Warmup'),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              onPressed: _isReady && !_isLoading
+                                  ? () async {
+                                      setState(() {
+                                        _isLoading = true;
+                                        _status =
+                                            'Rebuilding "$_activeCollectionId"...';
+                                      });
+                                      try {
+                                        await _activeCollection.rebuildIndex(
+                                          force: true,
+                                        );
+                                        await _loadSources();
+                                        setState(() {
+                                          _status =
+                                              '✅ Rebuild complete for "$_activeCollectionId".';
+                                          _isLoading = false;
+                                        });
+                                      } catch (e) {
+                                        setState(() {
+                                          _status = '❌ Rebuild error: $e';
+                                          _isLoading = false;
+                                        });
+                                      }
+                                    }
+                                  : null,
+                              icon: const Icon(Icons.build),
+                              label: const Text('Rebuild Active'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
                 // Document save section
                 const Text(
                   '📄 Save Document',
@@ -465,7 +692,7 @@ class _MyAppState extends State<MyApp> {
 
                 // Search section
                 const Text(
-                  '🔎 Semantic Search',
+                  '🔎 Semantic Search (Active Collection)',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
@@ -508,8 +735,8 @@ class _MyAppState extends State<MyApp> {
                 const SizedBox(height: 8),
                 // Source Filter Dropdown
                 InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Filter by Source',
+                  decoration: InputDecoration(
+                    labelText: 'Filter by Source ($_activeCollectionId)',
                     border: OutlineInputBorder(),
                     contentPadding: EdgeInsets.symmetric(
                       horizontal: 12,
@@ -605,7 +832,7 @@ class _MyAppState extends State<MyApp> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '📚 Sources (${_sources.length})',
+                      '📚 Sources in "$_activeCollectionId" (${_sources.length})',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -692,22 +919,31 @@ class _MyAppState extends State<MyApp> {
                             for (var i = 0; i < samples.length; i++) {
                               setState(
                                 () => _status =
-                                    "Adding sample ${i + 1}/${samples.length}...",
+                                    'Adding sample ${i + 1}/${samples.length} to "$_activeCollectionId"...',
                               );
-                              final result = await MobileRag.instance
-                                  .addDocument(
-                                    samples[i],
-                                    name: "Sample ${i + 1}",
-                                  );
+                              final result = _isDefaultCollection
+                                  ? await MobileRag.instance.addDocument(
+                                      samples[i],
+                                      name: "Sample ${i + 1}",
+                                    )
+                                  : await _activeCollection.addDocument(
+                                      samples[i],
+                                      name:
+                                          "[$_activeCollectionId] Sample ${i + 1}",
+                                    );
                               totalChunks += result.chunkCount;
                             }
                             // Rebuild index after all samples added
-                            await MobileRag.instance.rebuildIndex();
+                            if (_isDefaultCollection) {
+                              await MobileRag.instance.rebuildIndex();
+                            } else {
+                              await _activeCollection.rebuildIndex();
+                            }
                             await _loadSources();
 
                             setState(() {
                               _status =
-                                  "✅ Saved ${samples.length} sample documents!\n"
+                                  '✅ Saved ${samples.length} sample documents in "$_activeCollectionId"!\n'
                                   "📦 Total chunks: $totalChunks";
                               _isLoading = false;
                             });
@@ -720,7 +956,7 @@ class _MyAppState extends State<MyApp> {
                         }
                       : null,
                   icon: const Icon(Icons.dataset),
-                  label: const Text('Load 5 Sample Documents'),
+                  label: const Text('Load Sample Documents'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
@@ -754,22 +990,34 @@ class _MyAppState extends State<MyApp> {
 
                           setState(() {
                             _isLoading = true;
-                            _status = "Deleting all documents...";
+                            _status =
+                                'Deleting all documents in "$_activeCollectionId"...';
                           });
 
                           try {
-                            // Get stats before deletion
-                            final stats = await MobileRag.instance.engine
-                                .getStats();
-
-                            // Use the new clearAllData API
-                            await MobileRag.instance.clearAllData();
+                            late final SourceStats stats;
+                            if (_isDefaultCollection) {
+                              // Get stats before deletion
+                              stats = await MobileRag.instance.engine
+                                  .getStats();
+                              // Use the global clearAllData API
+                              await MobileRag.instance.clearAllData();
+                            } else {
+                              stats = await _activeCollection.getStats();
+                              final sourceIds = _sources
+                                  .map((s) => s.id.toInt())
+                                  .toList(growable: false);
+                              for (final sourceId in sourceIds) {
+                                await _activeCollection.removeSource(sourceId);
+                              }
+                              await _activeCollection.rebuildIndex(force: true);
+                            }
                             await _loadSources();
 
                             setState(() {
                               _searchResults.clear();
                               _status =
-                                  "✅ Deleted all documents!\n"
+                                  '✅ Deleted all documents in "$_activeCollectionId"!\n'
                                   "Previously had ${stats.sourceCount} sources.";
                               _isLoading = false;
                             });
@@ -797,6 +1045,9 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    _docController.dispose();
+    _queryController.dispose();
+    _collectionController.dispose();
     // MobileRag is global, don't dispose it here
     super.dispose();
   }

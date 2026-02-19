@@ -128,11 +128,13 @@ class RrfConfig {
 class SearchFilter {
   final Int64List? sourceIds;
   final String? metadataLike;
+  final String? collectionId;
 
-  const SearchFilter({this.sourceIds, this.metadataLike});
+  const SearchFilter({this.sourceIds, this.metadataLike, this.collectionId});
 
   @override
-  int get hashCode => sourceIds.hashCode ^ metadataLike.hashCode;
+  int get hashCode =>
+      sourceIds.hashCode ^ metadataLike.hashCode ^ collectionId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -140,5 +142,6 @@ class SearchFilter {
       other is SearchFilter &&
           runtimeType == other.runtimeType &&
           sourceIds == other.sourceIds &&
-          metadataLike == other.metadataLike;
+          metadataLike == other.metadataLike &&
+          collectionId == other.collectionId;
 }
