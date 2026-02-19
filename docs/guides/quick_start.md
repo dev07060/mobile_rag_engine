@@ -299,6 +299,35 @@ print('Sources: ${stats.sourceCount}, Chunks: ${stats.chunkCount}');
 
 ---
 
+## Step 10: Multi-Collection (v1)
+
+Use collection scopes when you want independent indexing/rebuild units by category
+(for example `business` vs `travel`) without rebuilding the entire corpus.
+
+```dart
+final business = MobileRag.instance.inCollection('business');
+final travel = MobileRag.instance.inCollection('travel');
+
+await business.addDocument('Large business corpus text...');
+await travel.addDocument('Small travel corpus text...');
+
+// Rebuild/warmup only the target collection if needed
+await travel.rebuildIndex();
+
+if (!travel.isIndexReady) {
+  await travel.warmupFuture;
+}
+
+final hits = await travel.searchHybrid('hotel near station', topK: 5);
+print('travel hits: ${hits.length}');
+```
+
+Notes:
+- Existing code without collection parameters still uses the default `__default__` collection.
+- `searchHybrid` remains collection-scoped by default when called through a `CollectionRag`.
+
+---
+
 ## Next Steps
 
 - [Model Setup Guide](model_setup.md) - Model selection and deployment strategies
