@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.13.0
+* **Multi-Collection v1**:
+  - Added collection-scoped workflows via `MobileRag.inCollection(...)` / `CollectionRag`.
+  - Added optional `collectionId` support across core operations (ingest/search/rebuild/stats/list/remove).
+  - Kept backward compatibility with default `__default__` collection behavior.
+* **Search & Index Isolation**:
+  - Scoped hybrid search filters by collection and aligned collection-specific index activation before query.
+  - Updated delete/rebuild flows to operate on the active collection context.
+* **Initialization Stability**:
+  - Added per-collection init in-flight guard to prevent duplicate concurrent initialization.
+  - Shared logger stream ownership across collection-scoped services to avoid duplicate logger bootstrap/freeze scenarios.
+* **Crash Recovery Visibility**:
+  - Restored ingest status visibility by creating source rows before long embedding work.
+  - Improved failure handling to persist `failed` state for interrupted/failed ingests.
+* **Example App DX**:
+  - Moved collection testing into the main example screen (collection switch/apply/chips).
+  - Updated sample load and delete-all behavior to be collection-aware for non-default collections.
+* **Docs**:
+  - Updated README.md for added features
+
 ## 0.12.0+1
 * **Fix engine version**:
   - fix rag engine version
