@@ -6,6 +6,11 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "staticlib"]
 
+[features]
+default = []
+vector_faer = ["dep:faer"]
+vector_quant_i8 = []
+
 [dependencies]
 flutter_rust_bridge = "=2.11.1"
 anyhow = "1.0.100"
@@ -13,10 +18,10 @@ thiserror = "1.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.25"
-ndarray = "0.17.1"
 log = "0.4.29"
 once_cell = "1.21"
 lazy_static = "1.4"
+faer = { version = "0.24.0", optional = true, default-features = false, features = ["std", "linalg"] }
 
 # Tokenizer for text preprocessing
 # Using fancy-regex instead of onig for iOS cross-compilation compatibility

@@ -16,10 +16,14 @@
 //
 //! Incremental Vector Index with Dual-Index Strategy (buffer + HNSW).
 
-use std::sync::RwLock;
+use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw};
+#[cfg(not(feature = "vector_quant_i8"))]
+use crate::api::vector_math::{cosine_with_query_norm_f32, l2_norm_f32};
+#[cfg(feature = "vector_quant_i8")]
+use crate::api::vector_quant::{cosine_with_query_norm_i8, l2_norm_i8, quantize_f32_to_i8};
+use log::{debug, info, warn};
 use once_cell::sync::Lazy;
-use log::{info, debug, warn};
-use crate::api::hnsw_index::{search_hnsw, is_hnsw_index_loaded};
+use std::sync::RwLock;
 
 const BUFFER_THRESHOLD: usize = 100;
 
@@ -29,19 +33,48 @@ static RECENT_BUFFER: Lazy<RwLock<Vec<BufferEntry>>> = Lazy::new(|| RwLock::new(
 struct BufferEntry {
     id: i64,
     embedding: Vec<f32>,
+    #[cfg(not(feature = "vector_quant_i8"))]
     norm: f32,
+    #[cfg(feature = "vector_quant_i8")]
+    embedding_i8: Vec<i8>,
+    #[cfg(feature = "vector_quant_i8")]
+    i8_norm: f32,
 }
 
 impl BufferEntry {
     fn new(id: i64, embedding: Vec<f32>) -> Self {
-        let norm = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-        Self { id, embedding, norm }
+        #[cfg(not(feature = "vector_quant_i8"))]
+        let norm = l2_norm_f32(&embedding);
+        #[cfg(feature = "vector_quant_i8")]
+        let (embedding_i8, _embedding_i8_scale) = quantize_f32_to_i8(&embedding);
+        #[cfg(feature = "vector_quant_i8")]
+        let i8_norm = l2_norm_i8(&embedding_i8);
+        Self {
+            id,
+            embedding,
+            #[cfg(not(feature = "vector_quant_i8"))]
+            norm,
+            #[cfg(feature = "vector_quant_i8")]
+            embedding_i8,
+            #[cfg(feature = "vector_quant_i8")]
+            i8_norm,
+        }
     }
 
+    #[cfg(not(feature = "vector_quant_i8"))]
     fn cosine_distance(&self, other: &[f32], other_norm: f32) -> f32 {
-        if self.norm == 0.0 || other_norm == 0.0 { return 1.0; }
-        let dot: f32 = self.embedding.iter().zip(other.iter()).map(|(a, b)| a * b).sum();
-        1.0 - (dot / (self.norm * other_norm))
+        if self.norm == 0.0 || other_norm == 0.0 {
+            return 1.0;
+        }
+        1.0 - cosine_with_query_norm_f32(other, other_norm, &self.embedding)
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    fn cosine_distance_i8(&self, query_i8: &[i8], query_i8_norm: f32) -> f32 {
+        if self.i8_norm == 0.0 || query_i8_norm == 0.0 {
+            return 1.0;
+        }
+        1.0 - cosine_with_query_norm_i8(query_i8, query_i8_norm, &self.embedding_i8)
     }
 }
 
@@ -51,9 +84,15 @@ pub fn incremental_add(doc_id: i64, embedding: Vec<f32>) {
     let mut buffer = RECENT_BUFFER.write().unwrap();
     buffer.push(entry);
     let buffer_size = buffer.len();
-    debug!("[incremental] Added doc {} to buffer, size: {}", doc_id, buffer_size);
+    debug!(
+        "[incremental] Added doc {} to buffer, size: {}",
+        doc_id, buffer_size
+    );
     if buffer_size >= BUFFER_THRESHOLD {
-        warn!("[incremental] Buffer threshold reached ({}), consider calling merge_buffer()", buffer_size);
+        warn!(
+            "[incremental] Buffer threshold reached ({}), consider calling merge_buffer()",
+            buffer_size
+        );
     }
 }
 
@@ -63,7 +102,10 @@ pub fn incremental_add_batch(docs: Vec<(i64, Vec<f32>)>) {
     for (doc_id, embedding) in docs {
         buffer.push(BufferEntry::new(doc_id, embedding));
     }
-    info!("[incremental] Added batch to buffer, total size: {}", buffer.len());
+    info!(
+        "[incremental] Added batch to buffer, total size: {}",
+        buffer.len()
+    );
 }
 
 /// Remove a document from buffer.
@@ -71,7 +113,9 @@ pub fn incremental_remove(doc_id: i64) {
     let mut buffer = RECENT_BUFFER.write().unwrap();
     let initial_len = buffer.len();
     buffer.retain(|entry| entry.id != doc_id);
-    if buffer.len() < initial_len { debug!("[incremental] Removed doc {} from buffer", doc_id); }
+    if buffer.len() < initial_len {
+        debug!("[incremental] Removed doc {} from buffer", doc_id);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -82,32 +126,50 @@ pub struct IncrementalSearchResult {
 }
 
 /// Search both buffer and HNSW.
-pub fn incremental_search(query_embedding: Vec<f32>, top_k: usize) -> anyhow::Result<Vec<IncrementalSearchResult>> {
-    let query_norm = query_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+pub fn incremental_search(
+    query_embedding: Vec<f32>,
+    top_k: usize,
+) -> anyhow::Result<Vec<IncrementalSearchResult>> {
+    #[cfg(not(feature = "vector_quant_i8"))]
+    let query_norm = l2_norm_f32(&query_embedding);
+    #[cfg(feature = "vector_quant_i8")]
+    let (query_i8, _query_i8_scale) = quantize_f32_to_i8(&query_embedding);
+    #[cfg(feature = "vector_quant_i8")]
+    let query_i8_norm = l2_norm_i8(&query_i8);
     let mut all_results: Vec<(i64, f32, &str)> = Vec::new();
-    
+
     {
         let buffer = RECENT_BUFFER.read().unwrap();
         for entry in buffer.iter() {
+            #[cfg(feature = "vector_quant_i8")]
+            let distance = entry.cosine_distance_i8(&query_i8, query_i8_norm);
+            #[cfg(not(feature = "vector_quant_i8"))]
             let distance = entry.cosine_distance(&query_embedding, query_norm);
             all_results.push((entry.id, distance, "buffer"));
         }
     }
-    
+
     if is_hnsw_index_loaded() {
         let hnsw_results = search_hnsw(query_embedding.clone(), top_k * 2)?;
-        for result in hnsw_results { all_results.push((result.id, result.distance, "hnsw")); }
+        for result in hnsw_results {
+            all_results.push((result.id, result.distance, "hnsw"));
+        }
     }
-    
+
     all_results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-    
+
     let mut seen = std::collections::HashSet::new();
-    let results: Vec<IncrementalSearchResult> = all_results.into_iter()
+    let results: Vec<IncrementalSearchResult> = all_results
+        .into_iter()
         .filter(|(id, _, _)| seen.insert(*id))
         .take(top_k)
-        .map(|(doc_id, distance, source)| IncrementalSearchResult { doc_id, distance, source: source.to_string() })
+        .map(|(doc_id, distance, source)| IncrementalSearchResult {
+            doc_id,
+            distance,
+            source: source.to_string(),
+        })
         .collect();
-    
+
     debug!("[incremental] Search returned {} results", results.len());
     Ok(results)
 }
@@ -121,7 +183,11 @@ pub struct BufferStats {
 
 pub fn get_buffer_stats() -> BufferStats {
     let buffer = RECENT_BUFFER.read().unwrap();
-    BufferStats { buffer_size: buffer.len(), threshold: BUFFER_THRESHOLD, hnsw_loaded: is_hnsw_index_loaded() }
+    BufferStats {
+        buffer_size: buffer.len(),
+        threshold: BUFFER_THRESHOLD,
+        hnsw_loaded: is_hnsw_index_loaded(),
+    }
 }
 
 /// Clear buffer.
@@ -138,7 +204,12 @@ pub fn needs_merge() -> bool {
 
 /// Get buffer entries for HNSW rebuild.
 pub fn get_buffer_for_merge() -> Vec<(i64, Vec<f32>)> {
-    RECENT_BUFFER.read().unwrap().iter().map(|entry| (entry.id, entry.embedding.clone())).collect()
+    RECENT_BUFFER
+        .read()
+        .unwrap()
+        .iter()
+        .map(|entry| (entry.id, entry.embedding.clone()))
+        .collect()
 }
 
 #[cfg(test)]

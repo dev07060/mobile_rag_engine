@@ -1,0 +1,5 @@
+cargo:
+  release:
+    extra_flags:
+      - --features
+      - vector_faer,vector_quant_i8
