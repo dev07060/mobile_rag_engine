@@ -13,15 +13,15 @@ fn remove_trailing_page_number(page_text: &str) -> String {
     if lines.is_empty() {
         return page_text.to_string();
     }
-    
+
     // Find last non-empty line
     let mut last_content_idx = lines.len() - 1;
     while last_content_idx > 0 && lines[last_content_idx].trim().is_empty() {
         last_content_idx -= 1;
     }
-    
+
     let last_line = lines[last_content_idx].trim();
-    
+
     // Check if last line is purely numeric (likely page number)
     if !last_line.is_empty() && last_line.chars().all(|c| c.is_ascii_digit()) {
         // Remove the page number line
@@ -40,65 +40,70 @@ fn join_pages(pages: Vec<String>) -> String {
     if pages.is_empty() {
         return String::new();
     }
-    
+
     // First, clean all pages by removing trailing page numbers
-    let cleaned_pages: Vec<String> = pages.iter()
+    let cleaned_pages: Vec<String> = pages
+        .iter()
         .map(|p| remove_trailing_page_number(p))
         .collect();
-    
+
     // Include standard hyphen (-), soft hyphen (\u{00AD}), hyphen (\u{2010}), non-breaking hyphen (\u{2011})
     let hyphen_end_re = Regex::new(r"(\w+)[-\u{00AD}\u{2010}\u{2011}]\s*$").unwrap();
     let word_start_re = Regex::new(r"^\s*(\w+)").unwrap();
-    
+
     let mut result = String::new();
-    
+
     for (i, page) in cleaned_pages.iter().enumerate() {
         if i == 0 {
             result = page.clone();
             continue;
         }
-        
+
         // Clone to check for hyphenation without borrow conflicts
         let result_for_check = result.clone();
         let result_trimmed = result_for_check.trim_end();
-        
+
         if let Some(caps) = hyphen_end_re.captures(result_trimmed) {
             let word_part1 = caps.get(1).unwrap().as_str().to_string();
             let match_len = caps.get(0).unwrap().as_str().len();
-            
+
             // Check if current page starts with word continuation
             let page_trimmed = page.trim_start();
             if let Some(next_caps) = word_start_re.captures(page_trimmed) {
                 let word_part2 = next_caps.get(1).unwrap().as_str();
-                
+
                 // Remove trailing "word-" from result
                 let match_start = result_trimmed.len() - match_len;
                 result.truncate(match_start);
                 result.push_str(&word_part1);
                 result.push_str(word_part2);
-                
+
                 // Add rest of current page (after the first word)
                 let rest_start = next_caps.get(1).unwrap().end();
                 result.push_str(&page_trimmed[rest_start..]);
                 continue;
             }
         }
-        
+
         // No hyphenation case: just add space and continue
         result.push(' ');
         result.push_str(page);
     }
-    
+
     // Handle in-line hyphenation (line breaks within pages)
     // Only join when: word- + newline + lowercase continuation
     // Preserves real compound words like "user-facing", "data-binding"
     // Also handles soft hyphens etc.
-    let inline_hyphen_re = Regex::new(r"(\w+)[-\u{00AD}\u{2010}\u{2011}]\s*[\r\n]+\s*([a-z]\w*)").unwrap();
+    let inline_hyphen_re =
+        Regex::new(r"(\w+)[-\u{00AD}\u{2010}\u{2011}]\s*[\r\n]+\s*([a-z]\w*)").unwrap();
     let dehyphenated = inline_hyphen_re.replace_all(&result, "$1$2");
-    
+
     // Normalize whitespace
     let whitespace_re = Regex::new(r"\s+").unwrap();
-    whitespace_re.replace_all(&dehyphenated, " ").trim().to_string()
+    whitespace_re
+        .replace_all(&dehyphenated, " ")
+        .trim()
+        .to_string()
 }
 
 /// Extract text content from a PDF file (bytes)
@@ -119,26 +124,31 @@ pub fn extract_text_from_docx(file_bytes: Vec<u8>) -> Result<String> {
 /// Uses magic bytes to determine file format
 pub fn extract_text_from_document(file_bytes: Vec<u8>) -> Result<String> {
     const MAX_FILE_SIZE: usize = 50 * 1024 * 1024; // 50MB
-    
+
     if file_bytes.len() > MAX_FILE_SIZE {
-        return Err(anyhow!("File too large ({} bytes). Maximum supported size is 50MB.", file_bytes.len()));
+        return Err(anyhow!(
+            "File too large ({} bytes). Maximum supported size is 50MB.",
+            file_bytes.len()
+        ));
     }
 
     if file_bytes.len() < 4 {
         return Err(anyhow!("File too small to determine format"));
     }
-    
+
     // PDF magic bytes: %PDF
     if file_bytes.starts_with(b"%PDF") {
         return extract_text_from_pdf(file_bytes);
     }
-    
+
     // DOCX magic bytes: PK (ZIP archive)
     if file_bytes.starts_with(b"PK") {
         return extract_text_from_docx(file_bytes);
     }
-    
-    Err(anyhow!("Unsupported document format. Expected PDF or DOCX."))
+
+    Err(anyhow!(
+        "Unsupported document format. Expected PDF or DOCX."
+    ))
 }
 
 /// EXPERIMENTAL: Smart CJK dehyphenation
@@ -148,59 +158,60 @@ fn join_pages_cjk_experimental(pages: Vec<String>) -> String {
     if pages.is_empty() {
         return String::new();
     }
-    
+
     // 1. Clean pages first (same as original)
-    let cleaned_pages: Vec<String> = pages.iter()
+    let cleaned_pages: Vec<String> = pages
+        .iter()
         .map(|p| remove_trailing_page_number(p))
         .collect();
-    
+
     // 2. Initial join logic (preserve current page-boundary logic for now, or simplify for test)
     // For this test case, we focus on the text content itself, so let's simplify line joining first.
     // If we want to test "newlines within a page", we can just join pages with newlines first if needed,
     // or apply logic per page. But usually dehyphenation runs on the full text.
-    // 
+    //
     // Let's replicate the basic joining logic but apply the CJK fix.
-    
+
     let mut combined_text = String::new();
-    
+
     // Simple join with space for pages for now (unless hyphenated logic invoked, let's borrow existing logic)
     // Actually, let's reuse the existing 'join_pages' logic logic broadly, BUT improve the "inline hyphenation" part.
     // AND add the CJK logic.
-    
+
     // Re-use logic body approach:
-    // ... (Page boundary logic omitted for brevity in experimental function unless needed, 
+    // ... (Page boundary logic omitted for brevity in experimental function unless needed,
     // let's assume we just have one big string for the specific test case of "newline within text").
-    
-    // Let's simulate "joining pages" by just joining them with space for this specific test 
+
+    // Let's simulate "joining pages" by just joining them with space for this specific test
     // if the focuses is on "newlines within the text" which the user highlighted.
     // Or better, let's call the original logic? No, we want to CHANGE it.
-    
+
     // Let's implement the FULL proposed new logic here:
-    
+
     let hyphen_end_re = Regex::new(r"(\w+)-\s*$").unwrap();
     let word_start_re = Regex::new(r"^\s*(\w+)").unwrap();
-    
+
     for (i, page) in cleaned_pages.iter().enumerate() {
         if i == 0 {
             combined_text = page.clone();
             continue;
         }
-        
+
         // CJK Page Boundary Check (NEW logic idea)
         // If last char of combined_text is CJK and first char of page is CJK, join no space.
         // Implementation:
         let last_char = combined_text.trim_end().chars().last();
         let first_char = page.trim_start().chars().next();
-        
+
         let is_cjk_boundary = match (last_char, first_char) {
             (Some(c1), Some(c2)) => is_cjk(c1) && is_cjk(c2),
             _ => false,
         };
-        
+
         if is_cjk_boundary {
             // Join without space!
             combined_text = combined_text.trim_end().to_string();
-             // Remove leading whitespace from next page
+            // Remove leading whitespace from next page
             combined_text.push_str(page.trim_start());
             continue;
         }
@@ -208,44 +219,47 @@ fn join_pages_cjk_experimental(pages: Vec<String>) -> String {
         // ... Previous hyphen logic ...
         let result_trimmed = combined_text.trim_end();
         if let Some(caps) = hyphen_end_re.captures(result_trimmed) {
-             // (Identical to original logic)
+            // (Identical to original logic)
             let word_part1 = caps.get(1).unwrap().as_str().to_string();
             let match_len = caps.get(0).unwrap().as_str().len();
             let page_trimmed = page.trim_start();
-             if let Some(next_caps) = word_start_re.captures(page_trimmed) {
-                 let word_part2 = next_caps.get(1).unwrap().as_str();
-                 let match_start = result_trimmed.len() - match_len;
-                 combined_text.truncate(match_start);
-                 combined_text.push_str(&word_part1);
-                 combined_text.push_str(word_part2);
-                 let rest_start = next_caps.get(1).unwrap().end();
-                 combined_text.push_str(&page_trimmed[rest_start..]);
-                 continue;
-             }
+            if let Some(next_caps) = word_start_re.captures(page_trimmed) {
+                let word_part2 = next_caps.get(1).unwrap().as_str();
+                let match_start = result_trimmed.len() - match_len;
+                combined_text.truncate(match_start);
+                combined_text.push_str(&word_part1);
+                combined_text.push_str(word_part2);
+                let rest_start = next_caps.get(1).unwrap().end();
+                combined_text.push_str(&page_trimmed[rest_start..]);
+                continue;
+            }
         }
-        
+
         // Default: Join with space
         combined_text.push(' ');
         combined_text.push_str(page);
     }
-    
+
     // 3. CJK Newline Logic (The Core Request)
     // Regex to find: CJK char + newline + CJK char (with NO spaces on either side)
     // Replace with: char1 + char2 (no space)
-    
+
     // Previous aggressive regex: `([\p...])\s*[\r\n]+\s*([\p...])` - consumed spaces!
     // New safe regex: `([\p...])[\r\n]+([\p...])` - only matches if NO space exists.
-    
+
     let cjk_newline_re = Regex::new(r"([\p{Han}\p{Hangul}\p{Hiragana}\p{Katakana}])[\r\n]+([\p{Han}\p{Hangul}\p{Hiragana}\p{Katakana}])").unwrap();
     let cjk_processed = cjk_newline_re.replace_all(&combined_text, "$1$2");
-    
+
     // 4. Original Dehyphenation (English)
     let inline_hyphen_re = Regex::new(r"(\w+)-\s*[\r\n]+\s*([a-z]\w*)").unwrap();
     let dehyphenated = inline_hyphen_re.replace_all(&cjk_processed, "$1$2");
-    
+
     // 5. Normalize whitespace
     let whitespace_re = Regex::new(r"\s+").unwrap();
-    whitespace_re.replace_all(&dehyphenated, " ").trim().to_string()
+    whitespace_re
+        .replace_all(&dehyphenated, " ")
+        .trim()
+        .to_string()
 }
 
 // Helper to check for CJK characters
@@ -256,7 +270,7 @@ fn is_cjk(c: char) -> bool {
     (u >= 0x4E00 && u <= 0x9FFF) || // CJK Unified Ideographs
     (u >= 0x3040 && u <= 0x309F) || // Hiragana
     (u >= 0x30A0 && u <= 0x30FF) || // Katakana
-    (u >= 0xAC00 && u <= 0xD7AF)    // Hangul Syllables
+    (u >= 0xAC00 && u <= 0xD7AF) // Hangul Syllables
 }
 
 #[cfg(test)]
@@ -329,7 +343,7 @@ mod tests {
     //     // Case 2: Korean distinct words separated by newline (Space preserved check)
     //     // "인출할 수 \n있습니다" (Space before newline) -> Should be "인출할 수 있습니다"
     //     let pages2 = vec![
-    //         "계약자적립금을 인출할 수 \n있습니다.".to_string() 
+    //         "계약자적립금을 인출할 수 \n있습니다.".to_string()
     //     ];
     //     let result2 = join_pages_cjk_experimental(pages2);
     //     assert!(result2.contains("인출할 수 있습니다"));
@@ -341,14 +355,13 @@ mod tests {
     //     assert_eq!(result3, "Hello World");
     // }
 
-
     // #[test]
     // fn test_user_provided_pdf() {
     //     // Look for file in the crate root (where cargo test runs)
     //     // NOTE: Please copy 'PDD_202109131505_5000260647_A0028_3_key.pdf' to this directory!
     //     let file_path = "PDD_202109131505_5000260647_A0028_3_key.pdf";
     //     let path = std::path::Path::new(file_path);
-        
+
     //     if !path.exists() {
     //         println!("Skipping test_user_provided_pdf: File not found at {}", file_path);
     //         return;
@@ -357,11 +370,11 @@ mod tests {
     //     let bytes = std::fs::read(path).expect("Failed to read file");
     //     let pages = pdf_extract::extract_text_from_mem_by_pages(&bytes)
     //          .expect("PDF extraction failed");
-             
+
     //     let result = join_pages_cjk_experimental(pages);
-        
+
     //     println!("PDF Extraction Result Length: {}", result.len());
-        
+
     //     if result.contains("해지환급금") {
     //          println!("SUCCESS: Found '해지환급금'");
     //     } else {
@@ -372,7 +385,7 @@ mod tests {
     //              println!("Context around '환급금': '{}'", &result[start..end]);
     //          }
     //     }
-        
+
     //     assert!(result.contains("해지환급금"), "Failed to dehyphenate '해지환급금'");
     // }
     #[test]
@@ -382,17 +395,20 @@ mod tests {
         let result = join_pages(pages);
         assert_eq!(result, "highly-readable");
 
-        // Soft hyphen (U+00AD) - The Regex expects literal '-', so this might fail to join 
+        // Soft hyphen (U+00AD) - The Regex expects literal '-', so this might fail to join
         // and leave the soft hyphen in the output.
         let pages_soft = vec!["highly-read\u{00AD}\n\nable".to_string()];
         let result_soft = join_pages(pages_soft);
         // If it fails to join, it will likely be "highly-read\u{00AD} able" (with space)
-        // We want to see what happens currenty. 
+        // We want to see what happens currenty.
         // If it fails, we know we need to fix the regex.
         println!("Soft hyphen result: {}", result_soft);
-        
+
         // We expect it to FAIL joining currently, resulting in the soft hyphen remaining
         // and a space being inserted.
-        assert_eq!(result_soft, "highly-readable", "Soft hyphen SHOULD match regex now");
+        assert_eq!(
+            result_soft, "highly-readable",
+            "Soft hyphen SHOULD match regex now"
+        );
     }
 }

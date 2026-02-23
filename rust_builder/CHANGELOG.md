@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.14.0
+* **Vector Math Refactor**:
+  - Removed `ndarray` dependency; introduced `vector_math` module with allocation-free dot product, L2 norm, and cosine kernels.
+  - Added optional `vector_faer` feature using `faer` crate for SIMD-accelerated vector operations.
+* **i8 Scalar Quantization (`vector_quant_i8` feature)**:
+  - Added `vector_quant` module with `quantize_f32_to_i8`, `dequantize_i8_to_f32`, and i8 cosine similarity kernels.
+  - Updated `init_db` / `init_source_db` schema migration to add `embedding_i8` and `embedding_scale` columns.
+  - Linear scan search paths (`search_similar`, `search_chunks_linear_in_collection`) use quantized cosine when available, with f32 fallback.
+* **Benchmark API**:
+  - Added `benchmark_search_linear_scan()` and `benchmark_search_chunks_linear_in_collection()` FFI entrypoints for deterministic linear scan measurement.
+* **Code Quality**:
+  - Applied `rustfmt` formatting across all source files.
+  - Sorted module declarations alphabetically in `mod.rs`.
+  - Removed unused `ndarray` crate dependency from `Cargo.toml`.
+
 ## 0.13.0
 * **Multi-Collection Core**:
   - Added collection-scoped schema and lifecycle support (`collection_id` on sources/chunks, collection index state).

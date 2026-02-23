@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.14.0
+* **Vector Math Refactor**:
+  - Replaced `ndarray` dependency with a zero-allocation `vector_math` module for mobile-optimized cosine similarity, dot product, and L2 norm.
+  - Added optional `faer` backend (`vector_faer` feature) for SIMD-accelerated vector math.
+* **i8 Scalar Quantization (Feature-Gated)**:
+  - Added `vector_quant_i8` feature flag for i8 scalar quantization support in search paths.
+  - Schema migration adds `embedding_i8` and `embedding_scale` columns to `docs` and `chunks` tables.
+  - Linear scan search paths support quantized cosine similarity with f32 fallback.
+* **Benchmark Service**:
+  - Added `DetailedBenchmarkStats` with warmup, p50/p95 percentiles, stddev, and raw sample collection.
+  - Added `benchmarkDetailed()`, `collectSamples()`, `summarizeSamples()`, and `aggregateRoundStats()` APIs.
+* **Benchmark FFI**:
+  - Added `benchmarkSearchLinearScan()` for deterministic linear scan measurement (bypasses HNSW).
+  - Added `benchmarkSearchChunksLinearInCollection()` for collection-scoped linear scan benchmarks.
+* **Code Quality**:
+  - Applied `rustfmt` formatting across all Rust source files.
+  - Sorted module declarations alphabetically in `mod.rs`.
+
 ## 0.13.0
 * **Multi-Collection v1**:
   - Added collection-scoped workflows via `MobileRag.inCollection(...)` / `CollectionRag`.

@@ -95,6 +95,9 @@ if (!MobileRag.instance.isIndexReady) {
 ## Step 4: Add Documents
 
 ```dart
+import 'dart:io';
+import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+
 // Add text
 await MobileRag.instance.addDocument(
   'Flutter is Google\'s UI toolkit for building beautiful apps.',
@@ -106,7 +109,8 @@ final bytes = await File('document.pdf').readAsBytes();
 final text = await DocumentParser.parse(bytes.toList());
 await MobileRag.instance.addDocument(text, filePath: 'document.pdf');
 
-// Rebuild index (important!)
+// Optional: force immediate rebuild if you need deterministic timing.
+// In most apps this is not required because indexing is auto-managed.
 await MobileRag.instance.rebuildIndex();
 ```
 
@@ -199,7 +203,6 @@ void main() async {
   await MobileRag.instance.addDocument(
     'Flutter is an open-source UI framework by Google.',
   );
-  await MobileRag.instance.rebuildIndex();
   
   // Search
   final result = await MobileRag.instance.search('What is Flutter?', topK: 3);
@@ -207,6 +210,19 @@ void main() async {
   print('Context: ${result.context.text}');
   
   runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      home: Scaffold(
+        body: Center(child: Text('Mobile RAG Engine ready')),
+      ),
+    );
+  }
 }
 ```
 
@@ -257,7 +273,9 @@ for (var r in results.chunks) {
 ## Step 9: Advanced Features
 
 ### 1. Optimize Startup (Cached Index)
-Instead of rebuilding the index every time, you can load a previously cached index. See [Index Management](../features/index_management.md#hnsw-index-persistence) for details.
+HNSW cache load/rebuild is handled automatically during initialization.  
+In most apps, you only need to gate first search when using `deferIndexWarmup: true`.  
+See [Index Management](../features/index_management.md) for persistence details.
 
 ```dart
 await MobileRag.initialize(...);
@@ -265,14 +283,6 @@ await MobileRag.initialize(...);
 // If initialized with deferIndexWarmup: true, wait before first search
 if (!MobileRag.instance.isIndexReady) {
   await MobileRag.instance.warmupFuture;
-}
-
-// Try to load existing index from disk (much faster)
-bool loaded = await MobileRag.instance.tryLoadCachedIndex();
-
-if (!loaded) {
-  // Only rebuild if cache doesn't exist
-  await MobileRag.instance.rebuildIndex();
 }
 ```
 
@@ -303,6 +313,7 @@ print('Sources: ${stats.sourceCount}, Chunks: ${stats.chunkCount}');
 
 Use collection scopes when you want independent indexing/rebuild units by category
 (for example `business` vs `travel`) without rebuilding the entire corpus.
+For a focused guide, see [Multi-Collection Feature](../features/multi_collection.md).
 
 ```dart
 final business = MobileRag.instance.inCollection('business');

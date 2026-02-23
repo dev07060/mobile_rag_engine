@@ -1,5 +1,5 @@
-use thiserror::Error;
 use flutter_rust_bridge::frb;
+use thiserror::Error;
 
 /// Structured error type passed to Dart via FFI.
 #[frb(dart_metadata=("freezed"))] // Generated as a sealed class in Dart.
@@ -24,7 +24,7 @@ pub enum RagError {
     /// Internal system error (HNSW, Logic, etc.).
     #[error("Internal error: {0}")]
     InternalError(String),
-    
+
     /// Unknown error.
     #[error("Unknown error: {0}")]
     Unknown(String),
