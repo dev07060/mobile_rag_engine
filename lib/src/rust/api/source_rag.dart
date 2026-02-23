@@ -141,6 +141,21 @@ Future<List<ChunkSearchResult>> searchChunksInCollection({
   topK: topK,
 );
 
+/// Benchmark-only entrypoint for deterministic linear scan measurement.
+///
+/// This bypasses HNSW activation/rebuild and executes the exact
+/// chunk linear-scan path directly for the given collection.
+Future<List<ChunkSearchResult>> benchmarkSearchChunksLinearInCollection({
+  required String collectionId,
+  required List<double> queryEmbedding,
+  required int topK,
+}) => RustLib.instance.api
+    .crateApiSourceRagBenchmarkSearchChunksLinearInCollection(
+      collectionId: collectionId,
+      queryEmbedding: queryEmbedding,
+      topK: topK,
+    );
+
 /// Get source document by ID.
 Future<String?> getSource({required PlatformInt64 sourceId}) =>
     RustLib.instance.api.crateApiSourceRagGetSource(sourceId: sourceId);

@@ -56,6 +56,18 @@ Future<List<String>> searchSimilar({
   topK: topK,
 );
 
+/// Benchmark-only entrypoint for deterministic linear scan measurement.
+///
+/// Unlike `search_similar`, this function bypasses HNSW and executes
+/// the linear scan path directly.
+Future<List<String>> benchmarkSearchLinearScan({
+  required List<double> queryEmbedding,
+  required int topK,
+}) => RustLib.instance.api.crateApiSimpleRagBenchmarkSearchLinearScan(
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
+
 /// Get document count.
 Future<PlatformInt64> getDocumentCount() =>
     RustLib.instance.api.crateApiSimpleRagGetDocumentCount();

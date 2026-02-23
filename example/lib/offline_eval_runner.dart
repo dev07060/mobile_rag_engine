@@ -70,7 +70,7 @@ class _OfflineEvalAppState extends State<_OfflineEvalApp> {
       final sourceIdByKey = <String, int>{};
       for (final source in manifest.sources) {
         final bytes = await _loadBytes(source.filePath);
-        final text = await DocumentParser.parse(bytes.toList());
+        final text = await _extractDocumentText(source.filePath, bytes);
         final addResult = await MobileRag.instance.addDocument(
           text,
           name: source.sourceKey,
@@ -266,6 +266,25 @@ class _OfflineEvalAppState extends State<_OfflineEvalApp> {
       return data.buffer.asUint8List();
     } catch (_) {
       return File(path).readAsBytes();
+    }
+  }
+
+  Future<String> _extractDocumentText(String path, Uint8List bytes) async {
+    final lower = path.toLowerCase();
+    final isTextLike =
+        lower.endsWith('.md') ||
+        lower.endsWith('.txt') ||
+        lower.endsWith('.html') ||
+        lower.endsWith('.htm');
+
+    if (isTextLike) {
+      return utf8.decode(bytes, allowMalformed: true);
+    }
+
+    try {
+      return await DocumentParser.parse(bytes.toList());
+    } catch (_) {
+      return utf8.decode(bytes, allowMalformed: true);
     }
   }
 

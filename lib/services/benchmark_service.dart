@@ -6,6 +6,7 @@ import 'package:mobile_rag_engine/src/rust/api/db_pool.dart';
 import 'package:mobile_rag_engine/src/rust/api/hybrid_search.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'dart:math' as math;
 
 /// Benchmark category for grouping results
 enum BenchmarkCategory {
@@ -41,8 +42,146 @@ class BenchmarkResult {
       '($iterations runs)';
 }
 
+/// Detailed benchmark statistics for reproducible validation.
+class DetailedBenchmarkStats {
+  final int warmupIterations;
+  final int measuredIterations;
+  final List<double> samplesMs;
+  final double avgMs;
+  final double minMs;
+  final double maxMs;
+  final double p50Ms;
+  final double p95Ms;
+  final double stdDevMs;
+
+  DetailedBenchmarkStats({
+    required this.warmupIterations,
+    required this.measuredIterations,
+    required this.samplesMs,
+    required this.avgMs,
+    required this.minMs,
+    required this.maxMs,
+    required this.p50Ms,
+    required this.p95Ms,
+    required this.stdDevMs,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'warmup_iterations': warmupIterations,
+    'measured_iterations': measuredIterations,
+    'samples_ms': samplesMs,
+    'avg_ms': avgMs,
+    'min_ms': minMs,
+    'max_ms': maxMs,
+    'p50_ms': p50Ms,
+    'p95_ms': p95Ms,
+    'stddev_ms': stdDevMs,
+  };
+}
+
 /// Performance benchmark service
 class BenchmarkService {
+  static double _percentileFromSorted(List<double> sorted, double p) {
+    if (sorted.isEmpty) return 0.0;
+    if (sorted.length == 1) return sorted.first;
+
+    final clamped = p.clamp(0.0, 1.0);
+    final pos = (sorted.length - 1) * clamped;
+    final lower = pos.floor();
+    final upper = pos.ceil();
+
+    if (lower == upper) return sorted[lower];
+    final weight = pos - lower;
+    return sorted[lower] * (1.0 - weight) + sorted[upper] * weight;
+  }
+
+  static double _stdDev(List<double> values, double mean) {
+    if (values.length <= 1) return 0.0;
+    final variance =
+        values
+            .map((v) {
+              final diff = v - mean;
+              return diff * diff;
+            })
+            .reduce((a, b) => a + b) /
+        values.length;
+    return math.sqrt(variance);
+  }
+
+  /// Collect measured samples after warmup.
+  static Future<List<double>> collectSamples(
+    Future<void> Function() fn, {
+    int warmupIterations = 5,
+    int measuredIterations = 30,
+  }) async {
+    for (var i = 0; i < warmupIterations; i++) {
+      await fn();
+    }
+
+    final samples = <double>[];
+    for (var i = 0; i < measuredIterations; i++) {
+      final ms = await measureMs(fn);
+      samples.add(ms);
+    }
+    return samples;
+  }
+
+  /// Summarize measured samples with p50/p95/stddev.
+  static DetailedBenchmarkStats summarizeSamples(
+    List<double> samplesMs, {
+    required int warmupIterations,
+  }) {
+    final copied = List<double>.from(samplesMs)..sort();
+    final measured = samplesMs.length;
+    final avg = measured == 0
+        ? 0.0
+        : samplesMs.reduce((a, b) => a + b) / measured;
+    final min = copied.isEmpty ? 0.0 : copied.first;
+    final max = copied.isEmpty ? 0.0 : copied.last;
+    final p50 = copied.isEmpty ? 0.0 : _percentileFromSorted(copied, 0.50);
+    final p95 = copied.isEmpty ? 0.0 : _percentileFromSorted(copied, 0.95);
+    final stdDev = _stdDev(samplesMs, avg);
+
+    return DetailedBenchmarkStats(
+      warmupIterations: warmupIterations,
+      measuredIterations: measured,
+      samplesMs: samplesMs,
+      avgMs: avg,
+      minMs: min,
+      maxMs: max,
+      p50Ms: p50,
+      p95Ms: p95,
+      stdDevMs: stdDev,
+    );
+  }
+
+  /// Run detailed benchmark with warmup and reproducible summary.
+  static Future<DetailedBenchmarkStats> benchmarkDetailed(
+    Future<void> Function() fn, {
+    int warmupIterations = 5,
+    int measuredIterations = 30,
+  }) async {
+    final samples = await collectSamples(
+      fn,
+      warmupIterations: warmupIterations,
+      measuredIterations: measuredIterations,
+    );
+    return summarizeSamples(samples, warmupIterations: warmupIterations);
+  }
+
+  /// Aggregate multiple round stats by flattening all measured samples.
+  static DetailedBenchmarkStats aggregateRoundStats(
+    List<DetailedBenchmarkStats> rounds,
+  ) {
+    final allSamples = <double>[];
+    var warmup = 0;
+    for (final round in rounds) {
+      warmup = round.warmupIterations;
+      allSamples.addAll(round.samplesMs);
+    }
+    return summarizeSamples(allSamples, warmupIterations: warmup);
+  }
+
   /// Measure execution time of async code block
   static Future<double> measureMs(Future<void> Function() fn) async {
     final sw = Stopwatch()..start();
