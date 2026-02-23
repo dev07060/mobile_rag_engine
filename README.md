@@ -100,14 +100,15 @@ curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/resolve/main/token
 *   [Adjacent Chunk Retrieval](docs/features/adjacent_chunk_retrieval.md) - Fetch surrounding context.
 *   [Index Management](docs/features/index_management.md) - Stats, persistence, and recovery.
 *   [Markdown Chunker](docs/features/markdown_chunker.md) - Structure-aware text splitting.
+*   [Multi-Collection](docs/features/multi_collection.md) - Isolate ingest/search/rebuild by category.
 *   [Prompt Compression](docs/features/prompt_compression.md) - Reduce token usage.
 *   [Search by Source](docs/features/search_by_source.md) - Filter results by document.
 *   [Search Strategies](docs/features/search_strategies.md) - Tune ranking and retrieval.
 
 ### Guides
 *   [Quick Start](docs/guides/quick_start.md) - Setup in 5 minutes.
-*   [Graph v2.1 Design](docs/guides/graph_v2_1_implementation_design.md) - Graph-enhanced retrieval implementation plan.
-*   [Graph v2.1 Risk Register](docs/guides/graph_v2_1_risk_register.md) - Predicted risks and mitigation assumptions.
+*   [FAER INT8 Adoption Plan](docs/guides/faer_int8_adoption_plan.md) - INT8 migration strategy and rollout plan.
+*   [FAER INT8 Spec (A)](docs/guides/faer_int8_additional_spec_a.md) - Additional implementation details for FAER INT8.
 *   [Model Setup](docs/guides/model_setup.md) - Choosing and downloading models.
 *   [Troubleshooting](docs/guides/troubleshooting.md) - Common fixes.
 *   [FAQ](docs/guides/faq.md) - Frequently asked questions.
@@ -147,7 +148,7 @@ class MySearchScreen extends StatelessWidget {
       'Flutter is a UI toolkit for building apps.',
     );
     await MobileRag.instance.addDocument(
-      'Flutter is a UI toolkit for building apps.',
+      'Dart is the language used to build Flutter apps.',
     );
     // Indexing is automatic! (Debounced 500ms)
     // Optional: await MobileRag.instance.rebuildIndex(); // Call if you want it done NOW
