@@ -58,7 +58,7 @@ example/assets/model.onnx
 example/assets/tokenizer.json
 
 # Python scripts (local tooling only)
-scripts/
+scripts/*.py
 
 # Validation artifacts / corpora (local only)
 artifacts/
