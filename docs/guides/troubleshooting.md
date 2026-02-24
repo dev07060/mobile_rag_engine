@@ -87,7 +87,7 @@ print('Model size: ${size / 1024 / 1024} MB');
 
 **Symptom:**
 ```
-Exception: Vector dimension mismatch (expected 1024, got 384)
+Exception: Vector dimension mismatch (expected 384, got 1024)
 ```
 
 **Cause:** Mixing embeddings from different models

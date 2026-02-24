@@ -8,12 +8,15 @@ Common questions about `mobile_rag_engine`.
 
 ### Q: Does it support Korean?
 
-**Yes!** The BGE-m3 model supports 100+ languages with excellent Korean performance.
+**Yes!** Switch to the BGE-m3 model, which supports 100+ languages with excellent Korean performance.
 
 ```bash
-# Download multilingual model
+# Download multilingual model (INT8 quantized, ~542MB)
 curl -L -o model.onnx "https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx"
+curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer.json"
 ```
+
+See [Model Setup Guide](model_setup.md) for details.
 
 ### Q: Does it work offline?
 
@@ -31,16 +34,16 @@ Yes, but it's **3-5x slower than real devices**. Always run performance tests on
 
 | Use Case | Recommended Model |
 |:---------|:------------------|
+| English-only apps (default) | **MiniLM** (384 dim, ~23MB) |
 | Korean / Multilingual apps | **BGE-m3** (1024 dim, ~542MB) |
-| English only, size-sensitive | **MiniLM** (384 dim, ~25MB) |
 | Quick prototyping | **MiniLM** |
 
-### Q: The model file is too large (542MB)
+### Q: BGE-m3 is too large (542MB) for my app
 
 Several options available:
 
-1. **Use MiniLM** (~25MB, English only)
-2. **Download at runtime** - Download on first app launch
+1. **Use MiniLM instead** (~23MB, English only) — this is the default
+2. **Download at runtime** - Download BGE-m3 on first app launch
 3. **Accept the size** - iOS allows 4GB, Android Play allows 150MB AAB
 
 See [Model Setup Guide](model_setup.md#production-deployment-strategies) for details.

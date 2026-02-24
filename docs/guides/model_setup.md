@@ -8,8 +8,8 @@ This guide covers embedding model selection, download, and deployment strategies
 
 | Model | Dimensions | Size (ONNX) | Max Tokens | Languages | Best For |
 |:------|:----------:|:-----------:|:----------:|:----------|:---------|
+| [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (INT8) | **384** | ~23 MB | 256 | English | English-only apps, lightweight & fast |
 | [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~542 MB | 8,194 | 100+ (multilingual) | Korean, CJK, mixed-language apps |
-| [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) | **384** | ~25 MB | 256 | English | English-only apps, size-sensitive |
 
 > **Dimension Matters**: The embedding dimension affects your vector index. Once you choose a model, all documents must use the same dimension. Switching models requires re-embedding all documents.
 
@@ -17,10 +17,21 @@ This guide covers embedding model selection, download, and deployment strategies
 
 ## Download Instructions
 
-### BGE-m3 (Recommended for Multilingual)
+### all-MiniLM-L6-v2 (Default — English, Lightweight)
 
 ```bash
-# Create assets folder
+mkdir -p assets && cd assets
+
+# Download INT8 quantized model for ARM64 (~23MB)
+curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx"
+
+# Download tokenizer
+curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json"
+```
+
+### BGE-m3 (Multilingual — Korean, CJK, etc.)
+
+```bash
 mkdir -p assets && cd assets
 
 # Download INT8 quantized model (~542MB)
@@ -28,18 +39,6 @@ curl -L -o model.onnx "https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/
 
 # Download tokenizer (~17MB)
 curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer.json"
-```
-
-### all-MiniLM-L6-v2 (Lightweight English)
-
-```bash
-mkdir -p assets && cd assets
-
-# Download model (~25MB)
-curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx"
-
-# Download tokenizer
-curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json"
 ```
 
 ---
