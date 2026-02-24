@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Centralized config/search defaults into shared internal constants.
   - Added runtime soft validation for chunking config, thread conflict handling, and hybrid search weights.
   - Aligned low-level `SourceRagService.searchHybrid` defaults to `vector=0.2`, `bm25=0.8`.
+  - Hardened embedding runtime with single FIFO serialization across `init/embed/embedBatch`.
+  - Added embedding dimension baseline guard (fail-fast on mismatch with recovery guidance).
+  - Switched re-initialization to safe session swap (keep old session until new session is ready).
+  - Added deterministic `EmbeddingService.disposeAsync()` and updated engine/isolate cleanup paths.
 * **Docs**:
   - Clarified model compatibility constraints (`input_ids`, `attention_mask`, optional `token_type_ids`).
   - Added validated ONNX artifact references and troubleshooting guidance for `Missing Input: token_type_ids`.

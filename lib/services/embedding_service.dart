@@ -1,14 +1,20 @@
 // lib/services/embedding_service.dart
+import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:mobile_rag_engine/src/internal/embedding_dimension_state.dart';
+import 'package:mobile_rag_engine/src/internal/serial_async_executor.dart';
 import 'package:onnxruntime/onnxruntime.dart';
 import 'package:mobile_rag_engine/src/rust/api/tokenizer.dart';
-import 'package:flutter/foundation.dart';
 
 /// Dart-based embedding service
 /// Rust tokenizer + Flutter ONNX Runtime combination
 class EmbeddingService {
   static OrtSession? _session;
   static Set<String> _requiredInputNames = <String>{};
+  static final SerialAsyncExecutor _executor = SerialAsyncExecutor();
+  static final EmbeddingDimensionState _dimensionState =
+      EmbeddingDimensionState();
 
   /// Debug mode flag
   static bool debugMode = false;
@@ -22,41 +28,53 @@ class EmbeddingService {
     String? modelPath,
     OrtSessionOptions? options,
   }) async {
-    OrtEnv.instance.init();
-    final sessionOptions = options ?? OrtSessionOptions();
+    await _executor.run(() async {
+      OrtEnv.instance.init();
+      final sessionOptions = options ?? OrtSessionOptions();
+      final createdSession = _createSession(
+        modelBytes: modelBytes,
+        modelPath: modelPath,
+        sessionOptions: sessionOptions,
+      );
+      var isSwapped = false;
 
-    if (modelPath != null) {
-      // Load from file (Memory efficient)
-      // Note: Assuming 'fromFile' exists based on standard ONNX Runtime API patterns.
-      // If the specific binding uses a different name (e.g. create path), we'll catch it.
-      // The web search indicated session creation from file is supported.
       try {
-        _session = OrtSession.fromFile(File(modelPath), sessionOptions);
-        if (debugMode) {
-          debugPrint('[EmbeddingService] Loaded model from file: $modelPath');
+        final nextRequiredInputNames = _extractRequiredInputNames(
+          createdSession,
+        );
+
+        final previousSession = _session;
+        _session = createdSession;
+        _requiredInputNames = nextRequiredInputNames;
+        _dimensionState.reset();
+        isSwapped = true;
+
+        try {
+          previousSession?.release();
+        } catch (error) {
+          if (debugMode) {
+            debugPrint(
+              '[EmbeddingService] Warning: Failed to release previous session: $error',
+            );
+          }
         }
       } catch (e) {
-        // Fallback or rethrow?
-        // If fromFile is not found, we might need to check if binding exposes naming differently.
-        // But for now let's assume standard API.
+        if (!isSwapped) {
+          createdSession.release();
+        }
         rethrow;
       }
-    } else if (modelBytes != null) {
-      // Legacy: Load from memory (Double buffering)
-      _session = OrtSession.fromBuffer(modelBytes, sessionOptions);
-      if (debugMode) {
-        debugPrint('[EmbeddingService] Loaded model from memory buffer');
-      }
-    } else {
-      throw ArgumentError('Either modelBytes or modelPath must be provided');
-    }
-
-    _refreshRequiredInputNames();
+    });
   }
 
   /// Convert text to 384-dimensional embedding
   static Future<List<double>> embed(String text) async {
-    if (_session == null) {
+    return _executor.run(() async => _embedInternal(text));
+  }
+
+  static Future<List<double>> _embedInternal(String text) async {
+    final session = _session;
+    if (session == null) {
       throw Exception("EmbeddingService not initialized. Call init() first.");
     }
 
@@ -112,7 +130,7 @@ class EmbeddingService {
     final runOptions = OrtRunOptions();
     List<OrtValue?>? outputs;
     try {
-      outputs = await _session!.runAsync(runOptions, inputs);
+      outputs = await session.runAsync(runOptions, inputs);
     } catch (e, st) {
       final wrapped = _buildInputSignatureException(e);
       if (wrapped != null) {
@@ -182,6 +200,7 @@ class EmbeddingService {
         embedding = outputData.map((e) => (e as num).toDouble()).toList();
       }
 
+      _dimensionState.validateAndRemember(embedding.length);
       return embedding;
     } finally {
       for (final output in outputs ?? <OrtValue?>[]) {
@@ -201,37 +220,81 @@ class EmbeddingService {
     int concurrency = 1, // Sequential due to ONNX session limitation
     void Function(int completed, int total)? onProgress,
   }) async {
-    if (_session == null) {
-      throw Exception("EmbeddingService not initialized. Call init() first.");
-    }
+    return _executor.run(() async {
+      if (_session == null) {
+        throw Exception("EmbeddingService not initialized. Call init() first.");
+      }
 
-    if (texts.isEmpty) return [];
+      if (texts.isEmpty) return <List<double>>[];
 
-    final results = <List<double>>[];
+      final results = <List<double>>[];
 
-    // Sequential processing (ONNX session is not thread-safe)
-    for (var i = 0; i < texts.length; i++) {
-      final embedding = await embed(texts[i]);
-      results.add(embedding);
-      onProgress?.call(i + 1, texts.length);
-    }
+      if (concurrency != 1 && debugMode) {
+        debugPrint(
+          '[EmbeddingService] concurrency=$concurrency is ignored; embedding runs serially.',
+        );
+      }
 
-    return results;
+      // Sequential processing (ONNX session is not thread-safe)
+      for (var i = 0; i < texts.length; i++) {
+        final embedding = await _embedInternal(texts[i]);
+        results.add(embedding);
+        onProgress?.call(i + 1, texts.length);
+      }
+
+      return results;
+    });
   }
 
-  /// Release resources
+  /// Release resources deterministically.
+  static Future<void> disposeAsync() async {
+    await _executor.run(() async {
+      _session?.release();
+      _session = null;
+      _requiredInputNames = <String>{};
+      _dimensionState.reset();
+      OrtEnv.instance.release();
+    });
+  }
+
+  /// Backward compatible, non-blocking dispose.
+  ///
+  /// For deterministic shutdown, prefer `await disposeAsync()`.
   static void dispose() {
-    _session?.release();
-    _requiredInputNames = <String>{};
-    OrtEnv.instance.release();
+    unawaited(disposeAsync());
   }
 
-  static void _refreshRequiredInputNames() {
-    _requiredInputNames = _session?.inputNames.toSet() ?? <String>{};
+  static OrtSession _createSession({
+    required OrtSessionOptions sessionOptions,
+    Uint8List? modelBytes,
+    String? modelPath,
+  }) {
+    if (modelPath != null) {
+      final session = OrtSession.fromFile(File(modelPath), sessionOptions);
+      if (debugMode) {
+        debugPrint('[EmbeddingService] Loaded model from file: $modelPath');
+      }
+      return session;
+    }
+
+    if (modelBytes != null) {
+      final session = OrtSession.fromBuffer(modelBytes, sessionOptions);
+      if (debugMode) {
+        debugPrint('[EmbeddingService] Loaded model from memory buffer');
+      }
+      return session;
+    }
+
+    throw ArgumentError('Either modelBytes or modelPath must be provided');
+  }
+
+  static Set<String> _extractRequiredInputNames(OrtSession session) {
+    final requiredInputNames = session.inputNames.toSet();
     if (debugMode) {
-      final sortedInputNames = _requiredInputNames.toList()..sort();
+      final sortedInputNames = requiredInputNames.toList()..sort();
       debugPrint('[EmbeddingService] Model input names: $sortedInputNames');
     }
+    return requiredInputNames;
   }
 
   static bool _requiresInput(String inputName) {

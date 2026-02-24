@@ -1250,10 +1250,7 @@ Future<void> _processContentInIsolate(_IsolateRequest req) async {
       );
     }
 
-    // 4. Dispose ONNX session in this isolate
-    EmbeddingService.dispose();
-
-    // Final progress
+    // 4. Final progress
     if (req.sendPort != null) {
       req.sendPort!.send([total, total]);
     }
@@ -1267,6 +1264,12 @@ Future<void> _processContentInIsolate(_IsolateRequest req) async {
   } catch (e) {
     if (req.sendPort != null) {
       req.sendPort!.send(['error', e.toString()]);
+    }
+  } finally {
+    try {
+      await EmbeddingService.disposeAsync();
+    } catch (_) {
+      // Best-effort cleanup in isolate shutdown path.
     }
   }
 }

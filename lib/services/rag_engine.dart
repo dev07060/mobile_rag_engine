@@ -684,7 +684,7 @@ class RagEngine {
   ///
   /// Call this when done using the engine to release resources.
   static Future<void> dispose() async {
-    EmbeddingService.dispose();
+    await EmbeddingService.disposeAsync();
     await closeDbPool();
   }
 }
