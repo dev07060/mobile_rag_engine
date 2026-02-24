@@ -27,5 +27,3 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
-    - assets/evalsets/
-    - assets/sample_data/
