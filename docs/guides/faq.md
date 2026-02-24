@@ -77,6 +77,11 @@ optimum-cli export onnx --model sentence-transformers/YOUR_MODEL --task feature-
 - BGE-m3: 1024 dimensions
 - MiniLM: 384 dimensions
 
+From `0.14.x` hardening patches, runtime now fails fast on dimension mismatch with a clear error (`expected/got`).
+After model replacement, run either:
+- clear/rebuild flow
+- `regenerateAllEmbeddings()`
+
 ---
 
 ## Performance
@@ -107,6 +112,16 @@ await MobileRag.instance.rebuildIndex();
 - **Limit document count**: 10K+ may cause degradation
 - **Use INT8 models**: 50% memory savings
 - **Rebuild index periodically**: Call `MobileRag.instance.rebuildIndex()`
+
+### Q: Which dispose API should I use?
+
+For deterministic cleanup in advanced flows, prefer:
+
+```dart
+await EmbeddingService.disposeAsync();
+```
+
+`EmbeddingService.dispose()` remains for backward compatibility, but it is fire-and-forget.
 
 ### Q: What happens if I pass invalid config/search values?
 

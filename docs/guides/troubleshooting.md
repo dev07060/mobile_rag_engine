@@ -107,20 +107,27 @@ Missing Input: token_type_ids
 
 **Symptom:**
 ```
-Exception: Vector dimension mismatch (expected 384, got 1024)
+StateError: Embedding dimension mismatch: expected 384, got 1024
 ```
 
-**Cause:** Mixing embeddings from different models
+**Cause:** Mixing embeddings from different models (for example after model swap)
 
 **Solution:**
-1. Delete the database file and restart
-2. Or delete all sources manually if you handle DB path:
+1. Re-embed all stored chunks after changing model
+2. Use one of the recovery paths:
+   - clear/rebuild flow (fresh vectors)
+   - `regenerateAllEmbeddings()` (in-place regeneration)
+3. Ensure old and new vectors are not mixed in the same index/database
 
 ```dart
 // Clear existing data by removing DB file
 final dbPath = MobileRag.instance.dbPath;
 // ... delete file at dbPath ...
 await MobileRag.initialize(...); // Re-initialize
+
+// Or regenerate embeddings in-place
+await MobileRag.instance.regenerateAllEmbeddings();
+await MobileRag.instance.rebuildIndex(force: true);
 ```
 
 ---
