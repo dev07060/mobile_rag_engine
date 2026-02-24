@@ -85,12 +85,12 @@ dependencies:
 # Create assets folder
 mkdir -p assets && cd assets
 
-# Download BGE-m3 model (INT8 quantized, multilingual)
-curl -L -o model.onnx "https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx"
-curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer.json"
+# Download all-MiniLM-L6-v2 model (INT8 quantized for ARM64, ~23MB)
+curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx"
+curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json"
 ```
 
-> See [Model Setup Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md) for alternative models and production deployment strategies.
+> Need multilingual (Korean, CJK, etc.)? See [Model Setup Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md) for BGE-m3 and other model options.
 
 ---
 
@@ -106,8 +106,6 @@ curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/resolve/main/token
 
 ### Guides
 *   [Quick Start](docs/guides/quick_start.md) - Setup in 5 minutes.
-*   [Graph v2.1 Design](docs/guides/graph_v2_1_implementation_design.md) - Graph-enhanced retrieval implementation plan.
-*   [Graph v2.1 Risk Register](docs/guides/graph_v2_1_risk_register.md) - Predicted risks and mitigation assumptions.
 *   [Model Setup](docs/guides/model_setup.md) - Choosing and downloading models.
 *   [Troubleshooting](docs/guides/troubleshooting.md) - Common fixes.
 *   [FAQ](docs/guides/faq.md) - Frequently asked questions.
@@ -190,10 +188,10 @@ collection for backward compatibility.
 
 ## Model Options
 
-| Model | Dimensions | Size | Max Tokens | Languages |
-|:------|:----------:|:----:|:----------:|:----------|
+| Model | Dimensions | Size (ONNX) | Max Tokens | Languages |
+|:------|:----------:|:-----------:|:----------:|:----------|
+| [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (INT8) | **384** | ~23 MB | 256 | English |
 | [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~542 MB | 8,194 | 100+ (multilingual) |
-| [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) | **384** | ~25 MB | 256 | English only |
 
 > **Important:** The embedding dimension must be consistent across all documents. Switching models requires re-embedding your entire corpus.
 

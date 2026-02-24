@@ -32,10 +32,12 @@ Run from your project root:
 ```bash
 mkdir -p assets && cd assets
 
-# BGE-m3 (multilingual, Korean support)
-curl -L -o model.onnx "https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx"
-curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer.json"
+# all-MiniLM-L6-v2 (INT8 quantized for ARM64, ~23MB)
+curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx"
+curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json"
 ```
+
+> Need multilingual support (Korean, CJK)? See [Model Setup Guide](model_setup.md) for BGE-m3.
 
 Register assets in `pubspec.yaml`:
 
