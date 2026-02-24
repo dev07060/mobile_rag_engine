@@ -22,6 +22,8 @@ import '../src/rust/api/semantic_chunker.dart';
 import '../src/rust/api/hybrid_search.dart' as hybrid;
 import 'context_builder.dart';
 import 'embedding_service.dart';
+import '../src/internal/defaults.dart';
+import '../src/internal/validation.dart';
 import '../utils/error_utils.dart';
 import '../src/rust/api/logger.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
@@ -82,7 +84,7 @@ class SourceRagService {
 
   final String dbPath;
 
-  /// Maximum characters per chunk (default: 500)
+  /// Maximum characters per chunk (default: [kDefaultMaxChunkChars])
   final int maxChunkChars;
 
   /// Overlap characters between chunks for context continuity
@@ -95,10 +97,17 @@ class SourceRagService {
   SourceRagService({
     required this.dbPath,
     this.modelPath,
-    this.maxChunkChars = 500,
-    this.overlapChars = 50,
+    int maxChunkChars = kDefaultMaxChunkChars,
+    int overlapChars = kDefaultOverlapChars,
     this.collectionId = defaultCollectionId,
-  });
+  }) : maxChunkChars = normalizeMaxChunkChars(
+         maxChunkChars,
+         context: 'SourceRagService',
+       ),
+       overlapChars = normalizeOverlapChars(
+         overlapChars,
+         context: 'SourceRagService',
+       );
 
   SourceRagService inCollection(String id) => SourceRagService(
     dbPath: dbPath,
@@ -1001,15 +1010,21 @@ class SourceRagService {
   /// Parameters:
   /// - [query]: The search query text
   /// - [topK]: Number of results to return (default: 10)
-  /// - [vectorWeight]: Weight for vector search (0.0-1.0, default: 0.2)
-  /// - [bm25Weight]: Weight for BM25 search (0.0-1.0, default: 0.8)
+  /// - [vectorWeight]: Weight for vector search (0.0-1.0, default: [kDefaultVectorWeight])
+  /// - [bm25Weight]: Weight for BM25 search (0.0-1.0, default: [kDefaultBm25Weight])
   Future<List<hybrid.HybridSearchResult>> searchHybrid(
     String query, {
     int topK = 10,
-    double vectorWeight = 0.2,
-    double bm25Weight = 0.8,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
     List<int>? sourceIds,
   }) async {
+    final normalizedWeights = normalizeHybridWeights(
+      vectorWeight: vectorWeight,
+      bm25Weight: bm25Weight,
+      context: 'SourceRagService.searchHybrid',
+    );
+
     // 1. Generate query embedding
     final queryEmbedding = await EmbeddingService.embed(query);
 
@@ -1035,8 +1050,8 @@ class SourceRagService {
         topK: effectiveTopK,
         config: hybrid.RrfConfig(
           k: 60,
-          vectorWeight: vectorWeight,
-          bm25Weight: bm25Weight,
+          vectorWeight: normalizedWeights.vectorWeight,
+          bm25Weight: normalizedWeights.bm25Weight,
         ),
         filter: hybrid.SearchFilter(
           sourceIds: sourceIds != null ? _toInt64List(sourceIds) : null,
@@ -1073,8 +1088,8 @@ class SourceRagService {
     int topK = 10,
     int tokenBudget = 2000,
     ContextStrategy strategy = ContextStrategy.relevanceFirst,
-    double vectorWeight = 0.2,
-    double bm25Weight = 0.8,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
     List<int>? sourceIds,
     int adjacentChunks = 0,
     bool singleSourceMode = false,

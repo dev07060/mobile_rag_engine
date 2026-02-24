@@ -38,6 +38,8 @@ import '../src/rust/api/tokenizer.dart';
 import '../src/rust/api/source_rag.dart'
     show ChunkSearchResult, SourceStats, SourceEntry;
 import '../src/rust/api/db_pool.dart';
+import '../src/internal/defaults.dart';
+import '../src/internal/validation.dart';
 import 'embedding_service.dart';
 import 'rag_config.dart';
 import 'source_rag_service.dart';
@@ -247,6 +249,20 @@ class RagEngine {
     // Configure session options if thread limit is requested
     OrtSessionOptions? sessionOptions;
 
+    final normalizedMaxChunkChars = normalizeMaxChunkChars(
+      config.maxChunkChars,
+      context: 'RagEngine.initialize',
+    );
+    final normalizedOverlapChars = normalizeOverlapChars(
+      config.overlapChars,
+      context: 'RagEngine.initialize',
+    );
+    warnThreadConfigConflict(
+      threadLevel: config.threadLevel,
+      embeddingIntraOpNumThreads: config.embeddingIntraOpNumThreads,
+      context: 'RagEngine.initialize',
+    );
+
     // Default to half the cores if not specified to prevent full CPU usage
     // Calculate threads based on configuration
     int threads;
@@ -300,8 +316,8 @@ class RagEngine {
     final ragService = SourceRagService(
       dbPath: dbPath,
       modelPath: modelPath,
-      maxChunkChars: config.maxChunkChars,
-      overlapChars: config.overlapChars,
+      maxChunkChars: normalizedMaxChunkChars,
+      overlapChars: normalizedOverlapChars,
     );
     await ragService.init(deferIndexWarmup: config.deferIndexWarmup);
 
@@ -443,8 +459,8 @@ class RagEngine {
   Future<List<hybrid.HybridSearchResult>> searchHybrid(
     String query, {
     int topK = 10,
-    double vectorWeight = 0.2,
-    double bm25Weight = 0.8,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
     List<int>? sourceIds,
     String? collectionId,
   }) async {
@@ -470,8 +486,8 @@ class RagEngine {
     int topK = 10,
     int tokenBudget = 2000,
     ContextStrategy strategy = ContextStrategy.relevanceFirst,
-    double vectorWeight = 0.2,
-    double bm25Weight = 0.8,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
     List<int>? sourceIds,
     int adjacentChunks = 0,
     bool singleSourceMode = false,

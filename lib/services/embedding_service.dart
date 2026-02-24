@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 /// Rust tokenizer + Flutter ONNX Runtime combination
 class EmbeddingService {
   static OrtSession? _session;
+  static Set<String> _requiredInputNames = <String>{};
 
   /// Debug mode flag
   static bool debugMode = false;
@@ -49,6 +50,8 @@ class EmbeddingService {
     } else {
       throw ArgumentError('Either modelBytes or modelPath must be provided');
     }
+
+    _refreshRequiredInputNames();
   }
 
   /// Convert text to 384-dimensional embedding
@@ -89,81 +92,102 @@ class EmbeddingService {
       attentionMaskData,
       shape,
     );
+    OrtValueTensor? tokenTypeIdsTensor;
 
-    // 4. Run inference
-    final inputs = {
+    final inputs = <String, OrtValue>{
       'input_ids': inputIdsTensor,
       'attention_mask': attentionMaskTensor,
-      // 'token_type_ids' removed
     };
 
+    if (_requiresInput('token_type_ids')) {
+      final tokenTypeIdsData = Int64List.fromList(List<int>.filled(seqLen, 0));
+      tokenTypeIdsTensor = OrtValueTensor.createTensorWithDataList(
+        tokenTypeIdsData,
+        shape,
+      );
+      inputs['token_type_ids'] = tokenTypeIdsTensor;
+    }
+
+    // 4. Run inference
     final runOptions = OrtRunOptions();
-    final outputs = await _session!.runAsync(runOptions, inputs);
+    List<OrtValue?>? outputs;
+    try {
+      outputs = await _session!.runAsync(runOptions, inputs);
+    } catch (e, st) {
+      final wrapped = _buildInputSignatureException(e);
+      if (wrapped != null) {
+        Error.throwWithStackTrace(wrapped, st);
+      }
+      rethrow;
+    } finally {
+      inputIdsTensor.release();
+      attentionMaskTensor.release();
+      tokenTypeIdsTensor?.release();
+      runOptions.release();
+    }
 
     // 5. Extract results and apply mean pooling
-    final outputTensor = outputs?[0];
-    if (outputTensor == null) {
-      throw Exception("ONNX inference returned null output");
-    }
+    try {
+      final outputTensor = outputs?[0];
+      if (outputTensor == null) {
+        throw Exception("ONNX inference returned null output");
+      }
 
-    final outputData = outputTensor.value as List;
+      final outputData = outputTensor.value as List;
 
-    if (debugMode) {
-      debugPrint('[DEBUG] Output shape: ${_getShape(outputData)}');
-    }
+      if (debugMode) {
+        debugPrint('[DEBUG] Output shape: ${_getShape(outputData)}');
+      }
 
-    // [1, seq_len, 384] -> mean pooling -> [384]
-    List<double> embedding;
-    if (outputData.isNotEmpty && outputData[0] is List) {
-      // 3D output: [batch, seq_len, hidden]
-      final batchData = outputData[0] as List;
-      if (batchData.isNotEmpty && batchData[0] is List) {
-        final hiddenSize = (batchData[0] as List).length;
-        embedding = List<double>.filled(hiddenSize, 0.0);
+      // [1, seq_len, 384] -> mean pooling -> [384]
+      List<double> embedding;
+      if (outputData.isNotEmpty && outputData[0] is List) {
+        // 3D output: [batch, seq_len, hidden]
+        final batchData = outputData[0] as List;
+        if (batchData.isNotEmpty && batchData[0] is List) {
+          final hiddenSize = (batchData[0] as List).length;
+          embedding = List<double>.filled(hiddenSize, 0.0);
 
-        // Apply mean pooling over all tokens (with attention mask)
-        // Includes CLS and SEP - sentence-transformers default behavior
-        int count = 0;
-        for (int t = 0; t < batchData.length; t++) {
-          // Only include tokens with attention_mask == 1
-          if (t < attentionMask.length && attentionMask[t] == 1) {
-            final tokenEmb = batchData[t] as List;
-            for (int h = 0; h < hiddenSize; h++) {
-              embedding[h] += (tokenEmb[h] as num).toDouble();
+          // Apply mean pooling over all tokens (with attention mask)
+          // Includes CLS and SEP - sentence-transformers default behavior
+          int count = 0;
+          for (int t = 0; t < batchData.length; t++) {
+            // Only include tokens with attention_mask == 1
+            if (t < attentionMask.length && attentionMask[t] == 1) {
+              final tokenEmb = batchData[t] as List;
+              for (int h = 0; h < hiddenSize; h++) {
+                embedding[h] += (tokenEmb[h] as num).toDouble();
+              }
+              count++;
             }
-            count++;
           }
-        }
 
-        if (count > 0) {
-          for (int h = 0; h < hiddenSize; h++) {
-            embedding[h] /= count;
+          if (count > 0) {
+            for (int h = 0; h < hiddenSize; h++) {
+              embedding[h] /= count;
+            }
           }
-        }
 
-        if (debugMode) {
-          debugPrint(
-            '[DEBUG] Embedding (first 5): ${embedding.take(5).toList()}',
-          );
+          if (debugMode) {
+            debugPrint(
+              '[DEBUG] Embedding (first 5): ${embedding.take(5).toList()}',
+            );
+          }
+        } else {
+          // 2D output: [batch, hidden]
+          embedding = (batchData).map((e) => (e as num).toDouble()).toList();
         }
       } else {
-        // 2D output: [batch, hidden]
-        embedding = (batchData).map((e) => (e as num).toDouble()).toList();
+        // 1D output: [hidden]
+        embedding = outputData.map((e) => (e as num).toDouble()).toList();
       }
-    } else {
-      // 1D output: [hidden]
-      embedding = outputData.map((e) => (e as num).toDouble()).toList();
-    }
 
-    // 6. Release resources
-    inputIdsTensor.release();
-    attentionMaskTensor.release();
-    runOptions.release();
-    for (final output in outputs ?? []) {
-      output?.release();
+      return embedding;
+    } finally {
+      for (final output in outputs ?? <OrtValue?>[]) {
+        output?.release();
+      }
     }
-
-    return embedding;
   }
 
   /// Batch embed multiple texts (sequential processing)
@@ -198,7 +222,42 @@ class EmbeddingService {
   /// Release resources
   static void dispose() {
     _session?.release();
+    _requiredInputNames = <String>{};
     OrtEnv.instance.release();
+  }
+
+  static void _refreshRequiredInputNames() {
+    _requiredInputNames = _session?.inputNames.toSet() ?? <String>{};
+    if (debugMode) {
+      final sortedInputNames = _requiredInputNames.toList()..sort();
+      debugPrint('[EmbeddingService] Model input names: $sortedInputNames');
+    }
+  }
+
+  static bool _requiresInput(String inputName) {
+    return _requiredInputNames.contains(inputName);
+  }
+
+  static Exception? _buildInputSignatureException(Object error) {
+    final message = error.toString();
+    final hasInputSignatureError =
+        message.contains('Missing Input') ||
+        message.contains('Invalid Feed Input Name');
+    if (!hasInputSignatureError) {
+      return null;
+    }
+
+    final sortedInputNames = _requiredInputNames.toList()..sort();
+    final availableInputs = sortedInputNames.isEmpty
+        ? '(unavailable)'
+        : sortedInputNames.join(', ');
+
+    return Exception(
+      'ONNX input signature mismatch: $message\n'
+      'Model input names: $availableInputs\n'
+      'mobile_rag_engine sends: input_ids, attention_mask, optional token_type_ids.\n'
+      'Models requiring additional mandatory inputs (e.g. position_ids) are not yet supported.',
+    );
   }
 
   /// Get array shape as string
