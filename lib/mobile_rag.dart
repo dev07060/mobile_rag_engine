@@ -25,6 +25,7 @@
 library;
 
 import 'package:flutter/foundation.dart';
+import 'package:mobile_rag_engine/src/internal/defaults.dart';
 import 'package:mobile_rag_engine/services/rag_config.dart';
 import 'package:mobile_rag_engine/services/rag_engine.dart';
 import 'package:mobile_rag_engine/services/context_builder.dart';
@@ -68,8 +69,8 @@ class MobileRag {
   /// - [tokenizerAsset] - Path to tokenizer.json in assets (e.g., `'assets/tokenizer.json'`)
   /// - [modelAsset] - Path to ONNX model file in assets (e.g., `'assets/model.onnx'`)
   /// - [databaseName] - SQLite database file name (default: `'rag.sqlite'`)
-  /// - [maxChunkChars] - Maximum characters per chunk (default: 500)
-  /// - [overlapChars] - Overlap between chunks for context continuity (default: 50)
+  /// - [maxChunkChars] - Maximum characters per chunk (default: [kDefaultMaxChunkChars])
+  /// - [overlapChars] - Overlap between chunks for context continuity (default: [kDefaultOverlapChars])
   /// - [embeddingIntraOpNumThreads] - Precise thread count for ONNX (e.g., `1` for minimal CPU).
   ///   **Mutually exclusive with [threadLevel].**
   /// - [threadLevel] - High-level thread usage: `low` (~20%), `medium` (~40%), `high` (~80%).
@@ -84,7 +85,9 @@ class MobileRag {
   /// - `threadLevel: ThreadUseLevel.medium` - Simple, recommended for most apps
   /// - `embeddingIntraOpNumThreads: 2` - Fine-grained control
   ///
-  /// ⚠️ Setting BOTH will throw an [AssertionError].
+  /// ⚠️ If both are set:
+  /// - Debug builds: throws an [AssertionError]
+  /// - Release builds: [threadLevel] takes precedence and a warning is logged
   ///
   /// Example:
   /// ```dart
@@ -99,8 +102,8 @@ class MobileRag {
     required String tokenizerAsset,
     required String modelAsset,
     String? databaseName,
-    int maxChunkChars = 500,
-    int overlapChars = 50,
+    int maxChunkChars = kDefaultMaxChunkChars,
+    int overlapChars = kDefaultOverlapChars,
     int? embeddingIntraOpNumThreads,
     ThreadUseLevel? threadLevel,
     bool deferIndexWarmup = false,
@@ -265,8 +268,8 @@ class MobileRag {
   Future<List<hybrid.HybridSearchResult>> searchHybrid(
     String query, {
     int topK = 10,
-    double vectorWeight = 0.2,
-    double bm25Weight = 0.8,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
     List<int>? sourceIds,
   }) => _engine!.searchHybrid(
     query,
@@ -283,8 +286,8 @@ class MobileRag {
     int tokenBudget = 2000,
     ContextStrategy strategy = ContextStrategy.relevanceFirst,
     int adjacentChunks = 0,
-    double vectorWeight = 0.2,
-    double bm25Weight = 0.8,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
     bool singleSourceMode = false,
     List<int>? sourceIds,
   }) => _engine!.searchHybridWithContext(
@@ -356,7 +359,8 @@ class CollectionRag {
   String get collectionId => _collectionId;
 
   bool get isIndexReady => _engine.isCollectionIndexReady(_collectionId);
-  Future<void> get warmupFuture => _engine.collectionWarmupFuture(_collectionId);
+  Future<void> get warmupFuture =>
+      _engine.collectionWarmupFuture(_collectionId);
 
   Future<SourceAddResult> addDocument(
     String content, {
@@ -405,8 +409,8 @@ class CollectionRag {
   Future<List<hybrid.HybridSearchResult>> searchHybrid(
     String query, {
     int topK = 10,
-    double vectorWeight = 0.2,
-    double bm25Weight = 0.8,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
     List<int>? sourceIds,
   }) => _engine.searchHybrid(
     query,
@@ -423,8 +427,8 @@ class CollectionRag {
     int tokenBudget = 2000,
     ContextStrategy strategy = ContextStrategy.relevanceFirst,
     int adjacentChunks = 0,
-    double vectorWeight = 0.2,
-    double bm25Weight = 0.8,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
     bool singleSourceMode = false,
     List<int>? sourceIds,
   }) => _engine.searchHybridWithContext(
@@ -443,7 +447,8 @@ class CollectionRag {
   Future<void> rebuildIndex({bool force = false}) =>
       _engine.rebuildIndex(force: force, collectionId: _collectionId);
 
-  Future<SourceStats> getStats() => _engine.getStats(collectionId: _collectionId);
+  Future<SourceStats> getStats() =>
+      _engine.getStats(collectionId: _collectionId);
 
   String formatPrompt(String query, RagSearchResult result) =>
       _engine.formatPrompt(query, result);

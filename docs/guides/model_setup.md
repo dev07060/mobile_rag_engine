@@ -13,6 +13,20 @@ This guide covers embedding model selection, download, and deployment strategies
 
 > **Dimension Matters**: The embedding dimension affects your vector index. Once you choose a model, all documents must use the same dimension. Switching models requires re-embedding all documents.
 
+### Officially Validated ONNX Artifacts (0.14.x)
+
+- MiniLM: `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx`
+- BGE-m3: `https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx`
+
+These are the regression-tested artifacts for each patch release.
+
+Compatibility was expanded in 0.14.x patches:
+- models requiring `token_type_ids` are now supported without re-export
+- the engine reads ONNX `inputNames` and injects zero `token_type_ids` only when required
+
+Additional models outside this list are supported on a best-effort basis.
+Validated examples during this compatibility patch: `all-MiniLM-L6-v2/onnx`, `intfloat/e5-small-v2`.
+
 ---
 
 ## Download Instructions
@@ -104,7 +118,16 @@ Bundle a small model (MiniLM) for immediate use, then download a larger model (B
 
 ## Custom Model Export
 
-Export any Sentence Transformer model to ONNX format:
+Custom ONNX models are supported when required inputs are:
+
+- `input_ids`
+- `attention_mask`
+- optional `token_type_ids` (auto-filled with zeros when required)
+
+Models with additional mandatory inputs (for example `position_ids`) are not supported yet.
+Reason: architecture-specific mandatory inputs cannot be inferred safely by this package without model-specific preprocessing logic.
+
+Export compatible Sentence Transformer models to ONNX format:
 
 ```bash
 # Install optimum

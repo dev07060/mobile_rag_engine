@@ -1,13 +1,20 @@
 // lib/services/embedding_service.dart
+import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:mobile_rag_engine/src/internal/embedding_dimension_state.dart';
+import 'package:mobile_rag_engine/src/internal/serial_async_executor.dart';
 import 'package:onnxruntime/onnxruntime.dart';
 import 'package:mobile_rag_engine/src/rust/api/tokenizer.dart';
-import 'package:flutter/foundation.dart';
 
 /// Dart-based embedding service
 /// Rust tokenizer + Flutter ONNX Runtime combination
 class EmbeddingService {
   static OrtSession? _session;
+  static Set<String> _requiredInputNames = <String>{};
+  static final SerialAsyncExecutor _executor = SerialAsyncExecutor();
+  static final EmbeddingDimensionState _dimensionState =
+      EmbeddingDimensionState();
 
   /// Debug mode flag
   static bool debugMode = false;
@@ -21,39 +28,53 @@ class EmbeddingService {
     String? modelPath,
     OrtSessionOptions? options,
   }) async {
-    OrtEnv.instance.init();
-    final sessionOptions = options ?? OrtSessionOptions();
+    await _executor.run(() async {
+      OrtEnv.instance.init();
+      final sessionOptions = options ?? OrtSessionOptions();
+      final createdSession = _createSession(
+        modelBytes: modelBytes,
+        modelPath: modelPath,
+        sessionOptions: sessionOptions,
+      );
+      var isSwapped = false;
 
-    if (modelPath != null) {
-      // Load from file (Memory efficient)
-      // Note: Assuming 'fromFile' exists based on standard ONNX Runtime API patterns.
-      // If the specific binding uses a different name (e.g. create path), we'll catch it.
-      // The web search indicated session creation from file is supported.
       try {
-        _session = OrtSession.fromFile(File(modelPath), sessionOptions);
-        if (debugMode) {
-          debugPrint('[EmbeddingService] Loaded model from file: $modelPath');
+        final nextRequiredInputNames = _extractRequiredInputNames(
+          createdSession,
+        );
+
+        final previousSession = _session;
+        _session = createdSession;
+        _requiredInputNames = nextRequiredInputNames;
+        _dimensionState.reset();
+        isSwapped = true;
+
+        try {
+          previousSession?.release();
+        } catch (error) {
+          if (debugMode) {
+            debugPrint(
+              '[EmbeddingService] Warning: Failed to release previous session: $error',
+            );
+          }
         }
       } catch (e) {
-        // Fallback or rethrow?
-        // If fromFile is not found, we might need to check if binding exposes naming differently.
-        // But for now let's assume standard API.
+        if (!isSwapped) {
+          createdSession.release();
+        }
         rethrow;
       }
-    } else if (modelBytes != null) {
-      // Legacy: Load from memory (Double buffering)
-      _session = OrtSession.fromBuffer(modelBytes, sessionOptions);
-      if (debugMode) {
-        debugPrint('[EmbeddingService] Loaded model from memory buffer');
-      }
-    } else {
-      throw ArgumentError('Either modelBytes or modelPath must be provided');
-    }
+    });
   }
 
   /// Convert text to 384-dimensional embedding
   static Future<List<double>> embed(String text) async {
-    if (_session == null) {
+    return _executor.run(() async => _embedInternal(text));
+  }
+
+  static Future<List<double>> _embedInternal(String text) async {
+    final session = _session;
+    if (session == null) {
       throw Exception("EmbeddingService not initialized. Call init() first.");
     }
 
@@ -89,81 +110,103 @@ class EmbeddingService {
       attentionMaskData,
       shape,
     );
+    OrtValueTensor? tokenTypeIdsTensor;
 
-    // 4. Run inference
-    final inputs = {
+    final inputs = <String, OrtValue>{
       'input_ids': inputIdsTensor,
       'attention_mask': attentionMaskTensor,
-      // 'token_type_ids' removed
     };
 
+    if (_requiresInput('token_type_ids')) {
+      final tokenTypeIdsData = Int64List.fromList(List<int>.filled(seqLen, 0));
+      tokenTypeIdsTensor = OrtValueTensor.createTensorWithDataList(
+        tokenTypeIdsData,
+        shape,
+      );
+      inputs['token_type_ids'] = tokenTypeIdsTensor;
+    }
+
+    // 4. Run inference
     final runOptions = OrtRunOptions();
-    final outputs = await _session!.runAsync(runOptions, inputs);
+    List<OrtValue?>? outputs;
+    try {
+      outputs = await session.runAsync(runOptions, inputs);
+    } catch (e, st) {
+      final wrapped = _buildInputSignatureException(e);
+      if (wrapped != null) {
+        Error.throwWithStackTrace(wrapped, st);
+      }
+      rethrow;
+    } finally {
+      inputIdsTensor.release();
+      attentionMaskTensor.release();
+      tokenTypeIdsTensor?.release();
+      runOptions.release();
+    }
 
     // 5. Extract results and apply mean pooling
-    final outputTensor = outputs?[0];
-    if (outputTensor == null) {
-      throw Exception("ONNX inference returned null output");
-    }
+    try {
+      final outputTensor = outputs?[0];
+      if (outputTensor == null) {
+        throw Exception("ONNX inference returned null output");
+      }
 
-    final outputData = outputTensor.value as List;
+      final outputData = outputTensor.value as List;
 
-    if (debugMode) {
-      debugPrint('[DEBUG] Output shape: ${_getShape(outputData)}');
-    }
+      if (debugMode) {
+        debugPrint('[DEBUG] Output shape: ${_getShape(outputData)}');
+      }
 
-    // [1, seq_len, 384] -> mean pooling -> [384]
-    List<double> embedding;
-    if (outputData.isNotEmpty && outputData[0] is List) {
-      // 3D output: [batch, seq_len, hidden]
-      final batchData = outputData[0] as List;
-      if (batchData.isNotEmpty && batchData[0] is List) {
-        final hiddenSize = (batchData[0] as List).length;
-        embedding = List<double>.filled(hiddenSize, 0.0);
+      // [1, seq_len, 384] -> mean pooling -> [384]
+      List<double> embedding;
+      if (outputData.isNotEmpty && outputData[0] is List) {
+        // 3D output: [batch, seq_len, hidden]
+        final batchData = outputData[0] as List;
+        if (batchData.isNotEmpty && batchData[0] is List) {
+          final hiddenSize = (batchData[0] as List).length;
+          embedding = List<double>.filled(hiddenSize, 0.0);
 
-        // Apply mean pooling over all tokens (with attention mask)
-        // Includes CLS and SEP - sentence-transformers default behavior
-        int count = 0;
-        for (int t = 0; t < batchData.length; t++) {
-          // Only include tokens with attention_mask == 1
-          if (t < attentionMask.length && attentionMask[t] == 1) {
-            final tokenEmb = batchData[t] as List;
-            for (int h = 0; h < hiddenSize; h++) {
-              embedding[h] += (tokenEmb[h] as num).toDouble();
+          // Apply mean pooling over all tokens (with attention mask)
+          // Includes CLS and SEP - sentence-transformers default behavior
+          int count = 0;
+          for (int t = 0; t < batchData.length; t++) {
+            // Only include tokens with attention_mask == 1
+            if (t < attentionMask.length && attentionMask[t] == 1) {
+              final tokenEmb = batchData[t] as List;
+              for (int h = 0; h < hiddenSize; h++) {
+                embedding[h] += (tokenEmb[h] as num).toDouble();
+              }
+              count++;
             }
-            count++;
           }
-        }
 
-        if (count > 0) {
-          for (int h = 0; h < hiddenSize; h++) {
-            embedding[h] /= count;
+          if (count > 0) {
+            for (int h = 0; h < hiddenSize; h++) {
+              embedding[h] /= count;
+            }
           }
-        }
 
-        if (debugMode) {
-          debugPrint(
-            '[DEBUG] Embedding (first 5): ${embedding.take(5).toList()}',
-          );
+          if (debugMode) {
+            debugPrint(
+              '[DEBUG] Embedding (first 5): ${embedding.take(5).toList()}',
+            );
+          }
+        } else {
+          // 2D output: [batch, hidden]
+          embedding = (batchData).map((e) => (e as num).toDouble()).toList();
         }
       } else {
-        // 2D output: [batch, hidden]
-        embedding = (batchData).map((e) => (e as num).toDouble()).toList();
+        // 1D output: [hidden]
+        embedding = outputData.map((e) => (e as num).toDouble()).toList();
       }
-    } else {
-      // 1D output: [hidden]
-      embedding = outputData.map((e) => (e as num).toDouble()).toList();
-    }
 
-    // 6. Release resources
-    inputIdsTensor.release();
-    attentionMaskTensor.release();
-    runOptions.release();
-    for (final output in outputs ?? []) {
-      output?.release();
+      _dimensionState.validateAndRemember(embedding.length);
+      return embedding;
+    } finally {
+      for (final output in outputs ?? <OrtValue?>[]) {
+        output?.release();
+      }
     }
-
-    return embedding;
   }
 
   /// Batch embed multiple texts (sequential processing)
@@ -177,28 +220,107 @@ class EmbeddingService {
     int concurrency = 1, // Sequential due to ONNX session limitation
     void Function(int completed, int total)? onProgress,
   }) async {
-    if (_session == null) {
-      throw Exception("EmbeddingService not initialized. Call init() first.");
-    }
+    return _executor.run(() async {
+      if (_session == null) {
+        throw Exception("EmbeddingService not initialized. Call init() first.");
+      }
 
-    if (texts.isEmpty) return [];
+      if (texts.isEmpty) return <List<double>>[];
 
-    final results = <List<double>>[];
+      final results = <List<double>>[];
 
-    // Sequential processing (ONNX session is not thread-safe)
-    for (var i = 0; i < texts.length; i++) {
-      final embedding = await embed(texts[i]);
-      results.add(embedding);
-      onProgress?.call(i + 1, texts.length);
-    }
+      if (concurrency != 1 && debugMode) {
+        debugPrint(
+          '[EmbeddingService] concurrency=$concurrency is ignored; embedding runs serially.',
+        );
+      }
 
-    return results;
+      // Sequential processing (ONNX session is not thread-safe)
+      for (var i = 0; i < texts.length; i++) {
+        final embedding = await _embedInternal(texts[i]);
+        results.add(embedding);
+        onProgress?.call(i + 1, texts.length);
+      }
+
+      return results;
+    });
   }
 
-  /// Release resources
+  /// Release resources deterministically.
+  static Future<void> disposeAsync() async {
+    await _executor.run(() async {
+      _session?.release();
+      _session = null;
+      _requiredInputNames = <String>{};
+      _dimensionState.reset();
+      OrtEnv.instance.release();
+    });
+  }
+
+  /// Backward compatible, non-blocking dispose.
+  ///
+  /// For deterministic shutdown, prefer `await disposeAsync()`.
   static void dispose() {
-    _session?.release();
-    OrtEnv.instance.release();
+    unawaited(disposeAsync());
+  }
+
+  static OrtSession _createSession({
+    required OrtSessionOptions sessionOptions,
+    Uint8List? modelBytes,
+    String? modelPath,
+  }) {
+    if (modelPath != null) {
+      final session = OrtSession.fromFile(File(modelPath), sessionOptions);
+      if (debugMode) {
+        debugPrint('[EmbeddingService] Loaded model from file: $modelPath');
+      }
+      return session;
+    }
+
+    if (modelBytes != null) {
+      final session = OrtSession.fromBuffer(modelBytes, sessionOptions);
+      if (debugMode) {
+        debugPrint('[EmbeddingService] Loaded model from memory buffer');
+      }
+      return session;
+    }
+
+    throw ArgumentError('Either modelBytes or modelPath must be provided');
+  }
+
+  static Set<String> _extractRequiredInputNames(OrtSession session) {
+    final requiredInputNames = session.inputNames.toSet();
+    if (debugMode) {
+      final sortedInputNames = requiredInputNames.toList()..sort();
+      debugPrint('[EmbeddingService] Model input names: $sortedInputNames');
+    }
+    return requiredInputNames;
+  }
+
+  static bool _requiresInput(String inputName) {
+    return _requiredInputNames.contains(inputName);
+  }
+
+  static Exception? _buildInputSignatureException(Object error) {
+    final message = error.toString();
+    final hasInputSignatureError =
+        message.contains('Missing Input') ||
+        message.contains('Invalid Feed Input Name');
+    if (!hasInputSignatureError) {
+      return null;
+    }
+
+    final sortedInputNames = _requiredInputNames.toList()..sort();
+    final availableInputs = sortedInputNames.isEmpty
+        ? '(unavailable)'
+        : sortedInputNames.join(', ');
+
+    return Exception(
+      'ONNX input signature mismatch: $message\n'
+      'Model input names: $availableInputs\n'
+      'mobile_rag_engine sends: input_ids, attention_mask, optional token_type_ids.\n'
+      'Models requiring additional mandatory inputs (e.g. position_ids) are not yet supported.',
+    );
   }
 
   /// Get array shape as string

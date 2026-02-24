@@ -50,11 +50,25 @@ See [Model Setup Guide](model_setup.md#production-deployment-strategies) for det
 
 ### Q: Can I use custom models?
 
-**Yes!** Any Sentence Transformer model can be converted to ONNX:
+**Yes, with compatibility constraints.**
+
+Supported ONNX required inputs:
+- `input_ids`
+- `attention_mask`
+- optional `token_type_ids` (auto-filled with zeros when required)
+
+Not supported yet:
+- Models requiring extra mandatory inputs such as `position_ids`
+
+Officially validated ONNX artifacts (0.14.x):
+- `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx`
+- `https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx`
+
+Models outside the validated list are best-effort.
 
 ```bash
 pip install optimum[exporters]
-optimum-cli export onnx --model sentence-transformers/YOUR_MODEL ./output
+optimum-cli export onnx --model sentence-transformers/YOUR_MODEL --task feature-extraction ./output
 ```
 
 ### Q: What happens if I switch models?
@@ -62,6 +76,11 @@ optimum-cli export onnx --model sentence-transformers/YOUR_MODEL ./output
 **All documents must be re-embedded.** Each model produces different vector dimensions:
 - BGE-m3: 1024 dimensions
 - MiniLM: 384 dimensions
+
+From `0.14.x` hardening patches, runtime now fails fast on dimension mismatch with a clear error (`expected/got`).
+After model replacement, run either:
+- clear/rebuild flow
+- `regenerateAllEmbeddings()`
 
 ---
 
@@ -93,6 +112,27 @@ await MobileRag.instance.rebuildIndex();
 - **Limit document count**: 10K+ may cause degradation
 - **Use INT8 models**: 50% memory savings
 - **Rebuild index periodically**: Call `MobileRag.instance.rebuildIndex()`
+
+### Q: Which dispose API should I use?
+
+For deterministic cleanup in advanced flows, prefer:
+
+```dart
+await EmbeddingService.disposeAsync();
+```
+
+`EmbeddingService.dispose()` remains for backward compatibility, but it is fire-and-forget.
+
+### Q: What happens if I pass invalid config/search values?
+
+The engine applies **soft runtime validation** for stability:
+
+- `maxChunkChars < 100` → normalized to `100`
+- `overlapChars < 0` → normalized to `0`
+- `vectorWeight` / `bm25Weight` outside `0.0 ~ 1.0` → clamped
+- if both weights become `0` → restored to defaults `0.2 / 0.8`
+
+If both `threadLevel` and `embeddingIntraOpNumThreads` are set, debug builds assert; release builds keep running with `threadLevel` precedence and warning logs.
 
 ---
 

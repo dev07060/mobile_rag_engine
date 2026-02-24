@@ -74,13 +74,17 @@ Future<void> initializeRAG() async {
 | `modelAsset` | (required) | Path to ONNX model in assets |
 | `databaseName` | `'rag.sqlite'` | SQLite database file name |
 | `maxChunkChars` | `500` | Maximum characters per chunk |
-| `overlapChars` | `50` | Overlap between chunks for context |
+| `overlapChars` | `30` | Overlap between chunks for context |
 | `threadLevel` | `null` | CPU usage level: `low` (~20%), `medium` (~40%), `high` (~80%) |
 | `embeddingIntraOpNumThreads` | `null` | Precise thread count (⚠️ mutually exclusive with `threadLevel`) |
 | `deferIndexWarmup` | `false` | If `true`, initialization returns before BM25/HNSW warmup completes |
 | `onProgress` | `null` | Callback for initialization status |
 
-> **Note:** Choose either `threadLevel` OR `embeddingIntraOpNumThreads`, not both. Setting both will throw an error.
+> **Validation behavior (soft + stable):**
+> - `maxChunkChars < 100` is normalized to `100` at runtime.
+> - `overlapChars < 0` is normalized to `0` at runtime.
+> - `vectorWeight` / `bm25Weight` are clamped to `0.0 ~ 1.0` (if both become `0`, defaults `0.2 / 0.8` are restored).
+> - If both `threadLevel` and `embeddingIntraOpNumThreads` are set, debug builds assert; release builds use `threadLevel` precedence with warning logs.
 
 ### When to use `deferIndexWarmup`
 

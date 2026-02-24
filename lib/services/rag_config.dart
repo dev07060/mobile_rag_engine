@@ -10,6 +10,8 @@
 /// ```
 library;
 
+import '../src/internal/defaults.dart';
+
 /// Thread usage level for ONNX runtime.
 ///
 /// Controls how many CPU threads are used for embedding operations.
@@ -38,10 +40,11 @@ class RagConfig {
   /// Both `.sqlite` and `.db` extensions work (e.g., `'rag.sqlite'` or `'rag.db'`).
   final String? databaseName;
 
-  /// Maximum characters per chunk (default: 500).
+  /// Maximum characters per chunk (default: [kDefaultMaxChunkChars]).
   final int maxChunkChars;
 
-  /// Overlap characters between chunks for context continuity (default: 50).
+  /// Overlap characters between chunks for context continuity
+  /// (default: [kDefaultOverlapChars]).
   final int overlapChars;
 
   /// Maximum number of threads for intra-op parallelism in ONNX runtime.
@@ -72,8 +75,8 @@ class RagConfig {
     required this.tokenizerAsset,
     required this.modelAsset,
     this.databaseName,
-    this.maxChunkChars = 500,
-    this.overlapChars = 50,
+    this.maxChunkChars = kDefaultMaxChunkChars,
+    this.overlapChars = kDefaultOverlapChars,
     this.embeddingIntraOpNumThreads,
     this.threadLevel,
     this.deferIndexWarmup = false,
@@ -96,8 +99,8 @@ class RagConfig {
     required String tokenizerAsset,
     required String modelAsset,
     String? databaseName,
-    int maxChunkChars = 500,
-    int overlapChars = 50,
+    int maxChunkChars = kDefaultMaxChunkChars,
+    int overlapChars = kDefaultOverlapChars,
     int? embeddingIntraOpNumThreads,
     ThreadUseLevel? threadLevel,
     bool deferIndexWarmup = false,
