@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.14.2
+* **Fix**:
+  - Added dynamic ONNX input handling for `token_type_ids` based on model `inputNames`.
+  - Improved inference error messaging for input-signature mismatches (includes model input names).
+  - Centralized config/search defaults into shared internal constants.
+  - Added runtime soft validation for chunking config, thread conflict handling, and hybrid search weights.
+  - Aligned low-level `SourceRagService.searchHybrid` defaults to `vector=0.2`, `bm25=0.8`.
+* **Docs**:
+  - Clarified model compatibility constraints (`input_ids`, `attention_mask`, optional `token_type_ids`).
+  - Added validated ONNX artifact references and troubleshooting guidance for `Missing Input: token_type_ids`.
+  - Synchronized docs with effective defaults and runtime validation behavior.
+
+## 0.14.1
+* **Docs**: 
+  - Update feature documents
+* **Refactor**: 
+  - Refactoring example app `main.dart`
+
 ## 0.14.0
 * **Vector Math Refactor**:
   - Replaced `ndarray` dependency with a zero-allocation `vector_math` module for mobile-optimized cosine similarity, dot product, and L2 norm.
