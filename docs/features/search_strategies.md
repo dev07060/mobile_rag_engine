@@ -67,9 +67,12 @@ await MobileRag.instance.search(query, adjacentChunks: 1);
 ```
 
 ### `vectorWeight` vs `bm25Weight`
-- **Default**: `0.5`, `0.5`
+- **Default**: `0.2`, `0.8`
 - **Description**: Controls the balance between Semantic Search (Vector) and Keyword Search (BM25).
 - **Formula**: `Final Score = (VectorRank * vectorWeight) + (BM25Rank * bm25Weight)` (Rank fusion)
+- **Validation**:
+    - Values outside `0.0 ~ 1.0` are clamped at runtime.
+    - If both become `0`, defaults (`0.2`, `0.8`) are restored.
 - **Scenarios**:
     - **Concept Search**: `vectorWeight: 0.8`, `bm25Weight: 0.2` (e.g., "How does this feel?")
     - **Exact Term Search**: `vectorWeight: 0.2`, `bm25Weight: 0.8` (e.g., "Error code 0x1234")

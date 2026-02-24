@@ -135,7 +135,6 @@ if (!MobileRag.instance.isIndexReady) {
 }
 ```
 
-
 Then use it anywhere in your app:
 
 ```dart
@@ -185,35 +184,6 @@ collection for backward compatibility.
 
 > **Advanced Usage:** For fine-grained control, you can still use the low-level APIs (`initTokenizer`, `EmbeddingService`, `SourceRagService`) directly. See the [API Reference](https://pub.dev/documentation/mobile_rag_engine/latest/).
 
----
-
-## Model Options
-
-| Model | Dimensions | Size (ONNX) | Max Tokens | Languages |
-|:------|:----------:|:-----------:|:----------:|:----------|
-| [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (INT8) | **384** | ~23 MB | 256 | English |
-| [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~542 MB | 8,194 | 100+ (multilingual) |
-
-> **Important:** The embedding dimension must be consistent across all documents. Switching models requires re-embedding your entire corpus.
-
-**Custom Models:** Export any Sentence Transformer to ONNX:
-```bash
-pip install optimum[exporters]
-optimum-cli export onnx --model sentence-transformers/YOUR_MODEL ./output
-```
-
-See [Model Setup Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md) for deployment strategies and troubleshooting.
-
----
-
-## Documentation
-
-| Guide | Description |
-|:------|:------------|
-| [Quick Start](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/quick_start.md) | Get started in 5 minutes |
-| [Model Setup](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md) | Model selection, download, deployment strategies |
-| [FAQ](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/faq.md) | Frequently asked questions |
-| [Troubleshooting](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md) | Problem solving guide |
 
 ---
 
