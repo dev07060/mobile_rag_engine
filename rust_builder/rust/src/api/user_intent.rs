@@ -35,7 +35,7 @@ impl UserIntent {
             UserIntent::InvalidCommand { command, .. } => command,
         }
     }
-    
+
     pub fn intent_type(&self) -> &str {
         match self {
             UserIntent::Summary { .. } => "summary",
@@ -51,30 +51,50 @@ impl UserIntent {
 #[flutter_rust_bridge::frb(sync)]
 pub fn parse_user_intent(input: &str) -> UserIntent {
     let trimmed = input.trim();
-    
+
     if trimmed.is_empty() {
-        return UserIntent::InvalidCommand { command: String::new(), reason: "Empty input".to_string() };
+        return UserIntent::InvalidCommand {
+            command: String::new(),
+            reason: "Empty input".to_string(),
+        };
     }
-    
+
     if !trimmed.starts_with('/') {
-        return UserIntent::General { query: trimmed.to_string() };
+        return UserIntent::General {
+            query: trimmed.to_string(),
+        };
     }
-    
+
     let parts: Vec<&str> = trimmed.splitn(2, ' ').collect();
     let command = parts[0].to_lowercase();
     let argument = parts.get(1).map(|s| s.trim()).unwrap_or("");
-    
+
     match command.as_str() {
-        "/summary" => UserIntent::Summary { query: argument.to_string() },
+        "/summary" => UserIntent::Summary {
+            query: argument.to_string(),
+        },
         "/define" => {
             if argument.is_empty() {
-                UserIntent::InvalidCommand { command: command.to_string(), reason: "Term required for /define. Usage: /define <term>".to_string() }
+                UserIntent::InvalidCommand {
+                    command: command.to_string(),
+                    reason: "Term required for /define. Usage: /define <term>".to_string(),
+                }
             } else {
-                UserIntent::Define { term: argument.to_string() }
+                UserIntent::Define {
+                    term: argument.to_string(),
+                }
             }
         }
-        "/more" => UserIntent::ExpandKnowledge { query: argument.to_string() },
-        _ => UserIntent::InvalidCommand { command: command.to_string(), reason: format!("Unknown command '{}'. Available: /summary, /define, /more", command) }
+        "/more" => UserIntent::ExpandKnowledge {
+            query: argument.to_string(),
+        },
+        _ => UserIntent::InvalidCommand {
+            command: command.to_string(),
+            reason: format!(
+                "Unknown command '{}'. Available: /summary, /define, /more",
+                command
+            ),
+        },
     }
 }
 
@@ -91,31 +111,56 @@ pub struct ParsedIntent {
 pub fn parse_intent(input: String) -> ParsedIntent {
     let intent = parse_user_intent(&input);
     match intent {
-        UserIntent::Summary { query } => ParsedIntent { intent_type: "summary".to_string(), query, is_valid: true, error_message: None },
-        UserIntent::Define { term } => ParsedIntent { intent_type: "define".to_string(), query: term, is_valid: true, error_message: None },
-        UserIntent::ExpandKnowledge { query } => ParsedIntent { intent_type: "more".to_string(), query, is_valid: true, error_message: None },
-        UserIntent::General { query } => ParsedIntent { intent_type: "general".to_string(), query, is_valid: true, error_message: None },
-        UserIntent::InvalidCommand { command, reason } => ParsedIntent { intent_type: "invalid".to_string(), query: command, is_valid: false, error_message: Some(reason) },
+        UserIntent::Summary { query } => ParsedIntent {
+            intent_type: "summary".to_string(),
+            query,
+            is_valid: true,
+            error_message: None,
+        },
+        UserIntent::Define { term } => ParsedIntent {
+            intent_type: "define".to_string(),
+            query: term,
+            is_valid: true,
+            error_message: None,
+        },
+        UserIntent::ExpandKnowledge { query } => ParsedIntent {
+            intent_type: "more".to_string(),
+            query,
+            is_valid: true,
+            error_message: None,
+        },
+        UserIntent::General { query } => ParsedIntent {
+            intent_type: "general".to_string(),
+            query,
+            is_valid: true,
+            error_message: None,
+        },
+        UserIntent::InvalidCommand { command, reason } => ParsedIntent {
+            intent_type: "invalid".to_string(),
+            query: command,
+            is_valid: false,
+            error_message: Some(reason),
+        },
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parse_summary_command() {
         let intent = parse_user_intent("/summary about RWA");
         assert!(matches!(intent, UserIntent::Summary { .. }));
         assert_eq!(intent.get_query(), "about RWA");
     }
-    
+
     #[test]
     fn test_parse_define_command() {
         let intent = parse_user_intent("/define smart contract");
         assert!(matches!(intent, UserIntent::Define { .. }));
     }
-    
+
     #[test]
     fn test_parse_empty_input() {
         let intent = parse_user_intent("");

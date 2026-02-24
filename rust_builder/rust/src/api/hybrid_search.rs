@@ -23,7 +23,9 @@ use crate::api::bm25_search::{bm25_search, tokenize_for_bm25, Bm25SearchResult};
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
 use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw, HnswSearchResult};
-use ndarray::Array1;
+use crate::api::vector_math::{cosine_with_query_norm_f32, l2_norm_f32};
+#[cfg(feature = "vector_quant_i8")]
+use crate::api::vector_quant::{cosine_with_query_norm_i8_blob, l2_norm_i8, quantize_f32_to_i8};
 
 #[derive(Debug, Clone)]
 pub struct SearchFilter {
@@ -65,6 +67,17 @@ fn rrf_score(rank: usize, k: u32) -> f64 {
     1.0 / (k as f64 + rank as f64)
 }
 
+fn decode_f32_embedding(blob: &[u8]) -> Option<Vec<f32>> {
+    if blob.len() % 4 != 0 {
+        return None;
+    }
+    Some(
+        blob.chunks(4)
+            .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
+            .collect(),
+    )
+}
+
 /// Perform hybrid search combining vector and keyword search.
 pub fn search_hybrid(
     query_text: String,
@@ -80,40 +93,57 @@ pub fn search_hybrid(
     let multiplier = if filter.is_some() { 4 } else { 2 };
     let candidate_k = (top_k * multiplier) as usize;
 
-    // 1. Parallel Execution: Run Vector and BM25 search simultaneously
-    let (mut vector_results, mut bm25_results) = std::thread::scope(|s| {
-        let handle_vec = s.spawn(|| {
-            if is_hnsw_index_loaded() {
-                search_hnsw(query_embedding.clone(), candidate_k).unwrap_or_else(|e| {
-                    log::error!("[hybrid] Vector search failed: {}", e);
-                    vec![]
-                })
-            } else {
-                debug!("[hybrid] HNSW index not loaded, skipping vector search");
-                vec![]
-            }
-        });
-
-        let handle_bm25 = s.spawn(|| bm25_search(query_text.clone(), candidate_k as u32));
-
-        let vec_res = handle_vec.join().unwrap_or_else(|e| {
-            log::error!("[hybrid] Vector search thread panicked: {:?}", e);
-            vec![]
-        });
-
-        let bm25_res = handle_bm25.join().unwrap_or_else(|e| {
-            log::error!("[hybrid] BM25 search thread panicked: {:?}", e);
-            vec![]
-        });
-
-        (vec_res, bm25_res)
+    let use_exact_source_scan = filter.as_ref().is_some_and(|f| {
+        f.source_ids
+            .as_ref()
+            .map(|sids| !sids.is_empty())
+            .unwrap_or(false)
+            || f.metadata_like
+                .as_ref()
+                .map(|pattern| !pattern.trim().is_empty())
+                .unwrap_or(false)
     });
 
-    info!(
-        "[hybrid] Raw candidates - Vector: {}, BM25: {}",
-        vector_results.len(),
-        bm25_results.len()
-    );
+    let mut vector_results = Vec::new();
+    let mut bm25_results = Vec::new();
+    if !use_exact_source_scan {
+        // 1. Parallel Execution: Run Vector and BM25 search simultaneously
+        let (vec_res, bm25_res) = std::thread::scope(|s| {
+            let handle_vec = s.spawn(|| {
+                if is_hnsw_index_loaded() {
+                    search_hnsw(query_embedding.clone(), candidate_k).unwrap_or_else(|e| {
+                        log::error!("[hybrid] Vector search failed: {}", e);
+                        vec![]
+                    })
+                } else {
+                    debug!("[hybrid] HNSW index not loaded, skipping vector search");
+                    vec![]
+                }
+            });
+
+            let handle_bm25 = s.spawn(|| bm25_search(query_text.clone(), candidate_k as u32));
+
+            let vec_res = handle_vec.join().unwrap_or_else(|e| {
+                log::error!("[hybrid] Vector search thread panicked: {:?}", e);
+                vec![]
+            });
+
+            let bm25_res = handle_bm25.join().unwrap_or_else(|e| {
+                log::error!("[hybrid] BM25 search thread panicked: {:?}", e);
+                vec![]
+            });
+
+            (vec_res, bm25_res)
+        });
+
+        vector_results = vec_res;
+        bm25_results = bm25_res;
+        info!(
+            "[hybrid] Raw candidates - Vector: {}, BM25: {}",
+            vector_results.len(),
+            bm25_results.len()
+        );
+    }
 
     // 2. Filter-Aware Search Strategy
     // If filtering by source_id or metadata, performing a global candidate search and
@@ -122,18 +152,7 @@ pub fn search_hybrid(
     // both vector and BM25 ranks directly.
     let mut used_exact_source_scan = false;
     if let Some(f) = &filter {
-        let has_source_filter = f
-            .source_ids
-            .as_ref()
-            .map(|sids| !sids.is_empty())
-            .unwrap_or(false);
-        let has_metadata_filter = f
-            .metadata_like
-            .as_ref()
-            .map(|pattern| !pattern.trim().is_empty())
-            .unwrap_or(false);
-
-        if has_source_filter || has_metadata_filter {
+        if use_exact_source_scan {
             used_exact_source_scan = true;
             info!(
                     "[hybrid] Scoped exact filter active (source_ids={:?}, metadata_like={:?}), switching to exact scan",
@@ -168,29 +187,45 @@ pub fn search_hybrid(
             }
 
             // Fetch ALL chunks for this scoped set for exact vector + BM25 scoring.
-            let query = format!(
-                "SELECT c.id, c.embedding, c.content
+            let query_with_i8 = format!(
+                "SELECT c.id, c.embedding, {}, c.content
                      FROM chunks c
                      LEFT JOIN sources s ON c.source_id = s.id
                      WHERE {}",
+                "c.embedding_i8",
+                exact_conditions.join(" AND ")
+            );
+            let query_without_i8 = format!(
+                "SELECT c.id, c.embedding, {}, c.content
+                     FROM chunks c
+                     LEFT JOIN sources s ON c.source_id = s.id
+                     WHERE {}",
+                "NULL AS embedding_i8",
                 exact_conditions.join(" AND ")
             );
 
-            let mut stmt = conn
-                .prepare(&query)
-                .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+            let mut stmt = match conn.prepare(&query_with_i8) {
+                Ok(stmt) => stmt,
+                Err(_) => conn
+                    .prepare(&query_without_i8)
+                    .map_err(|e| RagError::DatabaseError(e.to_string()))?,
+            };
             let chunk_iter = stmt
                 .query_map([], |row| {
                     Ok((
                         row.get::<_, i64>(0)?,
                         row.get::<_, Vec<u8>>(1)?,
-                        row.get::<_, String>(2)?,
+                        row.get::<_, Option<Vec<u8>>>(2)?,
+                        row.get::<_, String>(3)?,
                     ))
                 })
                 .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
-            let query_vec = Array1::from(query_embedding.clone());
-            let query_norm = query_vec.mapv(|x| x * x).sum().sqrt();
+            let query_norm = l2_norm_f32(&query_embedding);
+            #[cfg(feature = "vector_quant_i8")]
+            let (query_i8, _query_i8_scale) = quantize_f32_to_i8(&query_embedding);
+            #[cfg(feature = "vector_quant_i8")]
+            let query_i8_norm = l2_norm_i8(&query_i8);
             let query_tokens = tokenize_for_bm25(&query_text);
             let query_token_set: HashSet<String> = query_tokens.iter().cloned().collect();
 
@@ -205,27 +240,44 @@ pub fn search_hybrid(
             bm25_results.clear();
 
             for row in chunk_iter {
-                if let Ok((id, embedding_blob, content)) = row {
-                    let embedding: Vec<f32> = embedding_blob
-                        .chunks(4)
-                        .map(|c| f32::from_ne_bytes(c.try_into().unwrap()))
-                        .collect();
-
-                    if embedding.len() == query_embedding.len() {
-                        let target_vec = Array1::from(embedding);
-                        let target_norm = target_vec.mapv(|x| x * x).sum().sqrt();
-                        let dot = query_vec.dot(&target_vec);
-                        let sim = if query_norm == 0.0 || target_norm == 0.0 {
-                            0.0
+                if let Ok((id, embedding_blob, embedding_i8_blob, content)) = row {
+                    #[cfg(not(feature = "vector_quant_i8"))]
+                    let _ = &embedding_i8_blob;
+                    #[cfg(feature = "vector_quant_i8")]
+                    let sim = if let Some(qblob) = embedding_i8_blob.as_deref() {
+                        if qblob.len() == query_i8.len() && query_i8_norm > 0.0 {
+                            cosine_with_query_norm_i8_blob(&query_i8, query_i8_norm, qblob)
+                        } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
+                            if embedding.len() != query_embedding.len() {
+                                continue;
+                            }
+                            cosine_with_query_norm_f32(&query_embedding, query_norm, &embedding)
                         } else {
-                            dot / (query_norm * target_norm)
-                        };
+                            continue;
+                        }
+                    } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
+                        if embedding.len() != query_embedding.len() {
+                            continue;
+                        }
+                        cosine_with_query_norm_f32(&query_embedding, query_norm, &embedding)
+                    } else {
+                        continue;
+                    };
 
-                        vector_results.push(HnswSearchResult {
-                            id,
-                            distance: (1.0 - sim) as f32, // lower is better
-                        });
-                    }
+                    #[cfg(not(feature = "vector_quant_i8"))]
+                    let sim = if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
+                        if embedding.len() != query_embedding.len() {
+                            continue;
+                        }
+                        cosine_with_query_norm_f32(&query_embedding, query_norm, &embedding)
+                    } else {
+                        continue;
+                    };
+
+                    vector_results.push(HnswSearchResult {
+                        id,
+                        distance: (1.0 - sim) as f32, // lower is better
+                    });
 
                     if !query_token_set.is_empty() {
                         let doc_tokens = tokenize_for_bm25(&content);
@@ -244,7 +296,9 @@ pub fn search_hybrid(
                             for term in term_freqs.keys() {
                                 *scoped_doc_freqs.entry(term.clone()).or_insert(0) += 1;
                             }
-                            scoped_term_freqs.insert(id, term_freqs);
+                            if !term_freqs.is_empty() {
+                                scoped_term_freqs.insert(id, term_freqs);
+                            }
                         }
                     }
                 }

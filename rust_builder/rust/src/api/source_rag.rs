@@ -23,8 +23,13 @@ use crate::api::hnsw_index::{
     build_hnsw_index, clear_hnsw_index, is_hnsw_index_loaded, load_hnsw_index, save_hnsw_index,
     search_hnsw,
 };
+use crate::api::vector_math::{cosine_with_query_norm_f32, l2_norm_f32};
+#[cfg(feature = "vector_quant_i8")]
+use crate::api::vector_quant::{
+    cosine_with_query_norm_i8_blob, dequantize_i8_to_f32, i8_blob_from_slice, i8_vec_from_blob,
+    l2_norm_i8, quantize_f32_to_i8,
+};
 use log::{debug, info};
-use ndarray::Array1;
 use once_cell::sync::Lazy;
 use rusqlite::params;
 use sha2::{Digest, Sha256};
@@ -39,6 +44,17 @@ fn hash_content(content: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
     format!("{:x}", hasher.finalize())
+}
+
+fn decode_f32_embedding(blob: &[u8]) -> Option<Vec<f32>> {
+    if blob.len() % 4 != 0 {
+        return None;
+    }
+    Some(
+        blob.chunks(4)
+            .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
+            .collect(),
+    )
 }
 
 fn normalize_collection_id(collection_id: String) -> String {
@@ -163,6 +179,8 @@ pub fn init_source_db() -> Result<(), RagError> {
             end_pos INTEGER NOT NULL,
             chunk_type TEXT DEFAULT 'general',
             embedding BLOB NOT NULL,
+            embedding_i8 BLOB,
+            embedding_scale REAL,
             FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE
         )",
         [],
@@ -226,6 +244,52 @@ pub fn init_source_db() -> Result<(), RagError> {
             [],
         )
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    }
+
+    let has_chunk_embedding_i8: bool = conn
+        .prepare("SELECT embedding_i8 FROM chunks LIMIT 1")
+        .is_ok();
+    if !has_chunk_embedding_i8 {
+        info!("[init_source_db] Migrating: adding embedding_i8 to chunks");
+        conn.execute("ALTER TABLE chunks ADD COLUMN embedding_i8 BLOB", [])
+            .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    }
+
+    let has_chunk_embedding_scale: bool = conn
+        .prepare("SELECT embedding_scale FROM chunks LIMIT 1")
+        .is_ok();
+    if !has_chunk_embedding_scale {
+        info!("[init_source_db] Migrating: adding embedding_scale to chunks");
+        conn.execute("ALTER TABLE chunks ADD COLUMN embedding_scale REAL", [])
+            .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    {
+        let mut stmt = conn.prepare(
+            "SELECT id, embedding FROM chunks WHERE embedding_i8 IS NULL OR embedding_scale IS NULL",
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        let rows: Vec<(i64, Vec<u8>)> = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .map_err(|e| RagError::DatabaseError(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        for (id, embedding_blob) in rows {
+            let Some(embedding) = decode_f32_embedding(&embedding_blob) else {
+                continue;
+            };
+            if embedding.is_empty() {
+                continue;
+            }
+            let (embedding_i8, embedding_scale) = quantize_f32_to_i8(&embedding);
+            conn.execute(
+                "UPDATE chunks SET embedding_i8 = ?1, embedding_scale = ?2 WHERE id = ?3",
+                params![i8_blob_from_slice(&embedding_i8), embedding_scale, id],
+            )
+            .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        }
     }
 
     conn.execute(
@@ -457,6 +521,12 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
             |row| row.get(0),
         )
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let has_chunk_embedding_i8: bool = tx
+        .prepare("SELECT embedding_i8 FROM chunks LIMIT 1")
+        .is_ok();
+    let has_chunk_embedding_scale: bool = tx
+        .prepare("SELECT embedding_scale FROM chunks LIMIT 1")
+        .is_ok();
 
     for chunk in &chunks {
         let mut embedding_bytes: Vec<u8> = Vec::with_capacity(chunk.embedding.len() * 4);
@@ -464,20 +534,67 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
             embedding_bytes.extend_from_slice(&f.to_ne_bytes());
         }
 
-        tx.execute(
-            "INSERT INTO chunks (source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![
-                source_id,
-                source_collection_id,
-                chunk.chunk_index,
-                chunk.content,
-                chunk.start_pos,
-                chunk.end_pos,
-                chunk.chunk_type,
-                embedding_bytes
-            ],
-        ).map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        #[cfg(feature = "vector_quant_i8")]
+        {
+            let (embedding_i8, embedding_scale) = quantize_f32_to_i8(&chunk.embedding);
+            let embedding_i8_bytes = i8_blob_from_slice(&embedding_i8);
+
+            if has_chunk_embedding_i8 && has_chunk_embedding_scale {
+                tx.execute(
+                    "INSERT INTO chunks (source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding, embedding_i8, embedding_scale)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    params![
+                        source_id,
+                        source_collection_id,
+                        chunk.chunk_index,
+                        chunk.content,
+                        chunk.start_pos,
+                        chunk.end_pos,
+                        chunk.chunk_type,
+                        embedding_bytes,
+                        embedding_i8_bytes,
+                        embedding_scale
+                    ],
+                )
+                .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+            } else {
+                tx.execute(
+                    "INSERT INTO chunks (source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    params![
+                        source_id,
+                        source_collection_id,
+                        chunk.chunk_index,
+                        chunk.content,
+                        chunk.start_pos,
+                        chunk.end_pos,
+                        chunk.chunk_type,
+                        embedding_bytes
+                    ],
+                )
+                .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+            }
+        }
+
+        #[cfg(not(feature = "vector_quant_i8"))]
+        {
+            let _ = (has_chunk_embedding_i8, has_chunk_embedding_scale);
+            tx.execute(
+                "INSERT INTO chunks (source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    source_id,
+                    source_collection_id,
+                    chunk.chunk_index,
+                    chunk.content,
+                    chunk.start_pos,
+                    chunk.end_pos,
+                    chunk.chunk_type,
+                    embedding_bytes
+                ],
+            )
+            .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        }
     }
 
     tx.commit()
@@ -502,22 +619,55 @@ pub fn rebuild_chunk_hnsw_index_for_collection(collection_id: String) -> Result<
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     ensure_collection_row(&conn, &collection_id)?;
 
-    let mut stmt = conn
-        .prepare("SELECT id, embedding FROM chunks WHERE collection_id = ?1")
-        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let has_chunk_embedding_i8: bool = conn
+        .prepare("SELECT embedding_i8 FROM chunks LIMIT 1")
+        .is_ok();
+    let has_chunk_embedding_scale: bool = conn
+        .prepare("SELECT embedding_scale FROM chunks LIMIT 1")
+        .is_ok();
+    let mut stmt = if has_chunk_embedding_i8 && has_chunk_embedding_scale {
+        conn.prepare(
+            "SELECT id, embedding, embedding_i8, embedding_scale FROM chunks WHERE collection_id = ?1",
+        )
+    } else {
+        conn.prepare(
+            "SELECT id, embedding, NULL AS embedding_i8, NULL AS embedding_scale FROM chunks WHERE collection_id = ?1",
+        )
+    }
+    .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
     let points: Vec<(i64, Vec<f32>)> = stmt
         .query_map(params![collection_id], |row| {
             let id: i64 = row.get(0)?;
             let embedding_blob: Vec<u8> = row.get(1)?;
-            let mut embedding = Vec::with_capacity(embedding_blob.len() / 4);
-            for chunk in embedding_blob.chunks_exact(4) {
-                embedding.push(f32::from_ne_bytes(chunk.try_into().unwrap()));
-            }
+            let embedding_i8_blob: Option<Vec<u8>> = row.get(2)?;
+            let embedding_scale: Option<f32> = row.get(3)?;
+
+            #[cfg(feature = "vector_quant_i8")]
+            let embedding = if let (Some(qblob), Some(scale)) =
+                (embedding_i8_blob.as_deref(), embedding_scale)
+            {
+                let quantized = i8_vec_from_blob(qblob);
+                let restored = dequantize_i8_to_f32(&quantized, scale);
+                if restored.is_empty() {
+                    decode_f32_embedding(&embedding_blob).unwrap_or_default()
+                } else {
+                    restored
+                }
+            } else {
+                decode_f32_embedding(&embedding_blob).unwrap_or_default()
+            };
+
+            #[cfg(not(feature = "vector_quant_i8"))]
+            let embedding = {
+                let _ = (embedding_i8_blob, embedding_scale);
+                decode_f32_embedding(&embedding_blob).unwrap_or_default()
+            };
             Ok((id, embedding))
         })
         .map_err(|e| RagError::DatabaseError(e.to_string()))?
         .filter_map(|r| r.ok())
+        .filter(|(_, embedding)| !embedding.is_empty())
         .collect();
 
     if points.is_empty() {
@@ -725,15 +875,28 @@ fn search_chunks_linear_in_collection(
     top_k: u32,
 ) -> Result<Vec<ChunkSearchResult>, RagError> {
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
-    let mut stmt = conn.prepare(
-        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, s.metadata 
+    let query_norm = l2_norm_f32(&query_embedding);
+    #[cfg(feature = "vector_quant_i8")]
+    let (query_i8, _query_i8_scale) = quantize_f32_to_i8(&query_embedding);
+    #[cfg(feature = "vector_quant_i8")]
+    let query_i8_norm = l2_norm_i8(&query_i8);
+
+    let mut stmt = match conn.prepare(
+        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, c.embedding_i8, s.metadata 
          FROM chunks c
          LEFT JOIN sources s ON c.source_id = s.id
-         WHERE c.collection_id = ?1"
-    ).map_err(|e| RagError::DatabaseError(e.to_string()))?;
-
-    let query_vec = Array1::from(query_embedding.clone());
-    let query_norm = query_vec.mapv(|x| x * x).sum().sqrt();
+         WHERE c.collection_id = ?1",
+    ) {
+        Ok(stmt) => stmt,
+        Err(_) => conn
+            .prepare(
+                "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, NULL AS embedding_i8, s.metadata 
+                 FROM chunks c
+                 LEFT JOIN sources s ON c.source_id = s.id
+                 WHERE c.collection_id = ?1",
+            )
+            .map_err(|e| RagError::DatabaseError(e.to_string()))?,
+    };
 
     let mut candidates: Vec<(f64, i64, i64, i32, String, String, Option<String>)> = Vec::new();
 
@@ -746,43 +909,68 @@ fn search_chunks_linear_in_collection(
                 row.get(3)?,
                 row.get(4)?,
                 row.get::<_, Vec<u8>>(5)?,
-                row.get(6)?,
+                row.get::<_, Option<Vec<u8>>>(6)?,
+                row.get(7)?,
             ))
         })
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
     for row in rows {
-        let (id, source_id, chunk_index, content, chunk_type, embedding_blob, metadata): (
+        let (
+            id,
+            source_id,
+            chunk_index,
+            content,
+            chunk_type,
+            embedding_blob,
+            embedding_i8_blob,
+            metadata,
+        ): (
             i64,
             i64,
             i32,
             String,
             String,
             Vec<u8>,
+            Option<Vec<u8>>,
             Option<String>,
         ) = row.map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        #[cfg(not(feature = "vector_quant_i8"))]
+        let _ = &embedding_i8_blob;
 
-        let embedding: Vec<f32> = embedding_blob
-            .chunks(4)
-            .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
-            .collect();
-
-        if embedding.len() != query_embedding.len() {
-            continue;
-        }
-
-        let target_vec = Array1::from(embedding);
-        let target_norm = target_vec.mapv(|x| x * x).sum().sqrt();
-        let dot_product = query_vec.dot(&target_vec);
-
-        let similarity = if query_norm == 0.0 || target_norm == 0.0 {
-            0.0
+        #[cfg(feature = "vector_quant_i8")]
+        let similarity = if let Some(qblob) = embedding_i8_blob.as_deref() {
+            if qblob.len() == query_i8.len() && query_i8_norm > 0.0 {
+                cosine_with_query_norm_i8_blob(&query_i8, query_i8_norm, qblob) as f64
+            } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
+                if embedding.len() != query_embedding.len() {
+                    continue;
+                }
+                cosine_with_query_norm_f32(&query_embedding, query_norm, &embedding) as f64
+            } else {
+                continue;
+            }
+        } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
+            if embedding.len() != query_embedding.len() {
+                continue;
+            }
+            cosine_with_query_norm_f32(&query_embedding, query_norm, &embedding) as f64
         } else {
-            (dot_product / (query_norm * target_norm)) as f64
+            continue;
+        };
+
+        #[cfg(not(feature = "vector_quant_i8"))]
+        let similarity = if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
+            if embedding.len() != query_embedding.len() {
+                continue;
+            }
+            cosine_with_query_norm_f32(&query_embedding, query_norm, &embedding) as f64
+        } else {
+            continue;
         };
 
         candidates.push((
-            similarity,
+            similarity as f64,
             id,
             source_id,
             chunk_index,
@@ -809,6 +997,19 @@ fn search_chunks_linear_in_collection(
             },
         )
         .collect())
+}
+
+/// Benchmark-only entrypoint for deterministic linear scan measurement.
+///
+/// This bypasses HNSW activation/rebuild and executes the exact
+/// chunk linear-scan path directly for the given collection.
+pub fn benchmark_search_chunks_linear_in_collection(
+    collection_id: String,
+    query_embedding: Vec<f32>,
+    top_k: u32,
+) -> Result<Vec<ChunkSearchResult>, RagError> {
+    let normalized = normalize_collection_id(collection_id);
+    search_chunks_linear_in_collection(&normalized, query_embedding, top_k)
 }
 
 /// Get source document by ID.

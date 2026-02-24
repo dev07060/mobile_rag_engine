@@ -1,82 +1,69 @@
-# Environment files (secrets)
+# Secrets
 .env
 *.env
 **/.env
 
-# AI Agent configuration (local only)
+# Local tool/runtime dirs
 .agent/
+.venv/
+bge-m3-temp/
 
-# Miscellaneous
+# OS / editor
+.DS_Store
+*.swp
 *.class
 *.log
 *.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
-
-# IntelliJ related
+.idea/
 *.iml
 *.ipr
 *.iws
-.idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+# Flutter / Dart build outputs
 .dart_tool/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
-/coverage/
+build/
+coverage/
+platform-build/
+**/ios/Flutter/.last_build_id
 
-# Symbolication related
+# Symbol / map outputs
 app.*.symbols
-
-# Obfuscation related
 app.*.map.json
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# Android app build artifacts
+android/app/debug
+android/app/profile
+android/app/release
 
-# Platform specific
+# Unused root platform apps in this package repo
 /windows/
 /web/
 /linux/
 /macos/
 
-# docs
+# Generated API docs / local roadmap / design specs
+**/doc/api/
 docs/roadmap
-# docs/test
-# fix/
+docs/guides/faer_int8_*
 
-# test_app/
-platform-build/
-
-# Large embedding models (download via download_models.sh)
+# Local large model binaries
 assets/bge-m3-int8.onnx
 assets/bge-m3-tokenizer.json
 **/assets/bge-m3-int8.onnx
 **/assets/bge-m3-tokenizer.json
-
-# Python venv
-.venv/
-bge-m3-temp/
-
-# Example app assets (too large for git, use download_models.sh)
 example/assets/model.onnx
 example/assets/tokenizer.json
-# docs/
+
+# Python scripts (local tooling only)
+scripts/*.py
+
+# Validation artifacts / corpora (local only)
+artifacts/
+example/assets/corpus/
+example/assets/evalsets/
+
+# Example evaluation/performance runners (local only)
+example/lib/*_runner.dart

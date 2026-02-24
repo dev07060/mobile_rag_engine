@@ -16,6 +16,10 @@ patch_notes/
 scripts/
 bge-m3-temp/
 
+# faer/int8 design docs & validation artifacts
+docs/guides/faer_int8_*
+artifacts/faer_int8_*
+
 # 환경 파일
 .venv/
 *.env
@@ -55,3 +59,11 @@ integration_test/
 /macos/
 /windows/
 /web/
+
+# Validation test datasets/reports (local artifacts)
+artifacts/
+example/assets/corpus/
+example/assets/evalsets/
+
+# Example evaluation/performance runners (local only)
+example/lib/*_runner.dart

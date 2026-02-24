@@ -100,6 +100,7 @@ curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-Mini
 *   [Adjacent Chunk Retrieval](docs/features/adjacent_chunk_retrieval.md) - Fetch surrounding context.
 *   [Index Management](docs/features/index_management.md) - Stats, persistence, and recovery.
 *   [Markdown Chunker](docs/features/markdown_chunker.md) - Structure-aware text splitting.
+*   [Multi-Collection](docs/features/multi_collection.md) - Isolate ingest/search/rebuild by category.
 *   [Prompt Compression](docs/features/prompt_compression.md) - Reduce token usage.
 *   [Search by Source](docs/features/search_by_source.md) - Filter results by document.
 *   [Search Strategies](docs/features/search_strategies.md) - Tune ranking and retrieval.
@@ -145,7 +146,7 @@ class MySearchScreen extends StatelessWidget {
       'Flutter is a UI toolkit for building apps.',
     );
     await MobileRag.instance.addDocument(
-      'Flutter is a UI toolkit for building apps.',
+      'Dart is the language used to build Flutter apps.',
     );
     // Indexing is automatic! (Debounced 500ms)
     // Optional: await MobileRag.instance.rebuildIndex(); // Call if you want it done NOW

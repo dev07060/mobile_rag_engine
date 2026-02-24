@@ -22,12 +22,12 @@
 //! - Batch operations: 33-50% faster
 //! - Reduced file descriptor usage
 
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
-use once_cell::sync::OnceCell;
-use std::sync::RwLock;
 use anyhow::Result;
 use log::info;
+use once_cell::sync::OnceCell;
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+use std::sync::RwLock;
 
 /// Global database connection pool (thread-safe)
 static DB_POOL: OnceCell<RwLock<Option<Pool<SqliteConnectionManager>>>> = OnceCell::new();
@@ -51,28 +51,30 @@ static DB_POOL: OnceCell<RwLock<Option<Pool<SqliteConnectionManager>>>> = OnceCe
 /// init_db_pool("/path/to/rag.sqlite", 4)?;
 /// ```
 pub fn init_db_pool(db_path: String, max_size: u32) -> Result<()> {
-    info!("[db_pool] Initializing connection pool: path={}, max_size={}", db_path, max_size);
-    
-    let manager = SqliteConnectionManager::file(&db_path)
-        .with_init(|conn| {
-            // SQLite performance optimizations
-            conn.execute_batch(
-                "PRAGMA journal_mode = WAL;
+    info!(
+        "[db_pool] Initializing connection pool: path={}, max_size={}",
+        db_path, max_size
+    );
+
+    let manager = SqliteConnectionManager::file(&db_path).with_init(|conn| {
+        // SQLite performance optimizations
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
                  PRAGMA synchronous = NORMAL;
                  PRAGMA cache_size = -64000;
                  PRAGMA temp_store = MEMORY;
                  PRAGMA mmap_size = 268435456;
-                 PRAGMA page_size = 4096;"
-            )?;
-            Ok(())
-        });
-    
+                 PRAGMA page_size = 4096;",
+        )?;
+        Ok(())
+    });
+
     let pool = Pool::builder()
         .max_size(max_size)
-        .min_idle(Some(1))  // Keep at least 1 connection alive
+        .min_idle(Some(1)) // Keep at least 1 connection alive
         .connection_timeout(std::time::Duration::from_secs(5))
         .build(manager)?;
-    
+
     // Support re-initialization
     if let Some(lock) = DB_POOL.get() {
         let mut guard = lock.write().unwrap();
@@ -94,7 +96,7 @@ pub fn init_db_pool(db_path: String, max_size: u32) -> Result<()> {
             info!("[db_pool] Connection pool initialized successfully");
         }
     }
-    
+
     Ok(())
 }
 
@@ -123,17 +125,18 @@ pub(crate) fn get_connection() -> Result<r2d2::PooledConnection<SqliteConnection
         .ok_or_else(|| anyhow::anyhow!("DB pool not initialized. Call init_db_pool() first."))?
         .read()
         .unwrap();
-    
+
     let pool = pool_guard
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("DB pool is None"))?;
-    
+
     Ok(pool.get()?)
 }
 
 /// Check if the connection pool is initialized.
 pub fn is_pool_initialized() -> bool {
-    DB_POOL.get()
+    DB_POOL
+        .get()
         .and_then(|lock| lock.read().ok())
         .map(|guard| guard.is_some())
         .unwrap_or(false)
@@ -143,7 +146,8 @@ pub fn is_pool_initialized() -> bool {
 ///
 /// Returns (active_connections, idle_connections, max_size)
 pub fn get_pool_stats() -> Option<(u32, u32, u32)> {
-    DB_POOL.get()
+    DB_POOL
+        .get()
         .and_then(|lock| lock.read().ok())
         .and_then(|guard| {
             guard.as_ref().map(|pool| {
@@ -174,11 +178,11 @@ mod tests {
     fn test_pool_initialization() {
         let temp_db = tempfile::NamedTempFile::new().unwrap();
         let db_path = temp_db.path().to_str().unwrap().to_string();
-        
+
         assert!(!is_pool_initialized());
         init_db_pool(db_path.clone(), 2).unwrap();
         assert!(is_pool_initialized());
-        
+
         close_db_pool();
         assert!(!is_pool_initialized());
     }
@@ -187,18 +191,25 @@ mod tests {
     fn test_get_connection() {
         let temp_db = tempfile::NamedTempFile::new().unwrap();
         let db_path = temp_db.path().to_str().unwrap().to_string();
-        
+
         init_db_pool(db_path, 2).unwrap();
-        
+
         let conn = get_connection().unwrap();
-        conn.execute("CREATE TABLE test (id INTEGER)", params![]).unwrap();
+        conn.execute("CREATE TABLE test (id INTEGER)", params![])
+            .unwrap();
         drop(conn);
-        
+
         // Connection should be returned to pool
         let conn2 = get_connection().unwrap();
-        let count: i32 = conn2.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table'", [], |row| row.get(0)).unwrap();
+        let count: i32 = conn2
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(count, 1);
-        
+
         close_db_pool();
     }
 
@@ -206,13 +217,13 @@ mod tests {
     fn test_pool_stats() {
         let temp_db = tempfile::NamedTempFile::new().unwrap();
         let db_path = temp_db.path().to_str().unwrap().to_string();
-        
+
         init_db_pool(db_path, 4).unwrap();
-        
+
         let stats = get_pool_stats().unwrap();
         assert_eq!(stats.2, 4); // max_size
         assert!(stats.0 >= 1); // at least min_idle connection
-        
+
         close_db_pool();
     }
 }
