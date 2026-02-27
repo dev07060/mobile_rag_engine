@@ -31,7 +31,7 @@ use crate::api::vector_quant::{
 };
 use log::{debug, info};
 use once_cell::sync::Lazy;
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use sha2::{Digest, Sha256};
 use std::sync::RwLock;
 
@@ -447,6 +447,69 @@ pub fn update_source_status(source_id: i64, status: String) -> Result<(), RagErr
     Ok(())
 }
 
+/// Claim a source for ingestion by atomically transitioning status to `processing`.
+///
+/// Returns true when claimed successfully. Only `pending` and `failed` sources
+/// can be claimed. Sources already in `processing`/`completed` return false.
+pub fn claim_source_for_ingestion(source_id: i64) -> Result<bool, RagError> {
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let updated = conn
+        .execute(
+            "UPDATE sources
+             SET status = 'processing'
+             WHERE id = ?1
+               AND COALESCE(status, 'completed') IN ('pending', 'failed')",
+            params![source_id],
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    Ok(updated > 0)
+}
+
+/// Get status of a source.
+///
+/// Returns `Ok(None)` if source does not exist or has NULL status.
+pub fn get_source_status(source_id: i64) -> Result<Option<String>, RagError> {
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let status: Option<String> = conn
+        .query_row(
+            "SELECT status FROM sources WHERE id = ?1",
+            params![source_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?
+        .flatten();
+    Ok(status)
+}
+
+/// Delete all chunks for a source while keeping the source row.
+///
+/// Returns number of deleted chunks.
+pub fn clear_source_chunks(source_id: i64) -> Result<i32, RagError> {
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let source_collection_id: Option<String> = conn
+        .query_row(
+            "SELECT collection_id FROM sources WHERE id = ?1",
+            params![source_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let deleted = conn
+        .execute(
+            "DELETE FROM chunks WHERE source_id = ?1",
+            params![source_id],
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    if deleted > 0 {
+        if let Some(collection_id) = source_collection_id {
+            mark_collection_dirty(&conn, &collection_id)?;
+        }
+    }
+    Ok(deleted as i32)
+}
+
 #[derive(Debug, Clone)]
 pub struct SourceEntry {
     pub id: i64,
@@ -627,11 +690,19 @@ pub fn rebuild_chunk_hnsw_index_for_collection(collection_id: String) -> Result<
         .is_ok();
     let mut stmt = if has_chunk_embedding_i8 && has_chunk_embedding_scale {
         conn.prepare(
-            "SELECT id, embedding, embedding_i8, embedding_scale FROM chunks WHERE collection_id = ?1",
+            "SELECT c.id, c.embedding, c.embedding_i8, c.embedding_scale
+             FROM chunks c
+             JOIN sources s ON s.id = c.source_id
+             WHERE c.collection_id = ?1
+               AND COALESCE(s.status, 'completed') = 'completed'",
         )
     } else {
         conn.prepare(
-            "SELECT id, embedding, NULL AS embedding_i8, NULL AS embedding_scale FROM chunks WHERE collection_id = ?1",
+            "SELECT c.id, c.embedding, NULL AS embedding_i8, NULL AS embedding_scale
+             FROM chunks c
+             JOIN sources s ON s.id = c.source_id
+             WHERE c.collection_id = ?1
+               AND COALESCE(s.status, 'completed') = 'completed'",
         )
     }
     .map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -700,7 +771,13 @@ pub fn rebuild_chunk_bm25_index_for_collection(collection_id: String) -> Result<
     bm25_clear_index();
 
     let mut stmt = conn
-        .prepare("SELECT id, content FROM chunks WHERE collection_id = ?1")
+        .prepare(
+            "SELECT c.id, c.content
+             FROM chunks c
+             JOIN sources s ON s.id = c.source_id
+             WHERE c.collection_id = ?1
+               AND COALESCE(s.status, 'completed') = 'completed'",
+        )
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
     let docs: Vec<(i64, String)> = stmt
@@ -836,10 +913,12 @@ pub fn search_chunks_in_collection(
     for result in hnsw_results {
         let row: Option<(i64, i32, String, String, Option<String>)> = conn
             .query_row(
-                "SELECT c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), s.metadata 
+                "SELECT c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), s.metadata
                  FROM chunks c
-                 LEFT JOIN sources s ON c.source_id = s.id
-                 WHERE c.id = ?1 AND c.collection_id = ?2",
+                 JOIN sources s ON c.source_id = s.id
+                 WHERE c.id = ?1
+                   AND c.collection_id = ?2
+                   AND COALESCE(s.status, 'completed') = 'completed'",
                 params![result.id, &collection_id],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
             )
@@ -882,18 +961,20 @@ fn search_chunks_linear_in_collection(
     let query_i8_norm = l2_norm_i8(&query_i8);
 
     let mut stmt = match conn.prepare(
-        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, c.embedding_i8, s.metadata 
+        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, c.embedding_i8, s.metadata
          FROM chunks c
-         LEFT JOIN sources s ON c.source_id = s.id
-         WHERE c.collection_id = ?1",
+         JOIN sources s ON c.source_id = s.id
+         WHERE c.collection_id = ?1
+           AND COALESCE(s.status, 'completed') = 'completed'",
     ) {
         Ok(stmt) => stmt,
         Err(_) => conn
             .prepare(
-                "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, NULL AS embedding_i8, s.metadata 
+                "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, NULL AS embedding_i8, s.metadata
                  FROM chunks c
-                 LEFT JOIN sources s ON c.source_id = s.id
-                 WHERE c.collection_id = ?1",
+                 JOIN sources s ON c.source_id = s.id
+                 WHERE c.collection_id = ?1
+                   AND COALESCE(s.status, 'completed') = 'completed'",
             )
             .map_err(|e| RagError::DatabaseError(e.to_string()))?,
     };
@@ -1212,11 +1293,201 @@ pub fn update_chunk_embedding(chunk_id: i64, embedding: Vec<f32>) -> Result<(), 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::bm25_search::{bm25_clear_index, bm25_search};
     use crate::api::db_pool::{close_db_pool, init_db_pool};
     use crate::api::hnsw_index::clear_hnsw_index;
+    use std::sync::{Mutex, OnceLock};
+
+    fn test_guard() -> std::sync::MutexGuard<'static, ()> {
+        static TEST_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+        TEST_MUTEX.get_or_init(|| Mutex::new(())).lock().unwrap()
+    }
+
+    #[test]
+    fn test_claim_source_for_ingestion_transitions() {
+        let _guard = test_guard();
+        let db_path = std::env::temp_dir().join("test_claim_source_for_ingestion.db");
+        let _ = std::fs::remove_file(&db_path);
+
+        init_db_pool(db_path.to_str().unwrap().to_string(), 1).unwrap();
+        init_source_db().unwrap();
+        clear_hnsw_index();
+        bm25_clear_index();
+
+        let source = add_source(
+            "claim transition doc".to_string(),
+            None,
+            Some("claim".to_string()),
+        )
+        .unwrap();
+
+        assert_eq!(
+            get_source_status(source.source_id).unwrap(),
+            Some("pending".to_string())
+        );
+        assert!(claim_source_for_ingestion(source.source_id).unwrap());
+        assert_eq!(
+            get_source_status(source.source_id).unwrap(),
+            Some("processing".to_string())
+        );
+        assert!(!claim_source_for_ingestion(source.source_id).unwrap());
+
+        update_source_status(source.source_id, "completed".to_string()).unwrap();
+        assert!(!claim_source_for_ingestion(source.source_id).unwrap());
+
+        update_source_status(source.source_id, "failed".to_string()).unwrap();
+        assert!(claim_source_for_ingestion(source.source_id).unwrap());
+        assert_eq!(
+            get_source_status(source.source_id).unwrap(),
+            Some("processing".to_string())
+        );
+
+        close_db_pool();
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn test_clear_source_chunks_keeps_source_row() {
+        let _guard = test_guard();
+        let db_path = std::env::temp_dir().join("test_clear_source_chunks.db");
+        let _ = std::fs::remove_file(&db_path);
+
+        init_db_pool(db_path.to_str().unwrap().to_string(), 1).unwrap();
+        init_source_db().unwrap();
+        clear_hnsw_index();
+        bm25_clear_index();
+
+        let source = add_source(
+            "clear chunks source content".to_string(),
+            None,
+            Some("clear".to_string()),
+        )
+        .unwrap();
+        update_source_status(source.source_id, "completed".to_string()).unwrap();
+
+        add_chunks(
+            source.source_id,
+            vec![
+                ChunkData {
+                    content: "chunk a".to_string(),
+                    chunk_index: 0,
+                    start_pos: 0,
+                    end_pos: 7,
+                    chunk_type: "text".to_string(),
+                    embedding: vec![1.0, 0.0, 0.0, 0.0],
+                },
+                ChunkData {
+                    content: "chunk b".to_string(),
+                    chunk_index: 1,
+                    start_pos: 8,
+                    end_pos: 15,
+                    chunk_type: "text".to_string(),
+                    embedding: vec![0.9, 0.0, 0.0, 0.0],
+                },
+            ],
+        )
+        .unwrap();
+        assert_eq!(get_source_chunk_count(source.source_id).unwrap(), 2);
+
+        let deleted = clear_source_chunks(source.source_id).unwrap();
+        assert_eq!(deleted, 2);
+        assert_eq!(get_source_chunk_count(source.source_id).unwrap(), 0);
+        assert!(get_source(source.source_id).unwrap().is_some());
+        assert_eq!(clear_source_chunks(source.source_id).unwrap(), 0);
+
+        close_db_pool();
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn test_completed_filter_excludes_pending_and_failed_sources() {
+        let _guard = test_guard();
+        let db_path = std::env::temp_dir().join("test_completed_filter.db");
+        let _ = std::fs::remove_file(&db_path);
+
+        init_db_pool(db_path.to_str().unwrap().to_string(), 1).unwrap();
+        init_source_db().unwrap();
+        clear_hnsw_index();
+        bm25_clear_index();
+
+        let collection = "filtering".to_string();
+        let completed =
+            add_source_in_collection(collection.clone(), "completed doc".to_string(), None, None)
+                .unwrap();
+        let pending =
+            add_source_in_collection(collection.clone(), "pending doc".to_string(), None, None)
+                .unwrap();
+        let failed =
+            add_source_in_collection(collection.clone(), "failed doc".to_string(), None, None)
+                .unwrap();
+
+        update_source_status(completed.source_id, "completed".to_string()).unwrap();
+        update_source_status(failed.source_id, "failed".to_string()).unwrap();
+        // pending remains pending
+
+        add_chunks(
+            completed.source_id,
+            vec![ChunkData {
+                content: "sharedtoken completed".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 21,
+                chunk_type: "text".to_string(),
+                embedding: vec![1.0, 0.0, 0.0, 0.0],
+            }],
+        )
+        .unwrap();
+        add_chunks(
+            pending.source_id,
+            vec![ChunkData {
+                content: "sharedtoken pending".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 19,
+                chunk_type: "text".to_string(),
+                embedding: vec![0.8, 0.0, 0.0, 0.0],
+            }],
+        )
+        .unwrap();
+        add_chunks(
+            failed.source_id,
+            vec![ChunkData {
+                content: "sharedtoken failed".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 18,
+                chunk_type: "text".to_string(),
+                embedding: vec![0.7, 0.0, 0.0, 0.0],
+            }],
+        )
+        .unwrap();
+
+        rebuild_chunk_hnsw_index_for_collection(collection.clone()).unwrap();
+        let hnsw_hits =
+            search_chunks_in_collection(collection.clone(), vec![1.0, 0.0, 0.0, 0.0], 10).unwrap();
+        assert_eq!(hnsw_hits.len(), 1);
+        assert_eq!(hnsw_hits[0].source_id, completed.source_id);
+
+        let linear_hits = benchmark_search_chunks_linear_in_collection(
+            collection.clone(),
+            vec![1.0, 0.0, 0.0, 0.0],
+            10,
+        )
+        .unwrap();
+        assert_eq!(linear_hits.len(), 1);
+        assert_eq!(linear_hits[0].source_id, completed.source_id);
+
+        rebuild_chunk_bm25_index_for_collection(collection).unwrap();
+        let bm25_hits = bm25_search("sharedtoken".to_string(), 10);
+        assert_eq!(bm25_hits.len(), 1);
+
+        close_db_pool();
+        let _ = std::fs::remove_file(db_path);
+    }
 
     #[test]
     fn test_metadata_retrieval() {
+        let _guard = test_guard();
         // 1. Setup
         let db_path = std::env::temp_dir().join("test_metadata.db");
         let _ = std::fs::remove_file(&db_path);
@@ -1229,6 +1500,7 @@ mod tests {
         let metadata = r#"{"author": "Test Author", "year": 2025}"#;
         let source_res =
             add_source("Test Content".to_string(), Some(metadata.to_string()), None).unwrap();
+        update_source_status(source_res.source_id, "completed".to_string()).unwrap();
 
         let chunk = ChunkData {
             content: "Test Chunk".to_string(),
@@ -1255,6 +1527,7 @@ mod tests {
 
     #[test]
     fn test_same_content_allowed_across_collections() {
+        let _guard = test_guard();
         let db_path = std::env::temp_dir().join("test_collection_scoped_dedup.db");
         let _ = std::fs::remove_file(&db_path);
 
@@ -1297,6 +1570,7 @@ mod tests {
 
     #[test]
     fn test_collection_scoped_search_and_stats_are_isolated() {
+        let _guard = test_guard();
         let db_path = std::env::temp_dir().join("test_collection_scope_isolation.db");
         let _ = std::fs::remove_file(&db_path);
 
@@ -1318,6 +1592,8 @@ mod tests {
             Some("trip".to_string()),
         )
         .unwrap();
+        update_source_status(business.source_id, "completed".to_string()).unwrap();
+        update_source_status(travel.source_id, "completed".to_string()).unwrap();
 
         add_chunks(
             business.source_id,

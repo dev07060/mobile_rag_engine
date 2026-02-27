@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `rrf_score`
+// These functions are ignored because they are not marked as `pub`: `decode_f32_embedding`, `rrf_score`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
 
 /// Perform hybrid search combining vector and keyword search.

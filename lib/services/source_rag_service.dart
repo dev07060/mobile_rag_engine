@@ -10,10 +10,8 @@ library;
 
 import 'dart:developer';
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import '../src/rust/api/error.dart';
 import '../src/rust/api/source_rag.dart' as rust_rag;
 import '../src/rust/api/source_rag.dart'
@@ -28,8 +26,6 @@ import '../utils/error_utils.dart';
 import '../src/rust/api/logger.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     as frb;
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-import '../src/rust/frb_generated.dart';
 import 'dart:async';
 
 extension RagErrorMessage on RagError {
@@ -50,6 +46,36 @@ enum ChunkingStrategy {
 
   /// Markdown-aware chunking (preserves headers, code blocks, tables)
   markdown,
+}
+
+enum DuplicateSourceIngestionDecision {
+  skipCompleted,
+  alreadyInProgress,
+  resetAndResume,
+}
+
+@visibleForTesting
+DuplicateSourceIngestionDecision decideDuplicateSourceIngestion({
+  required String? status,
+  required int chunkCount,
+}) {
+  final normalizedStatus = status ?? 'completed';
+  switch (normalizedStatus) {
+    case 'completed':
+      return chunkCount > 0
+          ? DuplicateSourceIngestionDecision.skipCompleted
+          : DuplicateSourceIngestionDecision.resetAndResume;
+    case 'pending':
+    case 'processing':
+      return DuplicateSourceIngestionDecision.alreadyInProgress;
+    case 'failed':
+      return DuplicateSourceIngestionDecision.resetAndResume;
+    default:
+      // Backward-compat fallback for unknown status values.
+      return chunkCount > 0
+          ? DuplicateSourceIngestionDecision.skipCompleted
+          : DuplicateSourceIngestionDecision.resetAndResume;
+  }
 }
 
 /// Result of adding a source document with automatic chunking.
@@ -398,12 +424,19 @@ class SourceRagService {
   ///
   /// The document is:
   /// 1. Split into chunks based on file type (auto-detected from [filePath])
-  /// 2. Each chunk is embedded
-  /// 3. Source and chunks are stored in DB
+  /// 2. Each chunk is embedded (micro-batch streaming, [kIngestionBatchSize] at a time)
+  /// 3. Source and chunks are incrementally stored in DB
   ///
   /// If [filePath] is provided, chunking strategy is auto-detected:
   /// - `.md`, `.markdown` → Markdown-aware chunking (preserves headers, code blocks)
   /// - Other files → Default recursive chunking
+  ///
+  /// **Memory safety:** Uses streaming micro-batch pipeline instead of loading
+  /// all embeddings into memory. Each batch of [kIngestionBatchSize] chunks is
+  /// embedded, saved to DB, then released — keeping memory usage flat.
+  ///
+  /// [chunkDelay] controls the yield duration between batches (default: 10ms).
+  /// This allows GC to run and prevents thermal throttling on mobile devices.
   Future<SourceAddResult> addSourceWithChunking(
     String content, {
     String? metadata,
@@ -413,26 +446,7 @@ class SourceRagService {
     Duration? chunkDelay,
     void Function(int done, int total)? onProgress,
   }) async {
-    // 1. Determine model path for isolate
-    // Use stored modelPath if available, otherwise try to guess (fallback)
-    // NOTE: In production usage via RagEngine, modelPath should always be provided.
-    String effectiveModelPath = modelPath ?? '';
-    if (effectiveModelPath.isEmpty) {
-      final directory = await getApplicationDocumentsDirectory();
-      effectiveModelPath = '${directory.path}/bge-m3-quantized-int8.onnx';
-      debugPrint(
-        '[SourceRagService] Warning: modelPath not set, using fallback: $effectiveModelPath',
-      );
-    }
-
-    // Check if file exists to avoid isolate crash
-    if (!await File(effectiveModelPath).exists()) {
-      throw Exception(
-        "Embedding model file not found at: $effectiveModelPath. Ensure RagEngine is initialized or modelPath is correct.",
-      );
-    }
-
-    // 2. Prepare request
+    // 1. Determine chunking strategy
     final effectiveStrategy =
         strategy ??
         (filePath != null &&
@@ -440,7 +454,7 @@ class SourceRagService {
             ? ChunkingStrategy.markdown
             : ChunkingStrategy.recursive);
 
-    // 3. Create source row first for crash recovery visibility.
+    // 2. Create source row first for crash recovery visibility.
     // This ensures unfinished ingests remain visible as pending/failed states.
     final sourceEntry = await rust_rag.addSourceInCollection(
       collectionId: collectionId,
@@ -449,75 +463,153 @@ class SourceRagService {
       name: name ?? filePath, // Use available identifier
     );
     final sourceId = sourceEntry.sourceId;
+    var resumedExistingSource = sourceEntry.isDuplicate;
 
-    // If already indexed in this collection, skip expensive embed/chunk pipeline.
-    if (sourceEntry.isDuplicate) {
+    // 3. Attempt to claim source for ingestion.
+    //    Only pending/failed sources can transition to processing.
+    var claimed = await rust_rag.claimSourceForIngestion(sourceId: sourceId);
+    if (!claimed) {
+      final status = await rust_rag.getSourceStatus(sourceId: sourceId);
       final existingChunkCount = await rust_rag.getSourceChunkCount(
         sourceId: sourceId,
       );
-      if (existingChunkCount > 0) {
-        await rust_rag.updateSourceStatus(
-          sourceId: sourceId,
-          status: 'completed',
-        );
-        return SourceAddResult(
-          sourceId: sourceId.toInt(),
-          isDuplicate: true,
-          chunkCount: 0,
-          message: sourceEntry.message,
-        );
+      switch (decideDuplicateSourceIngestion(
+        status: status,
+        chunkCount: existingChunkCount,
+      )) {
+        case DuplicateSourceIngestionDecision.skipCompleted:
+          await rust_rag.updateSourceStatus(
+            sourceId: sourceId,
+            status: 'completed',
+          );
+          return SourceAddResult(
+            sourceId: sourceId.toInt(),
+            isDuplicate: true,
+            chunkCount: 0,
+            message: sourceEntry.message,
+          );
+        case DuplicateSourceIngestionDecision.alreadyInProgress:
+          return SourceAddResult(
+            sourceId: sourceId.toInt(),
+            isDuplicate: true,
+            chunkCount: 0,
+            message: 'Source ingestion already in progress',
+          );
+        case DuplicateSourceIngestionDecision.resetAndResume:
+          resumedExistingSource = true;
+          await rust_rag.clearSourceChunks(sourceId: sourceId);
+          claimed = await rust_rag.claimSourceForIngestion(sourceId: sourceId);
+          if (!claimed) {
+            return SourceAddResult(
+              sourceId: sourceId.toInt(),
+              isDuplicate: true,
+              chunkCount: 0,
+              message: 'Source ingestion already in progress',
+            );
+          }
       }
     }
 
-    // Mark dirty early so abrupt termination still leaves a recovery hint.
+    // Duplicate resume path: defensively clear stale partial chunks left by
+    // older versions that failed before strict rollback was introduced.
+    if (sourceEntry.isDuplicate && claimed) {
+      resumedExistingSource = true;
+      final staleChunkCount = await rust_rag.getSourceChunkCount(
+        sourceId: sourceId,
+      );
+      if (staleChunkCount > 0) {
+        await rust_rag.clearSourceChunks(sourceId: sourceId);
+      }
+    }
+
+    // Mark dirty only when ingestion will actually run.
+    if (!claimed) {
+      throw StateError('Unable to claim source $sourceId for ingestion.');
+    }
     await _markDirty();
 
-    // 4. Process in background isolate with progress reporting
-    debugPrint('[SourceRagService] Offloading processing to isolate...');
-
-    final receivePort = ReceivePort();
-    final completer = Completer<_ProcessingResult>();
-
-    // Add request with SendPort
-    final isolateRequest = _IsolateRequest(
-      content: content,
-      modelPath: effectiveModelPath,
-      maxChars: maxChunkChars,
-      overlapChars: overlapChars,
-      strategy: effectiveStrategy,
-      sendPort: receivePort.sendPort,
-    );
+    // 4. Streaming micro-batch ingestion pipeline
+    //    - Embed kIngestionBatchSize chunks at a time
+    //    - Save to DB immediately (incremental commit)
+    //    - Release memory and yield to event loop
+    final effectiveDelay = chunkDelay ?? const Duration(milliseconds: 10);
+    int savedCount = 0;
 
     try {
-      await Isolate.spawn(_processContentInIsolate, isolateRequest);
+      // Chunking runs on main isolate (no ONNX double-loading).
+      debugPrint('[SourceRagService] Chunking content...');
+      final List<dynamic> rawChunks;
+      if (effectiveStrategy == ChunkingStrategy.markdown) {
+        rawChunks = markdownChunk(text: content, maxChars: maxChunkChars);
+      } else {
+        rawChunks = semanticChunkWithOverlap(
+          text: content,
+          maxChars: maxChunkChars,
+          overlapChars: overlapChars,
+        );
+      }
 
-      receivePort.listen((message) {
-        if (message is List && message.length == 2 && message[0] is int) {
-          // Progress update: [done, total]
-          onProgress?.call(message[0] as int, message[1] as int);
-        } else if (message is _ProcessingResult) {
-          // Final result
-          receivePort.close();
-          completer.complete(message);
-        } else if (message is List &&
-            message.isNotEmpty &&
-            message[0] == 'error') {
-          // Error handling
-          receivePort.close();
-          completer.completeError(Exception(message[1]));
-        }
-      });
-
-      final result = await completer.future;
-
+      final total = rawChunks.length;
       debugPrint(
-        '[SourceRagService] Isolate finished. Got ${result.chunks.length} chunks.',
+        '[SourceRagService] Got $total chunks. Starting streaming ingestion...',
       );
 
-      final chunks = result.chunks;
+      for (var i = 0; i < total; i += kIngestionBatchSize) {
+        final batchEnd = (i + kIngestionBatchSize).clamp(0, total);
+        final batchChunks = <ChunkData>[];
 
-      // 5. Save chunks to DB.
-      await rust_rag.addChunks(sourceId: sourceId, chunks: chunks);
+        for (var j = i; j < batchEnd; j++) {
+          final rawChunk = rawChunks[j];
+          String contentStr;
+          String chunkType;
+          int chunkIdx;
+          int startPos;
+          int endPos;
+
+          if (effectiveStrategy == ChunkingStrategy.markdown) {
+            final c = rawChunk as StructuredChunk;
+            contentStr = c.content;
+            chunkType = c.headerPath.isNotEmpty
+                ? '${c.chunkType}|${c.headerPath}'
+                : c.chunkType;
+            chunkIdx = c.index;
+            startPos = c.startPos;
+            endPos = c.endPos;
+          } else {
+            final c = rawChunk as SemanticChunk;
+            contentStr = c.content;
+            chunkType = c.chunkType;
+            chunkIdx = c.index;
+            startPos = c.startPos;
+            endPos = c.endPos;
+          }
+
+          // Embed using the already-loaded ONNX session (no double-loading)
+          final embedding = await EmbeddingService.embed(contentStr);
+
+          batchChunks.add(
+            ChunkData(
+              content: contentStr,
+              chunkIndex: chunkIdx,
+              startPos: startPos,
+              endPos: endPos,
+              chunkType: chunkType,
+              embedding: Float32List.fromList(embedding),
+            ),
+          );
+        }
+
+        // Incremental DB save — batch is committed and can be released
+        await rust_rag.addChunks(sourceId: sourceId, chunks: batchChunks);
+        savedCount += batchChunks.length;
+        onProgress?.call(savedCount, total);
+
+        // Yield to event loop: allows GC, UI updates, and thermal cooldown
+        if (i + kIngestionBatchSize < total) {
+          await Future.delayed(effectiveDelay);
+        }
+      }
+
       await rust_rag.updateSourceStatus(
         sourceId: sourceId,
         status: 'completed',
@@ -525,17 +617,19 @@ class SourceRagService {
 
       return SourceAddResult(
         sourceId: sourceId.toInt(),
-        isDuplicate: false,
-        chunkCount: chunks.length,
-        message: sourceEntry.isDuplicate
+        isDuplicate: sourceEntry.isDuplicate,
+        chunkCount: savedCount,
+        message: resumedExistingSource
             ? 'Source resumed and completed'
             : sourceEntry.message,
       );
     } catch (e) {
       try {
+        await rust_rag.clearSourceChunks(sourceId: sourceId);
+      } catch (_) {}
+      try {
         await rust_rag.updateSourceStatus(sourceId: sourceId, status: 'failed');
       } catch (_) {}
-      receivePort.close();
       rethrow;
     }
   }
@@ -1138,138 +1232,5 @@ class SourceRagService {
     );
 
     return RagSearchResult(chunks: chunks, context: context);
-  }
-}
-
-/// Result of processing content in isolate
-class _ProcessingResult {
-  final List<ChunkData> chunks;
-  final int totalChunks;
-
-  _ProcessingResult({required this.chunks, required this.totalChunks});
-}
-
-/// Request data for isolate processing
-class _IsolateRequest {
-  final String content;
-  final String? modelPath;
-  final int maxChars;
-  final int overlapChars;
-  final ChunkingStrategy strategy;
-  final SendPort? sendPort;
-
-  _IsolateRequest({
-    required this.content,
-    required this.modelPath,
-    required this.maxChars,
-    required this.overlapChars,
-    required this.strategy,
-    this.sendPort,
-  });
-}
-
-/// Top-level function for isolate execution
-Future<void> _processContentInIsolate(_IsolateRequest req) async {
-  try {
-    // 0. Initialize Rust in this isolate (Required for SemanticChunker)
-    if (Platform.isMacOS) {
-      await RustLib.init(
-        externalLibrary: ExternalLibrary.process(iKnowHowToUseIt: true),
-      );
-    } else {
-      await RustLib.init();
-    }
-
-    // 1. Initialize Embedding Service in this isolate
-    if (req.modelPath != null) {
-      await EmbeddingService.init(modelPath: req.modelPath);
-    } else {
-      // Fallback: If no model path, we can't embed.
-      // In a real app, we might pass bytes, but path is preferred for memory.
-      throw Exception('Model path required for background embedding');
-    }
-
-    // 2. Chunking
-    List<dynamic> rawChunks;
-    if (req.strategy == ChunkingStrategy.markdown) {
-      rawChunks = markdownChunk(text: req.content, maxChars: req.maxChars);
-    } else {
-      rawChunks = semanticChunkWithOverlap(
-        text: req.content,
-        maxChars: req.maxChars,
-        overlapChars: req.overlapChars,
-      );
-    }
-
-    // 3. Embedding (Batch processing)
-    final chunkDataList = <ChunkData>[];
-    final total = rawChunks.length;
-
-    for (var i = 0; i < total; i++) {
-      // Report progress
-      if (req.sendPort != null) {
-        req.sendPort!.send([i, total]);
-      }
-
-      final rawChunk = rawChunks[i];
-      String contentStr;
-      String chunkType;
-      int chunkIdx;
-      int startPos;
-      int endPos;
-
-      if (req.strategy == ChunkingStrategy.markdown) {
-        final c = rawChunk as StructuredChunk;
-        contentStr = c.content;
-        chunkType = c.headerPath.isNotEmpty
-            ? '${c.chunkType}|${c.headerPath}'
-            : c.chunkType;
-        chunkIdx = c.index;
-        startPos = c.startPos;
-        endPos = c.endPos;
-      } else {
-        final c = rawChunk as SemanticChunk;
-        contentStr = c.content;
-        chunkType = c.chunkType;
-        chunkIdx = c.index;
-        startPos = c.startPos;
-        endPos = c.endPos;
-      }
-
-      final embedding = await EmbeddingService.embed(contentStr);
-
-      chunkDataList.add(
-        ChunkData(
-          content: contentStr,
-          chunkIndex: chunkIdx,
-          startPos: startPos,
-          endPos: endPos,
-          chunkType: chunkType,
-          embedding: Float32List.fromList(embedding),
-        ),
-      );
-    }
-
-    // 4. Final progress
-    if (req.sendPort != null) {
-      req.sendPort!.send([total, total]);
-    }
-
-    // Send result
-    if (req.sendPort != null) {
-      req.sendPort!.send(
-        _ProcessingResult(chunks: chunkDataList, totalChunks: total),
-      );
-    }
-  } catch (e) {
-    if (req.sendPort != null) {
-      req.sendPort!.send(['error', e.toString()]);
-    }
-  } finally {
-    try {
-      await EmbeddingService.disposeAsync();
-    } catch (_) {
-      // Best-effort cleanup in isolate shutdown path.
-    }
   }
 }

@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `calculate_content_hash`, `rebuild_bm25_index_internal`, `rebuild_hnsw_index_internal`, `search_with_hnsw`, `search_with_linear_scan`, `truncate_str`
+// These functions are ignored because they are not marked as `pub`: `calculate_content_hash`, `decode_f32_embedding`, `rebuild_bm25_index_internal`, `rebuild_hnsw_index_internal`, `search_with_hnsw`, `search_with_linear_scan`, `truncate_str`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
 
 /// Calculate cosine similarity between two vectors.

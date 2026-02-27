@@ -1,6 +1,7 @@
-// lib/screens/quality_test_screen.dart
 import 'package:flutter/material.dart';
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+
+import 'package:mobile_rag_engine/models/quality_test_models.dart';
 
 class QualityTestScreen extends StatefulWidget {
   const QualityTestScreen({super.key});
@@ -23,6 +24,7 @@ class _QualityTestScreenState extends State<QualityTestScreen> {
 
     try {
       final summary = await QualityTestService.runQualityTest(
+        appDbPath: MobileRag.instance.engine.dbPath,
         onProgress: (msg, current, total) {
           setState(() => _progress = "$msg ($current/$total)");
         },
