@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.14.3
+* **Feat**:
+  - Added ingestion safety with claim/status/clear APIs and status-aware indexing.
+* **Refactor**:
+  - Moved ONNX inference to a dedicated background isolate for better UI performance without dropping frames.
+  - Extracted data classes into `lib/models/` directory for better structural organization.
+  - Extracted `RagController` from the example app to simplify `main.dart` into pure UI code.
+* **Fix**:
+  - Restored global DB pool after quality test cleanup.
+  - Changed internal error messages to English for better international developer experience.
+
 ## 0.14.2
 * **Fix**:
   - Added dynamic ONNX input handling for `token_type_ids` based on model `inputNames`.
@@ -412,7 +423,7 @@ final rag = await RagEngine.initialize(
 ### Removed
 - Deprecated `test_app` and `local-gemma-macos` directories.
 
-## [0.2.0] - 2024-12-08
+## [0.2.0] - 2025-12-08
 
 
 ### Added
@@ -422,7 +433,7 @@ final rag = await RagEngine.initialize(
 - **High-Level API**: New `SourceRagService` for automated chunking, embedding, and indexing pipeline.
 - **Context Strategies**: Support for `relevanceFirst`, `diverseSources`, and `chronological` context assembly strategies.
 
-## [0.1.0] - 2024-12-08
+## [0.1.0] - 2025-12-08
 
 ### Added
 - Initial release

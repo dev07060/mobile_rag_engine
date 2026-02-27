@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.1
+* **Feat**:
+  - Added ingestion safety with claim/status/clear APIs and status-aware indexing in vectors.
+* **Refactor**:
+  - Refactored `vector_math` module to tighten internal function visibility.
+
 ## 0.14.0
 * **Vector Math Refactor**:
   - Removed `ndarray` dependency; introduced `vector_math` module with allocation-free dot product, L2 norm, and cosine kernels.
