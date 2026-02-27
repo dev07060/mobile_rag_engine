@@ -5,17 +5,17 @@
 // Keeping this module allocation-free helps mobile hot paths.
 
 #[inline]
-pub fn dot_f32(a: &[f32], b: &[f32]) -> f32 {
+pub(crate) fn dot_f32(a: &[f32], b: &[f32]) -> f32 {
     backend::dot_f32(a, b)
 }
 
 #[inline]
-pub fn l2_norm_f32(v: &[f32]) -> f32 {
+pub(crate) fn l2_norm_f32(v: &[f32]) -> f32 {
     backend::l2_norm_f32(v)
 }
 
 #[inline]
-pub fn cosine_f32(a: &[f32], b: &[f32]) -> f32 {
+pub(crate) fn cosine_f32(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() || a.is_empty() {
         return 0.0;
     }
@@ -30,7 +30,7 @@ pub fn cosine_f32(a: &[f32], b: &[f32]) -> f32 {
 }
 
 #[inline]
-pub fn cosine_with_query_norm_f32(query: &[f32], query_norm: f32, target: &[f32]) -> f32 {
+pub(crate) fn cosine_with_query_norm_f32(query: &[f32], query_norm: f32, target: &[f32]) -> f32 {
     backend::cosine_with_query_norm_f32(query, query_norm, target)
 }
 
@@ -39,7 +39,7 @@ mod backend {
     use faer::MatRef;
 
     #[inline]
-    pub fn dot_f32(a: &[f32], b: &[f32]) -> f32 {
+    pub(super) fn dot_f32(a: &[f32], b: &[f32]) -> f32 {
         if a.len() != b.len() || a.is_empty() {
             return 0.0;
         }
@@ -51,7 +51,7 @@ mod backend {
     }
 
     #[inline]
-    pub fn l2_norm_f32(v: &[f32]) -> f32 {
+    pub(super) fn l2_norm_f32(v: &[f32]) -> f32 {
         if v.is_empty() {
             return 0.0;
         }
@@ -59,7 +59,11 @@ mod backend {
     }
 
     #[inline]
-    pub fn cosine_with_query_norm_f32(query: &[f32], query_norm: f32, target: &[f32]) -> f32 {
+    pub(super) fn cosine_with_query_norm_f32(
+        query: &[f32],
+        query_norm: f32,
+        target: &[f32],
+    ) -> f32 {
         if query.len() != target.len() || query.is_empty() || query_norm == 0.0 {
             return 0.0;
         }
@@ -107,7 +111,7 @@ mod tests {
 #[cfg(not(feature = "vector_faer"))]
 mod backend {
     #[inline]
-    pub fn dot_f32(a: &[f32], b: &[f32]) -> f32 {
+    pub(super) fn dot_f32(a: &[f32], b: &[f32]) -> f32 {
         if a.len() != b.len() || a.is_empty() {
             return 0.0;
         }
@@ -115,7 +119,7 @@ mod backend {
     }
 
     #[inline]
-    pub fn l2_norm_f32(v: &[f32]) -> f32 {
+    pub(super) fn l2_norm_f32(v: &[f32]) -> f32 {
         if v.is_empty() {
             return 0.0;
         }
@@ -123,7 +127,11 @@ mod backend {
     }
 
     #[inline]
-    pub fn cosine_with_query_norm_f32(query: &[f32], query_norm: f32, target: &[f32]) -> f32 {
+    pub(super) fn cosine_with_query_norm_f32(
+        query: &[f32],
+        query_norm: f32,
+        target: &[f32],
+    ) -> f32 {
         if query.len() != target.len() || query.is_empty() || query_norm == 0.0 {
             return 0.0;
         }

@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `ensure_collection_row`, `hash_content`, `is_active_bm25_collection`, `is_active_hnsw_collection`, `mark_collection_bm25_clean`, `mark_collection_dirty`, `mark_collection_hnsw_clean`, `normalize_collection_id`, `search_chunks_linear_in_collection`, `search_chunks_linear`, `set_active_bm25_collection`, `set_active_hnsw_collection`
+// These functions are ignored because they are not marked as `pub`: `decode_f32_embedding`, `ensure_collection_row`, `hash_content`, `is_active_bm25_collection`, `is_active_hnsw_collection`, `mark_collection_bm25_clean`, `mark_collection_dirty`, `mark_collection_hnsw_clean`, `normalize_collection_id`, `search_chunks_linear_in_collection`, `search_chunks_linear`, `set_active_bm25_collection`, `set_active_hnsw_collection`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Initialize database with sources and chunks tables.
@@ -46,6 +46,27 @@ Future<void> updateSourceStatus({
   sourceId: sourceId,
   status: status,
 );
+
+/// Claim a source for ingestion by atomically transitioning status to `processing`.
+///
+/// Returns true when claimed successfully. Only `pending` and `failed` sources
+/// can be claimed. Sources already in `processing`/`completed` return false.
+Future<bool> claimSourceForIngestion({required PlatformInt64 sourceId}) =>
+    RustLib.instance.api.crateApiSourceRagClaimSourceForIngestion(
+      sourceId: sourceId,
+    );
+
+/// Get status of a source.
+///
+/// Returns `Ok(None)` if source does not exist or has NULL status.
+Future<String?> getSourceStatus({required PlatformInt64 sourceId}) =>
+    RustLib.instance.api.crateApiSourceRagGetSourceStatus(sourceId: sourceId);
+
+/// Delete all chunks for a source while keeping the source row.
+///
+/// Returns number of deleted chunks.
+Future<int> clearSourceChunks({required PlatformInt64 sourceId}) =>
+    RustLib.instance.api.crateApiSourceRagClearSourceChunks(sourceId: sourceId);
 
 Future<List<SourceEntry>> listSources() =>
     RustLib.instance.api.crateApiSourceRagListSources();
