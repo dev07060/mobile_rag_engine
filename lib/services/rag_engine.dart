@@ -31,7 +31,6 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
-import 'package:onnxruntime/onnxruntime.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../src/rust/api/tokenizer.dart';
@@ -246,9 +245,6 @@ class RagEngine {
     // Copy model asset to file (optimized for memory)
     await _copyAssetToFile(config.modelAsset, modelPath);
 
-    // Configure session options if thread limit is requested
-    OrtSessionOptions? sessionOptions;
-
     final normalizedMaxChunkChars = normalizeMaxChunkChars(
       config.maxChunkChars,
       context: 'RagEngine.initialize',
@@ -292,20 +288,19 @@ class RagEngine {
     // Ensure at least 1 thread
     if (threads < 1) threads = 1;
 
-    // Apply thread configuration
-    sessionOptions = OrtSessionOptions();
-    try {
-      sessionOptions.setIntraOpNumThreads(threads);
-      debugPrint(
-        '[RagEngine] Configured ONNX embedding threads: $threads (Total Cores: $totalCores)',
-      );
-    } catch (e) {
-      debugPrint('[RagEngine] Warning: Failed to set intra-op num threads: $e');
-    }
+    debugPrint(
+      '[RagEngine] Configured ONNX embedding threads: $threads (Total Cores: $totalCores)',
+    );
 
-    // Init EmbeddingService with file path
+    // Init EmbeddingService on a background worker isolate.
+    // Thread config is passed as a raw int; the worker creates
+    // OrtSessionOptions internally (native objects can't cross isolate
+    // boundaries).
     onProgress?.call('Loading embedding model...');
-    await EmbeddingService.init(modelPath: modelPath, options: sessionOptions);
+    await EmbeddingService.init(
+      modelPath: modelPath,
+      intraOpNumThreads: threads,
+    );
 
     // 4. Initialize database connection pool
     onProgress?.call('Initializing connection pool...');

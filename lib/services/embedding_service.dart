@@ -1,260 +1,155 @@
 // lib/services/embedding_service.dart
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:mobile_rag_engine/src/internal/embedding_dimension_state.dart';
-import 'package:mobile_rag_engine/src/internal/serial_async_executor.dart';
 import 'package:onnxruntime/onnxruntime.dart';
 import 'package:mobile_rag_engine/src/rust/api/tokenizer.dart';
+import 'package:mobile_rag_engine/src/rust/frb_generated.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    as frb;
 
-/// Dart-based embedding service
-/// Rust tokenizer + Flutter ONNX Runtime combination
+/// Dart-based embedding service backed by a dedicated background isolate.
+///
+/// All ONNX inference runs on a long-lived worker isolate so that the main
+/// isolate (UI thread) is never blocked. The public API is unchanged:
+///
+/// ```dart
+/// await EmbeddingService.init(modelPath: '/path/to/model.onnx');
+/// final embedding = await EmbeddingService.embed('Hello world');
+/// await EmbeddingService.disposeAsync();
+/// ```
 class EmbeddingService {
-  static OrtSession? _session;
-  static Set<String> _requiredInputNames = <String>{};
-  static final SerialAsyncExecutor _executor = SerialAsyncExecutor();
+  // ── Worker isolate state ──────────────────────────────────────────────
+  static Isolate? _workerIsolate;
+  static SendPort? _workerSendPort;
   static final EmbeddingDimensionState _dimensionState =
       EmbeddingDimensionState();
 
-  /// Debug mode flag
+  /// Debug mode flag — forwarded to the worker on each embed call.
   static bool debugMode = false;
 
-  /// Initialize ONNX model
+  // ── Public API (unchanged signatures) ─────────────────────────────────
+
+  /// Initialize ONNX model on a background worker isolate.
   ///
-  /// Provide either [modelBytes] (loads from memory) or [modelPath] (loads from file).
-  /// [modelPath] is recommended for memory optimization.
+  /// Provide either [modelBytes] (loads from memory) or [modelPath] (loads
+  /// from file). [modelPath] is recommended for memory optimization.
+  ///
+  /// [intraOpNumThreads] configures ONNX intra-op parallelism. If omitted,
+  /// the ONNX default is used.
+  ///
+  /// The [options] parameter is retained for backward compatibility but is
+  /// **ignored** — `OrtSessionOptions` cannot be transferred across isolate
+  /// boundaries. Use [intraOpNumThreads] instead.
   static Future<void> init({
     Uint8List? modelBytes,
     String? modelPath,
     OrtSessionOptions? options,
+    int? intraOpNumThreads,
   }) async {
-    await _executor.run(() async {
-      OrtEnv.instance.init();
-      final sessionOptions = options ?? OrtSessionOptions();
-      final createdSession = _createSession(
-        modelBytes: modelBytes,
-        modelPath: modelPath,
-        sessionOptions: sessionOptions,
+    if (options != null && intraOpNumThreads == null) {
+      debugPrint(
+        '[EmbeddingService] Warning: OrtSessionOptions cannot be transferred to '
+        'the background worker isolate. Use intraOpNumThreads instead.',
       );
-      var isSwapped = false;
+    }
 
-      try {
-        final nextRequiredInputNames = _extractRequiredInputNames(
-          createdSession,
-        );
+    // Tear down any previous worker.
+    await _shutdownWorker();
 
-        final previousSession = _session;
-        _session = createdSession;
-        _requiredInputNames = nextRequiredInputNames;
-        _dimensionState.reset();
-        isSwapped = true;
+    // Spawn a fresh worker isolate.
+    final bootstrapPort = ReceivePort();
+    _workerIsolate = await Isolate.spawn(
+      _workerEntryPoint,
+      bootstrapPort.sendPort,
+    );
 
-        try {
-          previousSession?.release();
-        } catch (error) {
-          if (debugMode) {
-            debugPrint(
-              '[EmbeddingService] Warning: Failed to release previous session: $error',
-            );
-          }
-        }
-      } catch (e) {
-        if (!isSwapped) {
-          createdSession.release();
-        }
-        rethrow;
-      }
+    // First message from the worker is its own SendPort.
+    _workerSendPort = await bootstrapPort.first as SendPort;
+    bootstrapPort.close();
+
+    // Send the init command and wait for acknowledgement.
+    final replyPort = ReceivePort();
+    _workerSendPort!.send({
+      'cmd': 'init',
+      'modelPath': modelPath,
+      'modelBytes': modelBytes,
+      'intraOpNumThreads': intraOpNumThreads,
+      'replyPort': replyPort.sendPort,
     });
+
+    final result = await replyPort.first;
+    replyPort.close();
+
+    if (result is Map && result['error'] != null) {
+      await _shutdownWorker();
+      throw Exception(result['error']);
+    }
   }
 
-  /// Convert text to 384-dimensional embedding
+  /// Convert text to an embedding vector.
+  ///
+  /// The inference runs entirely on the background worker isolate so this
+  /// call never blocks the UI thread.
   static Future<List<double>> embed(String text) async {
-    return _executor.run(() async => _embedInternal(text));
-  }
-
-  static Future<List<double>> _embedInternal(String text) async {
-    final session = _session;
-    if (session == null) {
+    final sendPort = _workerSendPort;
+    if (sendPort == null) {
       throw Exception("EmbeddingService not initialized. Call init() first.");
     }
 
-    // 1. Tokenize with Rust tokenizer
-    final tokenIds = tokenize(text: text);
+    final replyPort = ReceivePort();
+    sendPort.send({
+      'cmd': 'embed',
+      'text': text,
+      'debugMode': debugMode,
+      'replyPort': replyPort.sendPort,
+    });
 
-    if (debugMode) {
-      debugPrint('[DEBUG] Text: "$text"');
-      debugPrint('[DEBUG] Token IDs: $tokenIds (length: ${tokenIds.length})');
+    final result = await replyPort.first;
+    replyPort.close();
+
+    if (result is Map && result['error'] != null) {
+      throw Exception(result['error']);
     }
 
-    // 2. Generate attention_mask
-    final seqLen = tokenIds.length;
-    final attentionMask = List<int>.filled(seqLen, 1);
-
-    // 3. Create ONNX input tensors
-    final inputIdsData = Int64List.fromList(
-      tokenIds.map((e) => e.toInt()).toList(),
-    );
-    final attentionMaskData = Int64List.fromList(
-      attentionMask.map((e) => e.toInt()).toList(),
-    );
-    // BGE-m3 / many modern embedding models do not use token_type_ids
-    // Passing it to a model that doesn't expect it causes an ONNX runtime error.
-
-    final shape = [1, seqLen];
-
-    final inputIdsTensor = OrtValueTensor.createTensorWithDataList(
-      inputIdsData,
-      shape,
-    );
-    final attentionMaskTensor = OrtValueTensor.createTensorWithDataList(
-      attentionMaskData,
-      shape,
-    );
-    OrtValueTensor? tokenTypeIdsTensor;
-
-    final inputs = <String, OrtValue>{
-      'input_ids': inputIdsTensor,
-      'attention_mask': attentionMaskTensor,
-    };
-
-    if (_requiresInput('token_type_ids')) {
-      final tokenTypeIdsData = Int64List.fromList(List<int>.filled(seqLen, 0));
-      tokenTypeIdsTensor = OrtValueTensor.createTensorWithDataList(
-        tokenTypeIdsData,
-        shape,
-      );
-      inputs['token_type_ids'] = tokenTypeIdsTensor;
-    }
-
-    // 4. Run inference
-    final runOptions = OrtRunOptions();
-    List<OrtValue?>? outputs;
-    try {
-      outputs = await session.runAsync(runOptions, inputs);
-    } catch (e, st) {
-      final wrapped = _buildInputSignatureException(e);
-      if (wrapped != null) {
-        Error.throwWithStackTrace(wrapped, st);
-      }
-      rethrow;
-    } finally {
-      inputIdsTensor.release();
-      attentionMaskTensor.release();
-      tokenTypeIdsTensor?.release();
-      runOptions.release();
-    }
-
-    // 5. Extract results and apply mean pooling
-    try {
-      final outputTensor = outputs?[0];
-      if (outputTensor == null) {
-        throw Exception("ONNX inference returned null output");
-      }
-
-      final outputData = outputTensor.value as List;
-
-      if (debugMode) {
-        debugPrint('[DEBUG] Output shape: ${_getShape(outputData)}');
-      }
-
-      // [1, seq_len, 384] -> mean pooling -> [384]
-      List<double> embedding;
-      if (outputData.isNotEmpty && outputData[0] is List) {
-        // 3D output: [batch, seq_len, hidden]
-        final batchData = outputData[0] as List;
-        if (batchData.isNotEmpty && batchData[0] is List) {
-          final hiddenSize = (batchData[0] as List).length;
-          embedding = List<double>.filled(hiddenSize, 0.0);
-
-          // Apply mean pooling over all tokens (with attention mask)
-          // Includes CLS and SEP - sentence-transformers default behavior
-          int count = 0;
-          for (int t = 0; t < batchData.length; t++) {
-            // Only include tokens with attention_mask == 1
-            if (t < attentionMask.length && attentionMask[t] == 1) {
-              final tokenEmb = batchData[t] as List;
-              for (int h = 0; h < hiddenSize; h++) {
-                embedding[h] += (tokenEmb[h] as num).toDouble();
-              }
-              count++;
-            }
-          }
-
-          if (count > 0) {
-            for (int h = 0; h < hiddenSize; h++) {
-              embedding[h] /= count;
-            }
-          }
-
-          if (debugMode) {
-            debugPrint(
-              '[DEBUG] Embedding (first 5): ${embedding.take(5).toList()}',
-            );
-          }
-        } else {
-          // 2D output: [batch, hidden]
-          embedding = (batchData).map((e) => (e as num).toDouble()).toList();
-        }
-      } else {
-        // 1D output: [hidden]
-        embedding = outputData.map((e) => (e as num).toDouble()).toList();
-      }
-
-      _dimensionState.validateAndRemember(embedding.length);
-      return embedding;
-    } finally {
-      for (final output in outputs ?? <OrtValue?>[]) {
-        output?.release();
-      }
-    }
+    final embedding = (result as List).cast<double>();
+    _dimensionState.validateAndRemember(embedding.length);
+    return embedding;
   }
 
-  /// Batch embed multiple texts (sequential processing)
+  /// Batch embed multiple texts (sequential processing).
   ///
-  /// ONNX session doesn't support concurrent access, so processing is sequential
+  /// ONNX session doesn't support concurrent access, so processing is
+  /// sequential. Each embed call is dispatched to the worker isolate.
   ///
   /// [texts]: List of texts to embed
   /// [onProgress]: Progress callback (completed count, total count)
   static Future<List<List<double>>> embedBatch(
     List<String> texts, {
-    int concurrency = 1, // Sequential due to ONNX session limitation
+    int concurrency = 1,
     void Function(int completed, int total)? onProgress,
   }) async {
-    return _executor.run(() async {
-      if (_session == null) {
-        throw Exception("EmbeddingService not initialized. Call init() first.");
-      }
+    if (_workerSendPort == null) {
+      throw Exception("EmbeddingService not initialized. Call init() first.");
+    }
 
-      if (texts.isEmpty) return <List<double>>[];
+    if (texts.isEmpty) return <List<double>>[];
 
-      final results = <List<double>>[];
-
-      if (concurrency != 1 && debugMode) {
-        debugPrint(
-          '[EmbeddingService] concurrency=$concurrency is ignored; embedding runs serially.',
-        );
-      }
-
-      // Sequential processing (ONNX session is not thread-safe)
-      for (var i = 0; i < texts.length; i++) {
-        final embedding = await _embedInternal(texts[i]);
-        results.add(embedding);
-        onProgress?.call(i + 1, texts.length);
-      }
-
-      return results;
-    });
+    final results = <List<double>>[];
+    for (var i = 0; i < texts.length; i++) {
+      final embedding = await embed(texts[i]);
+      results.add(embedding);
+      onProgress?.call(i + 1, texts.length);
+    }
+    return results;
   }
 
   /// Release resources deterministically.
   static Future<void> disposeAsync() async {
-    await _executor.run(() async {
-      _session?.release();
-      _session = null;
-      _requiredInputNames = <String>{};
-      _dimensionState.reset();
-      OrtEnv.instance.release();
-    });
+    await _shutdownWorker();
+    _dimensionState.reset();
   }
 
   /// Backward compatible, non-blocking dispose.
@@ -264,72 +159,248 @@ class EmbeddingService {
     unawaited(disposeAsync());
   }
 
-  static OrtSession _createSession({
-    required OrtSessionOptions sessionOptions,
-    Uint8List? modelBytes,
-    String? modelPath,
-  }) {
-    if (modelPath != null) {
-      final session = OrtSession.fromFile(File(modelPath), sessionOptions);
-      if (debugMode) {
-        debugPrint('[EmbeddingService] Loaded model from file: $modelPath');
-      }
-      return session;
+  // ── Private helpers ───────────────────────────────────────────────────
+
+  static Future<void> _shutdownWorker() async {
+    final sendPort = _workerSendPort;
+    if (sendPort != null) {
+      final replyPort = ReceivePort();
+      sendPort.send({'cmd': 'dispose', 'replyPort': replyPort.sendPort});
+      await replyPort.first.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => null,
+      );
+      replyPort.close();
     }
 
-    if (modelBytes != null) {
-      final session = OrtSession.fromBuffer(modelBytes, sessionOptions);
-      if (debugMode) {
-        debugPrint('[EmbeddingService] Loaded model from memory buffer');
-      }
-      return session;
+    _workerIsolate?.kill(priority: Isolate.immediate);
+    _workerIsolate = null;
+    _workerSendPort = null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Worker Isolate — all ONNX work happens here, never on the UI thread.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Top-level entry point for the worker isolate.
+Future<void> _workerEntryPoint(SendPort mainSendPort) async {
+  final receivePort = ReceivePort();
+  mainSendPort.send(receivePort.sendPort);
+
+  OrtSession? session;
+  Set<String> requiredInputNames = {};
+
+  await for (final message in receivePort) {
+    final msg = message as Map<String, dynamic>;
+    final cmd = msg['cmd'] as String;
+    final replyPort = msg['replyPort'] as SendPort;
+
+    switch (cmd) {
+      case 'init':
+        try {
+          // Initialize Rust FFI (required for tokenizer)
+          if (Platform.isMacOS) {
+            await RustLib.init(
+              externalLibrary: frb.ExternalLibrary.process(
+                iKnowHowToUseIt: true,
+              ),
+            );
+          } else {
+            await RustLib.init();
+          }
+
+          // Initialize ONNX Runtime
+          OrtEnv.instance.init();
+
+          final sessionOptions = OrtSessionOptions();
+          final threads = msg['intraOpNumThreads'] as int?;
+          if (threads != null) {
+            try {
+              sessionOptions.setIntraOpNumThreads(threads);
+            } catch (_) {
+              // Best-effort; fall back to ONNX default.
+            }
+          }
+
+          final modelPath = msg['modelPath'] as String?;
+          final modelBytes = msg['modelBytes'] as Uint8List?;
+
+          if (modelPath != null) {
+            session = OrtSession.fromFile(File(modelPath), sessionOptions);
+          } else if (modelBytes != null) {
+            session = OrtSession.fromBuffer(modelBytes, sessionOptions);
+          } else {
+            replyPort.send({
+              'error': 'Either modelBytes or modelPath must be provided',
+            });
+            continue;
+          }
+
+          requiredInputNames = session.inputNames.toSet();
+          replyPort.send({'ok': true});
+        } catch (e) {
+          replyPort.send({'error': e.toString()});
+        }
+
+      case 'embed':
+        try {
+          if (session == null) {
+            replyPort.send({'error': 'Not initialized'});
+            continue;
+          }
+
+          final text = msg['text'] as String;
+          final debug = msg['debugMode'] as bool? ?? false;
+
+          // 1. Tokenize with Rust tokenizer
+          final tokenIds = tokenize(text: text);
+          final seqLen = tokenIds.length;
+          final attentionMask = List<int>.filled(seqLen, 1);
+
+          if (debug) {
+            debugPrint('[DEBUG] Text: "$text"');
+            debugPrint(
+              '[DEBUG] Token IDs: $tokenIds (length: ${tokenIds.length})',
+            );
+          }
+
+          // 2. Create ONNX input tensors
+          final inputIdsData = Int64List.fromList(
+            tokenIds.map((e) => e.toInt()).toList(),
+          );
+          final attentionMaskData = Int64List.fromList(
+            attentionMask.map((e) => e.toInt()).toList(),
+          );
+          final shape = [1, seqLen];
+
+          final inputIdsTensor = OrtValueTensor.createTensorWithDataList(
+            inputIdsData,
+            shape,
+          );
+          final attentionMaskTensor = OrtValueTensor.createTensorWithDataList(
+            attentionMaskData,
+            shape,
+          );
+          OrtValueTensor? tokenTypeIdsTensor;
+
+          final inputs = <String, OrtValue>{
+            'input_ids': inputIdsTensor,
+            'attention_mask': attentionMaskTensor,
+          };
+
+          if (requiredInputNames.contains('token_type_ids')) {
+            final tokenTypeIdsData = Int64List.fromList(
+              List<int>.filled(seqLen, 0),
+            );
+            tokenTypeIdsTensor = OrtValueTensor.createTensorWithDataList(
+              tokenTypeIdsData,
+              shape,
+            );
+            inputs['token_type_ids'] = tokenTypeIdsTensor;
+          }
+
+          // 3. Run inference
+          final runOptions = OrtRunOptions();
+          List<OrtValue?>? outputs;
+          try {
+            outputs = await session.runAsync(runOptions, inputs);
+          } catch (e) {
+            // Wrap input-signature errors with helpful context.
+            final message = e.toString();
+            if (message.contains('Missing Input') ||
+                message.contains('Invalid Feed Input Name')) {
+              final sortedNames = requiredInputNames.toList()..sort();
+              replyPort.send({
+                'error':
+                    'ONNX input signature mismatch: $message\n'
+                    'Model input names: ${sortedNames.join(', ')}\n'
+                    'mobile_rag_engine sends: input_ids, attention_mask, '
+                    'optional token_type_ids.',
+              });
+              continue;
+            }
+            rethrow;
+          } finally {
+            inputIdsTensor.release();
+            attentionMaskTensor.release();
+            tokenTypeIdsTensor?.release();
+            runOptions.release();
+          }
+
+          // 4. Extract results and apply mean pooling
+          try {
+            final outputTensor = outputs?[0];
+            if (outputTensor == null) {
+              replyPort.send({'error': 'ONNX inference returned null output'});
+              continue;
+            }
+
+            final outputData = outputTensor.value as List;
+            List<double> embedding;
+
+            if (outputData.isNotEmpty && outputData[0] is List) {
+              final batchData = outputData[0] as List;
+              if (batchData.isNotEmpty && batchData[0] is List) {
+                // 3D output: [batch, seq_len, hidden] → mean pooling
+                final hiddenSize = (batchData[0] as List).length;
+                embedding = List<double>.filled(hiddenSize, 0.0);
+
+                int count = 0;
+                for (int t = 0; t < batchData.length; t++) {
+                  if (t < attentionMask.length && attentionMask[t] == 1) {
+                    final tokenEmb = batchData[t] as List;
+                    for (int h = 0; h < hiddenSize; h++) {
+                      embedding[h] += (tokenEmb[h] as num).toDouble();
+                    }
+                    count++;
+                  }
+                }
+
+                if (count > 0) {
+                  for (int h = 0; h < hiddenSize; h++) {
+                    embedding[h] /= count;
+                  }
+                }
+
+                if (debug) {
+                  debugPrint(
+                    '[DEBUG] Embedding (first 5): ${embedding.take(5).toList()}',
+                  );
+                }
+              } else {
+                // 2D output: [batch, hidden]
+                embedding = batchData
+                    .map((e) => (e as num).toDouble())
+                    .toList();
+              }
+            } else {
+              // 1D output: [hidden]
+              embedding = outputData.map((e) => (e as num).toDouble()).toList();
+            }
+
+            replyPort.send(embedding);
+          } finally {
+            for (final output in outputs ?? <OrtValue?>[]) {
+              output?.release();
+            }
+          }
+        } catch (e) {
+          replyPort.send({'error': e.toString()});
+        }
+
+      case 'dispose':
+        try {
+          session?.release();
+          session = null;
+          requiredInputNames = {};
+          OrtEnv.instance.release();
+        } catch (_) {
+          // Best-effort cleanup.
+        }
+        replyPort.send({'ok': true});
+        receivePort.close();
+        return; // Exit the worker isolate.
     }
-
-    throw ArgumentError('Either modelBytes or modelPath must be provided');
-  }
-
-  static Set<String> _extractRequiredInputNames(OrtSession session) {
-    final requiredInputNames = session.inputNames.toSet();
-    if (debugMode) {
-      final sortedInputNames = requiredInputNames.toList()..sort();
-      debugPrint('[EmbeddingService] Model input names: $sortedInputNames');
-    }
-    return requiredInputNames;
-  }
-
-  static bool _requiresInput(String inputName) {
-    return _requiredInputNames.contains(inputName);
-  }
-
-  static Exception? _buildInputSignatureException(Object error) {
-    final message = error.toString();
-    final hasInputSignatureError =
-        message.contains('Missing Input') ||
-        message.contains('Invalid Feed Input Name');
-    if (!hasInputSignatureError) {
-      return null;
-    }
-
-    final sortedInputNames = _requiredInputNames.toList()..sort();
-    final availableInputs = sortedInputNames.isEmpty
-        ? '(unavailable)'
-        : sortedInputNames.join(', ');
-
-    return Exception(
-      'ONNX input signature mismatch: $message\n'
-      'Model input names: $availableInputs\n'
-      'mobile_rag_engine sends: input_ids, attention_mask, optional token_type_ids.\n'
-      'Models requiring additional mandatory inputs (e.g. position_ids) are not yet supported.',
-    );
-  }
-
-  /// Get array shape as string
-  static String _getShape(dynamic data) {
-    if (data is! List) return 'scalar';
-    if (data.isEmpty) return '[0]';
-    if (data[0] is! List) return '[${data.length}]';
-    if (data[0].isEmpty) return '[${data.length}, 0]';
-    if (data[0][0] is! List) return '[${data.length}, ${data[0].length}]';
-    return '[${data.length}, ${data[0].length}, ${data[0][0].length}]';
   }
 }
