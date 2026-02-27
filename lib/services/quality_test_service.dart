@@ -159,8 +159,12 @@ class QualityTestService {
   }
 
   /// Run full quality test
+  ///
+  /// [appDbPath] - Path to the app's main database. After the test completes,
+  /// the global DB pool is restored to this path so the app continues working.
   static Future<QualityTestSummary> runQualityTest({
     Function(String, int, int)? onProgress,
+    String? appDbPath,
   }) async {
     final dir = await getApplicationDocumentsDirectory();
     final testDbPath = "${dir.path}/quality_test_db.sqlite";
@@ -171,7 +175,7 @@ class QualityTestService {
       await dbFile.delete();
     }
 
-    // Initialize DB
+    // Initialize test DB (overwrites global pool)
     await initDbPool(dbPath: testDbPath, maxSize: 5);
     await initDb();
 
@@ -250,9 +254,15 @@ class QualityTestService {
       );
     }
 
-    // Cleanup
+    // Cleanup test DB
     await closeDbPool();
     await dbFile.delete();
+
+    // Restore original app DB pool
+    if (appDbPath != null) {
+      await initDbPool(dbPath: appDbPath, maxSize: 4);
+      debugPrint('[QualityTest] Restored app DB pool: $appDbPath');
+    }
 
     // Aggregate
     final avgRecall =
