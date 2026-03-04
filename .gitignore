@@ -56,6 +56,7 @@ assets/bge-m3-tokenizer.json
 **/assets/bge-m3-tokenizer.json
 example/assets/model.onnx
 example/assets/tokenizer.json
+example/assets/backup_onnx/
 
 # Python scripts (local tooling only)
 scripts/*.py

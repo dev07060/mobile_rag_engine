@@ -6,6 +6,68 @@
 use anyhow::{anyhow, Result};
 use regex::Regex;
 
+fn is_private_use_code_point(code_point: u32) -> bool {
+    (0xE000..=0xF8FF).contains(&code_point)
+        || (0xF0000..=0xFFFFD).contains(&code_point)
+        || (0x100000..=0x10FFFD).contains(&code_point)
+}
+
+fn is_noncharacter_code_point(code_point: u32) -> bool {
+    (0xFDD0..=0xFDEF).contains(&code_point)
+        || ((code_point & 0xFFFE) == 0xFFFE && code_point <= 0x10FFFF)
+}
+
+/// Normalize extraction artifacts from PDF text runs.
+///
+/// Some PDFs encode spaces with private-use or non-printable characters,
+/// which appear as "tofu" boxes in UI. Convert them to regular spaces so
+/// chunking/embedding receives clean text.
+fn normalize_extracted_text(raw: &str) -> String {
+    let mut normalized = String::with_capacity(raw.len());
+
+    for ch in raw.chars() {
+        let code_point = ch as u32;
+        let mapped = match ch {
+            // Normalize line separators to '\n'
+            '\r' | '\u{2028}' | '\u{2029}' => Some('\n'),
+
+            // Space-like separators seen in PDF extraction output
+            '\t'
+            | '\u{00A0}'
+            | '\u{1680}'
+            | '\u{180E}'
+            | '\u{2000}'..='\u{200A}'
+            | '\u{202F}'
+            | '\u{205F}'
+            | '\u{3000}'
+            | '\u{FFFC}'
+            | '\u{FFFD}' => Some(' '),
+
+            // Keep soft hyphen as explicit hyphen so dehyphenation still works.
+            '\u{00AD}' => Some('-'),
+
+            // Formatting chars we do not want in chunk text
+            '\u{034F}' | '\u{061C}' | '\u{200B}' | '\u{200C}' | '\u{200D}' | '\u{2060}'
+            | '\u{FEFF}' => None,
+
+            // Other controls/private/noncharacters are treated as separators
+            _ if ch.is_control() && ch != '\n' => Some(' '),
+            _ if is_private_use_code_point(code_point)
+                || is_noncharacter_code_point(code_point) =>
+            {
+                Some(' ')
+            }
+            _ => Some(ch),
+        };
+
+        if let Some(output_char) = mapped {
+            normalized.push(output_char);
+        }
+    }
+
+    normalized
+}
+
 /// Remove page number from the end of a page text (if present)
 /// Only removes if the last non-empty line is purely numeric
 fn remove_trailing_page_number(page_text: &str) -> String {
@@ -44,7 +106,8 @@ fn join_pages(pages: Vec<String>) -> String {
     // First, clean all pages by removing trailing page numbers
     let cleaned_pages: Vec<String> = pages
         .iter()
-        .map(|p| remove_trailing_page_number(p))
+        .map(|page| normalize_extracted_text(page))
+        .map(|page| remove_trailing_page_number(&page))
         .collect();
 
     // Include standard hyphen (-), soft hyphen (\u{00AD}), hyphen (\u{2010}), non-breaking hyphen (\u{2011})
@@ -96,7 +159,8 @@ fn join_pages(pages: Vec<String>) -> String {
     // Also handles soft hyphens etc.
     let inline_hyphen_re =
         Regex::new(r"(\w+)[-\u{00AD}\u{2010}\u{2011}]\s*[\r\n]+\s*([a-z]\w*)").unwrap();
-    let dehyphenated = inline_hyphen_re.replace_all(&result, "$1$2");
+    let normalized_result = normalize_extracted_text(&result);
+    let dehyphenated = inline_hyphen_re.replace_all(&normalized_result, "$1$2");
 
     // Normalize whitespace
     let whitespace_re = Regex::new(r"\s+").unwrap();
@@ -411,4 +475,14 @@ mod tests {
             "Soft hyphen SHOULD match regex now"
         );
     }
+
+    #[test]
+    fn test_normalize_weird_pdf_space_artifacts() {
+        let pages = vec![
+            "적립금의\u{E000}적립비율\u{200B}을\u{FFFD}변경할\u{0091}수\u{FDD0}있습니다.".to_string(),
+        ];
+        let result = join_pages(pages);
+        assert_eq!(result, "적립금의 적립비율을 변경할 수 있습니다.");
+    }
+
 }

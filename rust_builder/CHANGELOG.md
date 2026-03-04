@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.2
+* **Fix**:
+  - Normalized PDF extraction artifacts (private-use, noncharacter, and control code points) into safe separators to prevent broken box characters in extracted text.
+  - Applied normalization before page-number trimming and dehyphenation to improve downstream chunking and embedding stability.
+* **Test**:
+  - Added regression coverage for malformed PDF spacing artifacts.
+
 ## 0.14.1
 * **Feat**:
   - Added ingestion safety with claim/status/clear APIs and status-aware indexing in vectors.
