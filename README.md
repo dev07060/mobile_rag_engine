@@ -108,6 +108,7 @@ curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-Mini
 ### Guides
 *   [Quick Start](docs/guides/quick_start.md) - Setup in 5 minutes.
 *   [Model Setup](docs/guides/model_setup.md) - Choosing and downloading models.
+*   [Release Build](docs/guides/release_build.md) - Bundle size optimization for production.
 *   [Troubleshooting](docs/guides/troubleshooting.md) - Common fixes.
 *   [FAQ](docs/guides/faq.md) - Frequently asked questions.
 

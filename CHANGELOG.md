@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.14.4
+* **Fix**:
+  - Improved PDF text quality by consuming `rag_engine_flutter 0.14.2`, which normalizes private-use/noncharacter extraction artifacts into safe separators.
+* **Docs**:
+  - Added a new release optimization guide: `docs/guides/release_build.md`.
+  - Linked the new guide in README under `Guides`.
+* **Compatibility**:
+  - Updated dependency constraint to `rag_engine_flutter: ^0.14.2`.
+
 ## 0.14.3
 * **Feat**:
   - Added ingestion safety with claim/status/clear APIs and status-aware indexing.
