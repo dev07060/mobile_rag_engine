@@ -122,6 +122,20 @@ fn join_pages(pages: Vec<String>) -> String {
             continue;
         }
 
+        let result_trimmed = result.trim_end();
+        let page_trimmed = page.trim_start();
+
+        let is_cjk_page_boundary =
+            match (result_trimmed.chars().last(), page_trimmed.chars().next()) {
+                (Some(left), Some(right)) => is_cjk(left) && is_cjk(right),
+                _ => false,
+            };
+        if is_cjk_page_boundary {
+            result = result_trimmed.to_string();
+            result.push_str(page_trimmed);
+            continue;
+        }
+
         // Clone to check for hyphenation without borrow conflicts
         let result_for_check = result.clone();
         let result_trimmed = result_for_check.trim_end();
@@ -160,7 +174,12 @@ fn join_pages(pages: Vec<String>) -> String {
     let inline_hyphen_re =
         Regex::new(r"(\w+)[-\u{00AD}\u{2010}\u{2011}]\s*[\r\n]+\s*([a-z]\w*)").unwrap();
     let normalized_result = normalize_extracted_text(&result);
-    let dehyphenated = inline_hyphen_re.replace_all(&normalized_result, "$1$2");
+    let cjk_newline_re = Regex::new(
+        r"([\p{Han}\p{Hangul}\p{Hiragana}\p{Katakana}])[\r\n]+([\p{Han}\p{Hangul}\p{Hiragana}\p{Katakana}])",
+    )
+    .unwrap();
+    let cjk_joined = cjk_newline_re.replace_all(&normalized_result, "$1$2");
+    let dehyphenated = inline_hyphen_re.replace_all(&cjk_joined, "$1$2");
 
     // Normalize whitespace
     let whitespace_re = Regex::new(r"\s+").unwrap();
@@ -479,10 +498,31 @@ mod tests {
     #[test]
     fn test_normalize_weird_pdf_space_artifacts() {
         let pages = vec![
-            "적립금의\u{E000}적립비율\u{200B}을\u{FFFD}변경할\u{0091}수\u{FDD0}있습니다.".to_string(),
+            "적립금의\u{E000}적립비율\u{200B}을\u{FFFD}변경할\u{0091}수\u{FDD0}있습니다."
+                .to_string(),
         ];
         let result = join_pages(pages);
         assert_eq!(result, "적립금의 적립비율을 변경할 수 있습니다.");
     }
 
+    #[test]
+    fn test_join_pages_collapses_cjk_linebreak_without_inserting_space() {
+        let pages = vec!["해\n지환급금".to_string()];
+        let result = join_pages(pages);
+        assert_eq!(result, "해지환급금");
+    }
+
+    #[test]
+    fn test_join_pages_preserves_explicit_spacing_around_cjk_linebreak() {
+        let pages = vec!["계약자적립금을 인출할 수 \n있습니다.".to_string()];
+        let result = join_pages(pages);
+        assert_eq!(result, "계약자적립금을 인출할 수 있습니다.");
+    }
+
+    #[test]
+    fn test_join_pages_collapses_cjk_page_boundary_without_inserting_space() {
+        let pages = vec!["보험계약의 해".to_string(), "지환급금 안내".to_string()];
+        let result = join_pages(pages);
+        assert_eq!(result, "보험계약의 해지환급금 안내");
+    }
 }

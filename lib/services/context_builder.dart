@@ -49,6 +49,32 @@ enum ContextStrategy {
 class ContextBuilder {
   ContextBuilder._();
 
+  static ({String rawType, String? headerPath}) _decodeChunkType(
+    String chunkType,
+  ) {
+    final separator = chunkType.indexOf('|');
+    if (separator < 0) {
+      return (rawType: chunkType, headerPath: null);
+    }
+
+    final rawType = chunkType.substring(0, separator);
+    final headerPath = chunkType.substring(separator + 1).trim();
+    return (
+      rawType: rawType,
+      headerPath: headerPath.isEmpty ? null : headerPath,
+    );
+  }
+
+  static String _renderChunkText(ChunkSearchResult chunk) {
+    final decoded = _decodeChunkType(chunk.chunkType);
+    final headerPath = decoded.headerPath;
+    if (headerPath == null) {
+      return chunk.content;
+    }
+
+    return 'Header Path: $headerPath\n${chunk.content}';
+  }
+
   /// Assemble context from search results within a token budget.
   ///
   /// [searchResults] - Chunks ranked by relevance (highest first).
@@ -181,7 +207,7 @@ class ContextBuilder {
 
     if (skipHeaders) {
       // Keep lean output for single-source mode and preserve selection order.
-      return chunks.map((c) => c.content).join(separator);
+      return chunks.map(_renderChunkText).join(separator);
     }
 
     // Group chunks by source
@@ -219,7 +245,7 @@ class ContextBuilder {
 
       // Add content
       buffer.write('  <content>\n');
-      buffer.write(chunks.map((c) => c.content).join('\n\n'));
+      buffer.write(chunks.map(_renderChunkText).join('\n\n'));
       buffer.write('\n  </content>\n');
 
       // Close document tag
@@ -288,8 +314,7 @@ class ContextBuilder {
     }
 
     // Default instruction: bilingual for better model understanding
-    final instruction =
-        systemInstruction ??
+    final instruction = systemInstruction ??
         (useStrictMode
             ? 'Answer the question based ONLY on the documents below. If the information is not in the documents, say "I could not find the information in the provided documents".'
             : 'Answer based on the following documents:');
@@ -369,7 +394,7 @@ Answer:''';
     String language,
   ) async {
     // Combine text from chunks
-    final combinedText = chunks.map((c) => c.content).join('\n\n');
+    final combinedText = chunks.map(_renderChunkText).join('\n\n');
 
     // Apply compression
     final maxChars = tokenBudget * 4; // Rough token to char conversion

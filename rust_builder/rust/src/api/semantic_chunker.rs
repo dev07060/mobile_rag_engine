@@ -16,6 +16,9 @@
 //
 //! Semantic text chunking with paragraph-first strategy for multilingual support.
 
+use crate::api::tokenizer::{count_tokens_untruncated, resolve_truncation_max_length};
+use std::collections::HashMap;
+use std::ops::Range;
 use text_splitter::TextSplitter;
 
 /// Chunk type classification.
@@ -151,6 +154,433 @@ pub struct SemanticChunk {
     pub chunk_type: String,
 }
 
+trait TextSizer {
+    fn size(&self, text: &str) -> Option<usize>;
+
+    fn budget(&self, text: &str, max_chars: usize) -> usize;
+
+    fn fits(&self, text: &str, max_chars: usize) -> bool {
+        self.size(text)
+            .map(|size| size <= self.budget(text, max_chars))
+            .unwrap_or(true)
+    }
+}
+
+struct CharSizer;
+
+impl TextSizer for CharSizer {
+    fn size(&self, text: &str) -> Option<usize> {
+        Some(text.chars().count())
+    }
+
+    fn budget(&self, _text: &str, max_chars: usize) -> usize {
+        max_chars
+    }
+}
+
+struct PlainTextPlanner {
+    max_chars: usize,
+    char_sizer: CharSizer,
+}
+
+impl PlainTextPlanner {
+    fn new(max_chars: usize) -> Self {
+        Self {
+            max_chars,
+            char_sizer: CharSizer,
+        }
+    }
+
+    fn fits_range(&self, text: &str, range: &Range<usize>) -> bool {
+        let slice = &text[range.clone()];
+        self.char_sizer.fits(slice, self.max_chars)
+    }
+}
+
+fn line_content_end(line: &str) -> usize {
+    line.trim_end_matches(|c| c == '\n' || c == '\r').len()
+}
+
+fn split_paragraph_ranges(text: &str) -> Vec<Range<usize>> {
+    let mut paragraphs = Vec::new();
+    let mut paragraph_start: Option<usize> = None;
+    let mut paragraph_end = 0usize;
+    let mut cursor = 0usize;
+
+    for line in text.split_inclusive('\n') {
+        let line_start = cursor;
+        cursor += line.len();
+        let line_end = line_start + line_content_end(line);
+        let line_content = &text[line_start..line_end];
+
+        if line_content.trim().is_empty() {
+            if let Some(start) = paragraph_start.take() {
+                paragraphs.push(start..paragraph_end);
+            }
+            continue;
+        }
+
+        if paragraph_start.is_none() {
+            paragraph_start = Some(line_start);
+        }
+        paragraph_end = line_end;
+    }
+
+    if let Some(start) = paragraph_start {
+        paragraphs.push(start..paragraph_end);
+    }
+
+    paragraphs
+}
+
+fn split_line_ranges(text: &str, range: &Range<usize>) -> Vec<Range<usize>> {
+    let mut lines = Vec::new();
+    let slice = &text[range.clone()];
+    let mut cursor = range.start;
+
+    for line in slice.split_inclusive('\n') {
+        let line_start = cursor;
+        cursor += line.len();
+        let line_end = line_start + line_content_end(line);
+
+        if line_end > line_start && !text[line_start..line_end].trim().is_empty() {
+            lines.push(line_start..line_end);
+        }
+    }
+
+    if cursor < range.end && !text[cursor..range.end].trim().is_empty() {
+        lines.push(cursor..range.end);
+    }
+
+    lines
+}
+
+fn subslice_range(parent: &str, child: &str) -> Option<Range<usize>> {
+    let parent_start = parent.as_ptr() as usize;
+    let child_start = child.as_ptr() as usize;
+    if child_start < parent_start {
+        return None;
+    }
+
+    let local_start = child_start - parent_start;
+    let local_end = local_start + child.len();
+    if local_end > parent.len() {
+        return None;
+    }
+
+    Some(local_start..local_end)
+}
+
+fn advance_by_chars(text: &str, start: usize, end: usize, char_count: usize) -> usize {
+    if char_count == 0 {
+        return start;
+    }
+
+    let slice = &text[start..end];
+    let mut consumed = 0usize;
+    for (offset, ch) in slice.char_indices() {
+        consumed += 1;
+        if consumed == char_count {
+            return start + offset + ch.len_utf8();
+        }
+    }
+
+    end
+}
+
+fn char_count_in_range(text: &str, range: &Range<usize>) -> usize {
+    text[range.clone()].chars().count()
+}
+
+fn largest_fitting_prefix_end(
+    text: &str,
+    start: usize,
+    end: usize,
+    upper_char_count: usize,
+    planner: &PlainTextPlanner,
+) -> usize {
+    let mut low = 1usize;
+    let mut high = upper_char_count;
+    let mut best = start;
+
+    while low <= high {
+        let mid = low + (high - low) / 2;
+        let candidate_end = advance_by_chars(text, start, end, mid);
+        if planner.fits_range(text, &(start..candidate_end)) {
+            best = candidate_end;
+            low = mid + 1;
+        } else if mid == 1 {
+            break;
+        } else {
+            high = mid - 1;
+        }
+    }
+
+    best
+}
+
+fn split_hard_range(
+    text: &str,
+    range: Range<usize>,
+    planner: &PlainTextPlanner,
+) -> Vec<Range<usize>> {
+    let mut parts = Vec::new();
+    let mut cursor = range.start;
+
+    while cursor < range.end {
+        let remaining = cursor..range.end;
+        let upper_char_count = char_count_in_range(text, &remaining).min(planner.max_chars.max(1));
+        let tentative_end = advance_by_chars(text, cursor, range.end, upper_char_count);
+        let candidate = cursor..tentative_end;
+
+        if planner.fits_range(text, &candidate) {
+            parts.push(candidate);
+            cursor = tentative_end;
+            continue;
+        }
+
+        let best_end =
+            largest_fitting_prefix_end(text, cursor, range.end, upper_char_count, planner);
+        let next_end = if best_end > cursor {
+            best_end
+        } else {
+            advance_by_chars(text, cursor, range.end, 1)
+        };
+
+        parts.push(cursor..next_end);
+        cursor = next_end;
+    }
+
+    parts
+}
+
+fn split_semantic_range(
+    text: &str,
+    range: Range<usize>,
+    planner: &PlainTextPlanner,
+) -> Vec<Range<usize>> {
+    let slice = &text[range.clone()];
+    let splitter = TextSplitter::new(planner.max_chars.max(1));
+    let mut subranges = Vec::new();
+
+    for piece in splitter.chunks(slice) {
+        if piece.is_empty() {
+            continue;
+        }
+
+        let Some(local_range) = subslice_range(slice, piece) else {
+            return split_hard_range(text, range, planner);
+        };
+        subranges.push((range.start + local_range.start)..(range.start + local_range.end));
+    }
+
+    if subranges.is_empty() || (subranges.len() == 1 && subranges[0] == range) {
+        return split_hard_range(text, range, planner);
+    }
+
+    let mut planned = Vec::new();
+    for subrange in subranges {
+        if planner.fits_range(text, &subrange) {
+            planned.push(subrange);
+        } else {
+            planned.extend(split_hard_range(text, subrange, planner));
+        }
+    }
+
+    planned
+}
+
+fn token_count_cache_key(range: &Range<usize>) -> (usize, usize) {
+    (range.start, range.end)
+}
+
+fn cached_token_count(
+    text: &str,
+    range: &Range<usize>,
+    cache: &mut HashMap<(usize, usize), usize>,
+) -> Option<usize> {
+    let key = token_count_cache_key(range);
+    if let Some(count) = cache.get(&key) {
+        return Some(*count);
+    }
+
+    let count = count_tokens_untruncated(&text[range.clone()]).ok()?;
+    cache.insert(key, count);
+    Some(count)
+}
+
+fn fits_token_budget(
+    text: &str,
+    range: &Range<usize>,
+    cache: &mut HashMap<(usize, usize), usize>,
+) -> bool {
+    let slice = &text[range.clone()];
+    cached_token_count(text, range, cache)
+        .map(|count| count <= resolve_truncation_max_length(slice))
+        .unwrap_or(true)
+}
+
+fn largest_token_fitting_prefix_end(
+    text: &str,
+    start: usize,
+    end: usize,
+    upper_char_count: usize,
+    cache: &mut HashMap<(usize, usize), usize>,
+) -> usize {
+    let mut low = 1usize;
+    let mut high = upper_char_count;
+    let mut best = start;
+
+    while low <= high {
+        let mid = low + (high - low) / 2;
+        let candidate_end = advance_by_chars(text, start, end, mid);
+        if fits_token_budget(text, &(start..candidate_end), cache) {
+            best = candidate_end;
+            low = mid + 1;
+        } else if mid == 1 {
+            break;
+        } else {
+            high = mid - 1;
+        }
+    }
+
+    best
+}
+
+fn split_token_budget_range(
+    text: &str,
+    range: Range<usize>,
+    max_chars: usize,
+    cache: &mut HashMap<(usize, usize), usize>,
+) -> Vec<Range<usize>> {
+    let mut parts = Vec::new();
+    let mut cursor = range.start;
+
+    while cursor < range.end {
+        let remaining = cursor..range.end;
+        if fits_token_budget(text, &remaining, cache) {
+            parts.push(remaining);
+            break;
+        }
+
+        let upper_char_count = char_count_in_range(text, &remaining).min(max_chars.max(1));
+        let best_end =
+            largest_token_fitting_prefix_end(text, cursor, range.end, upper_char_count, cache);
+        let next_end = if best_end > cursor {
+            best_end
+        } else {
+            advance_by_chars(text, cursor, range.end, 1)
+        };
+
+        parts.push(cursor..next_end);
+        cursor = next_end;
+    }
+
+    parts
+}
+
+fn enforce_token_budget(
+    text: &str,
+    ranges: Vec<Range<usize>>,
+    max_chars: usize,
+) -> Vec<Range<usize>> {
+    let mut cache = HashMap::new();
+    let mut validated = Vec::new();
+
+    for range in ranges {
+        if fits_token_budget(text, &range, &mut cache) {
+            validated.push(range);
+        } else {
+            validated.extend(split_token_budget_range(text, range, max_chars, &mut cache));
+        }
+    }
+
+    validated
+}
+
+fn plan_plain_text_ranges_char_budget(text: &str, max_chars: usize) -> Vec<Range<usize>> {
+    let planner = PlainTextPlanner::new(max_chars);
+    let mut chunks = Vec::new();
+
+    for paragraph in split_paragraph_ranges(text) {
+        if planner.fits_range(text, &paragraph) {
+            chunks.push(paragraph);
+            continue;
+        }
+
+        let mut line_buffer: Option<Range<usize>> = None;
+        for line in split_line_ranges(text, &paragraph) {
+            let is_article_start = is_article_title(text[line.clone()].trim());
+            let candidate = match &line_buffer {
+                Some(buffer) => buffer.start..line.end,
+                None => line.clone(),
+            };
+
+            if !is_article_start && planner.fits_range(text, &candidate) {
+                line_buffer = Some(candidate);
+                continue;
+            }
+
+            if let Some(buffer) = line_buffer.take() {
+                chunks.push(buffer);
+            }
+
+            if planner.fits_range(text, &line) {
+                line_buffer = Some(line);
+            } else {
+                chunks.extend(split_semantic_range(text, line, &planner));
+            }
+        }
+
+        if let Some(buffer) = line_buffer.take() {
+            chunks.push(buffer);
+        }
+    }
+
+    chunks
+}
+
+fn plan_plain_text_ranges(text: &str, max_chars: usize) -> Vec<Range<usize>> {
+    enforce_token_budget(
+        text,
+        plan_plain_text_ranges_char_budget(text, max_chars),
+        max_chars,
+    )
+}
+
+fn build_semantic_chunk(text: &str, range: Range<usize>, index: i32) -> SemanticChunk {
+    let content = &text[range.clone()];
+    let chunk_type = classify_chunk(content.trim()).as_str().to_string();
+    SemanticChunk {
+        index,
+        content: content.to_string(),
+        start_pos: range.start as i32,
+        end_pos: range.end as i32,
+        chunk_type,
+    }
+}
+
+fn materialize_semantic_chunks(text: &str, ranges: Vec<Range<usize>>) -> Vec<SemanticChunk> {
+    ranges
+        .into_iter()
+        .enumerate()
+        .map(|(index, range)| build_semantic_chunk(text, range, index as i32))
+        .collect()
+}
+
+fn overlap_start(text: &str, range: &Range<usize>, overlap_chars: usize) -> usize {
+    if overlap_chars == 0 {
+        return range.end;
+    }
+
+    let total_chars = char_count_in_range(text, range);
+    if total_chars <= overlap_chars {
+        return range.start;
+    }
+
+    advance_by_chars(text, range.start, range.end, total_chars - overlap_chars)
+}
+
 /// Split text into semantic chunks using paragraph-first strategy.
 #[flutter_rust_bridge::frb(sync)]
 pub fn semantic_chunk(text: String, max_chars: i32) -> Vec<SemanticChunk> {
@@ -158,122 +588,15 @@ pub fn semantic_chunk(text: String, max_chars: i32) -> Vec<SemanticChunk> {
         return vec![];
     }
 
-    let max_chars_usize = max_chars.max(100) as usize;
-    let mut chunks = Vec::new();
-    let mut current_pos = 0i32;
-    let mut chunk_index = 0i32;
-
-    let paragraphs: Vec<&str> = text.split("\n\n").collect();
-
-    for para in paragraphs {
-        let para_trimmed = para.trim();
-        if para_trimmed.is_empty() {
-            continue;
-        }
-
-        if para_trimmed.len() <= max_chars_usize {
-            let chunk_type = classify_chunk(para_trimmed);
-            chunks.push(SemanticChunk {
-                index: chunk_index,
-                content: para_trimmed.to_string(),
-                start_pos: current_pos,
-                end_pos: current_pos + para_trimmed.len() as i32,
-                chunk_type: chunk_type.as_str().to_string(),
-            });
-            chunk_index += 1;
-            current_pos += para_trimmed.len() as i32 + 1;
-        } else {
-            let lines: Vec<&str> = para_trimmed.split('\n').collect();
-            let mut line_buffer = String::new();
-
-            for line in lines {
-                let line_trimmed = line.trim();
-                if line_trimmed.is_empty() {
-                    continue;
-                }
-
-                let is_article_start = is_article_title(line_trimmed);
-                let would_be_len = if line_buffer.is_empty() {
-                    line_trimmed.len()
-                } else {
-                    line_buffer.len() + 1 + line_trimmed.len()
-                };
-
-                if would_be_len <= max_chars_usize && !is_article_start {
-                    if !line_buffer.is_empty() {
-                        line_buffer.push('\n');
-                    }
-                    line_buffer.push_str(line_trimmed);
-                } else {
-                    if !line_buffer.is_empty() {
-                        let chunk_type = classify_chunk(&line_buffer);
-                        chunks.push(SemanticChunk {
-                            index: chunk_index,
-                            content: line_buffer.clone(),
-                            start_pos: current_pos,
-                            end_pos: current_pos + line_buffer.len() as i32,
-                            chunk_type: chunk_type.as_str().to_string(),
-                        });
-                        chunk_index += 1;
-                        current_pos += line_buffer.len() as i32 + 1;
-                        line_buffer.clear();
-                    }
-
-                    if line_trimmed.len() <= max_chars_usize {
-                        line_buffer.push_str(line_trimmed);
-                    } else {
-                        let splitter = TextSplitter::new(max_chars_usize);
-                        for sub_chunk in splitter.chunks(line_trimmed) {
-                            let sub_chunk_trimmed = sub_chunk.trim();
-                            if !sub_chunk_trimmed.is_empty() {
-                                let chunk_type = classify_chunk(sub_chunk_trimmed);
-                                chunks.push(SemanticChunk {
-                                    index: chunk_index,
-                                    content: sub_chunk_trimmed.to_string(),
-                                    start_pos: current_pos,
-                                    end_pos: current_pos + sub_chunk_trimmed.len() as i32,
-                                    chunk_type: chunk_type.as_str().to_string(),
-                                });
-                                chunk_index += 1;
-                                current_pos += sub_chunk_trimmed.len() as i32;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if !line_buffer.is_empty() {
-                let chunk_type = classify_chunk(&line_buffer);
-                chunks.push(SemanticChunk {
-                    index: chunk_index,
-                    content: line_buffer.clone(),
-                    start_pos: current_pos,
-                    end_pos: current_pos + line_buffer.len() as i32,
-                    chunk_type: chunk_type.as_str().to_string(),
-                });
-                chunk_index += 1;
-                current_pos += line_buffer.len() as i32 + 2;
-            }
-        }
-    }
-
-    chunks
+    materialize_semantic_chunks(
+        &text,
+        plan_plain_text_ranges(&text, max_chars.max(100) as usize),
+    )
 }
 
 #[allow(dead_code)]
 fn is_article_title(_line: &str) -> bool {
     false
-}
-
-fn tail_chars(text: &str, count: usize) -> String {
-    if count == 0 || text.is_empty() {
-        return String::new();
-    }
-    let total_chars = text.chars().count();
-    if total_chars <= count {
-        return text.to_string();
-    }
-    text.chars().skip(total_chars - count).collect()
 }
 
 /// Split text with overlap (API compatibility wrapper).
@@ -283,34 +606,88 @@ pub fn semantic_chunk_with_overlap(
     max_chars: i32,
     overlap_chars: i32,
 ) -> Vec<SemanticChunk> {
-    let base_chunks = semantic_chunk(text, max_chars);
+    if text.is_empty() {
+        return vec![];
+    }
+
+    let base_ranges = plan_plain_text_ranges(&text, max_chars.max(100) as usize);
     let overlap = overlap_chars.max(0) as usize;
 
-    if overlap == 0 || base_chunks.len() <= 1 {
-        return base_chunks;
+    if overlap == 0 || base_ranges.len() <= 1 {
+        return materialize_semantic_chunks(&text, base_ranges);
     }
 
-    let mut overlapped = Vec::with_capacity(base_chunks.len());
-
-    for (i, base_chunk) in base_chunks.iter().enumerate() {
-        let mut chunk = base_chunk.clone();
-        if i > 0 {
-            let prefix = tail_chars(&base_chunks[i - 1].content, overlap);
-            if !prefix.is_empty() && !chunk.content.starts_with(&prefix) {
-                chunk.start_pos = (chunk.start_pos - prefix.len() as i32).max(0);
-                chunk.content = format!("{}\n{}", prefix, chunk.content);
-                chunk.end_pos = chunk.start_pos + chunk.content.len() as i32;
+    let ranges = base_ranges
+        .iter()
+        .enumerate()
+        .map(|(index, range)| {
+            if index == 0 {
+                range.clone()
+            } else {
+                overlap_start(&text, &base_ranges[index - 1], overlap)..range.end
             }
-        }
-        overlapped.push(chunk);
-    }
+        })
+        .collect();
 
-    overlapped
+    materialize_semantic_chunks(&text, ranges)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::tokenizer::{
+        count_tokens_untruncated, count_tokens_untruncated_call_count, init_tokenizer,
+        reset_count_tokens_untruncated_call_count, resolve_truncation_max_length,
+    };
+    use once_cell::sync::Lazy;
+    use std::sync::Mutex;
+    use tokenizers::models::wordlevel::WordLevel;
+    use tokenizers::pre_tokenizers::whitespace::Whitespace;
+    use uuid::Uuid;
+
+    static TOKENIZER_TEST_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+    fn init_test_tokenizer() {
+        let suffix = Uuid::new_v4().to_string();
+        let vocab_path =
+            std::env::temp_dir().join(format!("mobile_rag_engine_test_vocab_{suffix}.json"));
+        std::fs::write(&vocab_path, r#"{"[UNK]":0,"hello":1,"world":2}"#)
+            .expect("failed to write test vocab");
+
+        let model = WordLevel::builder()
+            .files(vocab_path.to_str().unwrap().to_string())
+            .unk_token("[UNK]".to_string())
+            .build()
+            .expect("failed to build test tokenizer");
+        let mut tokenizer = tokenizers::Tokenizer::new(model);
+        tokenizer.with_pre_tokenizer(Some(Whitespace));
+
+        let tokenizer_path =
+            std::env::temp_dir().join(format!("mobile_rag_engine_test_tokenizer_{suffix}.json"));
+        tokenizer
+            .save(tokenizer_path.to_str().unwrap(), false)
+            .expect("failed to save test tokenizer");
+        init_tokenizer(tokenizer_path.to_str().unwrap().to_string())
+            .expect("failed to init tokenizer");
+    }
+
+    fn assert_chunk_matches_source(text: &str, chunk: &SemanticChunk) {
+        let start = chunk.start_pos as usize;
+        let end = chunk.end_pos as usize;
+        assert!(
+            text.is_char_boundary(start),
+            "start_pos {} is not on a char boundary for {:?}",
+            start,
+            chunk.content
+        );
+        assert!(
+            text.is_char_boundary(end),
+            "end_pos {} is not on a char boundary for {:?}",
+            end,
+            chunk.content
+        );
+        assert_eq!(&text[start..end], chunk.content);
+    }
 
     #[test]
     fn test_semantic_chunk_basic() {
@@ -365,6 +742,84 @@ mod tests {
         assert_eq!(plain[0].content, overlapped[0].content);
         assert_eq!(plain[1].content, overlapped[1].content);
     }
+
+    #[test]
+    fn test_semantic_chunk_offsets_are_raw_byte_ranges() {
+        let text = "  첫 문단🙂\n\n둘째 문단";
+        let chunks = semantic_chunk(text.to_string(), 500);
+
+        assert_eq!(chunks.len(), 2);
+        for chunk in &chunks {
+            assert_chunk_matches_source(text, chunk);
+        }
+    }
+
+    #[test]
+    fn test_semantic_chunk_with_overlap_preserves_raw_source_slice() {
+        let text = "Alpha beta gamma.\n\n둘째 문단🙂.";
+        let chunks = semantic_chunk_with_overlap(text.to_string(), 500, 6);
+
+        assert_eq!(chunks.len(), 2);
+        for chunk in &chunks {
+            assert_chunk_matches_source(text, chunk);
+        }
+    }
+
+    #[test]
+    fn test_semantic_chunk_respects_tokenizer_budget_before_runtime_truncation() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+
+        let text = std::iter::repeat("hello")
+            .take(700)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let chunks = semantic_chunk(text, 5000);
+
+        assert!(chunks.len() > 1);
+        for chunk in &chunks {
+            let token_count = count_tokens_untruncated(&chunk.content).unwrap();
+            assert!(token_count <= resolve_truncation_max_length(&chunk.content));
+        }
+    }
+
+    #[test]
+    fn test_semantic_chunk_token_count_guard_for_long_repeated_tokens() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+        reset_count_tokens_untruncated_call_count();
+
+        let text = std::iter::repeat("hello world")
+            .take(240)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let chunks = semantic_chunk(text, 5000);
+
+        assert_eq!(chunks.len(), 1);
+        assert!(count_tokens_untruncated_call_count() <= 20);
+    }
+
+    #[test]
+    fn test_semantic_chunk_token_count_guard_for_long_cjk_input() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+        reset_count_tokens_untruncated_call_count();
+
+        let text = std::iter::repeat("가나다라마바사")
+            .take(220)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let chunks = semantic_chunk(text, 5000);
+
+        assert_eq!(chunks.len(), 1);
+        assert!(count_tokens_untruncated_call_count() <= 20);
+    }
 }
 
 // =============================================================================
@@ -406,17 +861,12 @@ pub fn markdown_chunk(text: String, max_chars: i32) -> Vec<StructuredChunk> {
 
     let max_chars_usize = max_chars.max(100) as usize;
     let mut chunks = Vec::new();
-    let mut current_pos = 0i32;
     let mut chunk_index = 0i32;
 
     // Track header hierarchy for breadcrumbs
     let mut header_stack: Vec<(i32, String)> = vec![]; // (level, header_text)
 
-    // First, identify and protect structural blocks
-    let protected = protect_structural_blocks(&text);
-
-    // Split by headers
-    let sections = split_by_headers(&protected.text);
+    let sections = split_by_headers(&text);
 
     for section in sections {
         // Update header stack based on section header
@@ -435,7 +885,7 @@ pub fn markdown_chunk(text: String, max_chars: i32) -> Vec<StructuredChunk> {
             .collect::<Vec<_>>()
             .join(" > ");
 
-        let content = section.content.trim();
+        let content = &text[section.content_range.clone()];
         if content.is_empty() {
             continue;
         }
@@ -454,61 +904,43 @@ pub fn markdown_chunk(text: String, max_chars: i32) -> Vec<StructuredChunk> {
             "text".to_string()
         };
 
-        // Check if content needs recursive splitting
-        if content.len() <= max_chars_usize {
+        let section_char_count = content.chars().count();
+        let sub_ranges = if section_char_count <= max_chars_usize {
+            vec![section.content_range.clone()]
+        } else if section.is_table || section.is_code_block {
+            split_by_line_ranges(&text, &section.content_range, max_chars_usize)
+        } else {
+            plan_plain_text_subranges(&text, &section.content_range, max_chars_usize)
+        };
+
+        let batch_id: Option<String> = if section.is_code_block && sub_ranges.len() > 1 {
+            Some(uuid::Uuid::new_v4().to_string())
+        } else {
+            None
+        };
+        let total_chunks = sub_ranges.len();
+
+        for (i, sub_range) in sub_ranges.into_iter().enumerate() {
+            let sub_type = if section.is_code_block || section.is_table {
+                chunk_type.clone()
+            } else if chunk_type == "header" && total_chunks == 1 {
+                chunk_type.clone()
+            } else {
+                "text".to_string()
+            };
+
             chunks.push(StructuredChunk {
                 index: chunk_index,
-                content: content.to_string(),
+                content: text[sub_range.clone()].to_string(),
                 header_path: header_path.clone(),
-                chunk_type: chunk_type.to_string(),
-                start_pos: current_pos,
-                end_pos: current_pos + content.len() as i32,
-                batch_id: None,
-                batch_index: None,
-                batch_total: None,
+                chunk_type: sub_type,
+                start_pos: sub_range.start as i32,
+                end_pos: sub_range.end as i32,
+                batch_id: batch_id.clone(),
+                batch_index: batch_id.as_ref().map(|_| i as i32),
+                batch_total: batch_id.as_ref().map(|_| total_chunks as i32),
             });
             chunk_index += 1;
-            current_pos += content.len() as i32 + 1;
-        } else {
-            // Structure-aware splitting for large sections
-            let sub_chunks = if section.is_table {
-                split_table_preserving_headers(content, max_chars_usize)
-            } else if section.is_code_block {
-                split_by_lines(content, max_chars_usize)
-            } else {
-                recursive_split(content, max_chars_usize)
-            };
-
-            // Generate batch linking metadata for code blocks
-            let batch_id: Option<String> = if section.is_code_block && sub_chunks.len() > 1 {
-                Some(uuid::Uuid::new_v4().to_string())
-            } else {
-                None
-            };
-            let total_chunks = sub_chunks.len();
-
-            for (i, sub) in sub_chunks.iter().enumerate() {
-                // Propagate original chunk type for structured content
-                let sub_type = if section.is_code_block || section.is_table {
-                    chunk_type.clone()
-                } else {
-                    "text".to_string()
-                };
-
-                chunks.push(StructuredChunk {
-                    index: chunk_index,
-                    content: sub.clone(),
-                    header_path: header_path.clone(),
-                    chunk_type: sub_type,
-                    start_pos: current_pos,
-                    end_pos: current_pos + sub.len() as i32,
-                    batch_id: batch_id.clone(),
-                    batch_index: batch_id.as_ref().map(|_| i as i32),
-                    batch_total: batch_id.as_ref().map(|_| total_chunks as i32),
-                });
-                chunk_index += 1;
-                current_pos += sub.len() as i32 + 1;
-            }
         }
     }
 
@@ -519,341 +951,334 @@ pub fn markdown_chunk(text: String, max_chars: i32) -> Vec<StructuredChunk> {
 // Helper structures and functions
 // =============================================================================
 
-struct ProtectedText {
-    text: String,
-}
-
 struct Section {
     header: Option<(i32, String)>, // (level, header_text)
-    content: String,
+    content_range: Range<usize>,
     is_code_block: bool,
     is_table: bool,
     code_language: Option<String>, // e.g., "rust", "bash", "yaml"
 }
 
-/// Protect code blocks and tables from being split.
-fn protect_structural_blocks(text: &str) -> ProtectedText {
-    // For now, we'll handle structural blocks in split_by_headers
-    // This function is a placeholder for more complex protection logic
-    ProtectedText {
-        text: text.to_string(),
+#[derive(Debug, Clone, Copy)]
+struct MarkdownLine {
+    start: usize,
+    end: usize,
+    content_end: usize,
+}
+
+fn trim_range(text: &str, mut range: Range<usize>) -> Option<Range<usize>> {
+    while range.start < range.end {
+        let slice = &text[range.start..range.end];
+        let line_end = slice
+            .find('\n')
+            .map(|offset| range.start + offset + 1)
+            .unwrap_or(range.end);
+        let line = &text[range.start..line_end];
+        let content_end = range.start + line_content_end(line);
+        if text[range.start..content_end].trim().is_empty() {
+            range.start = line_end;
+        } else {
+            break;
+        }
+    }
+
+    while range.start < range.end {
+        let ch = text[range.start..range.end].chars().next_back().unwrap();
+        if ch == '\n' || ch == '\r' {
+            range.end -= ch.len_utf8();
+            continue;
+        }
+
+        let slice = &text[range.start..range.end];
+        let line_start = slice
+            .rfind('\n')
+            .map(|offset| range.start + offset + 1)
+            .unwrap_or(range.start);
+        if text[line_start..range.end].trim().is_empty() {
+            range.end = line_start;
+        } else {
+            break;
+        }
+    }
+
+    (range.start < range.end).then_some(range)
+}
+
+fn markdown_line_ranges(text: &str) -> Vec<MarkdownLine> {
+    let mut lines = Vec::new();
+    let mut cursor = 0usize;
+
+    for line in text.split_inclusive('\n') {
+        let start = cursor;
+        cursor += line.len();
+        let content_end = start + line_content_end(line);
+        lines.push(MarkdownLine {
+            start,
+            end: cursor,
+            content_end,
+        });
+    }
+
+    if lines.is_empty() && !text.is_empty() {
+        lines.push(MarkdownLine {
+            start: 0,
+            end: text.len(),
+            content_end: text.len(),
+        });
+    }
+
+    lines
+}
+
+fn is_markdown_header(line: &str) -> bool {
+    line.starts_with('#')
+}
+
+fn parse_markdown_header(line: &str) -> (i32, String) {
+    let level = line.chars().take_while(|c| *c == '#').count() as i32;
+    let header_text = line.trim_start_matches('#').trim().to_string();
+    (level, header_text)
+}
+
+fn is_table_line(line: &str) -> bool {
+    line.starts_with('|') && line.ends_with('|')
+}
+
+fn parse_code_block_language(line: &str) -> Option<String> {
+    let trimmed = line.trim().trim_start_matches('`').trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
     }
 }
 
-/// Split text by markdown headers while preserving code blocks and tables.
-fn split_by_headers(text: &str) -> Vec<Section> {
-    let mut sections: Vec<Section> = vec![];
-    let mut current_content = String::new();
-    let mut current_header: Option<(i32, String)> = None;
-    let mut in_code_block = false;
-    let mut code_block_content = String::new();
-    let mut in_table = false;
-    let mut table_content = String::new();
+fn flush_text_section(
+    text: &str,
+    sections: &mut Vec<Section>,
+    current_text_start: &mut Option<usize>,
+    current_text_header: &mut Option<(i32, String)>,
+    end: usize,
+) {
+    let Some(start) = current_text_start.take() else {
+        return;
+    };
+    let header = current_text_header.take();
 
-    for line in text.lines() {
-        // Check for code block start/end
-        if line.trim().starts_with("```") {
-            if in_code_block {
-                // End of code block
-                code_block_content.push_str(line);
-                code_block_content.push('\n');
-                // Extract language from first line (e.g., ```bash -> bash)
-                let lang = code_block_content.lines().next().and_then(|first_line| {
-                    let trimmed = first_line.trim().trim_start_matches('`');
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed.to_string())
-                    }
-                });
-                sections.push(Section {
-                    header: None,
-                    content: code_block_content.clone(),
-                    is_code_block: true,
-                    is_table: false,
-                    code_language: lang,
-                });
-                code_block_content.clear();
-                in_code_block = false;
-            } else {
-                // Start of code block - save current content first
-                if !current_content.trim().is_empty() {
-                    sections.push(Section {
-                        header: current_header.take(),
-                        content: current_content.clone(),
-                        is_code_block: false,
-                        is_table: false,
-                        code_language: None,
-                    });
-                    current_content.clear();
-                }
-                in_code_block = true;
-                code_block_content.push_str(line);
-                code_block_content.push('\n');
-            }
-            continue;
-        }
-
-        if in_code_block {
-            code_block_content.push_str(line);
-            code_block_content.push('\n');
-            continue;
-        }
-
-        // Check for table (lines starting with |)
-        let is_table_line = line.trim().starts_with('|') && line.trim().ends_with('|');
-        if is_table_line {
-            if !in_table {
-                // Save current content first
-                if !current_content.trim().is_empty() {
-                    sections.push(Section {
-                        header: current_header.take(),
-                        content: current_content.clone(),
-                        is_code_block: false,
-                        is_table: false,
-                        code_language: None,
-                    });
-                    current_content.clear();
-                }
-                in_table = true;
-            }
-            table_content.push_str(line);
-            table_content.push('\n');
-            continue;
-        } else if in_table {
-            // End of table
-            sections.push(Section {
-                header: None,
-                content: table_content.clone(),
-                is_code_block: false,
-                is_table: true,
-                code_language: None,
-            });
-            table_content.clear();
-            in_table = false;
-        }
-
-        // Check for header
-        if line.starts_with('#') {
-            // Save current content first
-            if !current_content.trim().is_empty() {
-                sections.push(Section {
-                    header: current_header.take(),
-                    content: current_content.clone(),
-                    is_code_block: false,
-                    is_table: false,
-                    code_language: None,
-                });
-                current_content.clear();
-            }
-
-            // Parse header level
-            let level = line.chars().take_while(|c| *c == '#').count() as i32;
-            let header_text = line.trim_start_matches('#').trim().to_string();
-            current_header = Some((level, header_text));
-            current_content.push_str(line);
-            current_content.push('\n');
-        } else {
-            current_content.push_str(line);
-            current_content.push('\n');
-        }
-    }
-
-    // Don't forget remaining content
-    if in_table && !table_content.trim().is_empty() {
+    if let Some(content_range) = trim_range(text, start..end) {
         sections.push(Section {
-            header: None,
-            content: table_content,
-            is_code_block: false,
-            is_table: true,
-            code_language: None,
-        });
-    }
-    if !current_content.trim().is_empty() {
-        sections.push(Section {
-            header: current_header,
-            content: current_content,
+            header,
+            content_range,
             is_code_block: false,
             is_table: false,
             code_language: None,
         });
     }
+}
+
+fn plan_plain_text_subranges(
+    text: &str,
+    range: &Range<usize>,
+    max_chars: usize,
+) -> Vec<Range<usize>> {
+    let local_ranges = plan_plain_text_ranges(&text[range.clone()], max_chars);
+    if local_ranges.is_empty() {
+        return vec![range.clone()];
+    }
+
+    local_ranges
+        .into_iter()
+        .map(|local| (range.start + local.start)..(range.start + local.end))
+        .collect()
+}
+
+fn split_by_line_ranges(text: &str, range: &Range<usize>, max_chars: usize) -> Vec<Range<usize>> {
+    let planner = PlainTextPlanner::new(max_chars.max(1));
+    let mut chunks = Vec::new();
+    let mut current_start: Option<usize> = None;
+    let mut current_end = range.start;
+    let mut current_chars = 0usize;
+    let mut cursor = range.start;
+
+    for line in text[range.clone()].split_inclusive('\n') {
+        let line_start = cursor;
+        cursor += line.len();
+        let line_end = cursor;
+        let line_chars = line.chars().count();
+
+        if let Some(start) = current_start {
+            if current_chars + line_chars <= max_chars {
+                current_end = line_end;
+                current_chars += line_chars;
+                continue;
+            }
+
+            if let Some(trimmed) = trim_range(text, start..current_end) {
+                chunks.push(trimmed);
+            }
+            current_start = None;
+            current_chars = 0;
+        }
+
+        if line_chars <= max_chars {
+            current_start = Some(line_start);
+            current_end = line_end;
+            current_chars = line_chars;
+        } else {
+            for subrange in split_hard_range(text, line_start..line_end, &planner) {
+                if let Some(trimmed) = trim_range(text, subrange) {
+                    chunks.push(trimmed);
+                }
+            }
+        }
+    }
+
+    if let Some(start) = current_start {
+        if let Some(trimmed) = trim_range(text, start..current_end) {
+            chunks.push(trimmed);
+        }
+    }
+
+    chunks
+}
+
+/// Split text by markdown headers while preserving code blocks and tables.
+fn split_by_headers(text: &str) -> Vec<Section> {
+    let lines = markdown_line_ranges(text);
+    let mut sections: Vec<Section> = vec![];
+    let mut current_text_start: Option<usize> = None;
+    let mut current_text_header: Option<(i32, String)> = None;
+    let mut index = 0usize;
+
+    while index < lines.len() {
+        let line = lines[index];
+        let line_text = &text[line.start..line.content_end];
+        let trimmed = line_text.trim();
+
+        if trimmed.starts_with("```") {
+            flush_text_section(
+                text,
+                &mut sections,
+                &mut current_text_start,
+                &mut current_text_header,
+                line.start,
+            );
+
+            let block_start = line.start;
+            let language = parse_code_block_language(line_text);
+            let mut block_end = line.end;
+            index += 1;
+
+            while index < lines.len() {
+                let candidate = lines[index];
+                let candidate_text = &text[candidate.start..candidate.content_end];
+                block_end = candidate.end;
+                index += 1;
+                if candidate_text.trim().starts_with("```") {
+                    break;
+                }
+            }
+
+            if let Some(content_range) = trim_range(text, block_start..block_end) {
+                sections.push(Section {
+                    header: None,
+                    content_range,
+                    is_code_block: true,
+                    is_table: false,
+                    code_language: language,
+                });
+            }
+            continue;
+        }
+
+        if is_table_line(trimmed) {
+            flush_text_section(
+                text,
+                &mut sections,
+                &mut current_text_start,
+                &mut current_text_header,
+                line.start,
+            );
+
+            let table_start = line.start;
+            let mut table_end = line.end;
+            index += 1;
+
+            while index < lines.len() {
+                let candidate = lines[index];
+                let candidate_text = &text[candidate.start..candidate.content_end];
+                if !is_table_line(candidate_text.trim()) {
+                    break;
+                }
+                table_end = candidate.end;
+                index += 1;
+            }
+
+            if let Some(content_range) = trim_range(text, table_start..table_end) {
+                sections.push(Section {
+                    header: None,
+                    content_range,
+                    is_code_block: false,
+                    is_table: true,
+                    code_language: None,
+                });
+            }
+            continue;
+        }
+
+        if is_markdown_header(line_text) {
+            flush_text_section(
+                text,
+                &mut sections,
+                &mut current_text_start,
+                &mut current_text_header,
+                line.start,
+            );
+            current_text_start = Some(line.start);
+            current_text_header = Some(parse_markdown_header(line_text));
+            index += 1;
+            continue;
+        }
+
+        if current_text_start.is_none() {
+            current_text_start = Some(line.start);
+        }
+
+        index += 1;
+    }
+
+    flush_text_section(
+        text,
+        &mut sections,
+        &mut current_text_start,
+        &mut current_text_header,
+        text.len(),
+    );
 
     sections
-}
-
-/// Split text line-by-line, trying to fill chunks up to max_chars.
-/// Preserves structure by not breaking lines (unless a single line is too long).
-fn split_by_lines(text: &str, max_chars: usize) -> Vec<String> {
-    let mut chunks = Vec::new();
-    let mut buffer = String::new();
-
-    for line in text.lines() {
-        // If buffer + line fits, add it
-        // +1 for newline
-        let needed = if buffer.is_empty() {
-            line.len()
-        } else {
-            buffer.len() + 1 + line.len()
-        };
-
-        if needed <= max_chars {
-            if !buffer.is_empty() {
-                buffer.push('\n');
-            }
-            buffer.push_str(line);
-        } else {
-            // Buffer full, flush it
-            if !buffer.is_empty() {
-                chunks.push(buffer.clone());
-                buffer.clear();
-            }
-
-            // Handle current line
-            if line.len() <= max_chars {
-                buffer.push_str(line);
-            } else {
-                // Line itself is too long, must split it
-                // Fallback to text splitter for this line
-                let splitter = TextSplitter::new(max_chars);
-                for sub in splitter.chunks(line) {
-                    let sub_trimmed = sub.trim();
-                    if !sub_trimmed.is_empty() {
-                        chunks.push(sub_trimmed.to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    if !buffer.is_empty() {
-        chunks.push(buffer);
-    }
-
-    chunks
-}
-
-/// Split table while preserving headers for each chunk.
-fn split_table_preserving_headers(table_content: &str, max_chars: usize) -> Vec<String> {
-    let lines: Vec<&str> = table_content.lines().collect();
-    if lines.len() < 3 {
-        // Need at least header + separator + 1 row
-        return split_by_lines(table_content, max_chars);
-    }
-
-    let header_rows = format!("{}\n{}", lines[0], lines[1]);
-    let mut chunks = Vec::new();
-    let mut current_chunk = header_rows.clone();
-
-    for line in &lines[2..] {
-        if current_chunk.len() + 1 + line.len() <= max_chars {
-            current_chunk.push('\n');
-            current_chunk.push_str(line);
-        } else {
-            // Flush current
-            chunks.push(current_chunk);
-
-            // Start new with header
-            current_chunk = header_rows.clone();
-
-            // Check if line fits in new chunk
-            if current_chunk.len() + 1 + line.len() <= max_chars {
-                current_chunk.push('\n');
-                current_chunk.push_str(line);
-            } else {
-                // Line too huge even with fresh header.
-                // Force add it contextually
-                current_chunk.push('\n');
-                current_chunk.push_str(line);
-            }
-        }
-    }
-
-    if !current_chunk.is_empty() && current_chunk != header_rows {
-        chunks.push(current_chunk);
-    }
-
-    chunks
-}
-
-/// Recursively split large text into smaller chunks.
-fn recursive_split(text: &str, max_chars: usize) -> Vec<String> {
-    if text.len() <= max_chars {
-        return vec![text.to_string()];
-    }
-
-    let mut chunks = Vec::new();
-
-    // Try splitting by paragraphs first
-    let paragraphs: Vec<&str> = text.split("\n\n").collect();
-    if paragraphs.len() > 1 {
-        let mut buffer = String::new();
-        for para in paragraphs {
-            if buffer.len() + para.len() + 2 <= max_chars {
-                if !buffer.is_empty() {
-                    buffer.push_str("\n\n");
-                }
-                buffer.push_str(para);
-            } else {
-                if !buffer.is_empty() {
-                    chunks.push(buffer.clone());
-                    buffer.clear();
-                }
-                if para.len() <= max_chars {
-                    buffer.push_str(para);
-                } else {
-                    // Paragraph too large, split by sentences
-                    chunks.extend(split_by_sentences(para, max_chars));
-                }
-            }
-        }
-        if !buffer.is_empty() {
-            chunks.push(buffer);
-        }
-    } else {
-        // Single paragraph, split by sentences
-        chunks.extend(split_by_sentences(text, max_chars));
-    }
-
-    chunks
-}
-
-/// Split text by sentences.
-fn split_by_sentences(text: &str, max_chars: usize) -> Vec<String> {
-    let mut chunks = Vec::new();
-    let mut buffer = String::new();
-
-    // Simple sentence splitting by . ! ?
-    for part in text.split_inclusive(|c| c == '.' || c == '!' || c == '?') {
-        if buffer.len() + part.len() <= max_chars {
-            buffer.push_str(part);
-        } else {
-            if !buffer.is_empty() {
-                chunks.push(buffer.trim().to_string());
-                buffer.clear();
-            }
-            if part.len() <= max_chars {
-                buffer.push_str(part);
-            } else {
-                // Sentence too large, just split by chars
-                let splitter = TextSplitter::new(max_chars);
-                for sub in splitter.chunks(part) {
-                    chunks.push(sub.trim().to_string());
-                }
-            }
-        }
-    }
-
-    if !buffer.is_empty() {
-        chunks.push(buffer.trim().to_string());
-    }
-
-    chunks.into_iter().filter(|s| !s.is_empty()).collect()
 }
 
 #[cfg(test)]
 mod markdown_tests {
     use super::*;
+
+    fn assert_structured_chunk_matches_source(text: &str, chunk: &StructuredChunk) {
+        let start = chunk.start_pos as usize;
+        let end = chunk.end_pos as usize;
+        assert!(
+            text.is_char_boundary(start),
+            "start_pos {} is not on a char boundary for {:?}",
+            start,
+            chunk.content
+        );
+        assert!(
+            text.is_char_boundary(end),
+            "end_pos {} is not on a char boundary for {:?}",
+            end,
+            chunk.content
+        );
+        assert_eq!(&text[start..end], chunk.content);
+    }
 
     #[test]
     fn test_markdown_chunk_basic() {
@@ -889,6 +1314,49 @@ mod markdown_tests {
     }
 
     #[test]
+    fn test_markdown_offsets_skip_leading_blank_lines_but_match_raw_source() {
+        let text = "\n\n# Title\n\n## Section\n\nBody.";
+        let chunks = markdown_chunk(text.to_string(), 500);
+
+        assert!(!chunks.is_empty());
+        for chunk in &chunks {
+            assert_structured_chunk_matches_source(text, chunk);
+        }
+
+        let first_chunk = &chunks[0];
+        assert_eq!(first_chunk.content, "# Title");
+        assert_eq!(
+            first_chunk.start_pos as usize,
+            text.find("# Title").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_markdown_header_chunk_offsets_are_raw_byte_ranges() {
+        let text = "# Title\n\n## Section\n\nBody.";
+        let chunks = markdown_chunk(text.to_string(), 500);
+
+        let header_chunk = chunks.iter().find(|chunk| chunk.chunk_type == "header");
+        assert!(header_chunk.is_some());
+        assert_structured_chunk_matches_source(text, header_chunk.unwrap());
+    }
+
+    #[test]
+    fn test_markdown_text_split_offsets_are_raw_byte_ranges() {
+        let body = std::iter::repeat("첫 번째 문장입니다. 두 번째 문장입니다🙂.")
+            .take(8)
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let text = format!("# Guide\n\n{body}");
+        let chunks = markdown_chunk(text.clone(), 100);
+
+        assert!(chunks.len() >= 2);
+        for chunk in &chunks {
+            assert_structured_chunk_matches_source(&text, chunk);
+        }
+    }
+
+    #[test]
     fn test_header_path_inheritance() {
         let text =
             "# Main\n\nIntro.\n\n## Section A\n\nContent A.\n\n### Subsection\n\nDeep content.";
@@ -910,11 +1378,12 @@ mod markdown_tests {
         let text = format!("```rust\n{}\n```", code_body);
 
         // max_chars=100 (clamped internally if we pass less, but we pass 100 to be explicit)
-        let chunks = markdown_chunk(text, 100);
+        let chunks = markdown_chunk(text.clone(), 100);
 
         assert!(chunks.len() >= 2);
         for chunk in &chunks {
             assert!(chunk.chunk_type == "code:rust");
+            assert_structured_chunk_matches_source(&text, chunk);
             // Verify no split mid-line (simple check: no partial variable names if lines are atomic)
             assert!(!chunk.content.contains("let a = 10000000000;let"));
         }
@@ -933,22 +1402,18 @@ mod markdown_tests {
             header, row, row, row, row, row, row
         );
 
-        let chunks = markdown_chunk(text, 100);
+        let chunks = markdown_chunk(text.clone(), 100);
 
-        for (i, chunk) in chunks.iter().enumerate() {
+        assert!(chunks.len() >= 2);
+        for chunk in &chunks {
             assert_eq!(chunk.chunk_type, "table");
-            // EVERY chunk must start with header
-            assert!(
-                chunk.content.starts_with("| Col1 | Col2 |"),
-                "Chunk {} missing header",
-                i
-            );
-            assert!(
-                chunk.content.contains("|---|---|"),
-                "Chunk {} missing separator",
-                i
-            );
+            assert_structured_chunk_matches_source(&text, chunk);
         }
+        assert!(chunks[0].content.starts_with("| Col1 | Col2 |"));
+        assert!(chunks
+            .iter()
+            .skip(1)
+            .all(|chunk| !chunk.content.starts_with("| Col1 | Col2 |")));
     }
 
     #[test]

@@ -8,6 +8,7 @@ ChunkSearchResult _chunk({
   required int chunkIndex,
   required String content,
   required double similarity,
+  String chunkType = 'general',
   String? metadata,
 }) {
   return ChunkSearchResult(
@@ -15,7 +16,7 @@ ChunkSearchResult _chunk({
     sourceId: sourceId,
     chunkIndex: chunkIndex,
     content: content,
-    chunkType: 'general',
+    chunkType: chunkType,
     similarity: similarity,
     metadata: metadata,
   );
@@ -99,6 +100,33 @@ void main() {
       expect(context.estimatedTokens <= 45, isTrue);
       expect(context.text.contains('<document id="1">'), isTrue);
       expect(context.text.contains('<metadata>$metadata</metadata>'), isTrue);
+    });
+
+    test('markdown header path is preserved in rendered context text', () {
+      final results = <ChunkSearchResult>[
+        _chunk(
+          chunkId: 20,
+          sourceId: 7,
+          chunkIndex: 0,
+          content: 'Run `npm install` before starting the server.',
+          chunkType: 'text|Guide > Setup',
+          similarity: 0.91,
+        ),
+      ];
+
+      final context = ContextBuilder.build(
+        searchResults: results,
+        tokenBudget: 200,
+        singleSourceMode: true,
+      );
+
+      expect(results.single.content,
+          'Run `npm install` before starting the server.');
+      expect(context.text, contains('Guide > Setup'));
+      expect(
+        context.text,
+        contains('Run `npm install` before starting the server.'),
+      );
     });
   });
 }
