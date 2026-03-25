@@ -33,7 +33,6 @@ typedef CompressionRunner =
   return (rawType: rawType, headerPath: headerPath.isEmpty ? null : headerPath);
 }
 
-@visibleForTesting
 String renderContextText({required String content, required String chunkType}) {
   final decoded = decodeStructuredChunkType(chunkType);
   final headerPath = decoded.headerPath;
@@ -145,7 +144,6 @@ class ContextBuilder {
 
     // Select chunks within budget using the final rendered output.
     final selected = <ChunkSearchResult>[];
-    var usedTokens = 0;
     final skipHeaders = singleSourceMode;
 
     for (final chunk in orderedResults) {
@@ -160,7 +158,6 @@ class ContextBuilder {
 
       if (totalIfAdded <= tokenBudget) {
         selected.add(chunk);
-        usedTokens = totalIfAdded;
       } else {
         break; // Budget exhausted
       }
