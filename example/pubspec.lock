@@ -293,7 +293,7 @@ packages:
       path: "../rust_builder"
       relative: true
     source: path
-    version: "0.14.2"
+    version: "0.15.0"
   sky_engine:
     dependency: transitive
     description: flutter

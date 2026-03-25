@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15.0
+* **Feat**:
+  - Added non-truncating `count_tokens` support for exact engine-tokenizer budgeting paths.
+* **Chunking**:
+  - Tightened plain-text chunk planning with heading-aware boundaries and boundary-snapped overlap.
+  - Standardized chunk offsets around raw source byte ranges for both plain-text and markdown paths.
+* **Parser / Runtime**:
+  - Promoted CJK newline restoration into the production page-join path.
+  - Removed experimental CJK helper leftovers and reduced avoidable clone-heavy paths.
+
 ## 0.14.2
 * **Fix**:
   - Normalized PDF extraction artifacts (private-use, noncharacter, and control code points) into safe separators to prevent broken box characters in extracted text.
