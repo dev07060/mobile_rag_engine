@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.15.0
 * **Feat**:
   - Switched context budgeting to exact engine-tokenizer counting through a shared rendered-context path.
 * **Chunking**:
@@ -13,8 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserved markdown contextual path information consistently through embed, re-embed, and retrieval flows.
 * **Docs**:
   - Aligned chunking, `tokenBudget`, `overlapChars`, and markdown header-path contracts with runtime behavior.
-* **Release Prep**:
-  - This upcoming root release is intended to consume `rag_engine_flutter 0.15.0` after the native package is published.
+* **Compatibility**:
+  - Updated dependency constraint to `rag_engine_flutter: ^0.15.0`.
 
 ## 0.14.4
 * **Fix**:
