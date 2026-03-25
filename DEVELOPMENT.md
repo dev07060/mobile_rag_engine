@@ -31,6 +31,28 @@ flutter_rust_bridge_codegen generate
 ```
 This updates the Dart `frb_generated.dart` and Rust `frb_generated.rs` files.
 
+## Release Order
+
+This repository publishes two related packages:
+
+1. `rag_engine_flutter` in `rust_builder/`
+2. `mobile_rag_engine` at the repository root
+
+When a change modifies the Rust FFI surface or native runtime behavior, publish them in this order:
+
+```bash
+# 1) Validate and publish the native package first
+cd rust_builder
+flutter pub publish --dry-run
+
+# 2) After rag_engine_flutter is live on pub.dev, update the root dependency
+cd ..
+flutter pub get
+flutter pub publish --dry-run
+```
+
+The root package should only bump its `rag_engine_flutter` dependency after the matching native package version is available on pub.dev. This keeps CI and package resolution valid between the two releases.
+
 ## Troubleshooting
 
 ### Error: "Content hash on Dart side is different from Rust side"
