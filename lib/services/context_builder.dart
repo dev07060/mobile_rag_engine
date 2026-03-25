@@ -4,8 +4,45 @@
 /// an optimized context string within a token budget.
 library;
 
+import 'package:flutter/foundation.dart';
+
 import '../src/rust/api/source_rag.dart';
 import '../src/rust/api/compression_utils.dart' as compression;
+import '../src/rust/api/tokenizer.dart';
+
+typedef TokenCounter = int Function(String text);
+typedef CompressionRunner =
+    Future<String> Function(
+      String renderedText,
+      int maxChars,
+      int level,
+      String language,
+    );
+
+@visibleForTesting
+({String rawType, String? headerPath}) decodeStructuredChunkType(
+  String chunkType,
+) {
+  final separator = chunkType.indexOf('|');
+  if (separator < 0) {
+    return (rawType: chunkType, headerPath: null);
+  }
+
+  final rawType = chunkType.substring(0, separator);
+  final headerPath = chunkType.substring(separator + 1).trim();
+  return (rawType: rawType, headerPath: headerPath.isEmpty ? null : headerPath);
+}
+
+@visibleForTesting
+String renderContextText({required String content, required String chunkType}) {
+  final decoded = decodeStructuredChunkType(chunkType);
+  final headerPath = decoded.headerPath;
+  if (headerPath == null) {
+    return content;
+  }
+
+  return 'Header Path: $headerPath\n$content';
+}
 
 /// Assembled context ready for LLM consumption.
 class AssembledContext {
@@ -15,7 +52,7 @@ class AssembledContext {
   /// Chunks that were included in the context.
   final List<ChunkSearchResult> includedChunks;
 
-  /// Approximate token count used.
+  /// Token count used. Field name is kept for backward compatibility.
   final int estimatedTokens;
 
   /// Tokens remaining from budget.
@@ -49,30 +86,25 @@ enum ContextStrategy {
 class ContextBuilder {
   ContextBuilder._();
 
-  static ({String rawType, String? headerPath}) _decodeChunkType(
-    String chunkType,
-  ) {
-    final separator = chunkType.indexOf('|');
-    if (separator < 0) {
-      return (rawType: chunkType, headerPath: null);
-    }
+  @visibleForTesting
+  static TokenCounter? debugTokenCounterOverride;
 
-    final rawType = chunkType.substring(0, separator);
-    final headerPath = chunkType.substring(separator + 1).trim();
-    return (
-      rawType: rawType,
-      headerPath: headerPath.isEmpty ? null : headerPath,
+  @visibleForTesting
+  static CompressionRunner? debugCompressionRunnerOverride;
+
+  static String _renderChunkText(ChunkSearchResult chunk) {
+    return renderContextText(
+      content: chunk.content,
+      chunkType: chunk.chunkType,
     );
   }
 
-  static String _renderChunkText(ChunkSearchResult chunk) {
-    final decoded = _decodeChunkType(chunk.chunkType);
-    final headerPath = decoded.headerPath;
-    if (headerPath == null) {
-      return chunk.content;
+  static int _countTokens(String text) {
+    final override = debugTokenCounterOverride;
+    if (override != null) {
+      return override(text);
     }
-
-    return 'Header Path: $headerPath\n${chunk.content}';
+    return countTokens(text: text);
   }
 
   /// Assemble context from search results within a token budget.
@@ -111,8 +143,7 @@ class ContextBuilder {
       ContextStrategy.chronological => _orderChronologically(filteredResults),
     };
 
-    // Select chunks within budget using rendered output estimation
-    // (includes XML tags/metadata overhead).
+    // Select chunks within budget using the final rendered output.
     final selected = <ChunkSearchResult>[];
     var usedTokens = 0;
     final skipHeaders = singleSourceMode;
@@ -120,11 +151,12 @@ class ContextBuilder {
     for (final chunk in orderedResults) {
       final candidateSelection = List<ChunkSearchResult>.from(selected)
         ..add(chunk);
-      final totalIfAdded = _estimateGroupedTokens(
+      final renderedCandidate = _buildGroupedText(
         candidateSelection,
         separator,
         skipHeaders: skipHeaders,
       );
+      final totalIfAdded = _countTokens(renderedCandidate);
 
       if (totalIfAdded <= tokenBudget) {
         selected.add(chunk);
@@ -140,12 +172,13 @@ class ContextBuilder {
       separator,
       skipHeaders: skipHeaders,
     );
+    final measuredTokens = text.isEmpty ? 0 : _countTokens(text);
 
     return AssembledContext(
       text: text,
       includedChunks: selected,
-      estimatedTokens: usedTokens,
-      remainingBudget: tokenBudget - usedTokens,
+      estimatedTokens: measuredTokens,
+      remainingBudget: tokenBudget - measuredTokens,
     );
   }
 
@@ -180,21 +213,6 @@ class ContextBuilder {
 
     // Filter to only that source
     return results.where((c) => c.sourceId.toInt() == bestSourceId).toList();
-  }
-
-  /// Build text grouped by source with clear document headers.
-  static int _estimateGroupedTokens(
-    List<ChunkSearchResult> chunks,
-    String separator, {
-    bool skipHeaders = false,
-  }) {
-    if (chunks.isEmpty) return 0;
-    final rendered = _buildGroupedText(
-      chunks,
-      separator,
-      skipHeaders: skipHeaders,
-    );
-    return (rendered.length / 4).ceil();
   }
 
   /// Build text grouped by source with clear document headers.
@@ -314,7 +332,8 @@ class ContextBuilder {
     }
 
     // Default instruction: bilingual for better model understanding
-    final instruction = systemInstruction ??
+    final instruction =
+        systemInstruction ??
         (useStrictMode
             ? 'Answer the question based ONLY on the documents below. If the information is not in the documents, say "I could not find the information in the provided documents".'
             : 'Answer based on the following documents:');
@@ -368,36 +387,41 @@ Answer:''';
       ContextStrategy.chronological => _orderChronologically(filteredResults),
     };
 
-    // Import compression utilities dynamically
-    final compressText = await _compressChunksText(
+    final renderText = _buildGroupedText(
       orderedResults,
+      '\n\n',
+      skipHeaders: singleSourceMode,
+    );
+    final compressedText = await _compressRenderedTextToBudget(
+      renderText,
       tokenBudget,
       compressionLevel,
       language,
     );
-
-    final estimatedTokens = (compressText.length / 4).ceil();
+    final exactTokens = compressedText.isEmpty
+        ? 0
+        : _countTokens(compressedText);
 
     return AssembledContext(
-      text: compressText,
+      text: compressedText,
       includedChunks: orderedResults,
-      estimatedTokens: estimatedTokens,
-      remainingBudget: tokenBudget - estimatedTokens,
+      estimatedTokens: exactTokens,
+      remainingBudget: tokenBudget - exactTokens,
     );
   }
 
-  /// Internal: Compress chunks text using Rust compression.
-  static Future<String> _compressChunksText(
-    List<ChunkSearchResult> chunks,
+  static Future<String> _compressRenderedTextToBudget(
+    String renderedText,
     int tokenBudget,
     int level,
     String language,
   ) async {
-    // Combine text from chunks
-    final combinedText = chunks.map(_renderChunkText).join('\n\n');
+    if (renderedText.isEmpty) {
+      return '';
+    }
 
-    // Apply compression
-    final maxChars = tokenBudget * 4; // Rough token to char conversion
+    var maxChars = renderedText.length;
+    String compressedText = renderedText;
     final options = compression.CompressionOptions(
       removeStopwords: false, // Disabled - damages context
       removeDuplicates: true,
@@ -405,12 +429,80 @@ Answer:''';
       level: level,
     );
 
-    final result = await compression.compressText(
-      text: combinedText,
-      maxChars: maxChars,
-      options: options,
-    );
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final override = debugCompressionRunnerOverride;
+      if (override != null) {
+        compressedText = (await override(
+          renderedText,
+          maxChars,
+          level,
+          language,
+        )).trimRight();
+      } else {
+        final result = await compression.compressText(
+          text: renderedText,
+          maxChars: maxChars,
+          options: options,
+        );
+        compressedText = result.text.trimRight();
+      }
 
-    return result.text;
+      if (compressedText.isEmpty) {
+        return compressedText;
+      }
+
+      final tokenCount = _countTokens(compressedText);
+      if (tokenCount <= tokenBudget) {
+        return compressedText;
+      }
+
+      final nextMaxChars = ((maxChars * tokenBudget) / tokenCount)
+          .floor()
+          .clamp(32, maxChars - 1);
+      if (nextMaxChars >= maxChars) {
+        break;
+      }
+      maxChars = nextMaxChars;
+    }
+
+    return _trimRenderedTextToBudget(compressedText, tokenBudget);
+  }
+
+  static String _trimRenderedTextToBudget(String text, int tokenBudget) {
+    var current = text.trimRight();
+
+    while (current.isNotEmpty && _countTokens(current) > tokenBudget) {
+      final boundary = _previousTrimBoundary(current);
+      if (boundary <= 0) {
+        return '';
+      }
+      current = current.substring(0, boundary).trimRight();
+    }
+
+    return current;
+  }
+
+  static int _previousTrimBoundary(String text) {
+    final newlineBoundary = text.lastIndexOf('\n');
+    if (newlineBoundary > 0) {
+      return newlineBoundary;
+    }
+
+    RegExpMatch? sentenceBoundary;
+    for (final match in RegExp(
+      "[.!?。！？…](?:[\"')\\]\\u2019\\u201d]+)?\\s+",
+    ).allMatches(text)) {
+      sentenceBoundary = match;
+    }
+    if (sentenceBoundary != null && sentenceBoundary.end < text.length) {
+      return sentenceBoundary.end;
+    }
+
+    final paragraphBoundary = text.lastIndexOf(' ');
+    if (paragraphBoundary > 0) {
+      return paragraphBoundary;
+    }
+
+    return 0;
   }
 }

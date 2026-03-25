@@ -24,8 +24,7 @@ ChunkSearchResult _chunk({
 
 void main() {
   group('SourceRagService search regressions', () {
-    test('markdown embedding text preserves header path across re-embedding',
-        () {
+    test('markdown embedding text preserves header path across re-embedding', () {
       const content = 'Install dependencies before starting the server.';
       const chunkType = 'text|Guide > Setup';
 

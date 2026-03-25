@@ -30,13 +30,13 @@ import 'dart:async';
 
 extension RagErrorMessage on RagError {
   String get message => when(
-        databaseError: (msg) => msg,
-        ioError: (msg) => msg,
-        modelLoadError: (msg) => msg,
-        invalidInput: (msg) => msg,
-        internalError: (msg) => msg,
-        unknown: (msg) => msg,
-      );
+    databaseError: (msg) => msg,
+    ioError: (msg) => msg,
+    modelLoadError: (msg) => msg,
+    invalidInput: (msg) => msg,
+    internalError: (msg) => msg,
+    unknown: (msg) => msg,
+  );
 }
 
 /// Chunking strategy for document processing.
@@ -89,34 +89,12 @@ String _encodeStructuredChunkType(String chunkType, {String? headerPath}) {
   return '$chunkType|$normalizedHeaderPath';
 }
 
-String? _headerPathFromChunkType(String chunkType) {
-  final separatorIndex = chunkType.indexOf('|');
-  if (separatorIndex < 0 || separatorIndex == chunkType.length - 1) {
-    return null;
-  }
-
-  final headerPath = chunkType.substring(separatorIndex + 1).trim();
-  return headerPath.isEmpty ? null : headerPath;
-}
-
-String _buildMarkdownContextualText(String content, {String? headerPath}) {
-  final normalizedHeaderPath = headerPath?.trim();
-  if (normalizedHeaderPath == null || normalizedHeaderPath.isEmpty) {
-    return content;
-  }
-
-  return 'Header Path: $normalizedHeaderPath\n$content';
-}
-
 @visibleForTesting
 String buildChunkEmbeddingText({
   required String content,
   required String chunkType,
 }) {
-  return _buildMarkdownContextualText(
-    content,
-    headerPath: _headerPathFromChunkType(chunkType),
-  );
+  return renderContextText(content: content, chunkType: chunkType);
 }
 
 ChunkSearchResult _chunkSearchResultFromHybrid(
@@ -201,22 +179,22 @@ class SourceRagService {
     int maxChunkChars = kDefaultMaxChunkChars,
     int overlapChars = kDefaultOverlapChars,
     this.collectionId = defaultCollectionId,
-  })  : maxChunkChars = normalizeMaxChunkChars(
-          maxChunkChars,
-          context: 'SourceRagService',
-        ),
-        overlapChars = normalizeOverlapChars(
-          overlapChars,
-          context: 'SourceRagService',
-        );
+  }) : maxChunkChars = normalizeMaxChunkChars(
+         maxChunkChars,
+         context: 'SourceRagService',
+       ),
+       overlapChars = normalizeOverlapChars(
+         overlapChars,
+         context: 'SourceRagService',
+       );
 
   SourceRagService inCollection(String id) => SourceRagService(
-        dbPath: dbPath,
-        modelPath: modelPath,
-        maxChunkChars: maxChunkChars,
-        overlapChars: overlapChars,
-        collectionId: id.trim().isEmpty ? defaultCollectionId : id.trim(),
-      );
+    dbPath: dbPath,
+    modelPath: modelPath,
+    maxChunkChars: maxChunkChars,
+    overlapChars: overlapChars,
+    collectionId: id.trim().isEmpty ? defaultCollectionId : id.trim(),
+  );
 
   /// Detect the appropriate chunking strategy based on file extension.
   static ChunkingStrategy detectChunkingStrategy(String? filePath) {
@@ -522,7 +500,8 @@ class SourceRagService {
     void Function(int done, int total)? onProgress,
   }) async {
     // 1. Determine chunking strategy
-    final effectiveStrategy = strategy ??
+    final effectiveStrategy =
+        strategy ??
         (filePath != null &&
                 (filePath.endsWith('.md') || filePath.endsWith('.markdown'))
             ? ChunkingStrategy.markdown
@@ -1133,9 +1112,10 @@ class SourceRagService {
         );
         for (final canonical in canonicalChunks) {
           canonicalByKey[_chunkLookupKey(
-            canonical.sourceId.toInt(),
-            canonical.chunkIndex,
-          )] = canonical;
+                canonical.sourceId.toInt(),
+                canonical.chunkIndex,
+              )] =
+              canonical;
         }
       } on RagError catch (e) {
         debugPrint(
@@ -1148,10 +1128,11 @@ class SourceRagService {
         .map(
           (chunk) => mergeCanonicalChunkSearchResult(
             fallback: chunk,
-            canonical: canonicalByKey[_chunkLookupKey(
-              chunk.sourceId.toInt(),
-              chunk.chunkIndex,
-            )],
+            canonical:
+                canonicalByKey[_chunkLookupKey(
+                  chunk.sourceId.toInt(),
+                  chunk.chunkIndex,
+                )],
           ),
         )
         .toList();
@@ -1266,8 +1247,9 @@ class SourceRagService {
       // Improve post-filtering recall:
       // If filtering by source, fetch more candidates internally to avoid
       // the dominant source occupying all top-k slots before filtering.
-      final effectiveTopK =
-          sourceIds != null ? (topK * 10).clamp(50, 200) : topK;
+      final effectiveTopK = sourceIds != null
+          ? (topK * 10).clamp(50, 200)
+          : topK;
 
       results = await hybrid.searchHybrid(
         queryText: query,

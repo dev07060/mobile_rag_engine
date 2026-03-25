@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `is_cjk`, `join_pages_cjk_experimental`, `join_pages`, `remove_trailing_page_number`
+// These functions are ignored because they are not marked as `pub`: `is_cjk`, `is_noncharacter_code_point`, `is_private_use_code_point`, `join_pages`, `normalize_extracted_text`, `remove_trailing_page_number`
 
 /// Extract text content from a PDF file (bytes)
 /// Uses page-by-page extraction for safe page number removal and hyphenation handling

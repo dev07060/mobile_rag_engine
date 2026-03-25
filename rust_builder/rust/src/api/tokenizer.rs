@@ -65,10 +65,23 @@ fn with_tokenizer<T>(f: impl FnOnce(&Tokenizer) -> Result<T>) -> Result<T> {
     f(tokenizer)
 }
 
+fn encode_without_truncation(text: &str, add_special_tokens: bool) -> Result<tokenizers::Encoding> {
+    with_tokenizer(|tokenizer| {
+        tokenizer
+            .encode(text, add_special_tokens)
+            .map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))
+    })
+}
+
 fn encode_internal(
     text: &str,
+    add_special_tokens: bool,
     truncation_max_length: Option<usize>,
 ) -> Result<tokenizers::Encoding> {
+    if truncation_max_length.is_none() {
+        return encode_without_truncation(text, add_special_tokens);
+    }
+
     with_tokenizer(|tokenizer| {
         let mut tokenizer = tokenizer.clone();
         tokenizer
@@ -81,7 +94,7 @@ fn encode_internal(
             .ok();
 
         tokenizer
-            .encode(text, true)
+            .encode(text, add_special_tokens)
             .map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))
     })
 }
@@ -89,7 +102,11 @@ fn encode_internal(
 pub(crate) fn count_tokens_untruncated(text: &str) -> Result<usize> {
     #[cfg(test)]
     COUNT_TOKENS_UNTRUNCATED_CALLS.fetch_add(1, Ordering::Relaxed);
-    Ok(encode_internal(text, None)?.len())
+    Ok(encode_internal(text, true, None)?.len())
+}
+
+pub(crate) fn count_plain_text_tokens_untruncated(text: &str) -> Result<usize> {
+    Ok(encode_internal(text, false, None)?.len())
 }
 
 #[cfg(test)]
@@ -106,8 +123,14 @@ pub(crate) fn count_tokens_untruncated_call_count() -> usize {
 #[frb(sync)]
 pub fn tokenize(text: String) -> Result<Vec<u32>> {
     let max_length = resolve_truncation_max_length(&text);
-    let encoding = encode_internal(&text, Some(max_length))?;
+    let encoding = encode_internal(&text, true, Some(max_length))?;
     Ok(encoding.get_ids().to_vec())
+}
+
+/// Count plain-text tokens without truncation or special tokens.
+#[frb(sync)]
+pub fn count_tokens(text: String) -> Result<u32> {
+    Ok(count_plain_text_tokens_untruncated(&text)? as u32)
 }
 
 /// Decode token IDs to text.
@@ -133,6 +156,7 @@ mod tests {
     use std::sync::Mutex;
     use tokenizers::models::wordlevel::WordLevel;
     use tokenizers::pre_tokenizers::whitespace::Whitespace;
+    use tokenizers::processors::bert::BertProcessing;
     use uuid::Uuid;
 
     static TOKENIZER_TEST_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -141,8 +165,11 @@ mod tests {
         let suffix = Uuid::new_v4().to_string();
         let vocab_path =
             std::env::temp_dir().join(format!("mobile_rag_engine_test_vocab_{suffix}.json"));
-        std::fs::write(&vocab_path, r#"{"[UNK]":0,"hello":1,"world":2}"#)
-            .expect("failed to write test vocab");
+        std::fs::write(
+            &vocab_path,
+            r#"{"[UNK]":0,"hello":1,"world":2,"[CLS]":3,"[SEP]":4}"#,
+        )
+        .expect("failed to write test vocab");
 
         let model = WordLevel::builder()
             .files(vocab_path.to_str().unwrap().to_string())
@@ -151,6 +178,10 @@ mod tests {
             .expect("failed to build test tokenizer");
         let mut tokenizer = Tokenizer::new(model);
         tokenizer.with_pre_tokenizer(Some(Whitespace));
+        tokenizer.with_post_processor(Some(BertProcessing::new(
+            ("[SEP]".to_string(), 4),
+            ("[CLS]".to_string(), 3),
+        )));
 
         let path =
             std::env::temp_dir().join(format!("mobile_rag_engine_test_tokenizer_{suffix}.json"));
@@ -187,8 +218,11 @@ mod tests {
         let text = "hello world hello";
         let truncated = tokenize(text.to_string()).unwrap();
         let untruncated = count_tokens_untruncated(text).unwrap();
+        let plain_text_count = count_tokens(text.to_string()).unwrap();
 
         assert_eq!(truncated.len(), untruncated);
+        assert_eq!(plain_text_count, 3);
+        assert_eq!(untruncated, plain_text_count as usize + 2);
     }
 
     #[test]
@@ -207,5 +241,20 @@ mod tests {
 
         assert_eq!(truncated.len(), TOKENIZER_MAX_TRUNCATION_MAX_LENGTH);
         assert!(untruncated > truncated.len());
+    }
+
+    #[test]
+    fn test_count_tokens_excludes_special_tokens() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+
+        let text = "hello world";
+        let plain = count_tokens(text.to_string()).unwrap();
+        let model_input = count_tokens_untruncated(text).unwrap();
+
+        assert_eq!(plain, 2);
+        assert_eq!(model_input, 4);
     }
 }

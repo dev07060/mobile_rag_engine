@@ -17,9 +17,18 @@
 //! Semantic text chunking with paragraph-first strategy for multilingual support.
 
 use crate::api::tokenizer::{count_tokens_untruncated, resolve_truncation_max_length};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use std::collections::HashMap;
 use std::ops::Range;
 use text_splitter::TextSplitter;
+
+static NUMBERED_SECTION_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^(?:\d+(?:\.\d+)*|[IVXLCM]+)[\.\)]\s+\S").unwrap());
+static ENGLISH_SECTION_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)^(chapter|section|appendix)\b").unwrap());
+static KOREAN_SECTION_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^제\s*\d+\s*[장절편부]").unwrap());
 
 /// Chunk type classification.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -154,51 +163,31 @@ pub struct SemanticChunk {
     pub chunk_type: String,
 }
 
-trait TextSizer {
-    fn size(&self, text: &str) -> Option<usize>;
-
-    fn budget(&self, text: &str, max_chars: usize) -> usize;
-
-    fn fits(&self, text: &str, max_chars: usize) -> bool {
-        self.size(text)
-            .map(|size| size <= self.budget(text, max_chars))
-            .unwrap_or(true)
-    }
-}
-
-struct CharSizer;
-
-impl TextSizer for CharSizer {
-    fn size(&self, text: &str) -> Option<usize> {
-        Some(text.chars().count())
-    }
-
-    fn budget(&self, _text: &str, max_chars: usize) -> usize {
-        max_chars
-    }
-}
-
 struct PlainTextPlanner {
     max_chars: usize,
-    char_sizer: CharSizer,
 }
 
 impl PlainTextPlanner {
     fn new(max_chars: usize) -> Self {
-        Self {
-            max_chars,
-            char_sizer: CharSizer,
-        }
+        Self { max_chars }
     }
 
     fn fits_range(&self, text: &str, range: &Range<usize>) -> bool {
-        let slice = &text[range.clone()];
-        self.char_sizer.fits(slice, self.max_chars)
+        char_count_in_range(text, range) <= self.max_chars
     }
 }
 
 fn line_content_end(line: &str) -> usize {
     line.trim_end_matches(|c| c == '\n' || c == '\r').len()
+}
+
+fn is_bullet_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with("- ")
+        || trimmed.starts_with("* ")
+        || trimmed.starts_with("• ")
+        || trimmed.starts_with("● ")
+        || trimmed.starts_with("+ ")
 }
 
 fn split_paragraph_ranges(text: &str) -> Vec<Range<usize>> {
@@ -568,6 +557,46 @@ fn materialize_semantic_chunks(text: &str, ranges: Vec<Range<usize>>) -> Vec<Sem
         .collect()
 }
 
+fn next_non_whitespace(text: &str, mut index: usize, end: usize) -> usize {
+    while index < end {
+        let ch = text[index..end].chars().next().unwrap();
+        if !ch.is_whitespace() {
+            break;
+        }
+        index += ch.len_utf8();
+    }
+    index
+}
+
+fn is_sentence_boundary_char(ch: char) -> bool {
+    matches!(ch, '.' | '!' | '?' | '。' | '！' | '？' | '…')
+}
+
+fn overlap_boundary_starts(text: &str, range: &Range<usize>) -> Vec<usize> {
+    let mut boundaries = vec![range.start];
+
+    for line in split_line_ranges(text, range) {
+        boundaries.push(line.start);
+    }
+
+    let slice = &text[range.clone()];
+    for (offset, ch) in slice.char_indices() {
+        if !is_sentence_boundary_char(ch) {
+            continue;
+        }
+
+        let after_boundary = range.start + offset + ch.len_utf8();
+        let next_start = next_non_whitespace(text, after_boundary, range.end);
+        if next_start < range.end {
+            boundaries.push(next_start);
+        }
+    }
+
+    boundaries.sort_unstable();
+    boundaries.dedup();
+    boundaries
+}
+
 fn overlap_start(text: &str, range: &Range<usize>, overlap_chars: usize) -> usize {
     if overlap_chars == 0 {
         return range.end;
@@ -578,7 +607,18 @@ fn overlap_start(text: &str, range: &Range<usize>, overlap_chars: usize) -> usiz
         return range.start;
     }
 
-    advance_by_chars(text, range.start, range.end, total_chars - overlap_chars)
+    let target_start = advance_by_chars(text, range.start, range.end, total_chars - overlap_chars);
+    let closest_boundary = overlap_boundary_starts(text, range)
+        .into_iter()
+        .min_by_key(|candidate| candidate.abs_diff(target_start))
+        .unwrap_or(target_start);
+
+    let max_snap_distance = overlap_chars.max(8) / 2;
+    if closest_boundary.abs_diff(target_start) <= max_snap_distance {
+        closest_boundary
+    } else {
+        target_start
+    }
 }
 
 /// Split text into semantic chunks using paragraph-first strategy.
@@ -594,9 +634,47 @@ pub fn semantic_chunk(text: String, max_chars: i32) -> Vec<SemanticChunk> {
     )
 }
 
-#[allow(dead_code)]
-fn is_article_title(_line: &str) -> bool {
-    false
+fn is_article_title(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.is_empty() || is_bullet_line(trimmed) {
+        return false;
+    }
+
+    if trimmed.starts_with('#') {
+        return true;
+    }
+
+    if NUMBERED_SECTION_RE.is_match(trimmed)
+        || ENGLISH_SECTION_RE.is_match(trimmed)
+        || KOREAN_SECTION_RE.is_match(trimmed)
+    {
+        return true;
+    }
+
+    let char_count = trimmed.chars().count();
+    if char_count > 80 {
+        return false;
+    }
+
+    let ends_with_terminal = trimmed
+        .chars()
+        .last()
+        .map(is_sentence_boundary_char)
+        .unwrap_or(false);
+    if ends_with_terminal {
+        return false;
+    }
+
+    if trimmed.ends_with(':') {
+        return true;
+    }
+
+    let word_count = trimmed.split_whitespace().count();
+    if word_count == 0 || word_count > 12 {
+        return false;
+    }
+
+    !trimmed.contains(',') && !trimmed.contains(';')
 }
 
 /// Split text with overlap (API compatibility wrapper).
@@ -724,13 +802,13 @@ mod tests {
     }
 
     #[test]
-    fn test_semantic_chunk_with_overlap_applies_prefix() {
-        let text = "First chunk content here.\n\nSecond chunk starts here.";
-        let chunks = semantic_chunk_with_overlap(text.to_string(), 500, 5);
+    fn test_semantic_chunk_with_overlap_snaps_to_boundary() {
+        let text = "Alpha sentence. Beta sentence.\n\nGamma paragraph.";
+        let chunks = semantic_chunk_with_overlap(text.to_string(), 500, 14);
         assert_eq!(chunks.len(), 2);
-        assert_eq!(chunks[0].content, "First chunk content here.");
-        assert!(chunks[1].content.starts_with("here."));
-        assert!(chunks[1].content.contains("Second chunk starts here."));
+        assert_eq!(chunks[0].content, "Alpha sentence. Beta sentence.");
+        assert!(chunks[1].content.starts_with("Beta sentence."));
+        assert!(chunks[1].content.contains("Gamma paragraph."));
     }
 
     #[test]
@@ -819,6 +897,25 @@ mod tests {
 
         assert_eq!(chunks.len(), 1);
         assert!(count_tokens_untruncated_call_count() <= 20);
+    }
+
+    #[test]
+    fn test_is_article_title_positive_cases() {
+        assert!(is_article_title("# Installation"));
+        assert!(is_article_title("1. Overview"));
+        assert!(is_article_title("I. Introduction"));
+        assert!(is_article_title("Section Getting Started"));
+        assert!(is_article_title("제1장 소개"));
+        assert!(is_article_title("Runtime Notes:"));
+        assert!(is_article_title("Short Standalone Heading"));
+    }
+
+    #[test]
+    fn test_is_article_title_negative_cases() {
+        assert!(!is_article_title("- list item"));
+        assert!(!is_article_title("This is a short sentence."));
+        assert!(!is_article_title("Another sentence!"));
+        assert!(!is_article_title("A short sentence, with a comma"));
     }
 }
 

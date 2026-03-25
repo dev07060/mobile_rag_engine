@@ -6,9 +6,9 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `is_article_title`, `protect_structural_blocks`, `recursive_split`, `split_by_headers`, `split_by_lines`, `split_by_sentences`, `split_table_preserving_headers`, `tail_chars`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ChunkingStrategy`, `ProtectedText`, `Section`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `advance_by_chars`, `build_semantic_chunk`, `cached_token_count`, `char_count_in_range`, `enforce_token_budget`, `fits_range`, `fits_token_budget`, `flush_text_section`, `is_article_title`, `is_bullet_line`, `is_markdown_header`, `is_sentence_boundary_char`, `is_table_line`, `largest_fitting_prefix_end`, `largest_token_fitting_prefix_end`, `line_content_end`, `markdown_line_ranges`, `materialize_semantic_chunks`, `new`, `next_non_whitespace`, `overlap_boundary_starts`, `overlap_start`, `parse_code_block_language`, `parse_markdown_header`, `plan_plain_text_ranges_char_budget`, `plan_plain_text_ranges`, `plan_plain_text_subranges`, `split_by_headers`, `split_by_line_ranges`, `split_hard_range`, `split_line_ranges`, `split_paragraph_ranges`, `split_semantic_range`, `split_token_budget_range`, `subslice_range`, `token_count_cache_key`, `trim_range`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ChunkingStrategy`, `MarkdownLine`, `PlainTextPlanner`, `Section`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Classify chunk by rule-based pattern matching.
 ChunkType classifyChunk({required String text}) =>
