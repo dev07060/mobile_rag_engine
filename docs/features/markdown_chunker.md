@@ -14,7 +14,7 @@ The chunker respects the logical boundaries of Markdown elements. It ensures tha
 ### 2. Header Path Inheritance (Context Awareness)
 One of the biggest challenges in RAG is losing context when a document is sliced. For example, a chunk containing just "Run `npm install`" is useless without knowing it belongs to the "Installation > Linux" section.
 
-The Markdown Chunker automatically prepends the **Header Path** to every chunk.
+The Markdown Chunker stores the **Header Path** as structured metadata on each chunk and the engine injects that path into embedding/context assembly when needed.
 
 **Example:**
 ```markdown
@@ -24,10 +24,14 @@ The Markdown Chunker automatically prepends the **Header Path** to every chunk.
 Run `installer.exe`...
 ```
 
-The resulting chunk for "Run `installer.exe`..." will carry the path:
-`# Agent System > ## Installation > ### Windows`
+The resulting chunk keeps:
+- `content`: `Run installer.exe...`
+- `headerPath`: `Agent System > Installation > Windows`
 
-This allows the LLM to understand *where* in the document this information resides, significantly improving answer quality.
+When the engine builds embedding text or final context, it renders:
+`Header Path: Agent System > Installation > Windows`
+
+This keeps stored chunk content clean while still giving the LLM the section context it needs.
 
 ### 3. Smart Code Block Linking (v0.9.1+)
 When a code block is too massive to fit into a single chunk (e.g., a 2000-line config file), it must be split. Standard splitters leave these orphan chunks disconnected.
@@ -86,19 +90,24 @@ final chunks = await TextChunker.markdown(
 );
 
 for (final chunk in chunks) {
-  print('Type: ${chunk.type}'); // text, code, table
+  print('Type: ${chunk.chunkType}'); // text, code, table
   print('Path: ${chunk.headerPath}'); // # My Guide > ...
   print('Content: ${chunk.content}');
   
-  // Access metadata for linked code blocks
-  if (chunk.metadata?['batch_id'] != null) {
-     print('Part ${chunk.metadata!['batch_index']} of ${chunk.metadata!['batch_total']}');
+  // Access linked code block metadata
+  if (chunk.batchId != null) {
+     print('Part ${chunk.batchIndex} of ${chunk.batchTotal}');
   }
 }
 ```
+
+## Contract Notes
+
+- Raw markdown chunk `content` is preserved as extracted text. Header path is **not** automatically prepended to stored content.
+- `headerPath` is carried separately and injected into embedding/context rendering paths.
+- `tokenBudget` applies to the assembled `context.text`, not the full prompt wrapper that `formatForPrompt()` adds later.
 
 ## Comparisons
 <p align="center">
 <img src="../../assets/readme-sources/comparing_markdown_structure.png" width="768" /> 
 </p>
-

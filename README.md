@@ -49,12 +49,12 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 | Category | Features |
 |:---------|:---------|
 | **Document Input** | PDF, DOCX, Markdown, Plain Text with smart dehyphenation |
-| **Chunking** | Semantic chunking, Markdown structure-aware, header path inheritance |
+| **Chunking** | Plain-text paragraph/line chunking with heading-aware split and tokenizer hard guard; Markdown structure-aware chunking with header-path metadata |
 | **Search** | HNSW vector + BM25 keyword hybrid search with RRF fusion |
 | **Storage** | SQLite persistence, HNSW Index persistence (fast startup), connection pooling, resumable indexing |
 | **Collections** | Collection-scoped ingest/search/rebuild via `inCollection('id')` |
 | **Performance** | Rust core, 10x faster tokenization, thread control, memory optimized |
-| **Context** | Token budget, adjacent chunk expansion, single source mode |
+| **Context** | Engine-tokenizer exact context budget, adjacent chunk expansion, single source mode |
 
 ---
 

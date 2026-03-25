@@ -78,6 +78,59 @@ DuplicateSourceIngestionDecision decideDuplicateSourceIngestion({
   }
 }
 
+String _chunkLookupKey(int sourceId, int chunkIndex) => '$sourceId:$chunkIndex';
+
+String _encodeStructuredChunkType(String chunkType, {String? headerPath}) {
+  final normalizedHeaderPath = headerPath?.trim();
+  if (normalizedHeaderPath == null || normalizedHeaderPath.isEmpty) {
+    return chunkType;
+  }
+
+  return '$chunkType|$normalizedHeaderPath';
+}
+
+@visibleForTesting
+String buildChunkEmbeddingText({
+  required String content,
+  required String chunkType,
+}) {
+  return renderContextText(content: content, chunkType: chunkType);
+}
+
+ChunkSearchResult _chunkSearchResultFromHybrid(
+  hybrid.HybridSearchResult result,
+) {
+  return ChunkSearchResult(
+    chunkId: result.docId,
+    sourceId: result.sourceId,
+    chunkIndex: result.chunkIndex,
+    content: result.content,
+    chunkType: 'general',
+    similarity: result.score,
+    metadata: result.metadata,
+  );
+}
+
+@visibleForTesting
+ChunkSearchResult mergeCanonicalChunkSearchResult({
+  required ChunkSearchResult fallback,
+  ChunkSearchResult? canonical,
+}) {
+  if (canonical == null) {
+    return fallback;
+  }
+
+  return ChunkSearchResult(
+    chunkId: fallback.chunkId,
+    sourceId: fallback.sourceId,
+    chunkIndex: fallback.chunkIndex,
+    content: canonical.content,
+    chunkType: canonical.chunkType,
+    similarity: fallback.similarity,
+    metadata: canonical.metadata ?? fallback.metadata,
+  );
+}
+
 /// Result of adding a source document with automatic chunking.
 class SourceAddResult {
   final int sourceId;
@@ -561,6 +614,7 @@ class SourceRagService {
         for (var j = i; j < batchEnd; j++) {
           final rawChunk = rawChunks[j];
           String contentStr;
+          String embeddingText;
           String chunkType;
           int chunkIdx;
           int startPos;
@@ -569,15 +623,21 @@ class SourceRagService {
           if (effectiveStrategy == ChunkingStrategy.markdown) {
             final c = rawChunk as StructuredChunk;
             contentStr = c.content;
-            chunkType = c.headerPath.isNotEmpty
-                ? '${c.chunkType}|${c.headerPath}'
-                : c.chunkType;
+            chunkType = _encodeStructuredChunkType(
+              c.chunkType,
+              headerPath: c.headerPath,
+            );
+            embeddingText = buildChunkEmbeddingText(
+              content: c.content,
+              chunkType: chunkType,
+            );
             chunkIdx = c.index;
             startPos = c.startPos;
             endPos = c.endPos;
           } else {
             final c = rawChunk as SemanticChunk;
             contentStr = c.content;
+            embeddingText = c.content;
             chunkType = c.chunkType;
             chunkIdx = c.index;
             startPos = c.startPos;
@@ -585,7 +645,7 @@ class SourceRagService {
           }
 
           // Embed using the already-loaded ONNX session (no double-loading)
-          final embedding = await EmbeddingService.embed(contentStr);
+          final embedding = await EmbeddingService.embed(embeddingText);
 
           batchChunks.add(
             ChunkData(
@@ -736,7 +796,11 @@ class SourceRagService {
         // Re-embed and update each chunk
         for (final chunk in batch) {
           try {
-            final embedding = await EmbeddingService.embed(chunk.content);
+            final embeddingText = buildChunkEmbeddingText(
+              content: chunk.content,
+              chunkType: chunk.chunkType,
+            );
+            final embedding = await EmbeddingService.embed(embeddingText);
             await rust_rag.updateChunkEmbedding(
               chunkId: chunk.chunkId,
               embedding: Float32List.fromList(embedding),
@@ -821,19 +885,9 @@ class SourceRagService {
           bm25Weight: 0.0,
           sourceIds: sourceIds,
         );
-        chunks = hybridResults
-            .map(
-              (r) => ChunkSearchResult(
-                chunkId: r.docId,
-                sourceId: r.sourceId,
-                content: r.content,
-                chunkIndex: r.chunkIndex,
-                chunkType: 'general',
-                similarity: r.score,
-                metadata: r.metadata,
-              ),
-            )
-            .toList();
+        chunks = await _hydrateCanonicalChunkResults(
+          hybridResults.map(_chunkSearchResultFromHybrid).toList(),
+        );
       } else {
         chunks = await rust_rag.searchChunksInCollection(
           collectionId: collectionId,
@@ -1025,6 +1079,65 @@ class SourceRagService {
     return result;
   }
 
+  Future<List<ChunkSearchResult>> _hydrateCanonicalChunkResults(
+    List<ChunkSearchResult> chunks,
+  ) async {
+    if (chunks.isEmpty) {
+      return chunks;
+    }
+
+    final rangesBySource = <int, ({int minIndex, int maxIndex})>{};
+    for (final chunk in chunks) {
+      final sourceId = chunk.sourceId.toInt();
+      final existing = rangesBySource[sourceId];
+      rangesBySource[sourceId] = existing == null
+          ? (minIndex: chunk.chunkIndex, maxIndex: chunk.chunkIndex)
+          : (
+              minIndex: existing.minIndex < chunk.chunkIndex
+                  ? existing.minIndex
+                  : chunk.chunkIndex,
+              maxIndex: existing.maxIndex > chunk.chunkIndex
+                  ? existing.maxIndex
+                  : chunk.chunkIndex,
+            );
+    }
+
+    final canonicalByKey = <String, ChunkSearchResult>{};
+    for (final entry in rangesBySource.entries) {
+      try {
+        final canonicalChunks = await rust_rag.getAdjacentChunks(
+          sourceId: entry.key,
+          minIndex: entry.value.minIndex,
+          maxIndex: entry.value.maxIndex,
+        );
+        for (final canonical in canonicalChunks) {
+          canonicalByKey[_chunkLookupKey(
+                canonical.sourceId.toInt(),
+                canonical.chunkIndex,
+              )] =
+              canonical;
+        }
+      } on RagError catch (e) {
+        debugPrint(
+          '[SmartError] Failed to hydrate canonical chunk metadata: ${e.message}',
+        );
+      }
+    }
+
+    return chunks
+        .map(
+          (chunk) => mergeCanonicalChunkSearchResult(
+            fallback: chunk,
+            canonical:
+                canonicalByKey[_chunkLookupKey(
+                  chunk.sourceId.toInt(),
+                  chunk.chunkIndex,
+                )],
+          ),
+        )
+        .toList();
+  }
+
   /// Get all chunk texts for a specific source.
   ///
   /// Returns the raw text content of each chunk in order.
@@ -1197,21 +1310,11 @@ class SourceRagService {
       sourceIds: sourceIds,
     );
 
-    // 2. Convert to ChunkSearchResult format for context building
-    // Note: Hybrid search returns content directly, so we create minimal chunks
-    var chunks = hybridResults
-        .map(
-          (r) => ChunkSearchResult(
-            chunkId: r.docId,
-            sourceId: r.sourceId,
-            content: r.content,
-            chunkIndex: r.chunkIndex, // Now available from Rust!
-            chunkType: 'general', // Hybrid search doesn't return chunk type
-            similarity: r.score, // RRF score as similarity
-            metadata: r.metadata,
-          ),
-        )
-        .toList();
+    // 2. Rehydrate canonical chunk rows so markdown chunk_type metadata survives
+    // hybrid search's lightweight result shape.
+    var chunks = await _hydrateCanonicalChunkResults(
+      hybridResults.map(_chunkSearchResultFromHybrid).toList(),
+    );
 
     // 3. Filter to single source FIRST (before adjacent expansion)
     if (singleSourceMode && chunks.isNotEmpty) {

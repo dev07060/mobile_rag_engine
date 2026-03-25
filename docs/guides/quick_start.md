@@ -73,8 +73,8 @@ Future<void> initializeRAG() async {
 | `tokenizerAsset` | (required) | Path to tokenizer.json in assets |
 | `modelAsset` | (required) | Path to ONNX model in assets |
 | `databaseName` | `'rag.sqlite'` | SQLite database file name |
-| `maxChunkChars` | `500` | Maximum characters per chunk |
-| `overlapChars` | `30` | Overlap between chunks for context |
+| `maxChunkChars` | `500` | Soft character target per chunk |
+| `overlapChars` | `30` | Boundary-snapped target overlap between chunks |
 | `threadLevel` | `null` | CPU usage level: `low` (~20%), `medium` (~40%), `high` (~80%) |
 | `embeddingIntraOpNumThreads` | `null` | Precise thread count (⚠️ mutually exclusive with `threadLevel`) |
 | `deferIndexWarmup` | `false` | If `true`, initialization returns before BM25/HNSW warmup completes |
@@ -85,6 +85,8 @@ Future<void> initializeRAG() async {
 > - `overlapChars < 0` is normalized to `0` at runtime.
 > - `vectorWeight` / `bm25Weight` are clamped to `0.0 ~ 1.0` (if both become `0`, defaults `0.2 / 0.8` are restored).
 > - If both `threadLevel` and `embeddingIntraOpNumThreads` are set, debug builds assert; release builds use `threadLevel` precedence with warning logs.
+> - `maxChunkChars` is a soft planning target. A tokenizer-based hard guard is applied before embedding/runtime truncation.
+> - `overlapChars` is a boundary-snapped target overlap, not an exact character guarantee.
 
 ### When to use `deferIndexWarmup`
 
@@ -142,6 +144,10 @@ for (final chunk in result.chunks) {
   print('Content: ${chunk.content}');
 }
 ```
+
+Notes:
+- `tokenBudget` is measured against `context.text`, not the full prompt wrapper added by `formatForPrompt()`.
+- In compressed paths, `includedChunks` represents source provenance for the compressed context, not a 1:1 segment map of the final compressed text.
 
 ---
 
