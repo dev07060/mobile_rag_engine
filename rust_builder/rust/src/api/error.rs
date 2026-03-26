@@ -21,6 +21,14 @@ pub enum RagError {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
+    /// Search handle became stale because collection data changed.
+    #[error("Stale search handle: {0}")]
+    StaleSearchHandle(String),
+
+    /// Search metadata creation raced with a concurrent collection mutation.
+    #[error("Concurrent mutation: {0}")]
+    ConcurrentMutation(String),
+
     /// Internal system error (HNSW, Logic, etc.).
     #[error("Internal error: {0}")]
     InternalError(String),

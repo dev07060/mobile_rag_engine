@@ -33,6 +33,10 @@ void main() {
           ioError: (msg) => fail('Unexpected IoError: $msg'),
           modelLoadError: (msg) => fail('Unexpected ModelLoadError: $msg'),
           invalidInput: (msg) => fail('Unexpected InvalidInput: $msg'),
+          staleSearchHandle: (msg) =>
+              fail('Unexpected StaleSearchHandle: $msg'),
+          concurrentMutation: (msg) =>
+              fail('Unexpected ConcurrentMutation: $msg'),
           internalError: (msg) => fail('Unexpected InternalError: $msg'),
           unknown: (msg) => fail('Unexpected Unknown error: $msg'),
         );

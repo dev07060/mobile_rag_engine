@@ -239,6 +239,29 @@ pub fn extract_text_from_document(file_bytes: Vec<u8>) -> Result<String> {
     ))
 }
 
+/// Decode UTF-8 text bytes without altering content semantics.
+pub fn extract_text_from_utf8(file_bytes: Vec<u8>) -> Result<String> {
+    String::from_utf8(file_bytes).map_err(|e| anyhow!("UTF-8 decode failed: {}", e))
+}
+
+/// Read a file and extract text according to extension / magic bytes.
+///
+/// Text-like files (`.txt`, `.md`, `.markdown`) are decoded as UTF-8.
+/// Binary document types fall back to the existing document extractor.
+pub fn extract_text_from_file(file_path: String) -> Result<String> {
+    let bytes = std::fs::read(&file_path)
+        .map_err(|e| anyhow!("Failed to read file '{}': {}", file_path, e))?;
+    let extension = std::path::Path::new(&file_path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase());
+
+    match extension.as_deref() {
+        Some("txt" | "md" | "markdown") => extract_text_from_utf8(bytes),
+        _ => extract_text_from_document(bytes),
+    }
+}
+
 // Helper to check for CJK characters
 fn is_cjk(c: char) -> bool {
     // Basic ranges for CJK Unified Ideographs, Hangul, Hiragana, Katakana
@@ -388,6 +411,32 @@ mod tests {
             let result = join_pages(pages);
             assert_eq!(result, expected);
         }
+    }
+
+    #[test]
+    fn test_extract_text_from_utf8_preserves_exact_text() {
+        let original = "Guide > Setup\nInstall dependencies.\n한글 줄도 유지";
+        let extracted = extract_text_from_utf8(original.as_bytes().to_vec()).unwrap();
+        assert_eq!(extracted, original);
+    }
+
+    #[test]
+    fn test_extract_text_from_file_for_text_like_extensions() {
+        let temp_dir = std::env::temp_dir();
+        let txt_path = temp_dir.join("document_parser_extract_text_from_file.txt");
+        let md_path = temp_dir.join("document_parser_extract_text_from_file.md");
+
+        std::fs::write(&txt_path, "plain text body").unwrap();
+        std::fs::write(&md_path, "# Guide\nInstall dependencies").unwrap();
+
+        let txt = extract_text_from_file(txt_path.to_string_lossy().into_owned()).unwrap();
+        let md = extract_text_from_file(md_path.to_string_lossy().into_owned()).unwrap();
+
+        assert_eq!(txt, "plain text body");
+        assert_eq!(md, "# Guide\nInstall dependencies");
+
+        let _ = std::fs::remove_file(txt_path);
+        let _ = std::fs::remove_file(md_path);
     }
 
     #[test]

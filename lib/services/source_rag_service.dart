@@ -16,6 +16,7 @@ import '../src/rust/api/error.dart';
 import '../src/rust/api/source_rag.dart' as rust_rag;
 import '../src/rust/api/source_rag.dart'
     show SourceStats, ChunkSearchResult, ChunkData, SourceEntry;
+import '../src/rust/api/document_parser.dart' as rust_document_parser;
 import '../src/rust/api/semantic_chunker.dart';
 import '../src/rust/api/hybrid_search.dart' as hybrid;
 import 'context_builder.dart';
@@ -34,6 +35,8 @@ extension RagErrorMessage on RagError {
         ioError: (msg) => msg,
         modelLoadError: (msg) => msg,
         invalidInput: (msg) => msg,
+        staleSearchHandle: (msg) => msg,
+        concurrentMutation: (msg) => msg,
         internalError: (msg) => msg,
         unknown: (msg) => msg,
       );
@@ -159,6 +162,19 @@ class RagSearchResult {
   RagSearchResult({required this.chunks, required this.context});
 }
 
+/// Result of the additive low-level search lane.
+///
+/// `hits` is a bounded metadata-only view. Use [handle] for explicit hydration
+/// or Rust-side context assembly when needed.
+class SearchMetaResult {
+  final rust_rag.SearchHandle handle;
+  final List<rust_rag.SearchHitMeta> hits;
+
+  const SearchMetaResult({required this.handle, required this.hits});
+
+  Future<void> dispose() => handle.dispose();
+}
+
 /// High-level service for source-based RAG operations.
 class SourceRagService {
   static const String defaultCollectionId = '__default__';
@@ -223,6 +239,19 @@ class SourceRagService {
       result[i] = list[i];
     }
     return result;
+  }
+
+  rust_rag.ContextAssemblyStrategy _toRustAssemblyStrategy(
+    ContextStrategy strategy,
+  ) {
+    return switch (strategy) {
+      ContextStrategy.relevanceFirst =>
+        rust_rag.ContextAssemblyStrategy.relevanceFirst,
+      ContextStrategy.diverseSources =>
+        rust_rag.ContextAssemblyStrategy.diverseSources,
+      ContextStrategy.chronological =>
+        rust_rag.ContextAssemblyStrategy.chronological,
+    };
   }
 
   String get _dbPathWithoutExtension {
@@ -695,6 +724,52 @@ class SourceRagService {
     }
   }
 
+  /// Add a document from UTF-8 bytes while avoiding caller-side String inflation.
+  /// Add a UTF-8 payload while reducing input-side Dart String materialization.
+  Future<SourceAddResult> addSourceUtf8WithChunking(
+    List<int> bytes, {
+    String? metadata,
+    String? name,
+    ChunkingStrategy? strategy,
+    Duration? chunkDelay,
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final content = await rust_document_parser.extractTextFromUtf8(
+      fileBytes: bytes,
+    );
+    return addSourceWithChunking(
+      content,
+      metadata: metadata,
+      name: name,
+      strategy: strategy ?? ChunkingStrategy.recursive,
+      chunkDelay: chunkDelay,
+      onProgress: onProgress,
+    );
+  }
+
+  /// Add a document from a file path using a Rust-side ingest fast path.
+  Future<SourceAddResult> addSourceFromFileWithChunking(
+    String filePath, {
+    String? metadata,
+    String? name,
+    ChunkingStrategy? strategy,
+    Duration? chunkDelay,
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final content = await rust_document_parser.extractTextFromFile(
+      filePath: filePath,
+    );
+    return addSourceWithChunking(
+      content,
+      metadata: metadata,
+      name: name,
+      filePath: filePath,
+      strategy: strategy,
+      chunkDelay: chunkDelay,
+      onProgress: onProgress,
+    );
+  }
+
   /// Rebuild the HNSW and BM25 indexes after adding sources.
   /// [force] - If true, rebuilds even if no changes were detected (default: false).
   Future<void> rebuildIndex({bool force = false}) {
@@ -733,6 +808,8 @@ class SourceRagService {
               debugPrint('[SmartError] IO error rebuilding index: $msg'),
           modelLoadError: (_) {},
           invalidInput: (_) {},
+          staleSearchHandle: (_) {},
+          concurrentMutation: (_) {},
           internalError: (msg) => debugPrint(
             '[SmartError] Internal error rebuilding indexes: $msg',
           ),
@@ -844,6 +921,119 @@ class SourceRagService {
     );
   }
 
+  /// Low-level metadata-first hybrid search lane.
+  ///
+  /// Returns a generation-pinned [SearchMetaResult]. The returned handle must
+  /// be disposed when no longer needed.
+  Future<SearchMetaResult> searchMeta(
+    String query, {
+    int topK = 10,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
+    List<int>? sourceIds,
+    int adjacentChunks = 0,
+  }) async {
+    final normalizedWeights = normalizeHybridWeights(
+      vectorWeight: vectorWeight,
+      bm25Weight: bm25Weight,
+      context: 'SourceRagService.searchMeta',
+    );
+
+    final queryEmbedding = await EmbeddingService.embed(query);
+    await rust_rag.activateCollectionForHybridSearch(
+      collectionId: collectionId,
+      basePath: _indexPath,
+    );
+
+    try {
+      final handle = await rust_rag.searchMetaHybrid(
+        collectionId: collectionId,
+        queryText: query,
+        queryEmbedding: queryEmbedding,
+        options: rust_rag.SearchMetaHybridOptions(
+          topK: topK,
+          vectorWeight: normalizedWeights.vectorWeight,
+          bm25Weight: normalizedWeights.bm25Weight,
+          sourceIds: sourceIds != null ? _toInt64List(sourceIds) : null,
+          adjacentChunks: adjacentChunks,
+        ),
+      );
+      final hits = await handle.hitMeta();
+      return SearchMetaResult(handle: handle, hits: hits);
+    } on RagError catch (e) {
+      e.when(
+        databaseError: (msg) =>
+            debugPrint('[SmartError] searchMeta DB error: $msg'),
+        ioError: (msg) => debugPrint('[SmartError] searchMeta IO error: $msg'),
+        modelLoadError: (_) {},
+        invalidInput: (msg) =>
+            debugPrint('[SmartError] searchMeta invalid input: $msg'),
+        staleSearchHandle: (msg) =>
+            debugPrint('[SmartError] searchMeta stale handle: $msg'),
+        concurrentMutation: (msg) => debugPrint(
+          '[SmartError] searchMeta concurrent mutation: $msg',
+        ),
+        internalError: (msg) =>
+            debugPrint('[SmartError] searchMeta internal error: $msg'),
+        unknown: (msg) => debugPrint('[SmartError] searchMeta unknown: $msg'),
+      );
+      rethrow;
+    }
+  }
+
+  Future<rust_rag.AssembledContextV2> assembleContext({
+    required rust_rag.SearchHandle searchHandle,
+    int tokenBudget = 2000,
+    ContextStrategy strategy = ContextStrategy.relevanceFirst,
+    String separator = '\n\n---\n\n',
+    bool singleSourceMode = false,
+  }) {
+    return searchHandle.assembleContext(
+      options: rust_rag.AssembleContextOptions(
+        tokenBudget: tokenBudget,
+        strategy: _toRustAssemblyStrategy(strategy),
+        separator: separator,
+        singleSourceMode: singleSourceMode,
+      ),
+    );
+  }
+
+  Future<List<ChunkSearchResult>> hydrateChunks({
+    required rust_rag.SearchHandle searchHandle,
+    required List<int> chunkIds,
+  }) {
+    return searchHandle.hydrateChunks(chunkIds: _toInt64List(chunkIds));
+  }
+
+  Future<List<rust_rag.ChunkExcerptResult>> getChunkExcerpts({
+    required rust_rag.SearchHandle searchHandle,
+    required List<int> chunkIds,
+    required int maxBytes,
+  }) {
+    return searchHandle.getChunkExcerpts(
+      chunkIds: _toInt64List(chunkIds),
+      maxBytes: maxBytes,
+    );
+  }
+
+  Future<int> deriveContextBudgetForPromptV2({
+    required int fullPromptBudget,
+    required String query,
+    String? systemInstruction,
+    bool useStrictMode = true,
+    int safetyMarginTokens = 0,
+    int? fixedPromptOverheadTokens,
+  }) {
+    return rust_rag.deriveContextBudgetForPromptV2(
+      fullPromptBudget: fullPromptBudget,
+      query: query,
+      systemInstruction: systemInstruction,
+      useStrictMode: useStrictMode,
+      safetyMarginTokens: safetyMarginTokens,
+      fixedPromptOverheadTokens: fixedPromptOverheadTokens,
+    );
+  }
+
   /// Search for relevant chunks and assemble context for LLM.
   ///
   /// [adjacentChunks] - Number of adjacent chunks to include before/after each
@@ -904,6 +1094,10 @@ class SourceRagService {
         modelLoadError: (_) {},
         invalidInput: (msg) =>
             debugPrint('[SmartError] Invalid search parameters: $msg'),
+        staleSearchHandle: (msg) =>
+            debugPrint('[SmartError] Search stale handle: $msg'),
+        concurrentMutation: (msg) =>
+            debugPrint('[SmartError] Search concurrent mutation: $msg'),
         internalError: (msg) =>
             debugPrint('[SmartError] Search engine failure: $msg'),
         unknown: (msg) => debugPrint('[SmartError] Unknown search error: $msg'),
@@ -1270,6 +1464,10 @@ class SourceRagService {
         ioError: (_) {},
         modelLoadError: (_) {},
         invalidInput: (_) {},
+        staleSearchHandle: (msg) =>
+            log('[SmartError] Hybrid search stale handle: $msg'),
+        concurrentMutation: (msg) =>
+            log('[SmartError] Hybrid search concurrent mutation: $msg'),
         internalError: (msg) =>
             log('[SmartError] Hybrid search engine error: $msg'),
         unknown: (msg) => log('[SmartError] Hybrid search unknown error: $msg'),

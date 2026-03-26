@@ -35,7 +35,13 @@ import 'package:path_provider/path_provider.dart';
 
 import '../src/rust/api/tokenizer.dart';
 import '../src/rust/api/source_rag.dart'
-    show ChunkSearchResult, SourceStats, SourceEntry;
+    show
+        ChunkSearchResult,
+        SourceStats,
+        SourceEntry,
+        SearchHandle,
+        ChunkExcerptResult,
+        AssembledContextV2;
 import '../src/rust/api/db_pool.dart';
 import '../src/internal/defaults.dart';
 import '../src/internal/validation.dart';
@@ -84,11 +90,13 @@ class RagEngine {
     required this.dbPath,
     required this.vocabSize,
     required bool deferIndexWarmup,
-  }) : _ragService = ragService,
-       _deferIndexWarmup = deferIndexWarmup,
-       _collectionServices = {SourceRagService.defaultCollectionId: ragService},
-       _initializedCollections = {SourceRagService.defaultCollectionId},
-       _collectionInitInFlight = {};
+  })  : _ragService = ragService,
+        _deferIndexWarmup = deferIndexWarmup,
+        _collectionServices = {
+          SourceRagService.defaultCollectionId: ragService
+        },
+        _initializedCollections = {SourceRagService.defaultCollectionId},
+        _collectionInitInFlight = {};
 
   String _normalizeCollectionId(String? collectionId) {
     final trimmed = collectionId?.trim();
@@ -415,6 +423,70 @@ class RagEngine {
     }
   }
 
+  /// Add a UTF-8 document payload while reducing input-side Dart String materialization.
+  Future<SourceAddResult> addDocumentUtf8(
+    Uint8List bytes, {
+    String? metadata,
+    String? name,
+    ChunkingStrategy? strategy,
+    Duration? chunkDelay,
+    void Function(int done, int total)? onProgress,
+    String? collectionId,
+  }) async {
+    final normalized = _normalizeCollectionId(collectionId);
+    final service = await _serviceForCollection(normalized);
+
+    if (normalized == SourceRagService.defaultCollectionId) {
+      _startOperation();
+    }
+    try {
+      return await service.addSourceUtf8WithChunking(
+        bytes,
+        metadata: metadata,
+        name: name,
+        strategy: strategy,
+        chunkDelay: chunkDelay,
+        onProgress: onProgress,
+      );
+    } finally {
+      if (normalized == SourceRagService.defaultCollectionId) {
+        _endOperation();
+      }
+    }
+  }
+
+  /// Add a document from a file path using a Rust-side ingest fast path.
+  Future<SourceAddResult> addDocumentFromFile(
+    String filePath, {
+    String? metadata,
+    String? name,
+    ChunkingStrategy? strategy,
+    Duration? chunkDelay,
+    void Function(int done, int total)? onProgress,
+    String? collectionId,
+  }) async {
+    final normalized = _normalizeCollectionId(collectionId);
+    final service = await _serviceForCollection(normalized);
+
+    if (normalized == SourceRagService.defaultCollectionId) {
+      _startOperation();
+    }
+    try {
+      return await service.addSourceFromFileWithChunking(
+        filePath,
+        metadata: metadata,
+        name: name,
+        strategy: strategy,
+        chunkDelay: chunkDelay,
+        onProgress: onProgress,
+      );
+    } finally {
+      if (normalized == SourceRagService.defaultCollectionId) {
+        _endOperation();
+      }
+    }
+  }
+
   /// Search for relevant chunks and assemble context for LLM.
   ///
   /// [query] - The search query text.
@@ -445,6 +517,92 @@ class RagEngine {
       adjacentChunks: adjacentChunks,
       singleSourceMode: singleSourceMode,
       sourceIds: sourceIds,
+    );
+  }
+
+  /// Additive metadata-first low-level search lane.
+  Future<SearchMetaResult> searchMeta(
+    String query, {
+    int topK = 10,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
+    List<int>? sourceIds,
+    int adjacentChunks = 0,
+    String? collectionId,
+  }) async {
+    final service = await _serviceForCollection(collectionId);
+    await _flushIndex(collectionId: collectionId);
+    return service.searchMeta(
+      query,
+      topK: topK,
+      vectorWeight: vectorWeight,
+      bm25Weight: bm25Weight,
+      sourceIds: sourceIds,
+      adjacentChunks: adjacentChunks,
+    );
+  }
+
+  Future<AssembledContextV2> assembleContext({
+    required SearchHandle searchHandle,
+    int tokenBudget = 2000,
+    ContextStrategy strategy = ContextStrategy.relevanceFirst,
+    String separator = '\n\n---\n\n',
+    bool singleSourceMode = false,
+    String? collectionId,
+  }) async {
+    final service = await _serviceForCollection(collectionId);
+    return service.assembleContext(
+      searchHandle: searchHandle,
+      tokenBudget: tokenBudget,
+      strategy: strategy,
+      separator: separator,
+      singleSourceMode: singleSourceMode,
+    );
+  }
+
+  Future<List<ChunkSearchResult>> hydrateChunks({
+    required SearchHandle searchHandle,
+    required List<int> chunkIds,
+    String? collectionId,
+  }) async {
+    final service = await _serviceForCollection(collectionId);
+    return service.hydrateChunks(
+      searchHandle: searchHandle,
+      chunkIds: chunkIds,
+    );
+  }
+
+  Future<List<ChunkExcerptResult>> getChunkExcerpts({
+    required SearchHandle searchHandle,
+    required List<int> chunkIds,
+    required int maxBytes,
+    String? collectionId,
+  }) async {
+    final service = await _serviceForCollection(collectionId);
+    return service.getChunkExcerpts(
+      searchHandle: searchHandle,
+      chunkIds: chunkIds,
+      maxBytes: maxBytes,
+    );
+  }
+
+  Future<int> deriveContextBudgetForPromptV2({
+    required int fullPromptBudget,
+    required String query,
+    String? systemInstruction,
+    bool useStrictMode = true,
+    int safetyMarginTokens = 0,
+    int? fixedPromptOverheadTokens,
+    String? collectionId,
+  }) async {
+    final service = await _serviceForCollection(collectionId);
+    return service.deriveContextBudgetForPromptV2(
+      fullPromptBudget: fullPromptBudget,
+      query: query,
+      systemInstruction: systemInstruction,
+      useStrictMode: useStrictMode,
+      safetyMarginTokens: safetyMarginTokens,
+      fixedPromptOverheadTokens: fixedPromptOverheadTokens,
     );
   }
 
@@ -579,11 +737,12 @@ class RagEngine {
     required int sourceId,
     required int minIndex,
     required int maxIndex,
-  }) => _ragService.getAdjacentChunks(
-    sourceId: sourceId,
-    minIndex: minIndex,
-    maxIndex: maxIndex,
-  );
+  }) =>
+      _ragService.getAdjacentChunks(
+        sourceId: sourceId,
+        minIndex: minIndex,
+        maxIndex: maxIndex,
+      );
 
   /// Get the number of chunks for a specific source.
   ///

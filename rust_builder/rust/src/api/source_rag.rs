@@ -23,22 +23,42 @@ use crate::api::hnsw_index::{
     build_hnsw_index, clear_hnsw_index, is_hnsw_index_loaded, load_hnsw_index, save_hnsw_index,
     search_hnsw,
 };
+use crate::api::hybrid_search::{search_hybrid, RrfConfig, SearchFilter};
+use crate::api::tokenizer::count_plain_text_tokens_untruncated;
 use crate::api::vector_math::{cosine_with_query_norm_f32, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{
     cosine_with_query_norm_i8_blob, dequantize_i8_to_f32, i8_blob_from_slice, i8_vec_from_blob,
     l2_norm_i8, quantize_f32_to_i8,
 };
+use crate::frb_generated::RustAutoOpaqueMoi as RustAutoOpaque;
+use flutter_rust_bridge::frb;
 use log::{debug, info};
 use once_cell::sync::Lazy;
+use regex::Regex;
 use rusqlite::{params, OptionalExtension};
 use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 
 pub const DEFAULT_COLLECTION_ID: &str = "__default__";
 
 static ACTIVE_HNSW_COLLECTION: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
 static ACTIVE_BM25_COLLECTION: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
+static QUERY_TERM_SPLITTER: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"[\s\(\)\[\]\{\},.!?:;/|_\-]+"#).expect("valid query splitter regex")
+});
+static CJK_OR_HANGUL_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7A3]"#)
+        .expect("valid cjk regex")
+});
+
+#[cfg(test)]
+static SEARCH_META_TEST_HOOK: Lazy<RwLock<Option<fn()>>> = Lazy::new(|| RwLock::new(None));
+#[cfg(test)]
+static HANDLE_HYDRATION_TEST_HOOK: Lazy<RwLock<Option<fn()>>> = Lazy::new(|| RwLock::new(None));
+#[cfg(test)]
+static HANDLE_ASSEMBLE_TEST_HOOK: Lazy<RwLock<Option<fn()>>> = Lazy::new(|| RwLock::new(None));
 
 fn hash_content(content: &str) -> String {
     let mut hasher = Sha256::new();
@@ -66,6 +86,56 @@ fn normalize_collection_id(collection_id: String) -> String {
     }
 }
 
+fn decode_structured_chunk_type(chunk_type: &str) -> (&str, Option<&str>) {
+    let Some(separator) = chunk_type.find('|') else {
+        return (chunk_type, None);
+    };
+
+    let raw_type = &chunk_type[..separator];
+    let header_path = chunk_type[separator + 1..].trim();
+    (
+        raw_type,
+        if header_path.is_empty() {
+            None
+        } else {
+            Some(header_path)
+        },
+    )
+}
+
+fn render_context_text(content: &str, chunk_type: &str) -> String {
+    let (_, header_path) = decode_structured_chunk_type(chunk_type);
+    match header_path {
+        Some(path) => format!("Header Path: {path}\n{content}"),
+        None => content.to_string(),
+    }
+}
+
+fn truncate_utf8_bytes(input: &str, max_bytes: usize) -> String {
+    if input.len() <= max_bytes {
+        return input.to_string();
+    }
+
+    let mut end = max_bytes.min(input.len());
+    while end > 0 && !input.is_char_boundary(end) {
+        end -= 1;
+    }
+    input[..end].to_string()
+}
+
+fn get_collection_data_generation(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+) -> Result<i64, RagError> {
+    ensure_collection_row(conn, collection_id)?;
+    conn.query_row(
+        "SELECT data_generation FROM collection_index_state WHERE collection_id = ?1",
+        params![collection_id],
+        |row| row.get(0),
+    )
+    .map_err(|e| RagError::DatabaseError(e.to_string()))
+}
+
 fn ensure_collection_row(conn: &rusqlite::Connection, collection_id: &str) -> Result<(), RagError> {
     conn.execute(
         "INSERT OR IGNORE INTO collections(id, name) VALUES (?1, ?2)",
@@ -88,6 +158,24 @@ fn mark_collection_dirty(conn: &rusqlite::Connection, collection_id: &str) -> Re
         "UPDATE collection_index_state
          SET hnsw_dirty = 1,
              bm25_dirty = 1,
+             last_error = NULL
+         WHERE collection_id = ?1",
+        params![collection_id],
+    )
+    .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    Ok(())
+}
+
+fn mark_collection_data_changed(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+) -> Result<(), RagError> {
+    ensure_collection_row(conn, collection_id)?;
+    conn.execute(
+        "UPDATE collection_index_state
+         SET hnsw_dirty = 1,
+             bm25_dirty = 1,
+             data_generation = data_generation + 1,
              last_error = NULL
          WHERE collection_id = ?1",
         params![collection_id],
@@ -308,6 +396,7 @@ pub fn init_source_db() -> Result<(), RagError> {
             collection_id TEXT PRIMARY KEY,
             hnsw_dirty INTEGER NOT NULL DEFAULT 1,
             bm25_dirty INTEGER NOT NULL DEFAULT 1,
+            data_generation INTEGER NOT NULL DEFAULT 0,
             last_hnsw_built_at INTEGER,
             last_bm25_built_at INTEGER,
             last_error TEXT
@@ -315,6 +404,18 @@ pub fn init_source_db() -> Result<(), RagError> {
         [],
     )
     .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    let has_data_generation: bool = conn
+        .prepare("SELECT data_generation FROM collection_index_state LIMIT 1")
+        .is_ok();
+    if !has_data_generation {
+        info!("[init_source_db] Migrating: adding data_generation to collection_index_state");
+        conn.execute(
+            "ALTER TABLE collection_index_state ADD COLUMN data_generation INTEGER NOT NULL DEFAULT 0",
+            [],
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    }
 
     conn.execute(
         "INSERT OR IGNORE INTO collections(id, name) VALUES (?1, 'default')",
@@ -421,7 +522,7 @@ pub fn add_source_in_collection(
     .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
     let source_id = conn.last_insert_rowid();
-    mark_collection_dirty(&conn, &collection_id)?;
+    mark_collection_data_changed(&conn, &collection_id)?;
     info!("[add_source_in_collection] Created source: {}", source_id);
 
     Ok(AddSourceResult {
@@ -435,11 +536,25 @@ pub fn add_source_in_collection(
 /// Update processing status of a source (e.g., 'pending', 'processing', 'completed', 'failed').
 pub fn update_source_status(source_id: i64, status: String) -> Result<(), RagError> {
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
-    conn.execute(
-        "UPDATE sources SET status = ?1 WHERE id = ?2",
-        params![status, source_id],
-    )
-    .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let collection_id: Option<String> = conn
+        .query_row(
+            "SELECT collection_id FROM sources WHERE id = ?1",
+            params![source_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let updated = conn
+        .execute(
+            "UPDATE sources SET status = ?1 WHERE id = ?2",
+            params![status, source_id],
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    if updated > 0 {
+        if let Some(collection_id) = collection_id {
+            mark_collection_data_changed(&conn, &collection_id)?;
+        }
+    }
     info!(
         "[update_source_status] Updated source {} to status '{}'",
         source_id, status
@@ -453,6 +568,14 @@ pub fn update_source_status(source_id: i64, status: String) -> Result<(), RagErr
 /// can be claimed. Sources already in `processing`/`completed` return false.
 pub fn claim_source_for_ingestion(source_id: i64) -> Result<bool, RagError> {
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let collection_id: Option<String> = conn
+        .query_row(
+            "SELECT collection_id FROM sources WHERE id = ?1",
+            params![source_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
     let updated = conn
         .execute(
             "UPDATE sources
@@ -462,6 +585,11 @@ pub fn claim_source_for_ingestion(source_id: i64) -> Result<bool, RagError> {
             params![source_id],
         )
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    if updated > 0 {
+        if let Some(collection_id) = collection_id {
+            mark_collection_data_changed(&conn, &collection_id)?;
+        }
+    }
     Ok(updated > 0)
 }
 
@@ -504,7 +632,7 @@ pub fn clear_source_chunks(source_id: i64) -> Result<i32, RagError> {
 
     if deleted > 0 {
         if let Some(collection_id) = source_collection_id {
-            mark_collection_dirty(&conn, &collection_id)?;
+            mark_collection_data_changed(&conn, &collection_id)?;
         }
     }
     Ok(deleted as i32)
@@ -662,7 +790,7 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
 
     tx.commit()
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
-    mark_collection_dirty(&conn, &source_collection_id)?;
+    mark_collection_data_changed(&conn, &source_collection_id)?;
     info!("[add_chunks] Added {} chunks", chunks.len());
     Ok(chunks.len() as i32)
 }
@@ -858,6 +986,974 @@ pub fn activate_collection_for_hybrid_search(
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct SearchMetaHybridOptions {
+    pub top_k: u32,
+    pub vector_weight: f64,
+    pub bm25_weight: f64,
+    pub source_ids: Option<Vec<i64>>,
+    pub adjacent_chunks: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct SearchHitMeta {
+    pub chunk_id: i64,
+    pub source_id: i64,
+    pub chunk_index: i32,
+    pub similarity: f64,
+    pub raw_type: String,
+    pub header_path_preview: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChunkExcerptResult {
+    pub chunk_id: i64,
+    pub source_id: i64,
+    pub chunk_index: i32,
+    pub raw_type: String,
+    pub header_path_preview: Option<String>,
+    pub excerpt: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ContextAssemblyStrategy {
+    RelevanceFirst,
+    DiverseSources,
+    Chronological,
+}
+
+#[derive(Debug, Clone)]
+pub struct AssembleContextOptions {
+    pub token_budget: i32,
+    pub strategy: ContextAssemblyStrategy,
+    pub separator: String,
+    pub single_source_mode: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct AssembledContextV2 {
+    pub text: String,
+    pub exact_tokens: u32,
+    pub included_chunk_ids: Vec<i64>,
+    pub remaining_budget: i32,
+}
+
+#[derive(Debug, Clone)]
+struct HydratedChunkRow {
+    chunk_id: i64,
+    source_id: i64,
+    chunk_index: i32,
+    content: String,
+    chunk_type: String,
+    similarity: f64,
+    metadata: Option<String>,
+}
+
+#[frb(opaque)]
+#[derive(Debug, Clone)]
+pub struct SearchHandle {
+    collection_id: String,
+    data_generation: i64,
+    query_text: String,
+    base_hits: Vec<SearchHitMeta>,
+    ordered_hits: Vec<SearchHitMeta>,
+    _query_options: SearchMetaHybridOptions,
+}
+
+impl SearchHandle {
+    fn ensure_fresh_with_conn(&self, conn: &rusqlite::Connection) -> Result<i64, RagError> {
+        let current_generation = get_collection_data_generation(&conn, &self.collection_id)?;
+        if current_generation != self.data_generation {
+            return Err(RagError::StaleSearchHandle(format!(
+                "collection={} expected_generation={} current_generation={}",
+                self.collection_id, self.data_generation, current_generation
+            )));
+        }
+        Ok(current_generation)
+    }
+
+    fn ensure_generation_unchanged_with_conn(
+        &self,
+        conn: &rusqlite::Connection,
+        start_generation: i64,
+    ) -> Result<(), RagError> {
+        let end_generation = get_collection_data_generation(conn, &self.collection_id)?;
+        if end_generation != start_generation {
+            return Err(RagError::ConcurrentMutation(format!(
+                "collection={} changed during search handle operation start_generation={} end_generation={}",
+                self.collection_id, start_generation, end_generation
+            )));
+        }
+        Ok(())
+    }
+
+    fn allowed_chunk_ids(&self) -> HashSet<i64> {
+        self.ordered_hits.iter().map(|hit| hit.chunk_id).collect()
+    }
+
+    fn resolved_chunk_ids(&self, chunk_ids: Vec<i64>) -> Vec<i64> {
+        if chunk_ids.is_empty() {
+            self.ordered_hits.iter().map(|hit| hit.chunk_id).collect()
+        } else {
+            chunk_ids
+        }
+    }
+
+    fn validate_requested_chunk_ids(&self, chunk_ids: Vec<i64>) -> Result<Vec<i64>, RagError> {
+        let allowed = self.allowed_chunk_ids();
+        let requested_ids = self.resolved_chunk_ids(chunk_ids);
+        let mut seen = HashSet::new();
+
+        if let Some(duplicate) = requested_ids
+            .iter()
+            .find(|chunk_id| !seen.insert(**chunk_id))
+        {
+            return Err(RagError::InvalidInput(format!(
+                "duplicate chunk_ids are not allowed: {}",
+                duplicate
+            )));
+        }
+
+        if let Some(missing) = requested_ids
+            .iter()
+            .find(|chunk_id| !allowed.contains(chunk_id))
+        {
+            return Err(RagError::InvalidInput(format!(
+                "chunk_id {} is not part of this search handle",
+                missing
+            )));
+        }
+
+        Ok(requested_ids)
+    }
+}
+
+#[frb]
+impl SearchHandle {
+    pub fn hit_meta(&self) -> Result<Vec<SearchHitMeta>, RagError> {
+        let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        self.ensure_fresh_with_conn(&conn)?;
+        Ok(self.ordered_hits.clone())
+    }
+
+    pub fn hydrate_chunks(&self, chunk_ids: Vec<i64>) -> Result<Vec<ChunkSearchResult>, RagError> {
+        let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        let start_generation = self.ensure_fresh_with_conn(&conn)?;
+        let requested_ids = self.validate_requested_chunk_ids(chunk_ids)?;
+        run_handle_hydration_test_hook();
+
+        let (hydrated, missing_ids) = hydrate_chunk_search_results(
+            &conn,
+            &self.collection_id,
+            requested_ids,
+            &self.ordered_hits,
+        )?;
+        self.ensure_generation_unchanged_with_conn(&conn, start_generation)?;
+        if let Some(missing) = missing_ids.first() {
+            return Err(RagError::StaleSearchHandle(format!(
+                "chunk_id {} disappeared while hydrating search results",
+                missing
+            )));
+        }
+        Ok(hydrated)
+    }
+
+    pub fn get_chunk_excerpts(
+        &self,
+        chunk_ids: Vec<i64>,
+        max_bytes: u32,
+    ) -> Result<Vec<ChunkExcerptResult>, RagError> {
+        let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        let start_generation = self.ensure_fresh_with_conn(&conn)?;
+        let requested_ids = self.validate_requested_chunk_ids(chunk_ids)?;
+        run_handle_hydration_test_hook();
+
+        let (hydrated, missing_ids) = hydrate_chunk_search_results(
+            &conn,
+            &self.collection_id,
+            requested_ids,
+            &self.ordered_hits,
+        )?;
+        self.ensure_generation_unchanged_with_conn(&conn, start_generation)?;
+        if let Some(missing) = missing_ids.first() {
+            return Err(RagError::StaleSearchHandle(format!(
+                "chunk_id {} disappeared while hydrating search results",
+                missing
+            )));
+        }
+
+        Ok(hydrated
+            .into_iter()
+            .map(|chunk| {
+                let (raw_type, header_path) = decode_structured_chunk_type(&chunk.chunk_type);
+                ChunkExcerptResult {
+                    chunk_id: chunk.chunk_id,
+                    source_id: chunk.source_id,
+                    chunk_index: chunk.chunk_index,
+                    raw_type: raw_type.to_string(),
+                    header_path_preview: header_path.map(|path| truncate_utf8_bytes(path, 256)),
+                    excerpt: truncate_utf8_bytes(&chunk.content, max_bytes as usize),
+                }
+            })
+            .collect())
+    }
+
+    pub fn assemble_context(
+        &self,
+        options: AssembleContextOptions,
+    ) -> Result<AssembledContextV2, RagError> {
+        let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        let start_generation = self.ensure_fresh_with_conn(&conn)?;
+        let built = assemble_context_internal(&conn, self, options)?;
+        run_handle_assemble_test_hook();
+        self.ensure_generation_unchanged_with_conn(&conn, start_generation)?;
+        match built {
+            AssemblyBuildResult::Complete(context) => Ok(context),
+            AssemblyBuildResult::MissingChunks(missing_ids) => {
+                let missing = missing_ids.first().copied().unwrap_or_default();
+                Err(RagError::StaleSearchHandle(format!(
+                    "chunk_id {} disappeared while assembling context",
+                    missing
+                )))
+            }
+        }
+    }
+
+    pub fn dispose(self) {}
+}
+
+pub fn search_meta_hybrid(
+    collection_id: String,
+    query_text: String,
+    query_embedding: Vec<f32>,
+    options: SearchMetaHybridOptions,
+) -> Result<RustAutoOpaque<SearchHandle>, RagError> {
+    let collection_id = normalize_collection_id(collection_id);
+    let mut last_error = None;
+
+    for _attempt in 0..=1 {
+        match search_meta_hybrid_once(
+            &collection_id,
+            query_text.clone(),
+            query_embedding.clone(),
+            options.clone(),
+        ) {
+            Ok(handle) => return Ok(RustAutoOpaque::new(handle)),
+            Err(err @ RagError::ConcurrentMutation(_)) => last_error = Some(err),
+            Err(err) => return Err(err),
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| {
+        RagError::ConcurrentMutation(
+            "search metadata creation raced with a concurrent mutation".to_string(),
+        )
+    }))
+}
+
+#[cfg(test)]
+fn run_search_meta_test_hook() {
+    if let Some(hook) = *SEARCH_META_TEST_HOOK.read().unwrap() {
+        hook();
+    }
+}
+
+#[cfg(not(test))]
+fn run_search_meta_test_hook() {}
+
+#[cfg(test)]
+fn run_handle_hydration_test_hook() {
+    if let Some(hook) = *HANDLE_HYDRATION_TEST_HOOK.read().unwrap() {
+        hook();
+    }
+}
+
+#[cfg(not(test))]
+fn run_handle_hydration_test_hook() {}
+
+#[cfg(test)]
+fn run_handle_assemble_test_hook() {
+    if let Some(hook) = *HANDLE_ASSEMBLE_TEST_HOOK.read().unwrap() {
+        hook();
+    }
+}
+
+#[cfg(not(test))]
+fn run_handle_assemble_test_hook() {}
+
+fn build_search_hit_meta(
+    chunk_id: i64,
+    source_id: i64,
+    chunk_index: i32,
+    similarity: f64,
+    stored_chunk_type: &str,
+) -> SearchHitMeta {
+    let (raw_type, header_path) = decode_structured_chunk_type(stored_chunk_type);
+    SearchHitMeta {
+        chunk_id,
+        source_id,
+        chunk_index,
+        similarity,
+        raw_type: raw_type.to_string(),
+        header_path_preview: header_path.map(|path| truncate_utf8_bytes(path, 256)),
+    }
+}
+
+fn fetch_stored_chunk_types(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+    chunk_ids: &[i64],
+) -> Result<HashMap<i64, String>, RagError> {
+    if chunk_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let id_list = chunk_ids
+        .iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT id, COALESCE(chunk_type, 'general')
+         FROM chunks
+         WHERE collection_id = ?1
+           AND id IN ({id_list})"
+    );
+
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let rows = stmt
+        .query_map(params![collection_id], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    let mut map = HashMap::new();
+    for row in rows {
+        let (chunk_id, chunk_type) = row.map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        map.insert(chunk_id, chunk_type);
+    }
+    Ok(map)
+}
+
+fn fetch_adjacent_hit_meta(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+    source_id: i64,
+    min_index: i32,
+    max_index: i32,
+) -> Result<Vec<SearchHitMeta>, RagError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, source_id, chunk_index, COALESCE(chunk_type, 'general')
+             FROM chunks
+             WHERE collection_id = ?1
+               AND source_id = ?2
+               AND chunk_index >= ?3
+               AND chunk_index <= ?4
+             ORDER BY chunk_index",
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    let rows = stmt
+        .query_map(
+            params![collection_id, source_id, min_index, max_index],
+            |row| {
+                let chunk_id: i64 = row.get(0)?;
+                let source_id: i64 = row.get(1)?;
+                let chunk_index: i32 = row.get(2)?;
+                let chunk_type: String = row.get(3)?;
+                Ok(build_search_hit_meta(
+                    chunk_id,
+                    source_id,
+                    chunk_index,
+                    0.0,
+                    &chunk_type,
+                ))
+            },
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    let mut hits = Vec::new();
+    for row in rows {
+        hits.push(row.map_err(|e| RagError::DatabaseError(e.to_string()))?);
+    }
+    Ok(hits)
+}
+
+fn search_meta_hybrid_once(
+    collection_id: &str,
+    query_text: String,
+    query_embedding: Vec<f32>,
+    options: SearchMetaHybridOptions,
+) -> Result<SearchHandle, RagError> {
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let start_generation = get_collection_data_generation(&conn, collection_id)?;
+
+    let effective_top_k = if options
+        .source_ids
+        .as_ref()
+        .map(|ids| !ids.is_empty())
+        .unwrap_or(false)
+    {
+        (options.top_k.saturating_mul(10)).clamp(50, 200)
+    } else {
+        options.top_k
+    };
+
+    let hybrid_results = search_hybrid(
+        query_text.clone(),
+        query_embedding,
+        effective_top_k,
+        Some(RrfConfig {
+            k: 60,
+            vector_weight: options.vector_weight.clamp(0.0, 1.0),
+            bm25_weight: options.bm25_weight.clamp(0.0, 1.0),
+        }),
+        Some(SearchFilter {
+            source_ids: options.source_ids.clone(),
+            metadata_like: None,
+            collection_id: Some(collection_id.to_string()),
+        }),
+    )?;
+
+    let base_results = hybrid_results
+        .into_iter()
+        .take(options.top_k as usize)
+        .collect::<Vec<_>>();
+    let base_chunk_ids = base_results
+        .iter()
+        .map(|result| result.doc_id)
+        .collect::<Vec<_>>();
+    let stored_chunk_types = fetch_stored_chunk_types(&conn, collection_id, &base_chunk_ids)?;
+
+    let mut base_hits = Vec::new();
+    for result in base_results {
+        let stored_chunk_type = stored_chunk_types
+            .get(&result.doc_id)
+            .cloned()
+            .unwrap_or_else(|| "general".to_string());
+        base_hits.push(build_search_hit_meta(
+            result.doc_id,
+            result.source_id,
+            result.chunk_index as i32,
+            result.score,
+            &stored_chunk_type,
+        ));
+    }
+
+    let ordered_hits = if options.adjacent_chunks > 0 && !base_hits.is_empty() {
+        let mut expanded = HashMap::<(i64, i32), SearchHitMeta>::new();
+        for hit in &base_hits {
+            expanded.insert((hit.source_id, hit.chunk_index), hit.clone());
+        }
+
+        for hit in &base_hits {
+            let min_index = (hit.chunk_index - options.adjacent_chunks).max(0);
+            let max_index = hit.chunk_index + options.adjacent_chunks;
+            for adjacent in
+                fetch_adjacent_hit_meta(&conn, collection_id, hit.source_id, min_index, max_index)?
+            {
+                expanded
+                    .entry((adjacent.source_id, adjacent.chunk_index))
+                    .or_insert(adjacent);
+            }
+        }
+
+        let mut hits = expanded.into_values().collect::<Vec<_>>();
+        hits.sort_by(|a, b| {
+            a.source_id
+                .cmp(&b.source_id)
+                .then_with(|| a.chunk_index.cmp(&b.chunk_index))
+        });
+        hits
+    } else {
+        base_hits.clone()
+    };
+
+    run_search_meta_test_hook();
+
+    let end_generation = get_collection_data_generation(&conn, collection_id)?;
+    if end_generation != start_generation {
+        return Err(RagError::ConcurrentMutation(format!(
+            "collection={} changed while creating search handle",
+            collection_id
+        )));
+    }
+
+    Ok(SearchHandle {
+        collection_id: collection_id.to_string(),
+        data_generation: start_generation,
+        query_text,
+        base_hits,
+        ordered_hits,
+        _query_options: options,
+    })
+}
+
+fn hydrate_chunk_search_results(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+    chunk_ids: Vec<i64>,
+    hits: &[SearchHitMeta],
+) -> Result<(Vec<ChunkSearchResult>, Vec<i64>), RagError> {
+    if chunk_ids.is_empty() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+
+    let hit_by_id = hits
+        .iter()
+        .map(|hit| (hit.chunk_id, hit))
+        .collect::<HashMap<_, _>>();
+    let id_list = chunk_ids
+        .iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), s.metadata
+         FROM chunks c
+         LEFT JOIN sources s ON c.source_id = s.id
+         WHERE c.collection_id = ?1
+           AND c.id IN ({id_list})"
+    );
+
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let rows = stmt
+        .query_map(params![collection_id], |row| {
+            Ok(ChunkSearchResult {
+                chunk_id: row.get(0)?,
+                source_id: row.get(1)?,
+                chunk_index: row.get(2)?,
+                content: row.get(3)?,
+                chunk_type: row.get(4)?,
+                similarity: 0.0,
+                metadata: row.get(5)?,
+            })
+        })
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    let mut hydrated_by_id = HashMap::new();
+    for row in rows {
+        let mut hydrated = row.map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        if let Some(hit) = hit_by_id.get(&hydrated.chunk_id) {
+            hydrated.similarity = hit.similarity;
+        }
+        hydrated_by_id.insert(hydrated.chunk_id, hydrated);
+    }
+
+    let mut ordered = Vec::with_capacity(chunk_ids.len());
+    let mut missing_ids = Vec::new();
+    for chunk_id in chunk_ids {
+        if let Some(chunk) = hydrated_by_id.remove(&chunk_id) {
+            ordered.push(chunk);
+        } else {
+            missing_ids.push(chunk_id);
+        }
+    }
+    Ok((ordered, missing_ids))
+}
+
+fn extract_significant_query_terms(query: &str) -> Vec<String> {
+    let mut terms = Vec::new();
+    let mut seen = HashSet::new();
+    for part in QUERY_TERM_SPLITTER.split(query) {
+        let term = part.trim();
+        if term.is_empty() {
+            continue;
+        }
+        if !CJK_OR_HANGUL_RE.is_match(term) && term.chars().count() < 2 {
+            continue;
+        }
+        let normalized = term.to_lowercase();
+        if seen.insert(normalized.clone()) {
+            terms.push(normalized);
+        }
+    }
+    terms
+}
+
+fn filter_to_most_relevant_source(chunks: &[HydratedChunkRow], query: &str) -> Option<i64> {
+    if chunks.is_empty() {
+        return None;
+    }
+
+    let query_lower = query.to_lowercase();
+    let query_terms = extract_significant_query_terms(query);
+    let mut source_text_matches = HashMap::<i64, i32>::new();
+
+    for chunk in chunks {
+        let content_lower = chunk.content.to_lowercase();
+        let mut match_count = 0;
+        for term in &query_terms {
+            if content_lower.contains(term) {
+                match_count += 1;
+            }
+        }
+        if content_lower.contains(&query_lower) || chunk.content.contains(query) {
+            match_count += 100;
+        }
+
+        *source_text_matches.entry(chunk.source_id).or_insert(0) += match_count;
+    }
+
+    if let Some((source_id, best_match_count)) = source_text_matches
+        .into_iter()
+        .max_by_key(|(_, score)| *score)
+    {
+        if best_match_count > 0 {
+            return Some(source_id);
+        }
+    }
+
+    chunks
+        .iter()
+        .fold(HashMap::<i64, f64>::new(), |mut acc, chunk| {
+            *acc.entry(chunk.source_id).or_insert(0.0) += chunk.similarity;
+            acc
+        })
+        .into_iter()
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(source_id, _)| source_id)
+}
+
+fn diversify_sources(chunks: Vec<HydratedChunkRow>) -> Vec<HydratedChunkRow> {
+    let mut diverse = Vec::new();
+    let mut remaining = chunks;
+    let mut last_source_id = None;
+
+    while !remaining.is_empty() {
+        if let Some(index) = remaining
+            .iter()
+            .position(|chunk| Some(chunk.source_id) != last_source_id)
+        {
+            let chunk = remaining.remove(index);
+            last_source_id = Some(chunk.source_id);
+            diverse.push(chunk);
+        } else {
+            diverse.extend(remaining.into_iter());
+            break;
+        }
+    }
+
+    diverse
+}
+
+fn order_chronologically(mut chunks: Vec<HydratedChunkRow>) -> Vec<HydratedChunkRow> {
+    chunks.sort_by(|a, b| {
+        a.source_id
+            .cmp(&b.source_id)
+            .then_with(|| a.chunk_index.cmp(&b.chunk_index))
+    });
+    chunks
+}
+
+struct RenderedSelectionState {
+    separator: String,
+    skip_headers: bool,
+    chunk_text_cache: HashMap<i64, String>,
+    token_count_cache: HashMap<String, u32>,
+    selected_in_order: Vec<HydratedChunkRow>,
+    source_order: Vec<i64>,
+    selected_by_source: HashMap<i64, Vec<HydratedChunkRow>>,
+    rendered_source_blocks: HashMap<i64, String>,
+    rendered_text: String,
+    measured_tokens: u32,
+}
+
+impl RenderedSelectionState {
+    fn new(separator: String, skip_headers: bool) -> Self {
+        Self {
+            separator,
+            skip_headers,
+            chunk_text_cache: HashMap::new(),
+            token_count_cache: HashMap::new(),
+            selected_in_order: Vec::new(),
+            source_order: Vec::new(),
+            selected_by_source: HashMap::new(),
+            rendered_source_blocks: HashMap::new(),
+            rendered_text: String::new(),
+            measured_tokens: 0,
+        }
+    }
+
+    fn try_add_chunk(
+        &mut self,
+        chunk: &HydratedChunkRow,
+        token_budget: i32,
+    ) -> Result<bool, RagError> {
+        let candidate_text = if self.skip_headers {
+            self.render_candidate_without_headers(chunk)
+        } else {
+            self.render_candidate_with_headers(chunk)
+        };
+        let candidate_tokens = self.count_tokens(&candidate_text)?;
+        if candidate_tokens as i32 > token_budget {
+            return Ok(false);
+        }
+
+        self.accept_chunk(chunk.clone(), candidate_text, candidate_tokens);
+        Ok(true)
+    }
+
+    fn render_candidate_without_headers(&mut self, chunk: &HydratedChunkRow) -> String {
+        let rendered_chunk = self.render_chunk(chunk);
+        if self.rendered_text.is_empty() {
+            return rendered_chunk;
+        }
+        format!("{}{}{}", self.rendered_text, self.separator, rendered_chunk)
+    }
+
+    fn render_candidate_with_headers(&mut self, chunk: &HydratedChunkRow) -> String {
+        let mut selected_for_source = self
+            .selected_by_source
+            .get(&chunk.source_id)
+            .cloned()
+            .unwrap_or_default();
+        selected_for_source.push(chunk.clone());
+        selected_for_source.sort_by(|a, b| a.chunk_index.cmp(&b.chunk_index));
+        let candidate_block = self.render_source_block(chunk.source_id, &selected_for_source);
+
+        let mut buffer = String::new();
+        let mut source_order = self.source_order.clone();
+        if !source_order.contains(&chunk.source_id) {
+            source_order.push(chunk.source_id);
+        }
+
+        for (index, current_source_id) in source_order.iter().enumerate() {
+            if index > 0 {
+                buffer.push('\n');
+            }
+            if *current_source_id == chunk.source_id {
+                buffer.push_str(&candidate_block);
+            } else if let Some(existing) = self.rendered_source_blocks.get(current_source_id) {
+                buffer.push_str(existing);
+            }
+        }
+
+        buffer
+    }
+
+    fn accept_chunk(
+        &mut self,
+        chunk: HydratedChunkRow,
+        rendered_text: String,
+        measured_tokens: u32,
+    ) {
+        self.selected_in_order.push(chunk.clone());
+        self.rendered_text = rendered_text;
+        self.measured_tokens = measured_tokens;
+
+        if self.skip_headers {
+            return;
+        }
+
+        let selected_for_source = self.selected_by_source.entry(chunk.source_id).or_default();
+        selected_for_source.push(chunk.clone());
+        selected_for_source.sort_by(|a, b| a.chunk_index.cmp(&b.chunk_index));
+        if !self.source_order.contains(&chunk.source_id) {
+            self.source_order.push(chunk.source_id);
+        }
+        let rendered_source_chunks = selected_for_source.clone();
+        let rendered_source_block =
+            self.render_source_block(chunk.source_id, &rendered_source_chunks);
+        self.rendered_source_blocks
+            .insert(chunk.source_id, rendered_source_block);
+    }
+
+    fn count_tokens(&mut self, text: &str) -> Result<u32, RagError> {
+        if let Some(tokens) = self.token_count_cache.get(text) {
+            return Ok(*tokens);
+        }
+        let tokens = count_plain_text_tokens_untruncated(text)
+            .map_err(|e| RagError::InternalError(e.to_string()))? as u32;
+        self.token_count_cache.insert(text.to_string(), tokens);
+        Ok(tokens)
+    }
+
+    fn render_chunk(&mut self, chunk: &HydratedChunkRow) -> String {
+        if let Some(text) = self.chunk_text_cache.get(&chunk.chunk_id) {
+            return text.clone();
+        }
+        let rendered = render_context_text(&chunk.content, &chunk.chunk_type);
+        self.chunk_text_cache
+            .insert(chunk.chunk_id, rendered.clone());
+        rendered
+    }
+
+    fn render_source_block(&mut self, source_id: i64, chunks: &[HydratedChunkRow]) -> String {
+        let mut buffer = String::new();
+        buffer.push_str(&format!("<document id=\"{}\">\n", source_id));
+
+        if let Some(metadata) = chunks.first().and_then(|chunk| chunk.metadata.clone()) {
+            buffer.push_str("  <metadata>");
+            buffer.push_str(&metadata);
+            buffer.push_str("</metadata>\n");
+        }
+
+        buffer.push_str("  <content>\n");
+        let rendered_chunks = chunks
+            .iter()
+            .map(|chunk| self.render_chunk(chunk))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        buffer.push_str(&rendered_chunks);
+        buffer.push_str("\n  </content>\n</document>\n");
+        buffer
+    }
+}
+
+fn hydrate_rows_for_assembly(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+    hits: &[SearchHitMeta],
+) -> Result<(Vec<HydratedChunkRow>, Vec<i64>), RagError> {
+    if hits.is_empty() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+
+    let (hydrated, missing_ids) = hydrate_chunk_search_results(
+        conn,
+        collection_id,
+        hits.iter().map(|hit| hit.chunk_id).collect(),
+        hits,
+    )?;
+
+    Ok((
+        hydrated
+            .into_iter()
+            .map(|chunk| HydratedChunkRow {
+                chunk_id: chunk.chunk_id,
+                source_id: chunk.source_id,
+                chunk_index: chunk.chunk_index,
+                content: chunk.content,
+                chunk_type: chunk.chunk_type,
+                similarity: chunk.similarity,
+                metadata: chunk.metadata,
+            })
+            .collect(),
+        missing_ids,
+    ))
+}
+
+enum AssemblyBuildResult {
+    Complete(AssembledContextV2),
+    MissingChunks(Vec<i64>),
+}
+
+fn assemble_context_internal(
+    conn: &rusqlite::Connection,
+    handle: &SearchHandle,
+    options: AssembleContextOptions,
+) -> Result<AssemblyBuildResult, RagError> {
+    let token_budget = options.token_budget.max(0);
+    if handle.ordered_hits.is_empty() {
+        return Ok(AssemblyBuildResult::Complete(AssembledContextV2 {
+            text: String::new(),
+            exact_tokens: 0,
+            included_chunk_ids: Vec::new(),
+            remaining_budget: token_budget,
+        }));
+    }
+
+    let selected_source_id = if options.single_source_mode {
+        let (base_chunks, missing_ids) =
+            hydrate_rows_for_assembly(conn, &handle.collection_id, &handle.base_hits)?;
+        if !missing_ids.is_empty() {
+            return Ok(AssemblyBuildResult::MissingChunks(missing_ids));
+        }
+        filter_to_most_relevant_source(&base_chunks, &handle.query_text)
+    } else {
+        None
+    };
+
+    let candidate_hits = match selected_source_id {
+        Some(source_id) => handle
+            .ordered_hits
+            .iter()
+            .filter(|hit| hit.source_id == source_id)
+            .cloned()
+            .collect::<Vec<_>>(),
+        None => handle.ordered_hits.clone(),
+    };
+
+    let (mut chunks, missing_ids) =
+        hydrate_rows_for_assembly(conn, &handle.collection_id, &candidate_hits)?;
+    if !missing_ids.is_empty() {
+        return Ok(AssemblyBuildResult::MissingChunks(missing_ids));
+    }
+    chunks = match options.strategy {
+        ContextAssemblyStrategy::RelevanceFirst => chunks,
+        ContextAssemblyStrategy::DiverseSources => diversify_sources(chunks),
+        ContextAssemblyStrategy::Chronological => order_chronologically(chunks),
+    };
+
+    let mut state = RenderedSelectionState::new(options.separator, options.single_source_mode);
+    for chunk in &chunks {
+        let _ = state.try_add_chunk(chunk, token_budget)?;
+    }
+
+    Ok(AssemblyBuildResult::Complete(AssembledContextV2 {
+        text: state.rendered_text.clone(),
+        exact_tokens: if state.rendered_text.is_empty() {
+            0
+        } else {
+            state.measured_tokens
+        },
+        included_chunk_ids: state
+            .selected_in_order
+            .iter()
+            .map(|chunk| chunk.chunk_id)
+            .collect(),
+        remaining_budget: token_budget - state.measured_tokens as i32,
+    }))
+}
+
+fn resolve_system_instruction(system_instruction: Option<&str>, use_strict_mode: bool) -> String {
+    if let Some(system_instruction) = system_instruction {
+        return system_instruction.to_string();
+    }
+
+    if use_strict_mode {
+        "Answer the question based ONLY on the documents below. If the information is not in the documents, say \"I could not find the information in the provided documents\".".to_string()
+    } else {
+        "Answer based on the following documents:".to_string()
+    }
+}
+
+fn build_prompt_text(instruction: &str, context_text: &str, query: &str) -> String {
+    format!(
+        "{instruction}\n\n--- Reference Documents ---\n{context_text}\n--- End of Documents ---\n\nQuestion: {query}\n\nAnswer:"
+    )
+}
+
+pub fn derive_context_budget_for_prompt_v2(
+    full_prompt_budget: u32,
+    query: String,
+    system_instruction: Option<String>,
+    use_strict_mode: bool,
+    safety_margin_tokens: u32,
+    fixed_prompt_overhead_tokens: Option<u32>,
+) -> Result<u32, RagError> {
+    let prompt_overhead_tokens = match fixed_prompt_overhead_tokens {
+        Some(tokens) => tokens,
+        None => {
+            let instruction =
+                resolve_system_instruction(system_instruction.as_deref(), use_strict_mode);
+            let skeleton = build_prompt_text(&instruction, "", &query);
+            count_plain_text_tokens_untruncated(&skeleton)
+                .map_err(|e| RagError::InternalError(e.to_string()))? as u32
+        }
+    };
+
+    Ok(full_prompt_budget
+        .saturating_sub(prompt_overhead_tokens)
+        .saturating_sub(safety_margin_tokens))
 }
 
 #[derive(Debug, Clone)]
@@ -1177,7 +2273,7 @@ pub fn delete_source_in_collection(collection_id: String, source_id: i64) -> Res
         params![source_id, &collection_id],
     )
     .map_err(|e| RagError::DatabaseError(e.to_string()))?;
-    mark_collection_dirty(&conn, &collection_id)?;
+    mark_collection_data_changed(&conn, &collection_id)?;
     info!("[delete_source] Deleted source {}", source_id);
     Ok(())
 }
@@ -1296,11 +2392,265 @@ mod tests {
     use crate::api::bm25_search::{bm25_clear_index, bm25_search};
     use crate::api::db_pool::{close_db_pool, init_db_pool};
     use crate::api::hnsw_index::clear_hnsw_index;
+    use crate::api::tokenizer::init_tokenizer;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Mutex, OnceLock};
+    use tokenizers::models::wordlevel::WordLevel;
+    use tokenizers::pre_tokenizers::whitespace::Whitespace;
+    use tokenizers::processors::bert::BertProcessing;
+    use tokenizers::Tokenizer;
 
     fn test_guard() -> std::sync::MutexGuard<'static, ()> {
         static TEST_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
-        TEST_MUTEX.get_or_init(|| Mutex::new(())).lock().unwrap()
+        TEST_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn init_test_tokenizer() {
+        let vocab_path = std::env::temp_dir().join("mobile_rag_engine_source_rag_test_vocab.json");
+        std::fs::write(
+            &vocab_path,
+            r#"{"[UNK]":0,"install":1,"the":2,"package":3,"run":4,"smoke":5,"test":6,"guide":7,"setup":8,"[CLS]":9,"[SEP]":10}"#,
+        )
+        .expect("failed to write source_rag test vocab");
+
+        let model = WordLevel::builder()
+            .files(vocab_path.to_str().unwrap().to_string())
+            .unk_token("[UNK]".to_string())
+            .build()
+            .expect("failed to build source_rag test tokenizer");
+        let mut tokenizer = Tokenizer::new(model);
+        tokenizer.with_pre_tokenizer(Some(Whitespace));
+        tokenizer.with_post_processor(Some(BertProcessing::new(
+            ("[SEP]".to_string(), 10),
+            ("[CLS]".to_string(), 9),
+        )));
+
+        let tokenizer_path =
+            std::env::temp_dir().join("mobile_rag_engine_source_rag_test_tokenizer.json");
+        tokenizer
+            .save(tokenizer_path.to_str().unwrap(), false)
+            .expect("failed to save source_rag test tokenizer");
+        init_tokenizer(tokenizer_path.to_str().unwrap().to_string())
+            .expect("failed to init source_rag test tokenizer");
+    }
+
+    fn test_search_meta_hook_collection() -> &'static Mutex<Option<String>> {
+        static HOOK_COLLECTION: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+        HOOK_COLLECTION.get_or_init(|| Mutex::new(None))
+    }
+
+    static SEARCH_META_HOOK_REMAINING: AtomicUsize = AtomicUsize::new(0);
+    static SEARCH_META_HOOK_SERIAL: AtomicUsize = AtomicUsize::new(0);
+    static HANDLE_HYDRATION_HOOK_REMAINING: AtomicUsize = AtomicUsize::new(0);
+    static HANDLE_ASSEMBLE_HOOK_REMAINING: AtomicUsize = AtomicUsize::new(0);
+
+    fn run_mutation_hook(remaining: &AtomicUsize) {
+        if remaining
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
+                if value > 0 {
+                    Some(value - 1)
+                } else {
+                    None
+                }
+            })
+            .is_err()
+        {
+            return;
+        }
+
+        let collection = test_search_meta_hook_collection()
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("hook collection must be set");
+        let serial = SEARCH_META_HOOK_SERIAL.fetch_add(1, Ordering::SeqCst);
+        let created = add_source_in_collection(
+            collection.clone(),
+            format!("hook mutation {}", serial),
+            None,
+            Some(format!("hook-{serial}")),
+        )
+        .unwrap();
+        update_source_status(created.source_id, "completed".to_string()).unwrap();
+    }
+
+    fn mutation_hook() {
+        run_mutation_hook(&SEARCH_META_HOOK_REMAINING);
+    }
+
+    fn hydration_mutation_hook() {
+        run_mutation_hook(&HANDLE_HYDRATION_HOOK_REMAINING);
+    }
+
+    fn assemble_mutation_hook() {
+        run_mutation_hook(&HANDLE_ASSEMBLE_HOOK_REMAINING);
+    }
+
+    fn configure_search_meta_hook(collection: &str, remaining_mutations: usize) {
+        *SEARCH_META_TEST_HOOK.write().unwrap() = Some(mutation_hook);
+        *test_search_meta_hook_collection().lock().unwrap() = Some(collection.to_string());
+        SEARCH_META_HOOK_REMAINING.store(remaining_mutations, Ordering::SeqCst);
+    }
+
+    fn clear_search_meta_hook() {
+        *SEARCH_META_TEST_HOOK.write().unwrap() = None;
+        *test_search_meta_hook_collection().lock().unwrap() = None;
+        SEARCH_META_HOOK_REMAINING.store(0, Ordering::SeqCst);
+    }
+
+    fn configure_handle_hydration_hook(collection: &str, remaining_mutations: usize) {
+        *HANDLE_HYDRATION_TEST_HOOK.write().unwrap() = Some(hydration_mutation_hook);
+        *test_search_meta_hook_collection().lock().unwrap() = Some(collection.to_string());
+        HANDLE_HYDRATION_HOOK_REMAINING.store(remaining_mutations, Ordering::SeqCst);
+    }
+
+    fn clear_handle_hydration_hook() {
+        *HANDLE_HYDRATION_TEST_HOOK.write().unwrap() = None;
+        *test_search_meta_hook_collection().lock().unwrap() = None;
+        HANDLE_HYDRATION_HOOK_REMAINING.store(0, Ordering::SeqCst);
+    }
+
+    fn configure_handle_assemble_hook(collection: &str, remaining_mutations: usize) {
+        *HANDLE_ASSEMBLE_TEST_HOOK.write().unwrap() = Some(assemble_mutation_hook);
+        *test_search_meta_hook_collection().lock().unwrap() = Some(collection.to_string());
+        HANDLE_ASSEMBLE_HOOK_REMAINING.store(remaining_mutations, Ordering::SeqCst);
+    }
+
+    fn clear_handle_assemble_hook() {
+        *HANDLE_ASSEMBLE_TEST_HOOK.write().unwrap() = None;
+        *test_search_meta_hook_collection().lock().unwrap() = None;
+        HANDLE_ASSEMBLE_HOOK_REMAINING.store(0, Ordering::SeqCst);
+    }
+
+    fn setup_test_db(name: &str) -> PathBuf {
+        let db_path = std::env::temp_dir().join(name);
+        let _ = std::fs::remove_file(&db_path);
+        init_db_pool(db_path.to_str().unwrap().to_string(), 4).unwrap();
+        init_source_db().unwrap();
+        clear_hnsw_index();
+        bm25_clear_index();
+        db_path
+    }
+
+    fn teardown_test_db(db_path: PathBuf) {
+        clear_search_meta_hook();
+        clear_handle_hydration_hook();
+        clear_handle_assemble_hook();
+        clear_hnsw_index();
+        bm25_clear_index();
+        close_db_pool();
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    fn fetch_chunk_rows(collection_id: &str) -> Vec<(i64, i64, i32, String)> {
+        let conn = get_connection().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, source_id, chunk_index, COALESCE(chunk_type, 'general')
+                 FROM chunks
+                 WHERE collection_id = ?1
+                 ORDER BY source_id, chunk_index, id",
+            )
+            .unwrap();
+        let rows = stmt
+            .query_map(params![collection_id], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i32>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .unwrap();
+        rows.map(|row| row.unwrap()).collect()
+    }
+
+    fn seed_search_fixture(collection_id: &str) -> Vec<(i64, i64, i32, String)> {
+        let source1 = add_source_in_collection(
+            collection_id.to_string(),
+            "Install the package.\nVerify the checksum.".to_string(),
+            Some("{\"source\":\"guide\"}".to_string()),
+            Some("guide".to_string()),
+        )
+        .unwrap();
+        update_source_status(source1.source_id, "completed".to_string()).unwrap();
+        add_chunks(
+            source1.source_id,
+            vec![ChunkData {
+                content: "Install the package.".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 20,
+                chunk_type: "text|Guide > Setup".to_string(),
+                embedding: vec![1.0, 0.0, 0.0, 0.0],
+            }],
+        )
+        .unwrap();
+
+        let source2 = add_source_in_collection(
+            collection_id.to_string(),
+            "Run the smoke test.".to_string(),
+            None,
+            Some("smoke".to_string()),
+        )
+        .unwrap();
+        update_source_status(source2.source_id, "completed".to_string()).unwrap();
+        add_chunks(
+            source2.source_id,
+            vec![ChunkData {
+                content: "Run the smoke test.".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 19,
+                chunk_type: "general".to_string(),
+                embedding: vec![0.6, 0.0, 0.0, 0.0],
+            }],
+        )
+        .unwrap();
+
+        rebuild_chunk_hnsw_index_for_collection(collection_id.to_string()).unwrap();
+        rebuild_chunk_bm25_index_for_collection(collection_id.to_string()).unwrap();
+        fetch_chunk_rows(collection_id)
+    }
+
+    fn build_handle_for_fixture(
+        collection_id: &str,
+        chunk_rows: &[(i64, i64, i32, String)],
+    ) -> SearchHandle {
+        let conn = get_connection().unwrap();
+        let data_generation = get_collection_data_generation(&conn, collection_id).unwrap();
+        let ordered_hits = chunk_rows
+            .iter()
+            .enumerate()
+            .map(|(index, (chunk_id, source_id, chunk_index, chunk_type))| {
+                build_search_hit_meta(
+                    *chunk_id,
+                    *source_id,
+                    *chunk_index,
+                    1.0 - (index as f64 * 0.1),
+                    chunk_type,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        SearchHandle {
+            collection_id: collection_id.to_string(),
+            data_generation,
+            query_text: "install".to_string(),
+            base_hits: ordered_hits.clone(),
+            ordered_hits,
+            _query_options: SearchMetaHybridOptions {
+                top_k: chunk_rows.len() as u32,
+                vector_weight: 1.0,
+                bm25_weight: 0.0,
+                source_ids: None,
+                adjacent_chunks: 0,
+            },
+        }
     }
 
     #[test]
@@ -1650,5 +3000,384 @@ mod tests {
 
         close_db_pool();
         let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn test_data_generation_defaults_and_mutations() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_data_generation_defaults_and_mutations.db");
+        let collection = "zero-copy-generation";
+        let conn = get_connection().unwrap();
+
+        assert_eq!(
+            get_collection_data_generation(&conn, collection).unwrap(),
+            0
+        );
+
+        let source = add_source_in_collection(
+            collection.to_string(),
+            "generation source".to_string(),
+            None,
+            Some("gen".to_string()),
+        )
+        .unwrap();
+        assert_eq!(
+            get_collection_data_generation(&conn, collection).unwrap(),
+            1
+        );
+
+        update_source_status(source.source_id, "completed".to_string()).unwrap();
+        assert_eq!(
+            get_collection_data_generation(&conn, collection).unwrap(),
+            2
+        );
+
+        add_chunks(
+            source.source_id,
+            vec![ChunkData {
+                content: "chunk body".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 10,
+                chunk_type: "text".to_string(),
+                embedding: vec![1.0, 0.0, 0.0, 0.0],
+            }],
+        )
+        .unwrap();
+        assert_eq!(
+            get_collection_data_generation(&conn, collection).unwrap(),
+            3
+        );
+
+        rebuild_chunk_hnsw_index_for_collection(collection.to_string()).unwrap();
+        rebuild_chunk_bm25_index_for_collection(collection.to_string()).unwrap();
+        assert_eq!(
+            get_collection_data_generation(&conn, collection).unwrap(),
+            3
+        );
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_search_meta_hybrid_returns_bounded_header_preview_and_no_hot_path_metadata_blob() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_search_meta_hybrid_returns_bounded_header_preview.db");
+        let collection = "zero-copy-preview";
+        let long_header = format!("text|{}", "가이드 > ".repeat(60));
+        let source = add_source_in_collection(
+            collection.to_string(),
+            "긴 헤더 테스트".to_string(),
+            Some(
+                "{\"very\":\"large metadata blob that should not appear in SearchHitMeta\"}"
+                    .to_string(),
+            ),
+            Some("preview".to_string()),
+        )
+        .unwrap();
+        update_source_status(source.source_id, "completed".to_string()).unwrap();
+        add_chunks(
+            source.source_id,
+            vec![ChunkData {
+                content: "긴 헤더를 가진 청크".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 24,
+                chunk_type: long_header.clone(),
+                embedding: vec![1.0, 0.0, 0.0, 0.0],
+            }],
+        )
+        .unwrap();
+        rebuild_chunk_hnsw_index_for_collection(collection.to_string()).unwrap();
+        rebuild_chunk_bm25_index_for_collection(collection.to_string()).unwrap();
+
+        let handle: SearchHandle = search_meta_hybrid_once(
+            collection,
+            "긴 헤더".to_string(),
+            vec![1.0, 0.0, 0.0, 0.0],
+            SearchMetaHybridOptions {
+                top_k: 1,
+                vector_weight: 1.0,
+                bm25_weight: 0.0,
+                source_ids: None,
+                adjacent_chunks: 0,
+            },
+        )
+        .unwrap();
+        let hits = handle.hit_meta().unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].raw_type, "text");
+        let preview = hits[0].header_path_preview.clone().unwrap();
+        assert!(preview.as_bytes().len() <= 256);
+        assert!("가이드 > ".repeat(60).starts_with(&preview));
+
+        let hydrated = handle.hydrate_chunks(vec![hits[0].chunk_id]).unwrap();
+        assert_eq!(
+            hydrated[0].metadata,
+            Some(
+                "{\"very\":\"large metadata blob that should not appear in SearchHitMeta\"}"
+                    .to_string()
+            )
+        );
+        assert_eq!(hydrated[0].chunk_type, long_header);
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_search_handle_rejects_stale_hydration_after_mutation() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_search_handle_rejects_stale_hydration_after_mutation.db");
+        let collection = "zero-copy-stale";
+        let chunk_rows = seed_search_fixture(collection);
+        let handle = build_handle_for_fixture(collection, &chunk_rows);
+
+        let _ = add_source_in_collection(
+            collection.to_string(),
+            "mutation source".to_string(),
+            None,
+            Some("mutation".to_string()),
+        )
+        .unwrap();
+
+        let err = handle.hit_meta().unwrap_err();
+        match err {
+            RagError::StaleSearchHandle(msg) => {
+                assert!(msg.contains("expected_generation"));
+            }
+            other => panic!("expected stale search handle error, got {:?}", other),
+        }
+        let err = handle.hydrate_chunks(vec![chunk_rows[0].0]).unwrap_err();
+        assert!(matches!(err, RagError::StaleSearchHandle(_)));
+        let err = handle
+            .get_chunk_excerpts(vec![chunk_rows[0].0], 8)
+            .unwrap_err();
+        assert!(matches!(err, RagError::StaleSearchHandle(_)));
+        let err = handle
+            .assemble_context(AssembleContextOptions {
+                token_budget: 100,
+                strategy: ContextAssemblyStrategy::RelevanceFirst,
+                separator: "\n\n---\n\n".to_string(),
+                single_source_mode: false,
+            })
+            .unwrap_err();
+        assert!(matches!(err, RagError::StaleSearchHandle(_)));
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_search_meta_hybrid_retries_once_after_concurrent_mutation() {
+        let _guard = test_guard();
+        let db_path =
+            setup_test_db("test_search_meta_hybrid_retries_once_after_concurrent_mutation.db");
+        let collection = "zero-copy-retry";
+        seed_search_fixture(collection);
+
+        configure_search_meta_hook(collection, 1);
+        let _opaque_handle = search_meta_hybrid(
+            collection.to_string(),
+            "install".to_string(),
+            vec![1.0, 0.0, 0.0, 0.0],
+            SearchMetaHybridOptions {
+                top_k: 2,
+                vector_weight: 1.0,
+                bm25_weight: 0.0,
+                source_ids: None,
+                adjacent_chunks: 0,
+            },
+        )
+        .unwrap();
+        let hits: SearchHandle = search_meta_hybrid_once(
+            collection,
+            "install".to_string(),
+            vec![1.0, 0.0, 0.0, 0.0],
+            SearchMetaHybridOptions {
+                top_k: 2,
+                vector_weight: 1.0,
+                bm25_weight: 0.0,
+                source_ids: None,
+                adjacent_chunks: 0,
+            },
+        )
+        .unwrap();
+        assert_eq!(hits.hit_meta().unwrap().len(), 2);
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_search_meta_hybrid_fails_after_repeated_concurrent_mutation() {
+        let _guard = test_guard();
+        let db_path =
+            setup_test_db("test_search_meta_hybrid_fails_after_repeated_concurrent_mutation.db");
+        let collection = "zero-copy-retry-fail";
+        seed_search_fixture(collection);
+
+        configure_search_meta_hook(collection, 2);
+        let err = search_meta_hybrid(
+            collection.to_string(),
+            "install".to_string(),
+            vec![1.0, 0.0, 0.0, 0.0],
+            SearchMetaHybridOptions {
+                top_k: 2,
+                vector_weight: 1.0,
+                bm25_weight: 0.0,
+                source_ids: None,
+                adjacent_chunks: 0,
+            },
+        )
+        .unwrap_err();
+        assert!(matches!(err, RagError::ConcurrentMutation(_)));
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_batch_hydration_and_excerpt_preserve_requested_order() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_batch_hydration_and_excerpt_preserve_requested_order.db");
+        let collection = "zero-copy-hydrate";
+        let chunk_rows = seed_search_fixture(collection);
+        let handle = build_handle_for_fixture(collection, &chunk_rows);
+
+        let requested = vec![chunk_rows[1].0, chunk_rows[0].0];
+        let hydrated = handle.hydrate_chunks(requested.clone()).unwrap();
+        assert_eq!(
+            hydrated
+                .iter()
+                .map(|chunk| chunk.chunk_id)
+                .collect::<Vec<_>>(),
+            requested
+        );
+        assert_eq!(hydrated[0].content, "Run the smoke test.");
+
+        let excerpts = handle.get_chunk_excerpts(requested.clone(), 10).unwrap();
+        assert_eq!(
+            excerpts
+                .iter()
+                .map(|chunk| chunk.chunk_id)
+                .collect::<Vec<_>>(),
+            requested
+        );
+        assert!(excerpts[0].excerpt.as_bytes().len() <= 10);
+        assert!("Run the smoke test.".starts_with(&excerpts[0].excerpt));
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_hydrate_and_excerpt_reject_duplicate_chunk_ids() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_hydrate_and_excerpt_reject_duplicate_chunk_ids.db");
+        let collection = "zero-copy-duplicate";
+        let chunk_rows = seed_search_fixture(collection);
+        let handle = build_handle_for_fixture(collection, &chunk_rows);
+        let duplicated = vec![chunk_rows[0].0, chunk_rows[0].0];
+
+        let err = handle.hydrate_chunks(duplicated.clone()).unwrap_err();
+        assert!(matches!(err, RagError::InvalidInput(_)));
+
+        let err = handle.get_chunk_excerpts(duplicated, 12).unwrap_err();
+        assert!(matches!(err, RagError::InvalidInput(_)));
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_hydrate_returns_concurrent_mutation_when_generation_changes_mid_operation() {
+        let _guard = test_guard();
+        let db_path = setup_test_db(
+            "test_hydrate_returns_concurrent_mutation_when_generation_changes_mid_operation.db",
+        );
+        let collection = "zero-copy-hydrate-race";
+        let chunk_rows = seed_search_fixture(collection);
+        let handle = build_handle_for_fixture(collection, &chunk_rows);
+
+        configure_handle_hydration_hook(collection, 1);
+        let err = handle.hydrate_chunks(vec![chunk_rows[0].0]).unwrap_err();
+        assert!(matches!(err, RagError::ConcurrentMutation(_)));
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_excerpt_returns_concurrent_mutation_when_generation_changes_mid_operation() {
+        let _guard = test_guard();
+        let db_path = setup_test_db(
+            "test_excerpt_returns_concurrent_mutation_when_generation_changes_mid_operation.db",
+        );
+        let collection = "zero-copy-excerpt-race";
+        let chunk_rows = seed_search_fixture(collection);
+        let handle = build_handle_for_fixture(collection, &chunk_rows);
+
+        configure_handle_hydration_hook(collection, 1);
+        let err = handle
+            .get_chunk_excerpts(vec![chunk_rows[0].0], 12)
+            .unwrap_err();
+        assert!(matches!(err, RagError::ConcurrentMutation(_)));
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_assemble_context_matches_grouped_rendering_contract() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_assemble_context_matches_grouped_rendering_contract.db");
+        let collection = "zero-copy-context";
+        let chunk_rows = seed_search_fixture(collection);
+        init_test_tokenizer();
+        let handle = build_handle_for_fixture(collection, &chunk_rows);
+
+        let assembled = handle
+            .assemble_context(AssembleContextOptions {
+                token_budget: 100,
+                strategy: ContextAssemblyStrategy::RelevanceFirst,
+                separator: "\n\n---\n\n".to_string(),
+                single_source_mode: false,
+            })
+            .unwrap();
+
+        let expected = "<document id=\"1\">\n  <metadata>{\"source\":\"guide\"}</metadata>\n  <content>\nHeader Path: Guide > Setup\nInstall the package.\n  </content>\n</document>\n\n<document id=\"2\">\n  <content>\nRun the smoke test.\n  </content>\n</document>\n".to_string();
+        assert_eq!(assembled.text, expected);
+        assert_eq!(
+            assembled.exact_tokens,
+            count_plain_text_tokens_untruncated(&expected).unwrap() as u32
+        );
+        assert_eq!(
+            assembled.included_chunk_ids,
+            chunk_rows.iter().map(|row| row.0).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            assembled.remaining_budget,
+            100 - assembled.exact_tokens as i32
+        );
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_assemble_context_returns_concurrent_mutation_when_generation_changes_before_finalize() {
+        let _guard = test_guard();
+        let db_path = setup_test_db(
+            "test_assemble_context_returns_concurrent_mutation_when_generation_changes_before_finalize.db",
+        );
+        let collection = "zero-copy-assemble-race";
+        let chunk_rows = seed_search_fixture(collection);
+        init_test_tokenizer();
+        let handle = build_handle_for_fixture(collection, &chunk_rows);
+
+        configure_handle_assemble_hook(collection, 1);
+        let err = handle
+            .assemble_context(AssembleContextOptions {
+                token_budget: 100,
+                strategy: ContextAssemblyStrategy::RelevanceFirst,
+                separator: "\n\n---\n\n".to_string(),
+                single_source_mode: false,
+            })
+            .unwrap_err();
+        assert!(matches!(err, RagError::ConcurrentMutation(_)));
+
+        teardown_test_db(db_path);
     }
 }

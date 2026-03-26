@@ -10,20 +10,30 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 /// Extract text content from a PDF file (bytes)
 /// Uses page-by-page extraction for safe page number removal and hyphenation handling
-Future<String> extractTextFromPdf({required List<int> fileBytes}) => RustLib
-    .instance
-    .api
-    .crateApiDocumentParserExtractTextFromPdf(fileBytes: fileBytes);
+Future<String> extractTextFromPdf({required List<int> fileBytes}) =>
+    RustLib.instance.api
+        .crateApiDocumentParserExtractTextFromPdf(fileBytes: fileBytes);
 
 /// Extract text content from a DOCX file (bytes)
-Future<String> extractTextFromDocx({required List<int> fileBytes}) => RustLib
-    .instance
-    .api
-    .crateApiDocumentParserExtractTextFromDocx(fileBytes: fileBytes);
+Future<String> extractTextFromDocx({required List<int> fileBytes}) =>
+    RustLib.instance.api
+        .crateApiDocumentParserExtractTextFromDocx(fileBytes: fileBytes);
 
 /// Auto-detect document type and extract text
 /// Uses magic bytes to determine file format
 Future<String> extractTextFromDocument({required List<int> fileBytes}) =>
-    RustLib.instance.api.crateApiDocumentParserExtractTextFromDocument(
-      fileBytes: fileBytes,
-    );
+    RustLib.instance.api
+        .crateApiDocumentParserExtractTextFromDocument(fileBytes: fileBytes);
+
+/// Decode UTF-8 text bytes without altering content semantics.
+Future<String> extractTextFromUtf8({required List<int> fileBytes}) =>
+    RustLib.instance.api
+        .crateApiDocumentParserExtractTextFromUtf8(fileBytes: fileBytes);
+
+/// Read a file and extract text according to extension / magic bytes.
+///
+/// Text-like files (`.txt`, `.md`, `.markdown`) are decoded as UTF-8.
+/// Binary document types fall back to the existing document extractor.
+Future<String> extractTextFromFile({required String filePath}) =>
+    RustLib.instance.api
+        .crateApiDocumentParserExtractTextFromFile(filePath: filePath);

@@ -69,7 +69,11 @@ export 'src/rust/api/source_rag.dart'
         AddSourceResult,
         ChunkData,
         SourceEntry,
-        ChunkForReembedding;
+        ChunkForReembedding,
+        SearchHandle,
+        SearchHitMeta,
+        ChunkExcerptResult,
+        AssembledContextV2;
 
 // Hybrid Search Types
 export 'src/rust/api/hybrid_search.dart' show HybridSearchResult;
