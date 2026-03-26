@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Clarified markdown table splitting to preserve raw source-backed slices without synthetic repeated header rows in later chunks.
 * **Parser / Quality**:
   - Added parser regression coverage for mixed Unicode/PDF-like artifacts and an ignored `join_pages()` stress benchmark.
+* **Docs**:
+  - Clarified README memory wording to describe a copy-minimized Rust core rather than end-to-end zero-copy FFI transport.
 * **Compatibility**:
   - Updated dependency constraint to `rag_engine_flutter: ^0.16.0`.
 

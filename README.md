@@ -10,6 +10,8 @@
 
 Powered by a **Rust core**, it delivers lightning-fast vector search and embedding generation directly on the device. No servers, no API costs, no latency.
 
+> **Memory note:** The runtime is memory-optimized and avoids unnecessary copies in the Rust core, but the current text pipeline is not an end-to-end zero-copy Dart↔Rust transport. Large text payloads still cross the FFI boundary as strings in the current public API.
+
 ---
 
 ## Why this package?
@@ -26,7 +28,7 @@ This package includes **pre-compiled binaries** for iOS, Android, and macOS. Jus
 |:---|:---:|:---:|
 | **Tokenization** | Slow | **10x Faster** (HuggingFace tokenizers) |
 | **Vector Search** | O(n) | **O(log n)** (HNSW Index) |
-| **Memory Usage** | High | **Optimized** (Zero-copy FFI) |
+| **Memory Usage** | High | **Optimized** (copy-minimized Rust core) |
 
 ### 100% Offline & Private
 
