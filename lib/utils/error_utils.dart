@@ -12,6 +12,10 @@ extension RagErrorUi on RagError {
       modelLoadError: (_) =>
           'Failed to load the AI model. Please restart the app.',
       invalidInput: (msg) => 'Invalid input: $msg',
+      staleSearchHandle: (_) =>
+          'The search results are no longer current. Please run the search again.',
+      concurrentMutation: (_) =>
+          'The underlying collection changed during search. Please try again.',
       internalError: (_) => 'A temporary internal error occurred.',
       unknown: (_) => 'An unknown error occurred.',
     );
@@ -24,6 +28,8 @@ extension RagErrorUi on RagError {
       ioError: (msg) => msg,
       modelLoadError: (msg) => msg,
       invalidInput: (msg) => msg,
+      staleSearchHandle: (msg) => msg,
+      concurrentMutation: (msg) => msg,
       internalError: (msg) => msg,
       unknown: (msg) => msg,
     );
