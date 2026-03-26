@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.16.0
+* **Context**:
+  - Improved `ContextBuilder` packing to skip oversized chunks instead of stopping at the first overflow.
+  - Added `ContextBuilder.deriveContextBudgetForPrompt(...)` and `PromptBudgetOptions` for full-prompt budgeting on top of exact `context.text` counting.
+* **Chunking**:
+  - Hardened plain-text heading detection against short imperative, UI-label, and command-style false positives.
+  - Clarified markdown table splitting to preserve raw source-backed slices without synthetic repeated header rows in later chunks.
+* **Parser / Quality**:
+  - Added parser regression coverage for mixed Unicode/PDF-like artifacts and an ignored `join_pages()` stress benchmark.
+* **Compatibility**:
+  - Updated dependency constraint to `rag_engine_flutter: ^0.16.0`.
+
 ## 0.15.0
 * **Feat**:
   - Switched context budgeting to exact engine-tokenizer counting through a shared rendered-context path.
