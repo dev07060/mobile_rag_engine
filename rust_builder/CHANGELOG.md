@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.17.0
+* **Low-level lane**:
+  - Added a generation-pinned `SearchHandle` with metadata-first hybrid search, batch hydration, excerpt fetch, and Rust-side context assembly.
+  - Added bounded `SearchHitMeta` plus `StaleSearchHandle` / `ConcurrentMutation` error paths for low-level handle operations.
+* **Search / Context**:
+  - Added Rust-side context assembly primitives that preserve the current header-path contextual injection and exact engine-tokenizer budgeting contract.
+  - Tightened `SearchHandle` hydration/excerpt/assembly generation checks to reject stale handles and mid-operation mutations deterministically.
+* **Ingest**:
+  - Added UTF-8 bytes and file-based extraction fast paths for additive low-level ingest APIs.
+* **Test**:
+  - Added regression coverage for generation bumps, stale-handle rejection, concurrent mutations during hydration/assembly, duplicate hydration requests, and low-level lane parity.
+
 ## 0.16.0
 * **Chunking**:
   - Hardened plain-text heading detection against short imperative, UI-label, and command-style false positives.
