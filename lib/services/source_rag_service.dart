@@ -725,6 +725,7 @@ class SourceRagService {
   }
 
   /// Add a document from UTF-8 bytes while avoiding caller-side String inflation.
+  /// Add a UTF-8 payload while reducing input-side Dart String materialization.
   Future<SourceAddResult> addSourceUtf8WithChunking(
     List<int> bytes, {
     String? metadata,
@@ -746,7 +747,7 @@ class SourceRagService {
     );
   }
 
-  /// Add a document from a file path using Rust-side file reading/parsing.
+  /// Add a document from a file path using a Rust-side ingest fast path.
   Future<SourceAddResult> addSourceFromFileWithChunking(
     String filePath, {
     String? metadata,

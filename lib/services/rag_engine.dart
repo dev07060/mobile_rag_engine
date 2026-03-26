@@ -423,7 +423,7 @@ class RagEngine {
     }
   }
 
-  /// Add a UTF-8 document payload without requiring the caller to inflate a Dart String first.
+  /// Add a UTF-8 document payload while reducing input-side Dart String materialization.
   Future<SourceAddResult> addDocumentUtf8(
     Uint8List bytes, {
     String? metadata,
@@ -455,7 +455,7 @@ class RagEngine {
     }
   }
 
-  /// Add a document from a file path using Rust-side file reading/parsing.
+  /// Add a document from a file path using a Rust-side ingest fast path.
   Future<SourceAddResult> addDocumentFromFile(
     String filePath, {
     String? metadata,

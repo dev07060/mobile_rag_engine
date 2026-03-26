@@ -55,6 +55,10 @@ static CJK_OR_HANGUL_RE: Lazy<Regex> = Lazy::new(|| {
 
 #[cfg(test)]
 static SEARCH_META_TEST_HOOK: Lazy<RwLock<Option<fn()>>> = Lazy::new(|| RwLock::new(None));
+#[cfg(test)]
+static HANDLE_HYDRATION_TEST_HOOK: Lazy<RwLock<Option<fn()>>> = Lazy::new(|| RwLock::new(None));
+#[cfg(test)]
+static HANDLE_ASSEMBLE_TEST_HOOK: Lazy<RwLock<Option<fn()>>> = Lazy::new(|| RwLock::new(None));
 
 fn hash_content(content: &str) -> String {
     let mut hasher = Sha256::new();
@@ -1059,13 +1063,27 @@ pub struct SearchHandle {
 }
 
 impl SearchHandle {
-    fn ensure_fresh(&self) -> Result<(), RagError> {
-        let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    fn ensure_fresh_with_conn(&self, conn: &rusqlite::Connection) -> Result<i64, RagError> {
         let current_generation = get_collection_data_generation(&conn, &self.collection_id)?;
         if current_generation != self.data_generation {
             return Err(RagError::StaleSearchHandle(format!(
                 "collection={} expected_generation={} current_generation={}",
                 self.collection_id, self.data_generation, current_generation
+            )));
+        }
+        Ok(current_generation)
+    }
+
+    fn ensure_generation_unchanged_with_conn(
+        &self,
+        conn: &rusqlite::Connection,
+        start_generation: i64,
+    ) -> Result<(), RagError> {
+        let end_generation = get_collection_data_generation(conn, &self.collection_id)?;
+        if end_generation != start_generation {
+            return Err(RagError::ConcurrentMutation(format!(
+                "collection={} changed during search handle operation start_generation={} end_generation={}",
+                self.collection_id, start_generation, end_generation
             )));
         }
         Ok(())
@@ -1082,19 +1100,22 @@ impl SearchHandle {
             chunk_ids
         }
     }
-}
 
-#[frb]
-impl SearchHandle {
-    pub fn hit_meta(&self) -> Result<Vec<SearchHitMeta>, RagError> {
-        self.ensure_fresh()?;
-        Ok(self.ordered_hits.clone())
-    }
-
-    pub fn hydrate_chunks(&self, chunk_ids: Vec<i64>) -> Result<Vec<ChunkSearchResult>, RagError> {
-        self.ensure_fresh()?;
+    fn validate_requested_chunk_ids(&self, chunk_ids: Vec<i64>) -> Result<Vec<i64>, RagError> {
         let allowed = self.allowed_chunk_ids();
         let requested_ids = self.resolved_chunk_ids(chunk_ids);
+        let mut seen = HashSet::new();
+
+        if let Some(duplicate) = requested_ids
+            .iter()
+            .find(|chunk_id| !seen.insert(**chunk_id))
+        {
+            return Err(RagError::InvalidInput(format!(
+                "duplicate chunk_ids are not allowed: {}",
+                duplicate
+            )));
+        }
+
         if let Some(missing) = requested_ids
             .iter()
             .find(|chunk_id| !allowed.contains(chunk_id))
@@ -1105,8 +1126,37 @@ impl SearchHandle {
             )));
         }
 
-        let hydrated =
-            hydrate_chunk_search_results(&self.collection_id, requested_ids, &self.ordered_hits)?;
+        Ok(requested_ids)
+    }
+}
+
+#[frb]
+impl SearchHandle {
+    pub fn hit_meta(&self) -> Result<Vec<SearchHitMeta>, RagError> {
+        let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        self.ensure_fresh_with_conn(&conn)?;
+        Ok(self.ordered_hits.clone())
+    }
+
+    pub fn hydrate_chunks(&self, chunk_ids: Vec<i64>) -> Result<Vec<ChunkSearchResult>, RagError> {
+        let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        let start_generation = self.ensure_fresh_with_conn(&conn)?;
+        let requested_ids = self.validate_requested_chunk_ids(chunk_ids)?;
+        run_handle_hydration_test_hook();
+
+        let (hydrated, missing_ids) = hydrate_chunk_search_results(
+            &conn,
+            &self.collection_id,
+            requested_ids,
+            &self.ordered_hits,
+        )?;
+        self.ensure_generation_unchanged_with_conn(&conn, start_generation)?;
+        if let Some(missing) = missing_ids.first() {
+            return Err(RagError::StaleSearchHandle(format!(
+                "chunk_id {} disappeared while hydrating search results",
+                missing
+            )));
+        }
         Ok(hydrated)
     }
 
@@ -1115,21 +1165,24 @@ impl SearchHandle {
         chunk_ids: Vec<i64>,
         max_bytes: u32,
     ) -> Result<Vec<ChunkExcerptResult>, RagError> {
-        self.ensure_fresh()?;
-        let allowed = self.allowed_chunk_ids();
-        let requested_ids = self.resolved_chunk_ids(chunk_ids);
-        if let Some(missing) = requested_ids
-            .iter()
-            .find(|chunk_id| !allowed.contains(chunk_id))
-        {
-            return Err(RagError::InvalidInput(format!(
-                "chunk_id {} is not part of this search handle",
+        let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        let start_generation = self.ensure_fresh_with_conn(&conn)?;
+        let requested_ids = self.validate_requested_chunk_ids(chunk_ids)?;
+        run_handle_hydration_test_hook();
+
+        let (hydrated, missing_ids) = hydrate_chunk_search_results(
+            &conn,
+            &self.collection_id,
+            requested_ids,
+            &self.ordered_hits,
+        )?;
+        self.ensure_generation_unchanged_with_conn(&conn, start_generation)?;
+        if let Some(missing) = missing_ids.first() {
+            return Err(RagError::StaleSearchHandle(format!(
+                "chunk_id {} disappeared while hydrating search results",
                 missing
             )));
         }
-
-        let hydrated =
-            hydrate_chunk_search_results(&self.collection_id, requested_ids, &self.ordered_hits)?;
 
         Ok(hydrated
             .into_iter()
@@ -1151,8 +1204,21 @@ impl SearchHandle {
         &self,
         options: AssembleContextOptions,
     ) -> Result<AssembledContextV2, RagError> {
-        self.ensure_fresh()?;
-        assemble_context_internal(self, options)
+        let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        let start_generation = self.ensure_fresh_with_conn(&conn)?;
+        let built = assemble_context_internal(&conn, self, options)?;
+        run_handle_assemble_test_hook();
+        self.ensure_generation_unchanged_with_conn(&conn, start_generation)?;
+        match built {
+            AssemblyBuildResult::Complete(context) => Ok(context),
+            AssemblyBuildResult::MissingChunks(missing_ids) => {
+                let missing = missing_ids.first().copied().unwrap_or_default();
+                Err(RagError::StaleSearchHandle(format!(
+                    "chunk_id {} disappeared while assembling context",
+                    missing
+                )))
+            }
+        }
     }
 
     pub fn dispose(self) {}
@@ -1196,6 +1262,26 @@ fn run_search_meta_test_hook() {
 
 #[cfg(not(test))]
 fn run_search_meta_test_hook() {}
+
+#[cfg(test)]
+fn run_handle_hydration_test_hook() {
+    if let Some(hook) = *HANDLE_HYDRATION_TEST_HOOK.read().unwrap() {
+        hook();
+    }
+}
+
+#[cfg(not(test))]
+fn run_handle_hydration_test_hook() {}
+
+#[cfg(test)]
+fn run_handle_assemble_test_hook() {
+    if let Some(hook) = *HANDLE_ASSEMBLE_TEST_HOOK.read().unwrap() {
+        hook();
+    }
+}
+
+#[cfg(not(test))]
+fn run_handle_assemble_test_hook() {}
 
 fn build_search_hit_meta(
     chunk_id: i64,
@@ -1409,12 +1495,13 @@ fn search_meta_hybrid_once(
 }
 
 fn hydrate_chunk_search_results(
+    conn: &rusqlite::Connection,
     collection_id: &str,
     chunk_ids: Vec<i64>,
     hits: &[SearchHitMeta],
-) -> Result<Vec<ChunkSearchResult>, RagError> {
+) -> Result<(Vec<ChunkSearchResult>, Vec<i64>), RagError> {
     if chunk_ids.is_empty() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
 
     let hit_by_id = hits
@@ -1426,7 +1513,6 @@ fn hydrate_chunk_search_results(
         .map(|id| id.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     let sql = format!(
         "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), s.metadata
          FROM chunks c
@@ -1462,16 +1548,15 @@ fn hydrate_chunk_search_results(
     }
 
     let mut ordered = Vec::with_capacity(chunk_ids.len());
+    let mut missing_ids = Vec::new();
     for chunk_id in chunk_ids {
-        let Some(chunk) = hydrated_by_id.remove(&chunk_id) else {
-            return Err(RagError::StaleSearchHandle(format!(
-                "chunk_id {} disappeared while hydrating search results",
-                chunk_id
-            )));
-        };
-        ordered.push(chunk);
+        if let Some(chunk) = hydrated_by_id.remove(&chunk_id) {
+            ordered.push(chunk);
+        } else {
+            missing_ids.push(chunk_id);
+        }
     }
-    Ok(ordered)
+    Ok((ordered, missing_ids))
 }
 
 fn extract_significant_query_terms(query: &str) -> Vec<String> {
@@ -1724,49 +1809,64 @@ impl RenderedSelectionState {
 }
 
 fn hydrate_rows_for_assembly(
+    conn: &rusqlite::Connection,
     collection_id: &str,
     hits: &[SearchHitMeta],
-) -> Result<Vec<HydratedChunkRow>, RagError> {
+) -> Result<(Vec<HydratedChunkRow>, Vec<i64>), RagError> {
     if hits.is_empty() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
 
-    let hydrated = hydrate_chunk_search_results(
+    let (hydrated, missing_ids) = hydrate_chunk_search_results(
+        conn,
         collection_id,
         hits.iter().map(|hit| hit.chunk_id).collect(),
         hits,
     )?;
 
-    Ok(hydrated
-        .into_iter()
-        .map(|chunk| HydratedChunkRow {
-            chunk_id: chunk.chunk_id,
-            source_id: chunk.source_id,
-            chunk_index: chunk.chunk_index,
-            content: chunk.content,
-            chunk_type: chunk.chunk_type,
-            similarity: chunk.similarity,
-            metadata: chunk.metadata,
-        })
-        .collect())
+    Ok((
+        hydrated
+            .into_iter()
+            .map(|chunk| HydratedChunkRow {
+                chunk_id: chunk.chunk_id,
+                source_id: chunk.source_id,
+                chunk_index: chunk.chunk_index,
+                content: chunk.content,
+                chunk_type: chunk.chunk_type,
+                similarity: chunk.similarity,
+                metadata: chunk.metadata,
+            })
+            .collect(),
+        missing_ids,
+    ))
+}
+
+enum AssemblyBuildResult {
+    Complete(AssembledContextV2),
+    MissingChunks(Vec<i64>),
 }
 
 fn assemble_context_internal(
+    conn: &rusqlite::Connection,
     handle: &SearchHandle,
     options: AssembleContextOptions,
-) -> Result<AssembledContextV2, RagError> {
+) -> Result<AssemblyBuildResult, RagError> {
     let token_budget = options.token_budget.max(0);
     if handle.ordered_hits.is_empty() {
-        return Ok(AssembledContextV2 {
+        return Ok(AssemblyBuildResult::Complete(AssembledContextV2 {
             text: String::new(),
             exact_tokens: 0,
             included_chunk_ids: Vec::new(),
             remaining_budget: token_budget,
-        });
+        }));
     }
 
     let selected_source_id = if options.single_source_mode {
-        let base_chunks = hydrate_rows_for_assembly(&handle.collection_id, &handle.base_hits)?;
+        let (base_chunks, missing_ids) =
+            hydrate_rows_for_assembly(conn, &handle.collection_id, &handle.base_hits)?;
+        if !missing_ids.is_empty() {
+            return Ok(AssemblyBuildResult::MissingChunks(missing_ids));
+        }
         filter_to_most_relevant_source(&base_chunks, &handle.query_text)
     } else {
         None
@@ -1782,7 +1882,11 @@ fn assemble_context_internal(
         None => handle.ordered_hits.clone(),
     };
 
-    let mut chunks = hydrate_rows_for_assembly(&handle.collection_id, &candidate_hits)?;
+    let (mut chunks, missing_ids) =
+        hydrate_rows_for_assembly(conn, &handle.collection_id, &candidate_hits)?;
+    if !missing_ids.is_empty() {
+        return Ok(AssemblyBuildResult::MissingChunks(missing_ids));
+    }
     chunks = match options.strategy {
         ContextAssemblyStrategy::RelevanceFirst => chunks,
         ContextAssemblyStrategy::DiverseSources => diversify_sources(chunks),
@@ -1794,7 +1898,7 @@ fn assemble_context_internal(
         let _ = state.try_add_chunk(chunk, token_budget)?;
     }
 
-    Ok(AssembledContextV2 {
+    Ok(AssemblyBuildResult::Complete(AssembledContextV2 {
         text: state.rendered_text.clone(),
         exact_tokens: if state.rendered_text.is_empty() {
             0
@@ -1807,7 +1911,7 @@ fn assemble_context_internal(
             .map(|chunk| chunk.chunk_id)
             .collect(),
         remaining_budget: token_budget - state.measured_tokens as i32,
-    })
+    }))
 }
 
 fn resolve_system_instruction(system_instruction: Option<&str>, use_strict_mode: bool) -> String {
@@ -2341,9 +2445,11 @@ mod tests {
 
     static SEARCH_META_HOOK_REMAINING: AtomicUsize = AtomicUsize::new(0);
     static SEARCH_META_HOOK_SERIAL: AtomicUsize = AtomicUsize::new(0);
+    static HANDLE_HYDRATION_HOOK_REMAINING: AtomicUsize = AtomicUsize::new(0);
+    static HANDLE_ASSEMBLE_HOOK_REMAINING: AtomicUsize = AtomicUsize::new(0);
 
-    fn mutation_hook() {
-        if SEARCH_META_HOOK_REMAINING
+    fn run_mutation_hook(remaining: &AtomicUsize) {
+        if remaining
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
                 if value > 0 {
                     Some(value - 1)
@@ -2372,6 +2478,18 @@ mod tests {
         update_source_status(created.source_id, "completed".to_string()).unwrap();
     }
 
+    fn mutation_hook() {
+        run_mutation_hook(&SEARCH_META_HOOK_REMAINING);
+    }
+
+    fn hydration_mutation_hook() {
+        run_mutation_hook(&HANDLE_HYDRATION_HOOK_REMAINING);
+    }
+
+    fn assemble_mutation_hook() {
+        run_mutation_hook(&HANDLE_ASSEMBLE_HOOK_REMAINING);
+    }
+
     fn configure_search_meta_hook(collection: &str, remaining_mutations: usize) {
         *SEARCH_META_TEST_HOOK.write().unwrap() = Some(mutation_hook);
         *test_search_meta_hook_collection().lock().unwrap() = Some(collection.to_string());
@@ -2382,6 +2500,30 @@ mod tests {
         *SEARCH_META_TEST_HOOK.write().unwrap() = None;
         *test_search_meta_hook_collection().lock().unwrap() = None;
         SEARCH_META_HOOK_REMAINING.store(0, Ordering::SeqCst);
+    }
+
+    fn configure_handle_hydration_hook(collection: &str, remaining_mutations: usize) {
+        *HANDLE_HYDRATION_TEST_HOOK.write().unwrap() = Some(hydration_mutation_hook);
+        *test_search_meta_hook_collection().lock().unwrap() = Some(collection.to_string());
+        HANDLE_HYDRATION_HOOK_REMAINING.store(remaining_mutations, Ordering::SeqCst);
+    }
+
+    fn clear_handle_hydration_hook() {
+        *HANDLE_HYDRATION_TEST_HOOK.write().unwrap() = None;
+        *test_search_meta_hook_collection().lock().unwrap() = None;
+        HANDLE_HYDRATION_HOOK_REMAINING.store(0, Ordering::SeqCst);
+    }
+
+    fn configure_handle_assemble_hook(collection: &str, remaining_mutations: usize) {
+        *HANDLE_ASSEMBLE_TEST_HOOK.write().unwrap() = Some(assemble_mutation_hook);
+        *test_search_meta_hook_collection().lock().unwrap() = Some(collection.to_string());
+        HANDLE_ASSEMBLE_HOOK_REMAINING.store(remaining_mutations, Ordering::SeqCst);
+    }
+
+    fn clear_handle_assemble_hook() {
+        *HANDLE_ASSEMBLE_TEST_HOOK.write().unwrap() = None;
+        *test_search_meta_hook_collection().lock().unwrap() = None;
+        HANDLE_ASSEMBLE_HOOK_REMAINING.store(0, Ordering::SeqCst);
     }
 
     fn setup_test_db(name: &str) -> PathBuf {
@@ -2396,6 +2538,8 @@ mod tests {
 
     fn teardown_test_db(db_path: PathBuf) {
         clear_search_meta_hook();
+        clear_handle_hydration_hook();
+        clear_handle_assemble_hook();
         clear_hnsw_index();
         bm25_clear_index();
         close_db_pool();
@@ -3005,6 +3149,19 @@ mod tests {
         }
         let err = handle.hydrate_chunks(vec![chunk_rows[0].0]).unwrap_err();
         assert!(matches!(err, RagError::StaleSearchHandle(_)));
+        let err = handle
+            .get_chunk_excerpts(vec![chunk_rows[0].0], 8)
+            .unwrap_err();
+        assert!(matches!(err, RagError::StaleSearchHandle(_)));
+        let err = handle
+            .assemble_context(AssembleContextOptions {
+                token_budget: 100,
+                strategy: ContextAssemblyStrategy::RelevanceFirst,
+                separator: "\n\n---\n\n".to_string(),
+                single_source_mode: false,
+            })
+            .unwrap_err();
+        assert!(matches!(err, RagError::StaleSearchHandle(_)));
 
         teardown_test_db(db_path);
     }
@@ -3110,6 +3267,60 @@ mod tests {
     }
 
     #[test]
+    fn test_hydrate_and_excerpt_reject_duplicate_chunk_ids() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_hydrate_and_excerpt_reject_duplicate_chunk_ids.db");
+        let collection = "zero-copy-duplicate";
+        let chunk_rows = seed_search_fixture(collection);
+        let handle = build_handle_for_fixture(collection, &chunk_rows);
+        let duplicated = vec![chunk_rows[0].0, chunk_rows[0].0];
+
+        let err = handle.hydrate_chunks(duplicated.clone()).unwrap_err();
+        assert!(matches!(err, RagError::InvalidInput(_)));
+
+        let err = handle.get_chunk_excerpts(duplicated, 12).unwrap_err();
+        assert!(matches!(err, RagError::InvalidInput(_)));
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_hydrate_returns_concurrent_mutation_when_generation_changes_mid_operation() {
+        let _guard = test_guard();
+        let db_path = setup_test_db(
+            "test_hydrate_returns_concurrent_mutation_when_generation_changes_mid_operation.db",
+        );
+        let collection = "zero-copy-hydrate-race";
+        let chunk_rows = seed_search_fixture(collection);
+        let handle = build_handle_for_fixture(collection, &chunk_rows);
+
+        configure_handle_hydration_hook(collection, 1);
+        let err = handle.hydrate_chunks(vec![chunk_rows[0].0]).unwrap_err();
+        assert!(matches!(err, RagError::ConcurrentMutation(_)));
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_excerpt_returns_concurrent_mutation_when_generation_changes_mid_operation() {
+        let _guard = test_guard();
+        let db_path = setup_test_db(
+            "test_excerpt_returns_concurrent_mutation_when_generation_changes_mid_operation.db",
+        );
+        let collection = "zero-copy-excerpt-race";
+        let chunk_rows = seed_search_fixture(collection);
+        let handle = build_handle_for_fixture(collection, &chunk_rows);
+
+        configure_handle_hydration_hook(collection, 1);
+        let err = handle
+            .get_chunk_excerpts(vec![chunk_rows[0].0], 12)
+            .unwrap_err();
+        assert!(matches!(err, RagError::ConcurrentMutation(_)));
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
     fn test_assemble_context_matches_grouped_rendering_contract() {
         let _guard = test_guard();
         let db_path = setup_test_db("test_assemble_context_matches_grouped_rendering_contract.db");
@@ -3141,6 +3352,31 @@ mod tests {
             assembled.remaining_budget,
             100 - assembled.exact_tokens as i32
         );
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_assemble_context_returns_concurrent_mutation_when_generation_changes_before_finalize() {
+        let _guard = test_guard();
+        let db_path = setup_test_db(
+            "test_assemble_context_returns_concurrent_mutation_when_generation_changes_before_finalize.db",
+        );
+        let collection = "zero-copy-assemble-race";
+        let chunk_rows = seed_search_fixture(collection);
+        init_test_tokenizer();
+        let handle = build_handle_for_fixture(collection, &chunk_rows);
+
+        configure_handle_assemble_hook(collection, 1);
+        let err = handle
+            .assemble_context(AssembleContextOptions {
+                token_budget: 100,
+                strategy: ContextAssemblyStrategy::RelevanceFirst,
+                separator: "\n\n---\n\n".to_string(),
+                single_source_mode: false,
+            })
+            .unwrap_err();
+        assert!(matches!(err, RagError::ConcurrentMutation(_)));
 
         teardown_test_db(db_path);
     }
