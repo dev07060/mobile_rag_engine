@@ -11,18 +11,31 @@ import '../src/rust/api/compression_utils.dart' as compression;
 import '../src/rust/api/tokenizer.dart';
 
 typedef TokenCounter = int Function(String text);
-typedef CompressionRunner =
-    Future<String> Function(
-      String renderedText,
-      int maxChars,
-      int level,
-      String language,
-    );
+typedef CompressionRunner = Future<String> Function(
+  String renderedText,
+  int maxChars,
+  int level,
+  String language,
+);
+
+class PromptBudgetOptions {
+  final int safetyMarginTokens;
+  final int? fixedPromptOverheadTokens;
+  final TokenCounter? targetPromptTokenCounter;
+
+  const PromptBudgetOptions({
+    this.safetyMarginTokens = 0,
+    this.fixedPromptOverheadTokens,
+    this.targetPromptTokenCounter,
+  });
+}
 
 @visibleForTesting
 ({String rawType, String? headerPath}) decodeStructuredChunkType(
   String chunkType,
 ) {
+  // TODO(metadata-breaking): stop multiplexing chunk type and contextual path
+  // inside a single string field once the public/runtime schema can change.
   final separator = chunkType.indexOf('|');
   if (separator < 0) {
     return (rawType: chunkType, headerPath: null);
@@ -51,7 +64,9 @@ class AssembledContext {
   /// Chunks that were included in the context.
   final List<ChunkSearchResult> includedChunks;
 
-  /// Token count used. Field name is kept for backward compatibility.
+  /// Exact engine-tokenizer count for `text`.
+  /// The legacy field name is kept for backward compatibility.
+  // TODO(token-naming-breaking): rename to exactTokens in the next breaking API.
   final int estimatedTokens;
 
   /// Tokens remaining from budget.
@@ -79,6 +94,150 @@ enum ContextStrategy {
 
   /// Order by chunk index within each source (maintains document order).
   chronological,
+}
+
+String _chunkCacheKey(ChunkSearchResult chunk) =>
+    '${chunk.sourceId}:${chunk.chunkId}:${chunk.chunkIndex}';
+
+class _RenderedSelectionState {
+  _RenderedSelectionState({
+    required this.separator,
+    required this.skipHeaders,
+    required this.tokenCounter,
+  });
+
+  final String separator;
+  final bool skipHeaders;
+  final TokenCounter tokenCounter;
+
+  final Map<String, String> _chunkTextCache = {};
+  final Map<String, int> _tokenCountCache = {};
+  final List<ChunkSearchResult> _selectedInOrder = [];
+
+  final List<int> _sourceOrder = [];
+  final Map<int, List<ChunkSearchResult>> _selectedBySource = {};
+  final Map<int, String> _renderedSourceBlocks = {};
+
+  String _renderedText = '';
+  int _measuredTokens = 0;
+
+  List<ChunkSearchResult> get selectedChunks =>
+      List<ChunkSearchResult>.unmodifiable(_selectedInOrder);
+
+  String get renderedText => _renderedText;
+
+  int get measuredTokens => _measuredTokens;
+
+  bool tryAddChunk(ChunkSearchResult chunk, int tokenBudget) {
+    final candidateText = skipHeaders
+        ? _renderCandidateWithoutHeaders(chunk)
+        : _renderCandidateWithHeaders(chunk);
+    final candidateTokens = _countTokens(candidateText);
+
+    if (candidateTokens > tokenBudget) {
+      return false;
+    }
+
+    _acceptChunk(
+      chunk: chunk,
+      renderedText: candidateText,
+      measuredTokens: candidateTokens,
+    );
+    return true;
+  }
+
+  String _renderCandidateWithoutHeaders(ChunkSearchResult chunk) {
+    final renderedChunk = _renderChunk(chunk);
+    if (_renderedText.isEmpty) {
+      return renderedChunk;
+    }
+    return '$_renderedText$separator$renderedChunk';
+  }
+
+  String _renderCandidateWithHeaders(ChunkSearchResult chunk) {
+    final sourceId = chunk.sourceId.toInt();
+    final selectedForSource =
+        List<ChunkSearchResult>.from(_selectedBySource[sourceId] ?? const [])
+          ..add(chunk)
+          ..sort((a, b) => a.chunkIndex.compareTo(b.chunkIndex));
+    final candidateBlock = _renderSourceBlock(sourceId, selectedForSource);
+
+    final buffer = StringBuffer();
+    var isFirst = true;
+    final sourceOrder = _sourceOrder.contains(sourceId)
+        ? _sourceOrder
+        : [..._sourceOrder, sourceId];
+
+    for (final currentSourceId in sourceOrder) {
+      if (!isFirst) {
+        buffer.write('\n');
+      }
+      buffer.write(
+        currentSourceId == sourceId
+            ? candidateBlock
+            : _renderedSourceBlocks[currentSourceId],
+      );
+      isFirst = false;
+    }
+
+    return buffer.toString();
+  }
+
+  void _acceptChunk({
+    required ChunkSearchResult chunk,
+    required String renderedText,
+    required int measuredTokens,
+  }) {
+    _selectedInOrder.add(chunk);
+    _renderedText = renderedText;
+    _measuredTokens = measuredTokens;
+
+    if (skipHeaders) {
+      return;
+    }
+
+    final sourceId = chunk.sourceId.toInt();
+    final selectedForSource =
+        _selectedBySource.putIfAbsent(sourceId, () => <ChunkSearchResult>[]);
+    selectedForSource.add(chunk);
+    selectedForSource.sort((a, b) => a.chunkIndex.compareTo(b.chunkIndex));
+
+    if (!_sourceOrder.contains(sourceId)) {
+      _sourceOrder.add(sourceId);
+    }
+
+    _renderedSourceBlocks[sourceId] = _renderSourceBlock(
+      sourceId,
+      selectedForSource,
+    );
+  }
+
+  int _countTokens(String text) {
+    return _tokenCountCache.putIfAbsent(text, () => tokenCounter(text));
+  }
+
+  String _renderChunk(ChunkSearchResult chunk) {
+    return _chunkTextCache.putIfAbsent(
+      _chunkCacheKey(chunk),
+      () => ContextBuilder._renderChunkText(chunk),
+    );
+  }
+
+  String _renderSourceBlock(int sourceId, List<ChunkSearchResult> chunks) {
+    final buffer = StringBuffer();
+    buffer.write('<document id="$sourceId">\n');
+
+    final firstChunk = chunks.first;
+    if (firstChunk.metadata != null) {
+      buffer.write('  <metadata>${firstChunk.metadata}</metadata>\n');
+    }
+
+    buffer.write('  <content>\n');
+    buffer.write(chunks.map(_renderChunk).join('\n\n'));
+    buffer.write('\n  </content>\n');
+    buffer.write('</document>\n');
+    return buffer.toString();
+  }
 }
 
 /// Builds optimized context for LLM prompts.
@@ -142,38 +301,23 @@ class ContextBuilder {
       ContextStrategy.chronological => _orderChronologically(filteredResults),
     };
 
-    // Select chunks within budget using the final rendered output.
-    final selected = <ChunkSearchResult>[];
     final skipHeaders = singleSourceMode;
+    final state = _RenderedSelectionState(
+      separator: separator,
+      skipHeaders: skipHeaders,
+      tokenCounter: _countTokens,
+    );
 
     for (final chunk in orderedResults) {
-      final candidateSelection = List<ChunkSearchResult>.from(selected)
-        ..add(chunk);
-      final renderedCandidate = _buildGroupedText(
-        candidateSelection,
-        separator,
-        skipHeaders: skipHeaders,
-      );
-      final totalIfAdded = _countTokens(renderedCandidate);
-
-      if (totalIfAdded <= tokenBudget) {
-        selected.add(chunk);
-      } else {
-        break; // Budget exhausted
-      }
+      state.tryAddChunk(chunk, tokenBudget);
     }
 
-    // Build final text - group by source with clear headers (skip headers in singleSourceMode)
-    final text = _buildGroupedText(
-      selected,
-      separator,
-      skipHeaders: skipHeaders,
-    );
-    final measuredTokens = text.isEmpty ? 0 : _countTokens(text);
+    final text = state.renderedText;
+    final measuredTokens = text.isEmpty ? 0 : state.measuredTokens;
 
     return AssembledContext(
       text: text,
-      includedChunks: selected,
+      includedChunks: state.selectedChunks,
       estimatedTokens: measuredTokens,
       remainingBudget: tokenBudget - measuredTokens,
     );
@@ -312,6 +456,32 @@ class ContextBuilder {
     return sorted;
   }
 
+  static String _resolveSystemInstruction({
+    String? systemInstruction,
+    required bool useStrictMode,
+  }) {
+    return systemInstruction ??
+        (useStrictMode
+            ? 'Answer the question based ONLY on the documents below. If the information is not in the documents, say "I could not find the information in the provided documents".'
+            : 'Answer based on the following documents:');
+  }
+
+  static String _buildPromptText({
+    required String instruction,
+    required String contextText,
+    required String query,
+  }) {
+    return '''$instruction
+
+--- Reference Documents ---
+$contextText
+--- End of Documents ---
+
+Question: $query
+
+Answer:''';
+  }
+
   /// Format context for LLM prompt.
   ///
   /// Creates a prompt that instructs the LLM to answer based ONLY on
@@ -328,22 +498,44 @@ class ContextBuilder {
       return query;
     }
 
-    // Default instruction: bilingual for better model understanding
-    final instruction =
-        systemInstruction ??
-        (useStrictMode
-            ? 'Answer the question based ONLY on the documents below. If the information is not in the documents, say "I could not find the information in the provided documents".'
-            : 'Answer based on the following documents:');
+    final instruction = _resolveSystemInstruction(
+      systemInstruction: systemInstruction,
+      useStrictMode: useStrictMode,
+    );
 
-    return '''$instruction
+    return _buildPromptText(
+      instruction: instruction,
+      contextText: context.text,
+      query: query,
+    );
+  }
 
---- Reference Documents ---
-${context.text}
---- End of Documents ---
+  /// Derive how many tokens can be safely assigned to `context.text`
+  /// when the downstream consumer budgets the full prompt instead.
+  static int deriveContextBudgetForPrompt({
+    required int fullPromptBudget,
+    required String query,
+    String? systemInstruction,
+    bool useStrictMode = true,
+    PromptBudgetOptions options = const PromptBudgetOptions(),
+  }) {
+    final promptOverheadTokens = switch (options.targetPromptTokenCounter) {
+      final targetCounter? => targetCounter(
+          _buildPromptText(
+            instruction: _resolveSystemInstruction(
+              systemInstruction: systemInstruction,
+              useStrictMode: useStrictMode,
+            ),
+            contextText: '',
+            query: query,
+          ),
+        ),
+      null => options.fixedPromptOverheadTokens ?? 0,
+    };
 
-Question: $query
-
-Answer:''';
+    final budget =
+        fullPromptBudget - promptOverheadTokens - options.safetyMarginTokens;
+    return budget < 0 ? 0 : budget;
   }
 
   /// Build context with REFRAG-style compression.
@@ -395,9 +587,8 @@ Answer:''';
       compressionLevel,
       language,
     );
-    final exactTokens = compressedText.isEmpty
-        ? 0
-        : _countTokens(compressedText);
+    final exactTokens =
+        compressedText.isEmpty ? 0 : _countTokens(compressedText);
 
     return AssembledContext(
       text: compressedText,
@@ -434,7 +625,8 @@ Answer:''';
           maxChars,
           level,
           language,
-        )).trimRight();
+        ))
+            .trimRight();
       } else {
         final result = await compression.compressText(
           text: renderedText,

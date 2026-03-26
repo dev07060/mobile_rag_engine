@@ -8,7 +8,7 @@ The `mobile_rag_engine` provides a highly specialized **Markdown Chunker** desig
 The chunker respects the logical boundaries of Markdown elements. It ensures that semantic units are kept intact whenever possible.
 
 *   **Code Blocks (`code`)**: Never splits a code block in the middle of a line. If a code block exceeds the chunk size, it is split by lines, and metadata is added to link the parts (see below).
-*   **Tables (`table`)**: Never splits a table row in the middle. If a table is too large, it is split by rows, and the **header row is repeated** in every resulting chunk to maintain column context.
+*   **Tables (`table`)**: Never splits a table row in the middle. If a table is too large, it is split by rows while keeping each stored chunk as a raw source-backed slice.
 *   **Headers**: Headers are not treated as separate chunks but are used to build "breadcrumbs" for context (see Header Path Inheritance).
 
 ### 2. Header Path Inheritance (Context Awareness)
@@ -44,9 +44,9 @@ Our chunker adds **Linking Metadata** to split code blocks:
 **Use Case:** This allows your UI or RAG pipeline to detect that a retrieved chunk is part of a larger code block and fetch the adjacent chunks to reconstruct the full code for the user or the LLM.
 
 ### 4. Smart Table Splitting (v0.9.1+)
-Large tables are notorious in RAG. If a table with 50 rows is split into 5 chunks of 10 rows, chunks 2-5 usually lose the header row, making the data meaningless numbers.
+Large tables are still split on row boundaries so the engine never cuts through the middle of a row.
 
-Our chunker **automatically prepends the header row** to every split chunk of a table.
+To preserve raw source offsets, the engine keeps each stored table chunk as a direct slice of the original markdown. That means the first chunk contains the table header row from the source, while later chunks continue with subsequent rows instead of receiving a synthetic repeated header row.
 
 **Original:**
 | Name | Age | Role |
@@ -55,10 +55,10 @@ Our chunker **automatically prepends the header row** to every split chunk of a 
 ... (50 rows) ...
 
 **Split Chunk 2:**
-| Name | Age | Role |
-|---|---|---|
 | Bob | 25 | Design |
 ...
+
+If you need extra table context for later chunks, treat it as a retrieval/rendering concern rather than assuming the stored chunk content has a duplicated header row.
 
 ## Usage
 
@@ -105,6 +105,7 @@ for (final chunk in chunks) {
 
 - Raw markdown chunk `content` is preserved as extracted text. Header path is **not** automatically prepended to stored content.
 - `headerPath` is carried separately and injected into embedding/context rendering paths.
+- Split table chunks preserve row boundaries, but later chunks do **not** receive a synthetic repeated header row.
 - `tokenBudget` applies to the assembled `context.text`, not the full prompt wrapper that `formatForPrompt()` adds later.
 
 ## Comparisons

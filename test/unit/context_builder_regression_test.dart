@@ -26,8 +26,8 @@ ChunkSearchResult _chunk({
 void main() {
   group('ContextBuilder regression', () {
     setUp(() {
-      ContextBuilder.debugTokenCounterOverride = (text) =>
-          RegExp(r'\S+').allMatches(text).length;
+      ContextBuilder.debugTokenCounterOverride =
+          (text) => RegExp(r'\S+').allMatches(text).length;
       ContextBuilder.debugCompressionRunnerOverride = null;
     });
 
@@ -143,6 +143,97 @@ void main() {
       );
     });
 
+    test('oversized chunk is skipped and later smaller chunks are still packed',
+        () {
+      final results = <ChunkSearchResult>[
+        _chunk(
+          chunkId: 40,
+          sourceId: 1,
+          chunkIndex: 0,
+          content: 'alpha beta gamma delta epsilon zeta',
+          similarity: 0.99,
+        ),
+        _chunk(
+          chunkId: 41,
+          sourceId: 1,
+          chunkIndex: 1,
+          content: 'small chunk',
+          similarity: 0.80,
+        ),
+        _chunk(
+          chunkId: 42,
+          sourceId: 1,
+          chunkIndex: 2,
+          content: 'later fit',
+          similarity: 0.70,
+        ),
+      ];
+
+      final context = ContextBuilder.build(
+        searchResults: results,
+        tokenBudget: 5,
+        separator: ' | ',
+        singleSourceMode: true,
+      );
+
+      expect(
+        context.includedChunks.map((chunk) => chunk.chunkId),
+        orderedEquals([41, 42]),
+      );
+      expect(context.text, 'small chunk | later fit');
+      expect(context.estimatedTokens, 5);
+      expect(context.remainingBudget, 0);
+    });
+
+    test('no-overflow grouped rendering remains byte-for-byte stable', () {
+      final results = <ChunkSearchResult>[
+        _chunk(
+          chunkId: 50,
+          sourceId: 7,
+          chunkIndex: 3,
+          content: 'Install the package.',
+          chunkType: 'text|Guide > Setup',
+          similarity: 0.95,
+          metadata: '{"source":"guide"}',
+        ),
+        _chunk(
+          chunkId: 51,
+          sourceId: 9,
+          chunkIndex: 0,
+          content: 'Run the smoke test.',
+          similarity: 0.90,
+        ),
+      ];
+
+      final context = ContextBuilder.build(
+        searchResults: results,
+        tokenBudget: 100,
+        singleSourceMode: false,
+      );
+
+      expect(
+        context.text,
+        '<document id="7">\n'
+        '  <metadata>{"source":"guide"}</metadata>\n'
+        '  <content>\n'
+        'Header Path: Guide > Setup\n'
+        'Install the package.\n'
+        '  </content>\n'
+        '</document>\n'
+        '\n'
+        '<document id="9">\n'
+        '  <content>\n'
+        'Run the smoke test.\n'
+        '  </content>\n'
+        '</document>\n',
+      );
+      expect(
+        context.estimatedTokens,
+        RegExp(r'\S+').allMatches(context.text).length,
+      );
+      expect(context.remainingBudget, 100 - context.estimatedTokens);
+    });
+
     test('renderContextText matches markdown embedding text contract', () {
       const content = 'Install dependencies before starting the server.';
       const chunkType = 'text|Guide > Setup';
@@ -153,21 +244,64 @@ void main() {
       );
     });
 
+    test('deriveContextBudgetForPrompt supports fixed overhead budgeting', () {
+      final budget = ContextBuilder.deriveContextBudgetForPrompt(
+        fullPromptBudget: 100,
+        query: 'What changed?',
+        options: const PromptBudgetOptions(
+          fixedPromptOverheadTokens: 13,
+          safetyMarginTokens: 7,
+        ),
+      );
+
+      expect(budget, 80);
+    });
+
+    test(
+      'deriveContextBudgetForPrompt can use a target prompt token counter',
+      () {
+        final counter = (String text) => RegExp(r'\S+').allMatches(text).length;
+        const query = 'Where is the guide?';
+        final expectedSkeleton = 'Answer the question based ONLY on the '
+            'documents below. If the information is not in the documents, '
+            'say "I could not find the information in the provided documents".\n\n'
+            '--- Reference Documents ---\n'
+            '\n'
+            '--- End of Documents ---\n\n'
+            'Question: $query\n\n'
+            'Answer:';
+
+        final budget = ContextBuilder.deriveContextBudgetForPrompt(
+          fullPromptBudget: 40,
+          query: query,
+          options: PromptBudgetOptions(
+            safetyMarginTokens: 2,
+            targetPromptTokenCounter: counter,
+          ),
+        );
+
+        expect(
+          budget,
+          (40 - counter(expectedSkeleton) - 2).clamp(0, 1 << 30),
+        );
+      },
+    );
+
     test(
       'buildWithCompression converges to exact token budget and keeps provenance',
       () async {
         var compressionCalls = 0;
         ContextBuilder.debugCompressionRunnerOverride =
             (renderedText, maxChars, level, language) async {
-              compressionCalls++;
-              if (compressionCalls == 1) {
-                return 'alpha beta gamma delta epsilon';
-              }
-              if (compressionCalls == 2) {
-                return 'alpha beta gamma';
-              }
-              return 'alpha beta';
-            };
+          compressionCalls++;
+          if (compressionCalls == 1) {
+            return 'alpha beta gamma delta epsilon';
+          }
+          if (compressionCalls == 2) {
+            return 'alpha beta gamma';
+          }
+          return 'alpha beta';
+        };
 
         final results = <ChunkSearchResult>[
           _chunk(
@@ -197,6 +331,7 @@ void main() {
         expect(context.estimatedTokens, lessThanOrEqualTo(2));
         expect(context.text, 'alpha beta');
         expect(context.includedChunks, results);
+        expect(context.remainingBudget, 0);
         expect(compressionCalls, greaterThanOrEqualTo(2));
       },
     );

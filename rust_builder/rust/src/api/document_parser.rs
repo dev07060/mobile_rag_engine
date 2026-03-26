@@ -312,21 +312,19 @@ mod tests {
         let result = join_pages(pages);
         assert_eq!(result, "highly-readable");
 
-        // Soft hyphen (U+00AD) - The Regex expects literal '-', so this might fail to join
-        // and leave the soft hyphen in the output.
         let pages_soft = vec!["highly-read\u{00AD}\n\nable".to_string()];
         let result_soft = join_pages(pages_soft);
-        // If it fails to join, it will likely be "highly-read\u{00AD} able" (with space)
-        // We want to see what happens currenty.
-        // If it fails, we know we need to fix the regex.
-        println!("Soft hyphen result: {}", result_soft);
-
-        // We expect it to FAIL joining currently, resulting in the soft hyphen remaining
-        // and a space being inserted.
         assert_eq!(
             result_soft, "highly-readable",
             "Soft hyphen SHOULD match regex now"
         );
+    }
+
+    #[test]
+    fn test_normalize_extracted_text_handles_mixed_unicode_artifacts() {
+        let raw = "보험금의\u{E000}지급\u{200B}절차\u{2028}안내\u{FFFD}";
+        let normalized = normalize_extracted_text(raw);
+        assert_eq!(normalized, "보험금의 지급절차\n안내 ");
     }
 
     #[test]
@@ -358,5 +356,64 @@ mod tests {
         let pages = vec!["보험계약의 해".to_string(), "지환급금 안내".to_string()];
         let result = join_pages(pages);
         assert_eq!(result, "보험계약의 해지환급금 안내");
+    }
+
+    #[test]
+    fn test_join_pages_normalizes_dense_cjk_linebreak_sequence() {
+        let pages = vec!["해\n지\n환\n급\n금".to_string()];
+        let result = join_pages(pages);
+        assert_eq!(result, "해지 환급 금");
+        assert!(!result.contains('\n'));
+    }
+
+    #[test]
+    fn test_join_pages_preserves_compound_word_without_dehyphenation_when_no_linebreak() {
+        let pages = vec!["The user-facing guide stays intact.".to_string()];
+        let result = join_pages(pages);
+        assert_eq!(result, "The user-facing guide stays intact.");
+    }
+
+    #[test]
+    fn test_join_pages_handles_pdf_like_artifact_cases() {
+        let cases = vec![
+            (
+                vec!["보험금의\u{E000}지급\u{200B}절차".to_string()],
+                "보험금의 지급절차",
+            ),
+            (vec!["해\u{2028}지환급금".to_string()], "해지환급금"),
+            (vec!["A\u{00AD}\npple".to_string()], "Apple"),
+        ];
+
+        for (pages, expected) in cases {
+            let result = join_pages(pages);
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    #[ignore = "stress benchmark"]
+    fn bench_join_pages_stress_corpus() {
+        let pages = (0..500)
+            .map(|index| {
+                if index % 2 == 0 {
+                    format!(
+                        "보험금의\u{E000}지급 절차 {}\n해\n지환급금 안내\nhighly-read-\n\nable",
+                        index
+                    )
+                } else {
+                    format!(
+                        "Policy section {} user-facing guidance\n계약자적립금을 인출할 수 \n있습니다.",
+                        index
+                    )
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let start = std::time::Instant::now();
+        let result = join_pages(pages);
+        let elapsed = start.elapsed();
+
+        assert!(!result.is_empty());
+        eprintln!("join_pages stress corpus elapsed: {:?}", elapsed);
     }
 }
