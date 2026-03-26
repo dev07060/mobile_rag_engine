@@ -4096,11 +4096,13 @@ impl SseDecode for crate::api::source_rag::AssembledContextV2 {
         let mut var_exactTokens = <u32>::sse_decode(deserializer);
         let mut var_includedChunkIds = <Vec<i64>>::sse_decode(deserializer);
         let mut var_remainingBudget = <i32>::sse_decode(deserializer);
+        let mut var_selectedSourceId = <Option<i64>>::sse_decode(deserializer);
         return crate::api::source_rag::AssembledContextV2 {
             text: var_text,
             exact_tokens: var_exactTokens,
             included_chunk_ids: var_includedChunkIds,
             remaining_budget: var_remainingBudget,
+            selected_source_id: var_selectedSourceId,
         };
     }
 }
@@ -4639,6 +4641,17 @@ impl SseDecode for Option<i32> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<i32>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<i64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<i64>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -5577,6 +5590,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::source_rag::AssembledContextV
             self.exact_tokens.into_into_dart().into_dart(),
             self.included_chunk_ids.into_into_dart().into_dart(),
             self.remaining_budget.into_into_dart().into_dart(),
+            self.selected_source_id.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -6298,6 +6312,7 @@ impl SseEncode for crate::api::source_rag::AssembledContextV2 {
         <u32>::sse_encode(self.exact_tokens, serializer);
         <Vec<i64>>::sse_encode(self.included_chunk_ids, serializer);
         <i32>::sse_encode(self.remaining_budget, serializer);
+        <Option<i64>>::sse_encode(self.selected_source_id, serializer);
     }
 }
 
@@ -6704,6 +6719,16 @@ impl SseEncode for Option<i32> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <i32>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<i64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <i64>::sse_encode(value, serializer);
         }
     }
 }

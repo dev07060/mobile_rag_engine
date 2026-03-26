@@ -54,7 +54,11 @@ export 'package:mobile_rag_engine/src/rust/api/source_rag.dart'
         ChunkExcerptResult,
         AssembledContextV2;
 export 'package:mobile_rag_engine/services/source_rag_service.dart'
-    show SearchMetaResult, RagSearchResult, ChunkingStrategy;
+    show
+        SearchMetaResult,
+        RagSearchResult,
+        ChunkingStrategy,
+        SearchHydrationMode;
 export 'package:mobile_rag_engine/services/context_builder.dart'
     show ContextStrategy, AssembledContext;
 
@@ -408,6 +412,8 @@ class MobileRag {
     double bm25Weight = kDefaultBm25Weight,
     bool singleSourceMode = false,
     List<int>? sourceIds,
+    SearchHydrationMode hydrationMode = SearchHydrationMode.full,
+    int previewMaxBytes = 512,
   }) =>
       _engine!.searchHybridWithContext(
         query,
@@ -419,6 +425,8 @@ class MobileRag {
         bm25Weight: bm25Weight,
         singleSourceMode: singleSourceMode,
         sourceIds: sourceIds,
+        hydrationMode: hydrationMode,
+        previewMaxBytes: previewMaxBytes,
       );
 
   /// Rebuild the HNSW index.
@@ -663,6 +671,8 @@ class CollectionRag {
     double bm25Weight = kDefaultBm25Weight,
     bool singleSourceMode = false,
     List<int>? sourceIds,
+    SearchHydrationMode hydrationMode = SearchHydrationMode.full,
+    int previewMaxBytes = 512,
   }) =>
       _engine.searchHybridWithContext(
         query,
@@ -674,6 +684,8 @@ class CollectionRag {
         bm25Weight: bm25Weight,
         singleSourceMode: singleSourceMode,
         sourceIds: sourceIds,
+        hydrationMode: hydrationMode,
+        previewMaxBytes: previewMaxBytes,
         collectionId: _collectionId,
       );
 

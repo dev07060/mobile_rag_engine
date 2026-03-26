@@ -7,8 +7,8 @@ import '../frb_generated.dart';
 import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accept_chunk`, `allowed_chunk_ids`, `assemble_context_internal`, `build_prompt_text`, `build_search_hit_meta`, `count_tokens`, `decode_f32_embedding`, `decode_structured_chunk_type`, `diversify_sources`, `ensure_collection_row`, `ensure_fresh`, `extract_significant_query_terms`, `fetch_adjacent_hit_meta`, `fetch_stored_chunk_types`, `filter_to_most_relevant_source`, `get_collection_data_generation`, `hash_content`, `hydrate_chunk_search_results`, `hydrate_rows_for_assembly`, `is_active_bm25_collection`, `is_active_hnsw_collection`, `mark_collection_bm25_clean`, `mark_collection_data_changed`, `mark_collection_dirty`, `mark_collection_hnsw_clean`, `new`, `normalize_collection_id`, `order_chronologically`, `render_candidate_with_headers`, `render_candidate_without_headers`, `render_chunk`, `render_context_text`, `render_source_block`, `resolve_system_instruction`, `resolved_chunk_ids`, `run_search_meta_test_hook`, `search_chunks_linear_in_collection`, `search_chunks_linear`, `search_meta_hybrid_once`, `set_active_bm25_collection`, `set_active_hnsw_collection`, `truncate_utf8_bytes`, `try_add_chunk`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `HydratedChunkRow`, `RenderedSelectionState`
+// These functions are ignored because they are not marked as `pub`: `accept_chunk`, `allowed_chunk_ids`, `assemble_context_internal`, `build_prompt_text`, `build_search_hit_meta`, `count_tokens`, `decode_f32_embedding`, `decode_structured_chunk_type`, `diversify_sources`, `ensure_collection_row`, `ensure_fresh_with_conn`, `ensure_generation_unchanged_with_conn`, `extract_significant_query_terms`, `fetch_adjacent_hit_meta`, `fetch_stored_chunk_types`, `filter_to_most_relevant_source`, `get_collection_data_generation`, `hash_content`, `hydrate_chunk_search_results`, `hydrate_rows_for_assembly`, `is_active_bm25_collection`, `is_active_hnsw_collection`, `mark_collection_bm25_clean`, `mark_collection_data_changed`, `mark_collection_dirty`, `mark_collection_hnsw_clean`, `new`, `normalize_collection_id`, `order_chronologically`, `render_candidate_with_headers`, `render_candidate_without_headers`, `render_chunk`, `render_context_text`, `render_source_block`, `resolve_system_instruction`, `resolved_chunk_ids`, `run_handle_assemble_test_hook`, `run_handle_hydration_test_hook`, `run_search_meta_test_hook`, `search_chunks_linear_in_collection`, `search_chunks_linear`, `search_meta_hybrid_once`, `set_active_bm25_collection`, `set_active_hnsw_collection`, `truncate_utf8_bytes`, `try_add_chunk`, `validate_requested_chunk_ids`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AssemblyBuildResult`, `HydratedChunkRow`, `RenderedSelectionState`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Initialize database with sources and chunks tables.
@@ -309,12 +309,14 @@ class AssembledContextV2 {
   final int exactTokens;
   final Int64List includedChunkIds;
   final int remainingBudget;
+  final PlatformInt64? selectedSourceId;
 
   const AssembledContextV2({
     required this.text,
     required this.exactTokens,
     required this.includedChunkIds,
     required this.remainingBudget,
+    this.selectedSourceId,
   });
 
   @override
@@ -322,7 +324,8 @@ class AssembledContextV2 {
       text.hashCode ^
       exactTokens.hashCode ^
       includedChunkIds.hashCode ^
-      remainingBudget.hashCode;
+      remainingBudget.hashCode ^
+      selectedSourceId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -332,7 +335,8 @@ class AssembledContextV2 {
           text == other.text &&
           exactTokens == other.exactTokens &&
           includedChunkIds == other.includedChunkIds &&
-          remainingBudget == other.remainingBudget;
+          remainingBudget == other.remainingBudget &&
+          selectedSourceId == other.selectedSourceId;
 }
 
 class ChunkData {

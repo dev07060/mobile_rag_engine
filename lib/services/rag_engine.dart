@@ -634,6 +634,10 @@ class RagEngine {
   ///
   /// [adjacentChunks] - Include N chunks before/after matches (default: 0).
   /// [singleSourceMode] - Only include chunks from most relevant source.
+  /// [hydrationMode] - Controls whether high-level chunk payloads are returned
+  /// as full content, lightweight previews, or omitted entirely.
+  /// [previewMaxBytes] - Maximum UTF-8 bytes per chunk preview when
+  /// [hydrationMode] is [SearchHydrationMode.preview].
   Future<RagSearchResult> searchHybridWithContext(
     String query, {
     int topK = 10,
@@ -644,6 +648,8 @@ class RagEngine {
     List<int>? sourceIds,
     int adjacentChunks = 0,
     bool singleSourceMode = false,
+    SearchHydrationMode hydrationMode = SearchHydrationMode.full,
+    int previewMaxBytes = 512,
     String? collectionId,
   }) async {
     final service = await _serviceForCollection(collectionId);
@@ -660,6 +666,8 @@ class RagEngine {
       sourceIds: sourceIds,
       adjacentChunks: adjacentChunks,
       singleSourceMode: singleSourceMode,
+      hydrationMode: hydrationMode,
+      previewMaxBytes: previewMaxBytes,
     );
   }
 
