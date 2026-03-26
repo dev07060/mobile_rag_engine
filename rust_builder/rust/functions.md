@@ -37,7 +37,7 @@ Refactored build_hnsw_index to consume the input vectors (Vec<Vec<f32>>) instead
 Impact: Removes the need to hold 2x the dataset size in RAM during index construction. This significantly lowers the risk of OOM on mobile devices.
 // Old (implicit clone in map)
 let embedding_points: Vec<EmbeddingPoint> = points.iter().map(...).collect();
-// New (zero-copy consumption)
+// New (move-based consumption without the extra clone)
 for (id, embedding) in points {
     hwns.insert((&embedding, u_id)); // inserts owned/referenced slice
 }

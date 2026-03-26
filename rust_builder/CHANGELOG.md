@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.16.0
+* **Chunking**:
+  - Hardened plain-text heading detection against short imperative, UI-label, and command-style false positives.
+  - Clarified the markdown table split contract around raw source-backed slices and non-repeated later headers.
+* **Parser / Quality**:
+  - Added parser regression coverage for mixed Unicode/PDF-like artifacts.
+  - Added an ignored `join_pages()` stress benchmark for release-time performance checks.
+
 ## 0.15.0
 * **Feat**:
   - Added non-truncating `count_tokens` support for exact engine-tokenizer budgeting paths.
