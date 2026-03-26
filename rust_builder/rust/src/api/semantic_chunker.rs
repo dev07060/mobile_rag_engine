@@ -669,9 +669,36 @@ fn is_article_title(line: &str) -> bool {
         return true;
     }
 
-    let word_count = trimmed.split_whitespace().count();
+    let words: Vec<&str> = trimmed.split_whitespace().collect();
+    let word_count = words.len();
     if word_count == 0 || word_count > 12 {
         return false;
+    }
+
+    if word_count == 1 {
+        return false;
+    }
+
+    if word_count <= 3 {
+        let first_word = words[0]
+            .trim_matches(|c: char| !c.is_alphanumeric())
+            .to_ascii_lowercase();
+        if matches!(
+            first_word.as_str(),
+            "open"
+                | "click"
+                | "tap"
+                | "save"
+                | "retry"
+                | "select"
+                | "choose"
+                | "press"
+                | "run"
+                | "install"
+                | "close"
+        ) {
+            return false;
+        }
     }
 
     !trimmed.contains(',') && !trimmed.contains(';')
@@ -916,6 +943,10 @@ mod tests {
         assert!(!is_article_title("This is a short sentence."));
         assert!(!is_article_title("Another sentence!"));
         assert!(!is_article_title("A short sentence, with a comma"));
+        assert!(!is_article_title("Open the app"));
+        assert!(!is_article_title("Click Save"));
+        assert!(!is_article_title("Settings"));
+        assert!(!is_article_title("Retry later"));
     }
 }
 
@@ -1487,7 +1518,7 @@ mod markdown_tests {
     }
 
     #[test]
-    fn test_large_table_splitting() {
+    fn test_large_table_splitting_preserves_row_boundaries_without_repeating_header() {
         // Table needs to be > 100 chars.
         // Header: | Col1 | Col2 |\n|---|---| (25 chars)
         // Rows: | Val1 | Val2 | (15 chars)
