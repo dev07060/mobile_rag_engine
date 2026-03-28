@@ -46,6 +46,17 @@ class PromptBudgetOptions {
   return (rawType: rawType, headerPath: headerPath.isEmpty ? null : headerPath);
 }
 
+String encodeStructuredChunkType({
+  required String rawType,
+  String? headerPath,
+}) {
+  final normalizedHeaderPath = headerPath?.trim();
+  if (normalizedHeaderPath == null || normalizedHeaderPath.isEmpty) {
+    return rawType;
+  }
+  return '$rawType|$normalizedHeaderPath';
+}
+
 String renderContextText({required String content, required String chunkType}) {
   final decoded = decodeStructuredChunkType(chunkType);
   final headerPath = decoded.headerPath;

@@ -162,6 +162,18 @@ class RagSearchResult {
   RagSearchResult({required this.chunks, required this.context});
 }
 
+/// Hydration mode for high-level hybrid search results.
+enum SearchHydrationMode {
+  /// Preserve the legacy full-content chunk contract.
+  full,
+
+  /// Return lightweight excerpt-based chunks for UI/debug style listing.
+  preview,
+
+  /// Return only assembled context and omit chunk payloads.
+  contextOnly,
+}
+
 /// Result of the additive low-level search lane.
 ///
 /// `hits` is a bounded metadata-only view. Use [handle] for explicit hydration
@@ -1242,7 +1254,7 @@ class SourceRagService {
 
       List<ChunkSearchResult> adjacent = [];
       try {
-        adjacent = await rust_rag.getAdjacentChunks(
+        adjacent = await getAdjacentChunks(
           sourceId: chunk.sourceId,
           minIndex: minIndex,
           maxIndex: maxIndex,
@@ -1300,7 +1312,7 @@ class SourceRagService {
     final canonicalByKey = <String, ChunkSearchResult>{};
     for (final entry in rangesBySource.entries) {
       try {
-        final canonicalChunks = await rust_rag.getAdjacentChunks(
+        final canonicalChunks = await getAdjacentChunks(
           sourceId: entry.key,
           minIndex: entry.value.minIndex,
           maxIndex: entry.value.maxIndex,
@@ -1486,6 +1498,10 @@ class SourceRagService {
   /// matched chunk (default: 0). Setting this to 1 will include the chunk
   /// before and after each matched chunk, helping with long articles.
   /// [singleSourceMode] - If true, only include chunks from the most relevant source.
+  /// [hydrationMode] - Controls whether returned chunks are fully hydrated,
+  /// preview-only, or omitted entirely while still returning assembled context.
+  /// [previewMaxBytes] - Maximum UTF-8 byte length per preview chunk when
+  /// [hydrationMode] is [SearchHydrationMode.preview].
   Future<RagSearchResult> searchHybridWithContext(
     String query, {
     int topK = 10,
@@ -1496,6 +1512,232 @@ class SourceRagService {
     List<int>? sourceIds,
     int adjacentChunks = 0,
     bool singleSourceMode = false,
+    SearchHydrationMode hydrationMode = SearchHydrationMode.full,
+    int previewMaxBytes = 512,
+  }) async {
+    RagError? lastRetryableError;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await _searchHybridWithContextViaHandle(
+          query,
+          topK: topK,
+          tokenBudget: tokenBudget,
+          strategy: strategy,
+          vectorWeight: vectorWeight,
+          bm25Weight: bm25Weight,
+          sourceIds: sourceIds,
+          adjacentChunks: adjacentChunks,
+          singleSourceMode: singleSourceMode,
+          hydrationMode: hydrationMode,
+          previewMaxBytes: previewMaxBytes,
+        );
+      } on RagError catch (e) {
+        final isRetryable = e.when(
+          databaseError: (_) => false,
+          ioError: (_) => false,
+          modelLoadError: (_) => false,
+          invalidInput: (_) => false,
+          staleSearchHandle: (_) => true,
+          concurrentMutation: (_) => true,
+          internalError: (_) => false,
+          unknown: (_) => false,
+        );
+        if (!isRetryable || attempt == 1) {
+          rethrow;
+        }
+        lastRetryableError = e;
+        debugPrint(
+          '[SmartError] Retrying searchHybridWithContext after transient handle invalidation: ${e.message}',
+        );
+      }
+    }
+
+    throw lastRetryableError ??
+        RagError.unknown('searchHybridWithContext retry loop exhausted');
+  }
+
+  @visibleForTesting
+  Future<RagSearchResult> searchHybridWithContextLegacyForTest(
+    String query, {
+    int topK = 10,
+    int tokenBudget = 2000,
+    ContextStrategy strategy = ContextStrategy.relevanceFirst,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
+    List<int>? sourceIds,
+    int adjacentChunks = 0,
+    bool singleSourceMode = false,
+  }) {
+    return _searchHybridWithContextLegacy(
+      query,
+      topK: topK,
+      tokenBudget: tokenBudget,
+      strategy: strategy,
+      vectorWeight: vectorWeight,
+      bm25Weight: bm25Weight,
+      sourceIds: sourceIds,
+      adjacentChunks: adjacentChunks,
+      singleSourceMode: singleSourceMode,
+    );
+  }
+
+  Future<RagSearchResult> _searchHybridWithContextViaHandle(
+    String query, {
+    required int topK,
+    required int tokenBudget,
+    required ContextStrategy strategy,
+    required double vectorWeight,
+    required double bm25Weight,
+    required List<int>? sourceIds,
+    required int adjacentChunks,
+    required bool singleSourceMode,
+    required SearchHydrationMode hydrationMode,
+    required int previewMaxBytes,
+  }) async {
+    final metaResult = await searchMeta(
+      query,
+      topK: topK,
+      vectorWeight: vectorWeight,
+      bm25Weight: bm25Weight,
+      sourceIds: sourceIds,
+      adjacentChunks: adjacentChunks,
+    );
+
+    try {
+      final assembled = await assembleContext(
+        searchHandle: metaResult.handle,
+        tokenBudget: tokenBudget,
+        strategy: strategy,
+        singleSourceMode: singleSourceMode,
+      );
+
+      final candidateHits = _candidateHitsForAssembly(
+        metaResult.hits,
+        selectedSourceId: assembled.selectedSourceId?.toInt(),
+      );
+      final candidateChunkIds = candidateHits
+          .map((hit) => hit.chunkId.toInt())
+          .toList(growable: false);
+
+      final chunks = switch (hydrationMode) {
+        SearchHydrationMode.full => await hydrateChunks(
+            searchHandle: metaResult.handle,
+            chunkIds: candidateChunkIds,
+          ),
+        SearchHydrationMode.preview => await _hydratePreviewChunks(
+            searchHandle: metaResult.handle,
+            candidateHits: candidateHits,
+            maxBytes: previewMaxBytes,
+          ),
+        SearchHydrationMode.contextOnly => const <ChunkSearchResult>[],
+      };
+
+      final context = _legacyContextFromAssembledContext(
+        assembled,
+        chunks,
+        clearIncludedChunks: hydrationMode == SearchHydrationMode.contextOnly,
+      );
+
+      return RagSearchResult(chunks: chunks, context: context);
+    } finally {
+      await metaResult.dispose();
+    }
+  }
+
+  Future<List<ChunkSearchResult>> _hydratePreviewChunks({
+    required rust_rag.SearchHandle searchHandle,
+    required List<rust_rag.SearchHitMeta> candidateHits,
+    required int maxBytes,
+  }) async {
+    if (candidateHits.isEmpty) {
+      return const <ChunkSearchResult>[];
+    }
+
+    final excerpts = await getChunkExcerpts(
+      searchHandle: searchHandle,
+      chunkIds: candidateHits.map((hit) => hit.chunkId.toInt()).toList(),
+      maxBytes: maxBytes,
+    );
+    final hitsById = {
+      for (final hit in candidateHits) hit.chunkId.toInt(): hit,
+    };
+    return excerpts.map((excerpt) {
+      final hit = hitsById[excerpt.chunkId.toInt()];
+      return ChunkSearchResult(
+        chunkId: excerpt.chunkId,
+        sourceId: excerpt.sourceId,
+        chunkIndex: excerpt.chunkIndex,
+        content: excerpt.excerpt,
+        chunkType: _encodeStructuredChunkType(
+          excerpt.rawType,
+          headerPath: excerpt.headerPathPreview,
+        ),
+        similarity: hit?.similarity ?? 0.0,
+        metadata: null,
+      );
+    }).toList(growable: false);
+  }
+
+  List<rust_rag.SearchHitMeta> _candidateHitsForAssembly(
+    List<rust_rag.SearchHitMeta> hits, {
+    int? selectedSourceId,
+  }) {
+    if (selectedSourceId == null) {
+      return List<rust_rag.SearchHitMeta>.from(hits, growable: false);
+    }
+
+    return hits
+        .where((hit) => hit.sourceId.toInt() == selectedSourceId)
+        .toList(growable: false);
+  }
+
+  AssembledContext _legacyContextFromAssembledContext(
+    rust_rag.AssembledContextV2 assembled,
+    List<ChunkSearchResult> hydratedChunks, {
+    bool clearIncludedChunks = false,
+  }) {
+    final includedChunks = clearIncludedChunks
+        ? const <ChunkSearchResult>[]
+        : _resolveIncludedChunks(
+            assembled.includedChunkIds,
+            hydratedChunks,
+          );
+
+    return AssembledContext(
+      text: assembled.text,
+      includedChunks: includedChunks,
+      estimatedTokens: assembled.exactTokens,
+      remainingBudget: assembled.remainingBudget,
+    );
+  }
+
+  List<ChunkSearchResult> _resolveIncludedChunks(
+    frb.Int64List includedChunkIds,
+    List<ChunkSearchResult> hydratedChunks,
+  ) {
+    if (includedChunkIds.isEmpty || hydratedChunks.isEmpty) {
+      return const <ChunkSearchResult>[];
+    }
+
+    final chunksById = {
+      for (final chunk in hydratedChunks) chunk.chunkId.toInt(): chunk,
+    };
+    return includedChunkIds
+        .map((chunkId) => chunksById[chunkId.toInt()])
+        .whereType<ChunkSearchResult>()
+        .toList(growable: false);
+  }
+
+  Future<RagSearchResult> _searchHybridWithContextLegacy(
+    String query, {
+    required int topK,
+    required int tokenBudget,
+    required ContextStrategy strategy,
+    required double vectorWeight,
+    required double bm25Weight,
+    required List<int>? sourceIds,
+    required int adjacentChunks,
+    required bool singleSourceMode,
   }) async {
     // 1. Get hybrid search results
     final hybridResults = await searchHybrid(

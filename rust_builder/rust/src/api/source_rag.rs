@@ -1038,6 +1038,7 @@ pub struct AssembledContextV2 {
     pub exact_tokens: u32,
     pub included_chunk_ids: Vec<i64>,
     pub remaining_budget: i32,
+    pub selected_source_id: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -1858,6 +1859,7 @@ fn assemble_context_internal(
             exact_tokens: 0,
             included_chunk_ids: Vec::new(),
             remaining_budget: token_budget,
+            selected_source_id: None,
         }));
     }
 
@@ -1911,6 +1913,7 @@ fn assemble_context_internal(
             .map(|chunk| chunk.chunk_id)
             .collect(),
         remaining_budget: token_budget - state.measured_tokens as i32,
+        selected_source_id,
     }))
 }
 
@@ -3352,6 +3355,33 @@ mod tests {
             assembled.remaining_budget,
             100 - assembled.exact_tokens as i32
         );
+        assert_eq!(assembled.selected_source_id, None);
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_assemble_context_exposes_selected_source_id_for_single_source_mode() {
+        let _guard = test_guard();
+        let db_path = setup_test_db(
+            "test_assemble_context_exposes_selected_source_id_for_single_source_mode.db",
+        );
+        let collection = "zero-copy-context-single-source";
+        let chunk_rows = seed_search_fixture(collection);
+        init_test_tokenizer();
+        let handle = build_handle_for_fixture(collection, &chunk_rows);
+
+        let assembled = handle
+            .assemble_context(AssembleContextOptions {
+                token_budget: 100,
+                strategy: ContextAssemblyStrategy::RelevanceFirst,
+                separator: "\n\n---\n\n".to_string(),
+                single_source_mode: true,
+            })
+            .unwrap();
+
+        assert_eq!(assembled.selected_source_id, Some(1));
+        assert_eq!(assembled.included_chunk_ids, vec![chunk_rows[0].0]);
 
         teardown_test_db(db_path);
     }
