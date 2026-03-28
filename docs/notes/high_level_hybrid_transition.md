@@ -64,3 +64,22 @@ During soak, watch for the following:
   assembly.
 - Treat hitching in representative app flows as a soak blocker even when
   parity still passes.
+
+## Legacy Oracle Boundary
+
+The legacy Dart assembly path is retained only as an internal parity oracle.
+It is not a public mode, rollout fallback, or alternate production path.
+
+Current boundary:
+
+- legacy assembly logic is used from regression helpers only
+- production `searchHybridWithContext()` goes through the low-level handle path
+- no public flag or mode switches back to the legacy path
+
+Removal criteria:
+
+- one release cycle with stable parity coverage
+- no unresolved lifecycle or retry regressions tied to the handle path
+- no unresolved UI hitching findings in representative flows
+- no outstanding contract clarifications that require legacy-vs-low-level
+  comparisons to stay live
