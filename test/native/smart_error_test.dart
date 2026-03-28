@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'dart:developer';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    as frb;
 import 'package:mobile_rag_engine/src/rust/api/error.dart';
 import 'package:mobile_rag_engine/src/rust/frb_generated.dart';
 import 'package:mobile_rag_engine/services/source_rag_service.dart';
@@ -10,7 +13,15 @@ void main() {
     'Smart Error Handling - Verify DatabaseError on missing pool',
     () async {
       // 1. Initialize FFI
-      await RustLib.init();
+      if (Platform.isMacOS) {
+        await RustLib.init(
+          externalLibrary: frb.ExternalLibrary.process(
+            iKnowHowToUseIt: true,
+          ),
+        );
+      } else {
+        await RustLib.init();
+      }
 
       // 2. Instantiate service *without* initializing DB Pool
       // This intentionally skips `initDbPool` to trigger the error check in Rust

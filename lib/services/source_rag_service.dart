@@ -22,6 +22,7 @@ import '../src/rust/api/hybrid_search.dart' as hybrid;
 import 'context_builder.dart';
 import 'embedding_service.dart';
 import '../src/internal/defaults.dart';
+import '../src/internal/high_level_hybrid_transition.dart';
 import '../src/internal/validation.dart';
 import '../utils/error_utils.dart';
 import '../src/rust/api/logger.dart';
@@ -1753,39 +1754,66 @@ class SourceRagService {
     required int adjacentChunks,
     required bool singleSourceMode,
   }) async {
-    // 1. Get hybrid search results
-    final hybridResults = await searchHybrid(
+    final metaResult = await searchMeta(
       query,
       topK: topK,
       vectorWeight: vectorWeight,
       bm25Weight: bm25Weight,
       sourceIds: sourceIds,
+      adjacentChunks: adjacentChunks,
     );
+    try {
+      final lowLevelContext = await assembleContext(
+        searchHandle: metaResult.handle,
+        tokenBudget: tokenBudget,
+        strategy: strategy,
+        singleSourceMode: singleSourceMode,
+      );
 
-    // 2. Rehydrate canonical chunk rows so markdown chunk_type metadata survives
-    // hybrid search's lightweight result shape.
-    var chunks = await _hydrateCanonicalChunkResults(
-      hybridResults.map(_chunkSearchResultFromHybrid).toList(),
-    );
+      final hitChunkIds =
+          metaResult.hits.map((hit) => hit.chunkId.toInt()).toList();
+      var hydratedChunks = hitChunkIds.isEmpty
+          ? const <ChunkSearchResult>[]
+          : orderHydratedChunksByIds(
+              orderedChunkIds: hitChunkIds,
+              hydratedChunks: await hydrateChunks(
+                searchHandle: metaResult.handle,
+                chunkIds: hitChunkIds,
+              ),
+            );
 
-    // 3. Filter to single source FIRST (before adjacent expansion)
-    if (singleSourceMode && chunks.isNotEmpty) {
-      chunks = _filterToMostRelevantSource(chunks, query);
+      final missingIncludedIds = missingChunkIds(
+        orderedChunkIds:
+            lowLevelContext.includedChunkIds.map((chunkId) => chunkId.toInt()),
+        hydratedChunks: hydratedChunks,
+      );
+      if (missingIncludedIds.isNotEmpty) {
+        final recoveredChunks = await hydrateChunks(
+          searchHandle: metaResult.handle,
+          chunkIds: missingIncludedIds,
+        );
+        hydratedChunks = [
+          ...hydratedChunks,
+          ...recoveredChunks,
+        ];
+      }
+
+      final context = buildLegacyCompatibleContextFromLowLevel(
+        lowLevelContext: lowLevelContext,
+        hydratedChunks: hydratedChunks,
+      );
+
+      var resultChunks = orderHydratedChunksByIds(
+        orderedChunkIds: hitChunkIds,
+        hydratedChunks: hydratedChunks,
+      );
+      if (singleSourceMode && resultChunks.isNotEmpty) {
+        resultChunks = _filterToMostRelevantSource(resultChunks, query);
+      }
+
+      return RagSearchResult(chunks: resultChunks, context: context);
+    } finally {
+      await metaResult.dispose();
     }
-
-    // 4. Expand with adjacent chunks (only for the selected source)
-    if (adjacentChunks > 0 && chunks.isNotEmpty) {
-      chunks = await _expandWithAdjacentChunks(chunks, adjacentChunks);
-    }
-
-    // 5. Assemble context (pass singleSourceMode to skip headers when single source)
-    final context = ContextBuilder.build(
-      searchResults: chunks,
-      tokenBudget: tokenBudget,
-      strategy: strategy,
-      singleSourceMode: singleSourceMode, // Pass through to skip headers
-    );
-
-    return RagSearchResult(chunks: chunks, context: context);
   }
 }

@@ -4,10 +4,14 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     as frb;
+import 'package:mobile_rag_engine/services/context_builder.dart';
 import 'package:mobile_rag_engine/src/rust/api/db_pool.dart';
 import 'package:mobile_rag_engine/src/rust/api/error.dart';
+import 'package:mobile_rag_engine/src/internal/high_level_hybrid_transition.dart';
 import 'package:mobile_rag_engine/src/rust/api/source_rag.dart';
 import 'package:mobile_rag_engine/src/rust/frb_generated.dart';
+
+import '../support/high_level_hybrid_legacy_oracle.dart';
 
 frb.Int64List _toInt64List(List<int> values) {
   final result = frb.Int64List(values.length);
@@ -44,6 +48,14 @@ Future<void> _seedCollection(String collectionId) async {
         chunkType: 'text|Guide > Setup',
         embedding: Float32List.fromList([1.0, 0.0, 0.0, 0.0]),
       ),
+      ChunkData(
+        content: 'Verify the checksum.',
+        chunkIndex: 1,
+        startPos: 21,
+        endPos: 41,
+        chunkType: 'text|Guide > Setup',
+        embedding: Float32List.fromList([0.95, 0.0, 0.0, 0.0]),
+      ),
     ],
   );
 
@@ -73,7 +85,15 @@ Future<void> _seedCollection(String collectionId) async {
 
 void main() {
   setUpAll(() async {
-    await RustLib.init();
+    if (Platform.isMacOS) {
+      await RustLib.init(
+        externalLibrary: frb.ExternalLibrary.process(
+          iKnowHowToUseIt: true,
+        ),
+      );
+    } else {
+      await RustLib.init();
+    }
   });
 
   tearDown(() async {
@@ -180,5 +200,45 @@ void main() {
     } on RagError catch (e) {
       expect(e, isA<RagError_StaleSearchHandle>());
     }
+  });
+
+  test('low-level full assembly matches legacy parity oracle', () async {
+    final dir = await _initTempDb('low_level_lane_parity');
+    addTearDown(() async {
+      await dir.delete(recursive: true);
+    });
+
+    const collectionId = 'dart-low-level-parity';
+    await _seedCollection(collectionId);
+
+    final lowLevelSnapshot = await buildLowLevelHybridParitySnapshot(
+      collectionId: collectionId,
+      queryText: 'install',
+      queryEmbedding: const [1.0, 0.0, 0.0, 0.0],
+      topK: 2,
+      tokenBudget: 32,
+      vectorWeight: 1.0,
+      bm25Weight: 0.0,
+      adjacentChunks: 1,
+      strategy: ContextStrategy.relevanceFirst,
+    );
+    final legacySnapshot = await buildLegacyHybridParitySnapshot(
+      collectionId: collectionId,
+      queryText: 'install',
+      queryEmbedding: const [1.0, 0.0, 0.0, 0.0],
+      topK: 2,
+      tokenBudget: 32,
+      vectorWeight: 1.0,
+      bm25Weight: 0.0,
+      adjacentChunks: 1,
+      strategy: ContextStrategy.relevanceFirst,
+    );
+
+    final report = compareHybridSearchParity(
+      expected: legacySnapshot,
+      actual: lowLevelSnapshot,
+    );
+
+    expect(report.isMatch, isTrue, reason: report.describe());
   });
 }
