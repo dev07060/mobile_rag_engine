@@ -83,3 +83,30 @@ Removal criteria:
 - no unresolved UI hitching findings in representative flows
 - no outstanding contract clarifications that require legacy-vs-low-level
   comparisons to stay live
+
+## `search()` Migration Gate
+
+Current decision: `require more parity/soak work first`
+
+Why this remains deferred:
+
+- `searchHybridWithContext()` has only just moved onto the low-level lane
+- soak evidence is still needed for lifecycle, retry, and UI behavior
+- parity coverage exists, but it has not yet accumulated release-level
+  confidence
+
+Preconditions before revisiting `search()`:
+
+- parity regressions remain clean through soak
+- handle lifecycle behavior is boring under normal mutation and retry paths
+- no significant UI hitching is observed in representative flows
+- the high-level contract is stable enough that a second migration would not
+  pile ambiguity on top of the first
+
+Allowed outcomes when revisiting the decision:
+
+- `migrate next`
+- `defer`
+- `require more parity/soak work first`
+
+The current state remains the third option.
