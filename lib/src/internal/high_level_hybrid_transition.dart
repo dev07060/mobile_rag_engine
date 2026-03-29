@@ -131,6 +131,18 @@ HybridSearchParityReport compareHybridSearchParity({
   return HybridSearchParityReport(mismatches: mismatches);
 }
 
+List<int> candidateChunkIdsForSelectedSource({
+  required Iterable<SearchHitMeta> hits,
+  required int? selectedSourceId,
+}) {
+  final candidateHits = selectedSourceId == null
+      ? hits
+      : hits.where((hit) => hit.sourceId.toInt() == selectedSourceId);
+  return candidateHits
+      .map((hit) => hit.chunkId.toInt())
+      .toList(growable: false);
+}
+
 void _compareChunkLists({
   required String fieldPath,
   required List<ChunkSearchResult> expected,

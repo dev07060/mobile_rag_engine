@@ -33,6 +33,24 @@ frb.Int64List _toInt64List(List<int> values) {
   return result;
 }
 
+SearchHitMeta _hitMeta({
+  required int chunkId,
+  required int sourceId,
+  required int chunkIndex,
+  required double similarity,
+  String rawType = 'text',
+  String? headerPathPreview,
+}) {
+  return SearchHitMeta(
+    chunkId: chunkId,
+    sourceId: sourceId,
+    chunkIndex: chunkIndex,
+    similarity: similarity,
+    rawType: rawType,
+    headerPathPreview: headerPathPreview,
+  );
+}
+
 void main() {
   group('high-level hybrid transition helpers', () {
     test(
@@ -158,6 +176,44 @@ void main() {
         report.describe(),
         contains(
             'chunks.content[0] expected=Install the package. actual=Install the package now.'),
+      );
+    });
+
+    test('candidateChunkIdsForSelectedSource follows low-level selection', () {
+      final hits = [
+        _hitMeta(
+          chunkId: 10,
+          sourceId: 7,
+          chunkIndex: 0,
+          similarity: 0.9,
+        ),
+        _hitMeta(
+          chunkId: 20,
+          sourceId: 9,
+          chunkIndex: 0,
+          similarity: 0.8,
+        ),
+        _hitMeta(
+          chunkId: 21,
+          sourceId: 9,
+          chunkIndex: 1,
+          similarity: 0.7,
+        ),
+      ];
+
+      expect(
+        candidateChunkIdsForSelectedSource(
+          hits: hits,
+          selectedSourceId: 9,
+        ),
+        orderedEquals([20, 21]),
+      );
+      expect(
+        candidateChunkIdsForSelectedSource(
+          hits: hits,
+          selectedSourceId: null,
+        ),
+        orderedEquals([10, 20, 21]),
       );
     });
   });

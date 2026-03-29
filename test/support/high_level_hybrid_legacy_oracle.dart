@@ -321,13 +321,16 @@ Future<HybridSearchParitySnapshot> buildLowLevelHybridParitySnapshot({
       ),
     );
 
-    final hitChunkIds = hits.map((hit) => hit.chunkId.toInt()).toList();
-    var hydratedChunks = hitChunkIds.isEmpty
+    final candidateChunkIds = candidateChunkIdsForSelectedSource(
+      hits: hits,
+      selectedSourceId: lowLevelContext.selectedSourceId?.toInt(),
+    );
+    var hydratedChunks = candidateChunkIds.isEmpty
         ? const <ChunkSearchResult>[]
         : orderHydratedChunksByIds(
-            orderedChunkIds: hitChunkIds,
+            orderedChunkIds: candidateChunkIds,
             hydratedChunks: await handle.hydrateChunks(
-              chunkIds: _toInt64List(hitChunkIds),
+              chunkIds: _toInt64List(candidateChunkIds),
             ),
           );
 
@@ -349,13 +352,10 @@ Future<HybridSearchParitySnapshot> buildLowLevelHybridParitySnapshot({
       hydratedChunks: hydratedChunks,
     );
 
-    var chunks = orderHydratedChunksByIds(
-      orderedChunkIds: hitChunkIds,
+    final chunks = orderHydratedChunksByIds(
+      orderedChunkIds: candidateChunkIds,
       hydratedChunks: hydratedChunks,
     );
-    if (singleSourceMode && chunks.isNotEmpty) {
-      chunks = _filterToMostRelevantSource(chunks, queryText);
-    }
 
     return HybridSearchParitySnapshot(chunks: chunks, context: context);
   } finally {
