@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
@@ -115,6 +116,7 @@ class FakeSearchHandle implements rust_rag.SearchHandle {
   int disposeCount = 0;
   int hydrateCallCount = 0;
   int excerptCallCount = 0;
+  int? lastExcerptMaxBytes;
 
   @override
   bool isDisposed = false;
@@ -145,6 +147,7 @@ class FakeSearchHandle implements rust_rag.SearchHandle {
     required int maxBytes,
   }) async {
     excerptCallCount++;
+    lastExcerptMaxBytes = maxBytes;
     if (_excerptResponses.isEmpty) {
       throw StateError('missing excerpt response');
     }
@@ -433,21 +436,21 @@ void main() {
           chunkIndex: 0,
           rawType: 'text',
           headerPathPreview: 'Guide > Setup',
-          excerpt: 'Install ',
+          excerpt: '메뉴é',
         ),
         _excerpt(
           chunkId: 102,
           sourceId: 1,
           chunkIndex: 1,
           rawType: 'general',
-          excerpt: 'Verify t',
+          excerpt: '한글é',
         ),
         _excerpt(
           chunkId: 201,
           sourceId: 2,
           chunkIndex: 0,
           rawType: 'general',
-          excerpt: 'Run the ',
+          excerpt: 'éééé',
         ),
       ];
       final handle = FakeSearchHandle(
@@ -484,7 +487,10 @@ void main() {
       expect(result.context.estimatedTokens, legacy.context.estimatedTokens);
       expect(result.chunks, hasLength(legacy.chunks.length));
       expect(result.chunks.every((chunk) => chunk.metadata == null), isTrue);
-      expect(result.chunks.every((chunk) => chunk.content.length <= 8), isTrue);
+      expect(
+        result.chunks.every((chunk) => utf8.encode(chunk.content).length <= 8),
+        isTrue,
+      );
       expect(result.chunks.first.chunkType, 'text|Guide > Setup');
       expect(
         result.context.includedChunks
@@ -495,6 +501,7 @@ void main() {
             .toList(growable: false),
       );
       expect(handle.excerptCallCount, 1);
+      expect(handle.lastExcerptMaxBytes, 8);
       expect(handle.isDisposed, isTrue);
     });
 
