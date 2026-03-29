@@ -5,6 +5,8 @@ This note tracks the post-cutover stabilization work for
 The high-level entrypoint now assembles `full` results from the low-level
 handle lane and keeps the public API unchanged.
 This is a parity-first transition.
+These notes record readiness criteria only; they do not mean soak, legacy
+oracle removal, or `search()` migration is already complete.
 It does not promise a new performance contract, and it does not reopen
 `preview` or other mode work that is still under review elsewhere.
 
