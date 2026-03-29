@@ -633,11 +633,17 @@ class RagEngine {
   /// Hybrid search with context assembly for LLM.
   ///
   /// [adjacentChunks] - Include N chunks before/after matches (default: 0).
-  /// [singleSourceMode] - Only include chunks from most relevant source.
+  /// [singleSourceMode] - Only include chunks from the source chosen by
+  /// low-level assembly's `selectedSourceId`, not by re-reading hydrated
+  /// chunks.
   /// [hydrationMode] - Controls whether high-level chunk payloads are returned
-  /// as full content, lightweight previews, or omitted entirely.
-  /// [previewMaxBytes] - Maximum UTF-8 bytes per chunk preview when
+  /// as parity-first full content, lossy/non-canonical previews, or omitted
+  /// entirely.
+  /// [previewMaxBytes] - Maximum UTF-8 byte budget per chunk preview when
   /// [hydrationMode] is [SearchHydrationMode.preview].
+  /// [search] remains unchanged by this transition. When
+  /// [hydrationMode] is [SearchHydrationMode.contextOnly], both returned chunk
+  /// lists are empty by design.
   Future<RagSearchResult> searchHybridWithContext(
     String query, {
     int topK = 10,

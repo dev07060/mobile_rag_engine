@@ -165,12 +165,18 @@ class RagSearchResult {
 /// Hydration mode for high-level hybrid search results.
 enum SearchHydrationMode {
   /// Preserve the legacy full-content chunk contract.
+  /// This default remains parity-first and does not promise a new
+  /// performance contract.
   full,
 
-  /// Return lightweight excerpt-based chunks for UI/debug style listing.
+  /// Return lossy, non-canonical excerpt-based chunks for UI/debug listing.
+  /// [SourceRagService.searchHybridWithContext]'s [previewMaxBytes] argument is
+  /// a UTF-8 byte budget, not a character count.
   preview,
 
   /// Return only assembled context and omit chunk payloads.
+  /// Returned [RagSearchResult.chunks] and [AssembledContext.includedChunks]
+  /// are empty by design.
   contextOnly,
 }
 
@@ -1493,15 +1499,21 @@ class SourceRagService {
   /// Hybrid search with context assembly for LLM.
   ///
   /// Similar to [search] but uses hybrid (vector + BM25) search.
+  /// This transition keeps [SearchHydrationMode.full] parity-first to preserve
+  /// the previous high-level contract, and it does not change [search].
   ///
   /// [adjacentChunks] - Number of adjacent chunks to include before/after each
   /// matched chunk (default: 0). Setting this to 1 will include the chunk
   /// before and after each matched chunk, helping with long articles.
-  /// [singleSourceMode] - If true, only include chunks from the most relevant source.
+  /// [singleSourceMode] - If true, only include chunks from the source chosen
+  /// by low-level assembly via `selectedSourceId`; do not re-derive source
+  /// selection from hydrated chunks.
   /// [hydrationMode] - Controls whether returned chunks are fully hydrated,
   /// preview-only, or omitted entirely while still returning assembled context.
-  /// [previewMaxBytes] - Maximum UTF-8 byte length per preview chunk when
+  /// [previewMaxBytes] - Maximum UTF-8 byte budget per preview chunk when
   /// [hydrationMode] is [SearchHydrationMode.preview].
+  /// When [hydrationMode] is [SearchHydrationMode.contextOnly], both
+  /// [RagSearchResult.chunks] and [AssembledContext.includedChunks] are empty.
   Future<RagSearchResult> searchHybridWithContext(
     String query, {
     int topK = 10,
@@ -1682,6 +1694,8 @@ class SourceRagService {
     List<rust_rag.SearchHitMeta> hits, {
     int? selectedSourceId,
   }) {
+    // Keep selectedSourceId semantics pinned to the source chosen during
+    // low-level assembly before final chunk hydration.
     if (selectedSourceId == null) {
       return List<rust_rag.SearchHitMeta>.from(hits, growable: false);
     }

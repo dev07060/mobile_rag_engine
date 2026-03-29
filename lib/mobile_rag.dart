@@ -402,6 +402,11 @@ class MobileRag {
       );
 
   /// Hybrid search with context assembly for LLM.
+  ///
+  /// `full` remains the parity-first default for preserving the existing
+  /// high-level contract. `preview` is lossy/non-canonical, and
+  /// `contextOnly` returns empty chunk lists by design. `search()` is
+  /// unchanged by this transition.
   Future<RagSearchResult> searchHybridWithContext(
     String query, {
     int topK = 10,

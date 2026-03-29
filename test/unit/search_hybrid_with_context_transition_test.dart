@@ -371,7 +371,7 @@ void main() {
     });
 
     test(
-        'singleSourceMode full path filters candidate hits using selectedSourceId',
+        'singleSourceMode full path uses low-level selectedSourceId without re-deriving from hydrated chunks',
         () async {
       final legacy = await service.searchHybridWithContextLegacyForTest(
         'install',
@@ -418,7 +418,7 @@ void main() {
       expect(handle.isDisposed, isTrue);
     });
 
-    test('preview mode keeps context parity and returns excerpt-only chunks',
+    test('preview mode stays lossy/non-canonical while keeping context parity',
         () async {
       final legacy = await service.searchHybridWithContextLegacyForTest(
         'install',
@@ -499,7 +499,7 @@ void main() {
     });
 
     test(
-        'contextOnly mode omits chunk hydration but preserves assembled context',
+        'contextOnly mode returns empty chunk lists while preserving assembled context',
         () async {
       final legacy = await service.searchHybridWithContextLegacyForTest(
         'install',
