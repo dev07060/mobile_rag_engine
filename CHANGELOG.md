@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.17.0
+* **Low-level APIs**:
+  - Added an additive metadata-first search lane with `searchMeta`, `assembleContext`, `hydrateChunks`, and `getChunkExcerpts`.
+  - Added `addDocumentUtf8` and `addDocumentFromFile` as ingest fast paths that reduce input-side string materialization.
+* **Search / Compatibility**:
+  - Preserved existing `search()` and `searchHybridWithContext()` semantics while introducing generation-pinned low-level handles underneath.
+  - Added deterministic stale-handle and concurrent-mutation error coverage for low-level search-handle operations.
+* **Compatibility**:
+  - Updated dependency constraint to `rag_engine_flutter: ^0.17.0`.
+
 ## 0.16.0
 * **Context**:
   - Improved `ContextBuilder` packing to skip oversized chunks instead of stopping at the first overflow.
