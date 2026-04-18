@@ -696,7 +696,7 @@ class SourceRagService {
               startPos: startPos,
               endPos: endPos,
               chunkType: chunkType,
-              embedding: Float32List.fromList(embedding),
+              embedding: embedding,
             ),
           );
         }
@@ -893,7 +893,7 @@ class SourceRagService {
             final embedding = await EmbeddingService.embed(embeddingText);
             await rust_rag.updateChunkEmbedding(
               chunkId: chunk.chunkId,
-              embedding: Float32List.fromList(embedding),
+              embedding: embedding,
             );
           } catch (e) {
             debugPrint(

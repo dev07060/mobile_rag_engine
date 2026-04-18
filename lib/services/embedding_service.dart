@@ -92,8 +92,11 @@ class EmbeddingService {
   /// Convert text to an embedding vector.
   ///
   /// The inference runs entirely on the background worker isolate so this
-  /// call never blocks the UI thread.
-  static Future<List<double>> embed(String text) async {
+  /// call never blocks the UI thread. The returned [Float32List] is
+  /// transferred across the isolate boundary without copying via
+  /// [TransferableTypedData]; downstream FFI consumers (`rag_engine_flutter`)
+  /// also expect `Float32List`, so no further conversion is performed.
+  static Future<Float32List> embed(String text) async {
     final sendPort = _workerSendPort;
     if (sendPort == null) {
       throw Exception("EmbeddingService not initialized. Call init() first.");
@@ -114,7 +117,9 @@ class EmbeddingService {
       throw Exception(result['error']);
     }
 
-    final embedding = (result as List).cast<double>();
+    final embedding = (result as TransferableTypedData)
+        .materialize()
+        .asFloat32List();
     _dimensionState.validateAndRemember(embedding.length);
     return embedding;
   }
@@ -126,7 +131,7 @@ class EmbeddingService {
   ///
   /// [texts]: List of texts to embed
   /// [onProgress]: Progress callback (completed count, total count)
-  static Future<List<List<double>>> embedBatch(
+  static Future<List<Float32List>> embedBatch(
     List<String> texts, {
     int concurrency = 1,
     void Function(int completed, int total)? onProgress,
@@ -135,9 +140,9 @@ class EmbeddingService {
       throw Exception("EmbeddingService not initialized. Call init() first.");
     }
 
-    if (texts.isEmpty) return <List<double>>[];
+    if (texts.isEmpty) return <Float32List>[];
 
-    final results = <List<double>>[];
+    final results = <Float32List>[];
     for (var i = 0; i < texts.length; i++) {
       final embedding = await embed(texts[i]);
       results.add(embedding);
@@ -328,7 +333,10 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
             runOptions.release();
           }
 
-          // 4. Extract results and apply mean pooling
+          // 4. Extract results and apply mean pooling.
+          // Accumulate in f64 for precision, narrow to f32 once at the end,
+          // and transfer the Float32List across the isolate boundary without
+          // copying via TransferableTypedData.
           try {
             final outputTensor = outputs?[0];
             if (outputTensor == null) {
@@ -337,29 +345,30 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
             }
 
             final outputData = outputTensor.value as List;
-            List<double> embedding;
+            Float32List embedding;
 
             if (outputData.isNotEmpty && outputData[0] is List) {
               final batchData = outputData[0] as List;
               if (batchData.isNotEmpty && batchData[0] is List) {
                 // 3D output: [batch, seq_len, hidden] → mean pooling
                 final hiddenSize = (batchData[0] as List).length;
-                embedding = List<double>.filled(hiddenSize, 0.0);
+                final accumulator = Float64List(hiddenSize);
 
                 int count = 0;
                 for (int t = 0; t < batchData.length; t++) {
                   if (t < attentionMask.length && attentionMask[t] == 1) {
                     final tokenEmb = batchData[t] as List;
                     for (int h = 0; h < hiddenSize; h++) {
-                      embedding[h] += (tokenEmb[h] as num).toDouble();
+                      accumulator[h] += (tokenEmb[h] as num).toDouble();
                     }
                     count++;
                   }
                 }
 
+                embedding = Float32List(hiddenSize);
                 if (count > 0) {
                   for (int h = 0; h < hiddenSize; h++) {
-                    embedding[h] /= count;
+                    embedding[h] = accumulator[h] / count;
                   }
                 }
 
@@ -370,16 +379,20 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
                 }
               } else {
                 // 2D output: [batch, hidden]
-                embedding = batchData
-                    .map((e) => (e as num).toDouble())
-                    .toList();
+                embedding = Float32List(batchData.length);
+                for (int i = 0; i < batchData.length; i++) {
+                  embedding[i] = (batchData[i] as num).toDouble();
+                }
               }
             } else {
               // 1D output: [hidden]
-              embedding = outputData.map((e) => (e as num).toDouble()).toList();
+              embedding = Float32List(outputData.length);
+              for (int i = 0; i < outputData.length; i++) {
+                embedding[i] = (outputData[i] as num).toDouble();
+              }
             }
 
-            replyPort.send(embedding);
+            replyPort.send(TransferableTypedData.fromList([embedding]));
           } finally {
             for (final output in outputs ?? <OrtValue?>[]) {
               output?.release();
