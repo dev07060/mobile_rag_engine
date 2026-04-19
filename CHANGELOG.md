@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.18.0
+* **Embedding path (zero-copy transport)**:
+  - `EmbeddingService.embed()` now returns `Future<Float32List>` (previously `Future<List<double>>`). The worker isolate narrows the mean-pooled vector to `Float32List` before transfer and delivers it via `TransferableTypedData`, eliminating the isolate-boundary deep copy and the downstream `Float32List.fromList(...)` re-allocation at every ingest callsite.
+  - `EmbeddingService.embedBatch()` returns `Future<List<Float32List>>` by the same narrowing. Mean-pooling accumulation still happens in `Float64List` so numerical output is bit-identical to the prior f64 → f32 narrowing performed at the receiver.
+  - Removed redundant `Float32List.fromList(embedding)` wrappers in `SourceRagService.addSource()` and `SourceRagService.regenerateAllEmbeddings()`.
+* **Migration note**:
+  - `Float32List` implements `List<double>`, so `final List<double> e = await embed(x);` and all read-only usages (`e[i]`, `e.length`, iteration, `.fold(...)`) continue to compile and run. Growable-list mutations such as `.add(...)` or `.removeAt(...)` on the returned vector will throw at runtime; embedding vectors were never intended to be appended to in practice.
+
 ## 0.17.0
 * **Low-level APIs**:
   - Added an additive metadata-first search lane with `searchMeta`, `assembleContext`, `hydrateChunks`, and `getChunkExcerpts`.
