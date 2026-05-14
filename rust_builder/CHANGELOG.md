@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.0
+* **Retrieval hot path (copy-minimized Rust core)**:
+  - Added `search_hnsw_slice(&[f32], usize)` and `search_hybrid_inner(String, &[f32], ...)` as borrowed-slice variants of the existing FFI-public entrypoints. The owned-`Vec<f32>` signatures of `search_hnsw` and `search_hybrid` are preserved for `flutter_rust_bridge` compatibility and now delegate to the slice helpers.
+  - Updated `search_meta_hybrid`'s retry loop to borrow the query text, embedding, and options across attempts. A transient `ConcurrentMutation` no longer forces per-attempt `Vec<f32>` / `String` / `SearchMetaHybridOptions` clones.
+  - Refactored the parallel vector + BM25 fan-out inside `search_hybrid_inner` to capture the embedding by reference inside `std::thread::scope` rather than cloning per spawn.
+  - Replaced the per-file `decode_f32_embedding` copies in `source_rag.rs`, `hybrid_search.rs`, and `simple_rag.rs` with a single shared `vector_math::decode_f32_embedding` so the SQLite-BLOB → `Vec<f32>` decode path is owned in one place.
+* **Quantization storage path (`vector_quant_i8` feature)**:
+  - Added `quantize_f32_to_u8_blob(&[f32]) -> (Vec<u8>, f32)` which produces the SQLite BLOB representation directly without the intermediate `Vec<i8>` that `quantize_f32_to_i8` + `i8_blob_from_slice` previously required. The two paths are byte-for-byte identical and covered by a parity regression test.
+  - Switched the four ingest/migration callsites (`source_rag.rs`, `simple_rag.rs`) that store quantized embeddings to the direct blob path.
+
 ## 0.17.0
 * **Low-level lane**:
   - Added a generation-pinned `SearchHandle` with metadata-first hybrid search, batch hydration, excerpt fetch, and Rust-side context assembly.
