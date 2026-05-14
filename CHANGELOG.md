@@ -14,8 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Hybrid and metadata-first search no longer clone the query embedding on every attempt. The `search_meta_hybrid` retry loop, `search_hybrid`'s parallel `std::thread::scope` fan-out, and the incremental-index lookup all borrow the embedding by reference via the new `search_hnsw_slice` / `search_hybrid_inner` slice helpers. Public FRB signatures of `search_hnsw` and `search_hybrid` are unchanged.
   - Consolidated the SQLite-BLOB `decode_f32_embedding` helper into `vector_math` (previously duplicated in `source_rag.rs`, `hybrid_search.rs`, and `simple_rag.rs`).
   - Added `quantize_f32_to_u8_blob` for the `vector_quant_i8` feature so chunk-ingest and re-embedding write the quantized SQLite BLOB without first materializing a `Vec<i8>`.
-* **Compatibility**:
-  - Updated dependency constraint to `rag_engine_flutter: ^0.18.0`.
 * **Migration note**:
   - `Float32List` implements `List<double>`, so `final List<double> e = await embed(x);` and all read-only usages (`e[i]`, `e.length`, iteration, `.fold(...)`) continue to compile and run. Growable-list mutations such as `.add(...)` or `.removeAt(...)` on the returned vector will throw at runtime; embedding vectors were never intended to be appended to in practice.
 * **Docs**:
