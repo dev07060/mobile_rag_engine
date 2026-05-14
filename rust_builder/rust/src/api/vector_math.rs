@@ -4,6 +4,22 @@
 // Shared vector math kernels for retrieval paths.
 // Keeping this module allocation-free helps mobile hot paths.
 
+/// Decode a SQLite `BLOB` column previously written as a native-endian
+/// f32 byte stream back into a `Vec<f32>`. Returns `None` when the
+/// stored length is not a multiple of 4, which would indicate a corrupt
+/// or unexpected payload.
+#[inline]
+pub(crate) fn decode_f32_embedding(blob: &[u8]) -> Option<Vec<f32>> {
+    if blob.len() % 4 != 0 {
+        return None;
+    }
+    Some(
+        blob.chunks_exact(4)
+            .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
+            .collect(),
+    )
+}
+
 #[inline]
 pub(crate) fn dot_f32(a: &[f32], b: &[f32]) -> f32 {
     backend::dot_f32(a, b)

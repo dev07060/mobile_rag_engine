@@ -39,6 +39,35 @@ pub fn i8_blob_from_slice(input: &[i8]) -> Vec<u8> {
     input.iter().map(|v| *v as u8).collect()
 }
 
+/// Quantize an `f32` embedding directly into the SQLite `BLOB`
+/// representation, skipping the intermediate `Vec<i8>` that
+/// [`quantize_f32_to_i8`] + [`i8_blob_from_slice`] would otherwise
+/// produce. Returns the quantized bytes together with the scale used
+/// to dequantize them later. Behaviour is bit-for-bit equivalent to
+/// calling the two helpers sequentially.
+#[inline]
+pub fn quantize_f32_to_u8_blob(input: &[f32]) -> (Vec<u8>, f32) {
+    if input.is_empty() {
+        return (Vec::new(), 1.0);
+    }
+
+    let max_abs = input
+        .iter()
+        .fold(0.0f32, |acc, v| if v.abs() > acc { v.abs() } else { acc });
+    if max_abs == 0.0 {
+        return (vec![0u8; input.len()], 1.0);
+    }
+
+    let scale = max_abs / 127.0;
+    let inv_scale = 1.0 / scale;
+    let blob = input
+        .iter()
+        .map(|v| (v * inv_scale).round().clamp(-127.0, 127.0) as i8 as u8)
+        .collect();
+
+    (blob, scale)
+}
+
 #[inline]
 pub fn i8_vec_from_blob(blob: &[u8]) -> Vec<i8> {
     blob.iter().map(|v| *v as i8).collect()
@@ -144,5 +173,26 @@ mod tests {
         let from_slice = cosine_with_query_norm_i8(&qa, l2_norm_i8(&qa), &qb);
         let from_blob = cosine_with_query_norm_i8_blob(&qa, l2_norm_i8(&qa), &blob);
         assert!((from_slice - from_blob).abs() < 1e-6);
+    }
+
+    #[test]
+    fn quantize_f32_to_u8_blob_matches_two_step_pipeline() {
+        // The direct blob path skips an intermediate Vec<i8>; the
+        // resulting bytes and scale must be bit-for-bit identical to
+        // quantize_f32_to_i8 + i8_blob_from_slice.
+        let inputs: &[&[f32]] = &[
+            &[],
+            &[0.0],
+            &[0.1, -0.25, 0.5, 1.0, -1.2, 2.3],
+            &[-3.4, 0.0, 3.4, -1.7, 1.7],
+        ];
+
+        for input in inputs {
+            let (direct_blob, direct_scale) = quantize_f32_to_u8_blob(input);
+            let (i8_vec, two_step_scale) = quantize_f32_to_i8(input);
+            let two_step_blob = i8_blob_from_slice(&i8_vec);
+            assert_eq!(direct_scale, two_step_scale);
+            assert_eq!(direct_blob, two_step_blob);
+        }
     }
 }

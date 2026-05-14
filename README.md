@@ -10,7 +10,7 @@
 
 Powered by a **Rust core**, it delivers lightning-fast vector search and embedding generation directly on the device. No servers, no API costs, no latency.
 
-> **Memory note:** The runtime is memory-optimized and avoids unnecessary copies in the Rust core, but the current text pipeline is not an end-to-end zero-copy Dart↔Rust transport. Large text payloads still cross the FFI boundary as strings in the current public API.
+> **Memory note:** The embedding vector path is copy-minimized in 0.18.0 with `Float32List` and isolate transfer optimizations, and the Rust core avoids unnecessary copies. This is still not an end-to-end zero-copy Dart↔Rust text pipeline. For large UTF-8 payloads or file-backed ingest, prefer `addDocumentUtf8` / `addDocumentFromFile`; `addDocument(String)` still crosses the public API as a Dart string.
 
 ---
 
@@ -50,9 +50,9 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 
 | Category | Features |
 |:---------|:---------|
-| **Document Input** | PDF, DOCX, Markdown, Plain Text with smart dehyphenation |
+| **Document Input** | PDF, DOCX, Markdown, Plain Text with smart dehyphenation; file-path and UTF-8 ingest fast paths |
 | **Chunking** | Plain-text paragraph/line chunking with heading-aware split and tokenizer hard guard; Markdown structure-aware chunking with header-path metadata |
-| **Search** | HNSW vector + BM25 keyword hybrid search with RRF fusion |
+| **Search** | HNSW vector + BM25 keyword hybrid search with RRF fusion; metadata-first search with explicit context/chunk hydration |
 | **Storage** | SQLite persistence, HNSW Index persistence (fast startup), connection pooling, resumable indexing |
 | **Collections** | Collection-scoped ingest/search/rebuild via `inCollection('id')` |
 | **Performance** | Rust core, 10x faster tokenization, thread control, memory optimized |
@@ -150,6 +150,15 @@ class MySearchScreen extends StatelessWidget {
     await MobileRag.instance.addDocument(
       'Dart is the language used to build Flutter apps.',
     );
+
+    // File/UTF-8 fast paths are useful for large local documents.
+    await MobileRag.instance.addDocumentFromFile('/path/to/manual.pdf');
+    final noteBytes = await File('/path/to/notes.md').readAsBytes();
+    await MobileRag.instance.addDocumentUtf8(
+      noteBytes,
+      name: 'notes.md',
+    );
+
     // Indexing is automatic! (Debounced 500ms)
     // Optional: await MobileRag.instance.rebuildIndex(); // Call if you want it done NOW
   
@@ -161,6 +170,40 @@ class MySearchScreen extends StatelessWidget {
     
     print(result.context.text); // Ready to send to LLM
   }
+}
+```
+
+### Metadata-First Search
+
+Use `searchMeta` when you want lightweight search metadata first, then explicitly assemble context or hydrate only the chunks you need.
+
+```dart
+final meta = await MobileRag.instance.searchMeta(
+  'What is Flutter?',
+  topK: 10,
+);
+
+try {
+  final context = await MobileRag.instance.assembleContext(
+    searchHandle: meta.handle,
+    tokenBudget: 2000,
+  );
+
+  final chunkIds = meta.hits.map((hit) => hit.chunkId.toInt()).toList();
+  final chunks = await MobileRag.instance.hydrateChunks(
+    searchHandle: meta.handle,
+    chunkIds: chunkIds,
+  );
+  final excerpts = await MobileRag.instance.getChunkExcerpts(
+    searchHandle: meta.handle,
+    chunkIds: chunkIds,
+    maxBytes: 256,
+  );
+
+  print(context.text);
+  print('hydrated=${chunks.length}, excerpts=${excerpts.length}');
+} finally {
+  await meta.handle.dispose();
 }
 ```
 
@@ -185,7 +228,7 @@ print(travelHits.length);
 If you do not specify a collection, the engine uses the default `__default__`
 collection for backward compatibility.
 
-> **Advanced Usage:** For fine-grained control, you can still use the low-level APIs (`initTokenizer`, `EmbeddingService`, `SourceRagService`) directly. See the [API Reference](https://pub.dev/documentation/mobile_rag_engine/latest/).
+> **Advanced Usage:** For fine-grained control, use the high-level metadata lane (`searchMeta`, `assembleContext`, `hydrateChunks`, `getChunkExcerpts`) or service APIs such as `EmbeddingService` and `SourceRagService` directly. See the [API Reference](https://pub.dev/documentation/mobile_rag_engine/latest/).
 
 
 ---

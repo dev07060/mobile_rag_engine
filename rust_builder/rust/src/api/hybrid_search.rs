@@ -22,8 +22,8 @@ use std::collections::{HashMap, HashSet};
 use crate::api::bm25_search::{bm25_search, tokenize_for_bm25, Bm25SearchResult};
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
-use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw, HnswSearchResult};
-use crate::api::vector_math::{cosine_with_query_norm_f32, l2_norm_f32};
+use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw_slice, HnswSearchResult};
+use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{cosine_with_query_norm_i8_blob, l2_norm_i8, quantize_f32_to_i8};
 
@@ -67,21 +67,28 @@ fn rrf_score(rank: usize, k: u32) -> f64 {
     1.0 / (k as f64 + rank as f64)
 }
 
-fn decode_f32_embedding(blob: &[u8]) -> Option<Vec<f32>> {
-    if blob.len() % 4 != 0 {
-        return None;
-    }
-    Some(
-        blob.chunks(4)
-            .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
-            .collect(),
-    )
-}
-
 /// Perform hybrid search combining vector and keyword search.
+///
+/// Owned-vector entrypoint kept stable for the flutter_rust_bridge
+/// surface; internal Rust callers should prefer [`search_hybrid_inner`]
+/// to avoid cloning the query embedding when it is already held by
+/// reference (e.g. inside `search_meta_hybrid`'s retry loop).
 pub fn search_hybrid(
     query_text: String,
     query_embedding: Vec<f32>,
+    top_k: u32,
+    config: Option<RrfConfig>,
+    filter: Option<SearchFilter>,
+) -> Result<Vec<HybridSearchResult>, RagError> {
+    search_hybrid_inner(query_text, &query_embedding, top_k, config, filter)
+}
+
+/// Slice-based variant of [`search_hybrid`]. The query embedding is
+/// borrowed for the lifetime of the call so retry loops and scoped
+/// thread spawns can reuse it without per-attempt `Vec<f32>` clones.
+pub(crate) fn search_hybrid_inner(
+    query_text: String,
+    query_embedding: &[f32],
     top_k: u32,
     config: Option<RrfConfig>,
     filter: Option<SearchFilter>,
@@ -111,7 +118,7 @@ pub fn search_hybrid(
         let (vec_res, bm25_res) = std::thread::scope(|s| {
             let handle_vec = s.spawn(|| {
                 if is_hnsw_index_loaded() {
-                    search_hnsw(query_embedding.clone(), candidate_k).unwrap_or_else(|e| {
+                    search_hnsw_slice(query_embedding, candidate_k).unwrap_or_else(|e| {
                         log::error!("[hybrid] Vector search failed: {}", e);
                         vec![]
                     })
@@ -221,9 +228,9 @@ pub fn search_hybrid(
                 })
                 .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
-            let query_norm = l2_norm_f32(&query_embedding);
+            let query_norm = l2_norm_f32(query_embedding);
             #[cfg(feature = "vector_quant_i8")]
-            let (query_i8, _query_i8_scale) = quantize_f32_to_i8(&query_embedding);
+            let (query_i8, _query_i8_scale) = quantize_f32_to_i8(query_embedding);
             #[cfg(feature = "vector_quant_i8")]
             let query_i8_norm = l2_norm_i8(&query_i8);
             let query_tokens = tokenize_for_bm25(&query_text);
@@ -251,7 +258,7 @@ pub fn search_hybrid(
                             if embedding.len() != query_embedding.len() {
                                 continue;
                             }
-                            cosine_with_query_norm_f32(&query_embedding, query_norm, &embedding)
+                            cosine_with_query_norm_f32(query_embedding, query_norm, &embedding)
                         } else {
                             continue;
                         }
@@ -259,7 +266,7 @@ pub fn search_hybrid(
                         if embedding.len() != query_embedding.len() {
                             continue;
                         }
-                        cosine_with_query_norm_f32(&query_embedding, query_norm, &embedding)
+                        cosine_with_query_norm_f32(query_embedding, query_norm, &embedding)
                     } else {
                         continue;
                     };
@@ -269,7 +276,7 @@ pub fn search_hybrid(
                         if embedding.len() != query_embedding.len() {
                             continue;
                         }
-                        cosine_with_query_norm_f32(&query_embedding, query_norm, &embedding)
+                        cosine_with_query_norm_f32(query_embedding, query_norm, &embedding)
                     } else {
                         continue;
                     };

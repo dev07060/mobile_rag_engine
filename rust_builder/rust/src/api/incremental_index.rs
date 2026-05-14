@@ -16,7 +16,7 @@
 //
 //! Incremental Vector Index with Dual-Index Strategy (buffer + HNSW).
 
-use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw};
+use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw_slice};
 #[cfg(not(feature = "vector_quant_i8"))]
 use crate::api::vector_math::{cosine_with_query_norm_f32, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
@@ -150,7 +150,7 @@ pub fn incremental_search(
     }
 
     if is_hnsw_index_loaded() {
-        let hnsw_results = search_hnsw(query_embedding.clone(), top_k * 2)?;
+        let hnsw_results = search_hnsw_slice(&query_embedding, top_k * 2)?;
         for result in hnsw_results {
             all_results.push((result.id, result.distance, "hnsw"));
         }

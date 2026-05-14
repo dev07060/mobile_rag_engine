@@ -223,6 +223,10 @@ pub struct HnswSearchResult {
 
 /// Search in HNSW index.
 ///
+/// Owned-vector entrypoint kept stable for the flutter_rust_bridge surface;
+/// delegates to the slice-based implementation so internal Rust callers can
+/// avoid `Vec<f32>` allocations on hot paths.
+///
 /// ef_search parameter controls accuracy vs speed:
 /// - Higher ef_search = better recall but slower
 /// - Lower ef_search = faster but may miss relevant results
@@ -230,6 +234,17 @@ pub struct HnswSearchResult {
 /// Current tuning targets ~95% recall for most use cases.
 pub fn search_hnsw(
     query_embedding: Vec<f32>,
+    top_k: usize,
+) -> anyhow::Result<Vec<HnswSearchResult>> {
+    search_hnsw_slice(&query_embedding, top_k)
+}
+
+/// Slice-based variant of [`search_hnsw`]. Internal Rust callers should
+/// prefer this entrypoint when the query embedding is already held by
+/// reference (e.g. inside `std::thread::scope` closures or retry loops)
+/// so the vector does not need to be cloned per call.
+pub fn search_hnsw_slice(
+    query_embedding: &[f32],
     top_k: usize,
 ) -> anyhow::Result<Vec<HnswSearchResult>> {
     debug!("[hnsw] Starting search, top_k: {}", top_k);
@@ -251,7 +266,7 @@ pub fn search_hnsw(
 
     debug!("[hnsw] Using ef_search={}", ef_search);
 
-    let neighbors = index.search(&query_embedding, top_k, ef_search);
+    let neighbors = index.search(query_embedding, top_k, ef_search);
 
     let results: Vec<HnswSearchResult> = neighbors
         .iter()

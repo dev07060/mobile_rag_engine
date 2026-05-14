@@ -23,13 +23,13 @@ use crate::api::hnsw_index::{
     build_hnsw_index, clear_hnsw_index, is_hnsw_index_loaded, load_hnsw_index, save_hnsw_index,
     search_hnsw,
 };
-use crate::api::hybrid_search::{search_hybrid, RrfConfig, SearchFilter};
+use crate::api::hybrid_search::{search_hybrid_inner, RrfConfig, SearchFilter};
 use crate::api::tokenizer::count_plain_text_tokens_untruncated;
-use crate::api::vector_math::{cosine_with_query_norm_f32, l2_norm_f32};
+use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{
-    cosine_with_query_norm_i8_blob, dequantize_i8_to_f32, i8_blob_from_slice, i8_vec_from_blob,
-    l2_norm_i8, quantize_f32_to_i8,
+    cosine_with_query_norm_i8_blob, dequantize_i8_to_f32, i8_vec_from_blob, l2_norm_i8,
+    quantize_f32_to_i8, quantize_f32_to_u8_blob,
 };
 use crate::frb_generated::RustAutoOpaqueMoi as RustAutoOpaque;
 use flutter_rust_bridge::frb;
@@ -64,17 +64,6 @@ fn hash_content(content: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
     format!("{:x}", hasher.finalize())
-}
-
-fn decode_f32_embedding(blob: &[u8]) -> Option<Vec<f32>> {
-    if blob.len() % 4 != 0 {
-        return None;
-    }
-    Some(
-        blob.chunks(4)
-            .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
-            .collect(),
-    )
 }
 
 fn normalize_collection_id(collection_id: String) -> String {
@@ -371,10 +360,10 @@ pub fn init_source_db() -> Result<(), RagError> {
             if embedding.is_empty() {
                 continue;
             }
-            let (embedding_i8, embedding_scale) = quantize_f32_to_i8(&embedding);
+            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&embedding);
             conn.execute(
                 "UPDATE chunks SET embedding_i8 = ?1, embedding_scale = ?2 WHERE id = ?3",
-                params![i8_blob_from_slice(&embedding_i8), embedding_scale, id],
+                params![embedding_i8_bytes, embedding_scale, id],
             )
             .map_err(|e| RagError::DatabaseError(e.to_string()))?;
         }
@@ -727,8 +716,8 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
 
         #[cfg(feature = "vector_quant_i8")]
         {
-            let (embedding_i8, embedding_scale) = quantize_f32_to_i8(&chunk.embedding);
-            let embedding_i8_bytes = i8_blob_from_slice(&embedding_i8);
+            let (embedding_i8_bytes, embedding_scale) =
+                quantize_f32_to_u8_blob(&chunk.embedding);
 
             if has_chunk_embedding_i8 && has_chunk_embedding_scale {
                 tx.execute(
@@ -1234,12 +1223,17 @@ pub fn search_meta_hybrid(
     let collection_id = normalize_collection_id(collection_id);
     let mut last_error = None;
 
+    // Borrow the inputs across retry attempts so a transient
+    // ConcurrentMutation does not force per-attempt clones of the
+    // 1.5KB+ query embedding (and matching String/options copies).
+    // `search_meta_hybrid_once` constructs the owned `SearchHandle`
+    // payload internally, cloning only what the handle actually stores.
     for _attempt in 0..=1 {
         match search_meta_hybrid_once(
             &collection_id,
-            query_text.clone(),
-            query_embedding.clone(),
-            options.clone(),
+            &query_text,
+            &query_embedding,
+            &options,
         ) {
             Ok(handle) => return Ok(RustAutoOpaque::new(handle)),
             Err(err @ RagError::ConcurrentMutation(_)) => last_error = Some(err),
@@ -1387,9 +1381,9 @@ fn fetch_adjacent_hit_meta(
 
 fn search_meta_hybrid_once(
     collection_id: &str,
-    query_text: String,
-    query_embedding: Vec<f32>,
-    options: SearchMetaHybridOptions,
+    query_text: &str,
+    query_embedding: &[f32],
+    options: &SearchMetaHybridOptions,
 ) -> Result<SearchHandle, RagError> {
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     let start_generation = get_collection_data_generation(&conn, collection_id)?;
@@ -1405,8 +1399,8 @@ fn search_meta_hybrid_once(
         options.top_k
     };
 
-    let hybrid_results = search_hybrid(
-        query_text.clone(),
+    let hybrid_results = search_hybrid_inner(
+        query_text.to_string(),
         query_embedding,
         effective_top_k,
         Some(RrfConfig {
@@ -1488,10 +1482,10 @@ fn search_meta_hybrid_once(
     Ok(SearchHandle {
         collection_id: collection_id.to_string(),
         data_generation: start_generation,
-        query_text,
+        query_text: query_text.to_string(),
         base_hits,
         ordered_hits,
-        _query_options: options,
+        _query_options: options.clone(),
     })
 }
 
@@ -3096,9 +3090,9 @@ mod tests {
 
         let handle: SearchHandle = search_meta_hybrid_once(
             collection,
-            "긴 헤더".to_string(),
-            vec![1.0, 0.0, 0.0, 0.0],
-            SearchMetaHybridOptions {
+            "긴 헤더",
+            &[1.0, 0.0, 0.0, 0.0],
+            &SearchMetaHybridOptions {
                 top_k: 1,
                 vector_weight: 1.0,
                 bm25_weight: 0.0,
@@ -3193,9 +3187,9 @@ mod tests {
         .unwrap();
         let hits: SearchHandle = search_meta_hybrid_once(
             collection,
-            "install".to_string(),
-            vec![1.0, 0.0, 0.0, 0.0],
-            SearchMetaHybridOptions {
+            "install",
+            &[1.0, 0.0, 0.0, 0.0],
+            &SearchMetaHybridOptions {
                 top_k: 2,
                 vector_weight: 1.0,
                 bm25_weight: 0.0,

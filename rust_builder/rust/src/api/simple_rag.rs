@@ -22,11 +22,13 @@ use crate::api::hnsw_index::{
     build_hnsw_index, clear_hnsw_index, is_hnsw_index_loaded, search_hnsw,
 };
 use crate::api::incremental_index::{clear_buffer, incremental_add};
-use crate::api::vector_math::{cosine_f32, cosine_with_query_norm_f32, l2_norm_f32};
+use crate::api::vector_math::{
+    cosine_f32, cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32,
+};
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{
-    cosine_with_query_norm_i8_blob, dequantize_i8_to_f32, i8_blob_from_slice, i8_vec_from_blob,
-    l2_norm_i8, quantize_f32_to_i8,
+    cosine_with_query_norm_i8_blob, dequantize_i8_to_f32, i8_vec_from_blob, l2_norm_i8,
+    quantize_f32_to_i8, quantize_f32_to_u8_blob,
 };
 use flutter_rust_bridge::frb;
 use log::{debug, error, info, warn};
@@ -44,17 +46,6 @@ fn calculate_content_hash(content: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
     format!("{:x}", hasher.finalize())
-}
-
-fn decode_f32_embedding(blob: &[u8]) -> Option<Vec<f32>> {
-    if blob.len() % 4 != 0 {
-        return None;
-    }
-    Some(
-        blob.chunks(4)
-            .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
-            .collect(),
-    )
 }
 
 /// Calculate cosine similarity between two vectors.
@@ -149,10 +140,10 @@ pub fn init_db() -> anyhow::Result<()> {
             if embedding.is_empty() {
                 continue;
             }
-            let (embedding_i8, embedding_scale) = quantize_f32_to_i8(&embedding);
+            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&embedding);
             conn.execute(
                 "UPDATE docs SET embedding_i8 = ?1, embedding_scale = ?2 WHERE id = ?3",
-                params![i8_blob_from_slice(&embedding_i8), embedding_scale, id],
+                params![embedding_i8_bytes, embedding_scale, id],
             )?;
         }
     }
@@ -311,8 +302,7 @@ pub fn add_document(content: String, embedding: Vec<f32>) -> anyhow::Result<AddD
 
     #[cfg(feature = "vector_quant_i8")]
     {
-        let (embedding_i8, embedding_scale) = quantize_f32_to_i8(&embedding);
-        let embedding_i8_bytes = i8_blob_from_slice(&embedding_i8);
+        let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&embedding);
 
         if has_embedding_i8_column && has_embedding_scale_column {
             conn.execute(

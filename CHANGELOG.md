@@ -10,8 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `EmbeddingService.embed()` now returns `Future<Float32List>` (previously `Future<List<double>>`). The worker isolate narrows the mean-pooled vector to `Float32List` before transfer and delivers it via `TransferableTypedData`, eliminating the isolate-boundary deep copy and the downstream `Float32List.fromList(...)` re-allocation at every ingest callsite.
   - `EmbeddingService.embedBatch()` returns `Future<List<Float32List>>` by the same narrowing. Mean-pooling accumulation still happens in `Float64List` so numerical output is bit-identical to the prior f64 → f32 narrowing performed at the receiver.
   - Removed redundant `Float32List.fromList(embedding)` wrappers in `SourceRagService.addSource()` and `SourceRagService.regenerateAllEmbeddings()`.
+* **Retrieval hot path (Rust core)**:
+  - Hybrid and metadata-first search no longer clone the query embedding on every attempt. The `search_meta_hybrid` retry loop, `search_hybrid`'s parallel `std::thread::scope` fan-out, and the incremental-index lookup all borrow the embedding by reference via the new `search_hnsw_slice` / `search_hybrid_inner` slice helpers. Public FRB signatures of `search_hnsw` and `search_hybrid` are unchanged.
+  - Consolidated the SQLite-BLOB `decode_f32_embedding` helper into `vector_math` (previously duplicated in `source_rag.rs`, `hybrid_search.rs`, and `simple_rag.rs`).
+  - Added `quantize_f32_to_u8_blob` for the `vector_quant_i8` feature so chunk-ingest and re-embedding write the quantized SQLite BLOB without first materializing a `Vec<i8>`.
 * **Migration note**:
   - `Float32List` implements `List<double>`, so `final List<double> e = await embed(x);` and all read-only usages (`e[i]`, `e.length`, iteration, `.fold(...)`) continue to compile and run. Growable-list mutations such as `.add(...)` or `.removeAt(...)` on the returned vector will throw at runtime; embedding vectors were never intended to be appended to in practice.
+* **Docs**:
+  - Updated README coverage for the file/UTF-8 ingest fast paths (`addDocumentFromFile`, `addDocumentUtf8`).
+  - Added README guidance for the metadata-first search lane (`searchMeta`, `assembleContext`, `hydrateChunks`, `getChunkExcerpts`).
+  - Clarified memory and advanced-usage wording for the 0.18.0 embedding transport changes.
 
 ## 0.17.0
 * **Low-level APIs**:
