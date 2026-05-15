@@ -16,7 +16,6 @@ import '../src/rust/api/error.dart';
 import '../src/rust/api/source_rag.dart' as rust_rag;
 import '../src/rust/api/source_rag.dart'
     show SourceStats, ChunkSearchResult, SourceEntry;
-import '../src/rust/api/document_parser.dart' as rust_document_parser;
 import '../src/rust/api/ingest_session.dart' as rust_ingest;
 import '../src/rust/api/hybrid_search.dart' as hybrid;
 import 'context_builder.dart';
@@ -561,6 +560,23 @@ class SourceRagService {
       maxChars: maxChunkChars,
       overlapChars: overlapChars,
     );
+    return _runPreparedIngestion(
+      prepared,
+      chunkDelay: chunkDelay,
+      onProgress: onProgress,
+    );
+  }
+
+  /// Shared drain loop for every `prepareSourceIngestion*` entrypoint.
+  ///
+  /// Handles duplicate-skip / duplicate-in-progress states, runs the
+  /// embedding micro-batch pipeline, and finalizes / aborts / disposes the
+  /// session. Keeps the public ingest entrypoints identical in behavior.
+  Future<SourceAddResult> _runPreparedIngestion(
+    rust_ingest.PreparedIngestion prepared, {
+    Duration? chunkDelay,
+    void Function(int done, int total)? onProgress,
+  }) async {
     final sourceId = prepared.sourceId.toInt();
 
     switch (prepared.state) {
@@ -666,7 +682,12 @@ class SourceRagService {
   }
 
   /// Add a document from UTF-8 bytes while avoiding caller-side String inflation.
-  /// Add a UTF-8 payload while reducing input-side Dart String materialization.
+  ///
+  /// The bytes are handed directly to Rust, which decodes UTF-8 once and runs
+  /// the ingest pipeline without round-tripping the body through a Dart
+  /// `String`. For a 4 MB UTF-8 buffer this saves the ~8 MB Dart heap UTF-16
+  /// allocation and one Rust→Dart→Rust traffic leg compared to the legacy
+  /// `extractTextFromUtf8 → addSourceWithChunking` two-step.
   Future<SourceAddResult> addSourceUtf8WithChunking(
     List<int> bytes, {
     String? metadata,
@@ -675,20 +696,32 @@ class SourceRagService {
     Duration? chunkDelay,
     void Function(int done, int total)? onProgress,
   }) async {
-    final content = await rust_document_parser.extractTextFromUtf8(
-      fileBytes: bytes,
-    );
-    return addSourceWithChunking(
-      content,
+    final effectiveStrategy = strategy ?? ChunkingStrategy.recursive;
+    final prepared = await rust_ingest.prepareSourceIngestionFromUtf8(
+      collectionId: collectionId,
+      contentBytes: bytes,
       metadata: metadata,
       name: name,
-      strategy: strategy ?? ChunkingStrategy.recursive,
+      strategy: _toIngestStrategy(effectiveStrategy),
+      maxChars: maxChunkChars,
+      overlapChars: overlapChars,
+    );
+    return _runPreparedIngestion(
+      prepared,
       chunkDelay: chunkDelay,
       onProgress: onProgress,
     );
   }
 
   /// Add a document from a file path using a Rust-side ingest fast path.
+  ///
+  /// The file body never crosses the FFI boundary — Rust reads the file
+  /// itself and runs the rest of the staging pipeline locally. Only the path
+  /// string is sent Dart→Rust. Strategy is auto-detected from the extension
+  /// when [strategy] is `null` (`.md` / `.markdown` → Markdown, else
+  /// Recursive). Text-like extensions (`.txt`, `.md`, `.markdown`) are
+  /// decoded as UTF-8; everything else falls through to the magic-byte
+  /// document extractor (PDF / DOCX).
   Future<SourceAddResult> addSourceFromFileWithChunking(
     String filePath, {
     String? metadata,
@@ -697,15 +730,17 @@ class SourceRagService {
     Duration? chunkDelay,
     void Function(int done, int total)? onProgress,
   }) async {
-    final content = await rust_document_parser.extractTextFromFile(
+    final prepared = await rust_ingest.prepareSourceIngestionFromFile(
+      collectionId: collectionId,
       filePath: filePath,
-    );
-    return addSourceWithChunking(
-      content,
       metadata: metadata,
-      name: name,
-      filePath: filePath,
-      strategy: strategy,
+      name: name ?? filePath,
+      strategyHint: strategy == null ? null : _toIngestStrategy(strategy),
+      maxChars: maxChunkChars,
+      overlapChars: overlapChars,
+    );
+    return _runPreparedIngestion(
+      prepared,
       chunkDelay: chunkDelay,
       onProgress: onProgress,
     );
