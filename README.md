@@ -10,7 +10,7 @@
 
 Powered by a **Rust core**, it delivers lightning-fast vector search and embedding generation directly on the device. No servers, no API costs, no latency.
 
-> **Memory note:** The embedding vector path is copy-minimized in 0.18.0 with `Float32List` and isolate transfer optimizations, and the Rust core avoids unnecessary copies. This is still not an end-to-end zero-copy Dart↔Rust text pipeline. For large UTF-8 payloads or file-backed ingest, prefer `addDocumentUtf8` / `addDocumentFromFile`; `addDocument(String)` still crosses the public API as a Dart string.
+> **Memory note:** The embedding vector path is copy-minimized in 0.18.0 with `Float32List` and isolate transfer optimizations, and the Rust core avoids unnecessary copies. The ingest text pipeline now keeps chunk content resident in Rust between chunking and DB commit — one `addDocument(content)` call sends the document body across FFI **~2× document size** (down from ~4× under the pre-IngestSession chain). Verified by `BenchmarkService.benchmarkIngestFfiTraffic` and `test/native/ingest_ffi_traffic_test.dart`: 256 KB doc → legacy 1019 KB / IngestSession 510 KB / 50% reduction. Public `addDocument(String)` signature is unchanged.
 
 ---
 

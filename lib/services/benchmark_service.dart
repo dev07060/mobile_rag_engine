@@ -4,9 +4,14 @@ import 'package:mobile_rag_engine/src/rust/api/tokenizer.dart';
 import 'package:mobile_rag_engine/src/rust/api/simple_rag.dart';
 import 'package:mobile_rag_engine/src/rust/api/db_pool.dart';
 import 'package:mobile_rag_engine/src/rust/api/hybrid_search.dart';
+import 'package:mobile_rag_engine/src/rust/api/ingest_metrics.dart' as ingest_metrics;
+import 'package:mobile_rag_engine/src/rust/api/ingest_session.dart' as ingest_session;
+import 'package:mobile_rag_engine/src/rust/api/semantic_chunker.dart' as semantic_chunker;
+import 'package:mobile_rag_engine/src/rust/api/source_rag.dart' as source_rag;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:mobile_rag_engine/models/benchmark_models.dart';
 
@@ -368,5 +373,223 @@ class BenchmarkService {
     onProgress?.call("Benchmark complete!");
 
     return results;
+  }
+
+  /// Measure FFI text-byte traffic for an `addDocument` ingest, comparing the
+  /// legacy chain (addSourceInCollection + chunker + addChunks) against the
+  /// IngestSession chain (prepareSourceIngestion + take_embedding_batch +
+  /// commit_embeddings) on a deterministic document.
+  ///
+  /// Self-contained: spins up an isolated temp DB, runs both pipelines with
+  /// stub embeddings (zeroed Float32List of [embeddingDim]) to keep the
+  /// measurement focused on FFI text traffic (no ONNX cost, no GC noise),
+  /// and tears everything down before returning.
+  ///
+  /// The caller is responsible for preserving whatever pool/DB state was
+  /// active on entry — on success this function restores the original pool
+  /// configuration; on failure the caller should reinitialise the pool.
+  static Future<IngestFfiBenchResult> benchmarkIngestFfiTraffic({
+    int targetBytes = 1 * 1024 * 1024,
+    int embeddingDim = 384,
+    int maxChunkChars = 1500,
+    int overlapChars = 100,
+    int batchSize = 16,
+    String? restoreDbPath,
+    String? dbPathOverride,
+  }) async {
+    final content = _generateBenchDoc(targetBytes);
+    // ASCII-only doc generator → 1 byte per code unit, so length == UTF-8
+    // byte count. If we ever switch to multilingual content, use utf8.encode.
+    final docUtf8Bytes = content.length;
+
+    final benchDbPath = dbPathOverride ??
+        "${(await getApplicationDocumentsDirectory()).path}/ingest_ffi_bench.sqlite";
+    final benchFile = File(benchDbPath);
+    if (await benchFile.exists()) {
+      await benchFile.delete();
+    }
+
+    await initDbPool(dbPath: benchDbPath, maxSize: 4);
+    await initDb();
+    await source_rag.initSourceDb();
+
+    final stubEmbedding = Float32List(embeddingDim);
+
+    // ---- Legacy chain ----------------------------------------------------
+    ingest_metrics.resetIngestTrafficStats();
+    final legacyEntry = await source_rag.addSourceInCollection(
+      collectionId: 'bench-legacy',
+      content: content,
+      metadata: null,
+      name: 'bench-legacy',
+    );
+    final legacySourceId = legacyEntry.sourceId;
+    await source_rag.claimSourceForIngestion(sourceId: legacySourceId);
+    final legacyChunks = semantic_chunker.semanticChunkWithOverlap(
+      text: content,
+      maxChars: maxChunkChars,
+      overlapChars: overlapChars,
+    );
+    final legacyChunkData = legacyChunks
+        .map(
+          (c) => source_rag.ChunkData(
+            content: c.content,
+            chunkIndex: c.index,
+            startPos: c.startPos,
+            endPos: c.endPos,
+            chunkType: c.chunkType,
+            embedding: stubEmbedding,
+          ),
+        )
+        .toList(growable: false);
+    for (var offset = 0; offset < legacyChunkData.length; offset += batchSize) {
+      final end = math.min(offset + batchSize, legacyChunkData.length);
+      await source_rag.addChunks(
+        sourceId: legacySourceId,
+        chunks: legacyChunkData.sublist(offset, end),
+      );
+    }
+    final legacyStats = ingest_metrics.ingestTrafficStats();
+    await source_rag.deleteSourceInCollection(
+      collectionId: 'bench-legacy',
+      sourceId: legacySourceId,
+    );
+
+    // ---- IngestSession chain --------------------------------------------
+    ingest_metrics.resetIngestTrafficStats();
+    final prepared = await ingest_session.prepareSourceIngestion(
+      collectionId: 'bench-session',
+      content: content,
+      metadata: null,
+      name: 'bench-session',
+      strategy: ingest_session.IngestStrategy.recursive,
+      maxChars: maxChunkChars,
+      overlapChars: overlapChars,
+    );
+    final session = prepared.session;
+    if (session == null) {
+      throw StateError(
+        'benchmarkIngestFfiTraffic: prepareSourceIngestion returned no session '
+        '(state=${prepared.state}); benchmark requires a fresh DB.',
+      );
+    }
+    try {
+      var saved = 0;
+      while (saved < prepared.totalChunks) {
+        final batch = await session.takeEmbeddingBatch(batchSize: batchSize);
+        if (batch.isEmpty) break;
+        final embeddings = batch
+            .map(
+              (req) => ingest_session.ChunkEmbedding(
+                chunkIndex: req.chunkIndex,
+                embedding: stubEmbedding,
+              ),
+            )
+            .toList(growable: false);
+        saved += await session.commitEmbeddings(embeddings: embeddings);
+      }
+      await session.finalize();
+    } finally {
+      await session.dispose();
+    }
+    final sessionStats = ingest_metrics.ingestTrafficStats();
+    await source_rag.deleteSourceInCollection(
+      collectionId: 'bench-session',
+      sourceId: prepared.sourceId,
+    );
+
+    // ---- Teardown --------------------------------------------------------
+    await closeDbPool();
+    if (await benchFile.exists()) {
+      await benchFile.delete();
+    }
+    if (restoreDbPath != null) {
+      await initDbPool(dbPath: restoreDbPath, maxSize: 4);
+    }
+
+    return IngestFfiBenchResult(
+      docBytes: docUtf8Bytes,
+      chunkCount: legacyChunks.length,
+      legacy: legacyStats,
+      session: sessionStats,
+    );
+  }
+
+  /// Builds a deterministic ASCII document of roughly [targetBytes] bytes by
+  /// repeating a paragraph fixture. ASCII-only so `String.length` == UTF-8
+  /// byte count.
+  static String _generateBenchDoc(int targetBytes) {
+    const fixture =
+        'The quick brown fox jumps over the lazy dog. Pack my box with five '
+        'dozen liquor jugs. How vexingly quick daft zebras jump! Sphinx of '
+        'black quartz, judge my vow. The five boxing wizards jump quickly.\n\n';
+    final buffer = StringBuffer();
+    while (buffer.length < targetBytes) {
+      buffer.write(fixture);
+    }
+    return buffer.toString();
+  }
+}
+
+/// Result of [BenchmarkService.benchmarkIngestFfiTraffic].
+///
+/// Each entry in [legacy] and [session] is a cumulative byte/call count from
+/// the corresponding Rust counter. The two `*TextTraffic` totals are the
+/// sum of all text-body FFI traffic across the chain (excluding embedding
+/// vector traffic, which is tracked separately for transparency).
+class IngestFfiBenchResult {
+  /// Document size in UTF-8 bytes.
+  final int docBytes;
+
+  /// Number of chunks the document was split into.
+  final int chunkCount;
+
+  /// Counter snapshot taken immediately after the legacy chain finished.
+  final ingest_metrics.IngestTrafficStats legacy;
+
+  /// Counter snapshot taken immediately after the IngestSession chain finished.
+  final ingest_metrics.IngestTrafficStats session;
+
+  const IngestFfiBenchResult({
+    required this.docBytes,
+    required this.chunkCount,
+    required this.legacy,
+    required this.session,
+  });
+
+  int get legacyTextTrafficBytes =>
+      (legacy.legacyAddSourceInBytes +
+              legacy.legacyChunkerTextInBytes +
+              legacy.legacyChunkerChunksOutBytes +
+              legacy.legacyAddChunksInBytes)
+          .toInt();
+
+  int get sessionTextTrafficBytes =>
+      (session.sessionPrepareContentInBytes +
+              session.sessionEmbeddingTextOutBytes)
+          .toInt();
+
+  double get legacyMultiple => legacyTextTrafficBytes / docBytes;
+  double get sessionMultiple => sessionTextTrafficBytes / docBytes;
+  double get reductionRatio => sessionTextTrafficBytes / legacyTextTrafficBytes;
+
+  /// Pretty-print a single-block summary of the comparison.
+  String renderSummary() {
+    String fmt(int bytes) => '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return [
+      'Ingest FFI traffic ($docBytes B doc → $chunkCount chunks):',
+      '  Legacy chain:  ${fmt(legacyTextTrafficBytes)}'
+          ' (${legacyMultiple.toStringAsFixed(2)}× document)',
+      '    add_source_in_collection:    ${fmt(legacy.legacyAddSourceInBytes.toInt())}',
+      '    chunker text in:             ${fmt(legacy.legacyChunkerTextInBytes.toInt())}',
+      '    chunker chunks out:          ${fmt(legacy.legacyChunkerChunksOutBytes.toInt())}',
+      '    add_chunks:                  ${fmt(legacy.legacyAddChunksInBytes.toInt())}',
+      '  IngestSession chain: ${fmt(sessionTextTrafficBytes)}'
+          ' (${sessionMultiple.toStringAsFixed(2)}× document)',
+      '    prepare content in:          ${fmt(session.sessionPrepareContentInBytes.toInt())}',
+      '    take_embedding_batch out:    ${fmt(session.sessionEmbeddingTextOutBytes.toInt())}',
+      '  Reduction: ${((1 - reductionRatio) * 100).toStringAsFixed(1)}%'
+          ' (session / legacy = ${reductionRatio.toStringAsFixed(2)})',
+    ].join('\n');
   }
 }

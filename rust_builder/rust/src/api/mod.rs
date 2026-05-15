@@ -13,6 +13,7 @@ pub mod error;
 pub mod hnsw_index;
 pub mod hybrid_search;
 pub mod incremental_index;
+pub mod ingest_metrics;
 pub mod ingest_session;
 pub mod logger;
 pub mod semantic_chunker;

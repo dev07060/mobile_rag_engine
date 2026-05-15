@@ -16,6 +16,9 @@
 //
 //! Semantic text chunking with paragraph-first strategy for multilingual support.
 
+use crate::api::ingest_metrics::{
+    legacy_counters_enabled, LEGACY_CHUNKER_CHUNKS_OUT, LEGACY_CHUNKER_TEXT_IN,
+};
 use crate::api::tokenizer::{count_tokens_untruncated, resolve_truncation_max_length};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -711,6 +714,11 @@ pub fn semantic_chunk_with_overlap(
     max_chars: i32,
     overlap_chars: i32,
 ) -> Vec<SemanticChunk> {
+    let count_traffic = legacy_counters_enabled();
+    if count_traffic {
+        LEGACY_CHUNKER_TEXT_IN.record(text.len() as u64);
+    }
+
     if text.is_empty() {
         return vec![];
     }
@@ -718,23 +726,28 @@ pub fn semantic_chunk_with_overlap(
     let base_ranges = plan_plain_text_ranges(&text, max_chars.max(100) as usize);
     let overlap = overlap_chars.max(0) as usize;
 
-    if overlap == 0 || base_ranges.len() <= 1 {
-        return materialize_semantic_chunks(&text, base_ranges);
+    let result = if overlap == 0 || base_ranges.len() <= 1 {
+        materialize_semantic_chunks(&text, base_ranges)
+    } else {
+        let ranges = base_ranges
+            .iter()
+            .enumerate()
+            .map(|(index, range)| {
+                if index == 0 {
+                    range.clone()
+                } else {
+                    overlap_start(&text, &base_ranges[index - 1], overlap)..range.end
+                }
+            })
+            .collect();
+        materialize_semantic_chunks(&text, ranges)
+    };
+
+    if count_traffic {
+        LEGACY_CHUNKER_CHUNKS_OUT
+            .record(result.iter().map(|c| c.content.len() as u64).sum());
     }
-
-    let ranges = base_ranges
-        .iter()
-        .enumerate()
-        .map(|(index, range)| {
-            if index == 0 {
-                range.clone()
-            } else {
-                overlap_start(&text, &base_ranges[index - 1], overlap)..range.end
-            }
-        })
-        .collect();
-
-    materialize_semantic_chunks(&text, ranges)
+    result
 }
 
 #[cfg(test)]
@@ -983,6 +996,10 @@ pub enum ChunkingStrategy {
 /// - Inherits header path as metadata
 #[flutter_rust_bridge::frb(sync)]
 pub fn markdown_chunk(text: String, max_chars: i32) -> Vec<StructuredChunk> {
+    let count_traffic = legacy_counters_enabled();
+    if count_traffic {
+        LEGACY_CHUNKER_TEXT_IN.record(text.len() as u64);
+    }
     if text.is_empty() {
         return vec![];
     }
@@ -1072,6 +1089,10 @@ pub fn markdown_chunk(text: String, max_chars: i32) -> Vec<StructuredChunk> {
         }
     }
 
+    if count_traffic {
+        LEGACY_CHUNKER_CHUNKS_OUT
+            .record(chunks.iter().map(|c| c.content.len() as u64).sum());
+    }
     chunks
 }
 
