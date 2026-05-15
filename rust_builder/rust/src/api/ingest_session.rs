@@ -313,7 +313,17 @@ pub fn prepare_source_ingestion(
         add_source_in_collection(collection_id, content.clone(), metadata, name)?;
     let source_id = add_result.source_id;
 
-    let is_resume = if add_result.is_duplicate {
+    // Mirror source_rag_service.dart::addSourceWithChunking exact order:
+    // try to claim first, fall back to status-based duplicate decision only
+    // when the row is not claimable (i.e. status is 'completed' or 'processing').
+    //
+    // This preserves the pre-IngestSession behavior where a 'pending' duplicate
+    // (left behind by a process that crashed between INSERT and CLAIM) auto-
+    // resumes on the next attempt rather than being skipped as in-progress.
+    let mut claimed = claim_source_for_ingestion(source_id)?;
+    let mut resumed_via_reset = false;
+
+    if !claimed {
         let status = get_source_status(source_id)?;
         let chunk_count = get_source_chunk_count(source_id)?;
         match decide_duplicate_decision(status.as_deref(), chunk_count) {
@@ -338,23 +348,33 @@ pub fn prepare_source_ingestion(
             }
             DuplicateDecision::ResetAndResume => {
                 clear_source_chunks(source_id)?;
-                true
+                claimed = claim_source_for_ingestion(source_id)?;
+                if !claimed {
+                    return Ok(PreparedIngestion {
+                        source_id,
+                        state: PreparedSourceState::DuplicateInProgress,
+                        total_chunks: 0,
+                        message: "Source ingestion already in progress".to_string(),
+                        session: None,
+                    });
+                }
+                resumed_via_reset = true;
             }
         }
-    } else {
-        false
-    };
-
-    let claimed = claim_source_for_ingestion(source_id)?;
-    if !claimed {
-        return Ok(PreparedIngestion {
-            source_id,
-            state: PreparedSourceState::DuplicateInProgress,
-            total_chunks: 0,
-            message: "Source ingestion already in progress".to_string(),
-            session: None,
-        });
     }
+
+    // Defensive clear: when a duplicate row's claim succeeded on first try
+    // (status was 'pending' or 'failed'), the previous incarnation may have
+    // left partial chunks on disk before strict rollback existed.
+    let is_resume = add_result.is_duplicate;
+    if is_resume && !resumed_via_reset {
+        let stale_count = get_source_chunk_count(source_id)?;
+        if stale_count > 0 {
+            clear_source_chunks(source_id)?;
+        }
+    }
+
+    debug_assert!(claimed, "source must be claimed before staging chunks");
 
     let staged: Vec<StagedChunk> = match strategy {
         IngestStrategy::Recursive => semantic_chunk_with_overlap(content, max_chars, overlap_chars)
@@ -676,6 +696,61 @@ mod tests {
             Some("failed".to_string())
         );
         assert_eq!(get_source_chunk_count(prepared.source_id).unwrap(), 0);
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_prepare_pending_duplicate_resumes() {
+        // Regression: a source row left in `pending` status by a process that
+        // crashed between INSERT and CLAIM must auto-resume on the next
+        // attempt — not be reported as DuplicateInProgress. This matches the
+        // pre-IngestSession behavior in source_rag_service.dart where claim
+        // was attempted before consulting decideDuplicateSourceIngestion.
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_ingest_pending_dup_resume.db");
+
+        let content = "Pending-duplicate body alpha bravo charlie delta echo.".to_string();
+        let first = prepare_source_ingestion(
+            "__default__".to_string(),
+            content.clone(),
+            None,
+            Some("pending-dup.txt".to_string()),
+            IngestStrategy::Recursive,
+            120,
+            0,
+        )
+        .unwrap();
+        assert_eq!(first.state, PreparedSourceState::CreatedReady);
+        let source_id = first.source_id;
+        // Drop the session without finalize/abort to simulate a crash before
+        // any chunks were written, then rewind status to `pending` so the next
+        // prepare sees the duplicate-pending edge case.
+        drop(first.session);
+        update_source_status(source_id, "pending".to_string()).unwrap();
+
+        let second = prepare_source_ingestion(
+            "__default__".to_string(),
+            content,
+            None,
+            Some("pending-dup.txt".to_string()),
+            IngestStrategy::Recursive,
+            120,
+            0,
+        )
+        .unwrap();
+        assert_eq!(
+            second.state,
+            PreparedSourceState::ResumeReady,
+            "pending duplicate must auto-resume, not stick as DuplicateInProgress",
+        );
+        assert!(second.session.is_some());
+        assert_eq!(second.source_id, source_id);
+        // After resume, source status should now be `processing`.
+        assert_eq!(
+            get_source_status(source_id).unwrap(),
+            Some("processing".to_string())
+        );
 
         teardown_test_db(db_path);
     }
