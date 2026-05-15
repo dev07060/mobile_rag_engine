@@ -7,44 +7,54 @@ import '../frb_generated.dart';
 import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `decode_f32_embedding`, `rrf_score`
+// These functions are ignored because they are not marked as `pub`: `rrf_score`, `search_hybrid_inner`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
 
 /// Perform hybrid search combining vector and keyword search.
-Future<List<HybridSearchResult>> searchHybrid(
-        {required String queryText,
-        required List<double> queryEmbedding,
-        required int topK,
-        RrfConfig? config,
-        SearchFilter? filter}) =>
-    RustLib.instance.api.crateApiHybridSearchSearchHybrid(
-        queryText: queryText,
-        queryEmbedding: queryEmbedding,
-        topK: topK,
-        config: config,
-        filter: filter);
+///
+/// Owned-vector entrypoint kept stable for the flutter_rust_bridge
+/// surface; internal Rust callers should prefer [`search_hybrid_inner`]
+/// to avoid cloning the query embedding when it is already held by
+/// reference (e.g. inside `search_meta_hybrid`'s retry loop).
+Future<List<HybridSearchResult>> searchHybrid({
+  required String queryText,
+  required List<double> queryEmbedding,
+  required int topK,
+  RrfConfig? config,
+  SearchFilter? filter,
+}) => RustLib.instance.api.crateApiHybridSearchSearchHybrid(
+  queryText: queryText,
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+  config: config,
+  filter: filter,
+);
 
 /// Simplified hybrid search returning content strings only.
-Future<List<String>> searchHybridSimple(
-        {required String queryText,
-        required List<double> queryEmbedding,
-        required int topK}) =>
-    RustLib.instance.api.crateApiHybridSearchSearchHybridSimple(
-        queryText: queryText, queryEmbedding: queryEmbedding, topK: topK);
+Future<List<String>> searchHybridSimple({
+  required String queryText,
+  required List<double> queryEmbedding,
+  required int topK,
+}) => RustLib.instance.api.crateApiHybridSearchSearchHybridSimple(
+  queryText: queryText,
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
 
 /// Search with custom weights (vector_weight + bm25_weight = 1.0 recommended).
-Future<List<HybridSearchResult>> searchHybridWeighted(
-        {required String queryText,
-        required List<double> queryEmbedding,
-        required int topK,
-        required double vectorWeight,
-        required double bm25Weight}) =>
-    RustLib.instance.api.crateApiHybridSearchSearchHybridWeighted(
-        queryText: queryText,
-        queryEmbedding: queryEmbedding,
-        topK: topK,
-        vectorWeight: vectorWeight,
-        bm25Weight: bm25Weight);
+Future<List<HybridSearchResult>> searchHybridWeighted({
+  required String queryText,
+  required List<double> queryEmbedding,
+  required int topK,
+  required double vectorWeight,
+  required double bm25Weight,
+}) => RustLib.instance.api.crateApiHybridSearchSearchHybridWeighted(
+  queryText: queryText,
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+  vectorWeight: vectorWeight,
+  bm25Weight: bm25Weight,
+);
 
 class HybridSearchResult {
   final PlatformInt64 docId;
@@ -125,11 +135,7 @@ class SearchFilter {
   final String? metadataLike;
   final String? collectionId;
 
-  const SearchFilter({
-    this.sourceIds,
-    this.metadataLike,
-    this.collectionId,
-  });
+  const SearchFilter({this.sourceIds, this.metadataLike, this.collectionId});
 
   @override
   int get hashCode =>

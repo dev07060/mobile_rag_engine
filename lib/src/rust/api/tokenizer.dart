@@ -9,9 +9,10 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `count_plain_text_tokens_untruncated`, `count_tokens_untruncated`, `encode_internal`, `encode_without_truncation`, `resolve_truncation_max_length`, `with_tokenizer`
 
 /// Initialize tokenizer with tokenizer.json file path.
-Future<void> initTokenizer({required String tokenizerPath}) =>
-    RustLib.instance.api
-        .crateApiTokenizerInitTokenizer(tokenizerPath: tokenizerPath);
+Future<void> initTokenizer({required String tokenizerPath}) => RustLib
+    .instance
+    .api
+    .crateApiTokenizerInitTokenizer(tokenizerPath: tokenizerPath);
 
 /// Tokenize text (returns token IDs with CLS/SEP tokens).
 Uint32List tokenize({required String text}) =>

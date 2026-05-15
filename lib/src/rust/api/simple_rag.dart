@@ -6,14 +6,17 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `calculate_content_hash`, `decode_f32_embedding`, `rebuild_bm25_index_internal`, `rebuild_hnsw_index_internal`, `search_with_hnsw`, `search_with_linear_scan`, `truncate_str`
+// These functions are ignored because they are not marked as `pub`: `calculate_content_hash`, `rebuild_bm25_index_internal`, `rebuild_hnsw_index_internal`, `search_with_hnsw`, `search_with_linear_scan`, `truncate_str`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
 
 /// Calculate cosine similarity between two vectors.
-double calculateCosineSimilarity(
-        {required List<double> vecA, required List<double> vecB}) =>
-    RustLib.instance.api
-        .crateApiSimpleRagCalculateCosineSimilarity(vecA: vecA, vecB: vecB);
+double calculateCosineSimilarity({
+  required List<double> vecA,
+  required List<double> vecB,
+}) => RustLib.instance.api.crateApiSimpleRagCalculateCosineSimilarity(
+  vecA: vecA,
+  vecB: vecB,
+);
 
 /// Initialize database with docs table.
 Future<void> initDb() => RustLib.instance.api.crateApiSimpleRagInitDb();
@@ -27,31 +30,43 @@ Future<void> rebuildBm25Index() =>
     RustLib.instance.api.crateApiSimpleRagRebuildBm25Index();
 
 /// Add document with embedding vector (with deduplication).
-Future<AddDocumentResult> addDocument(
-        {required String content, required List<double> embedding}) =>
-    RustLib.instance.api
-        .crateApiSimpleRagAddDocument(content: content, embedding: embedding);
+Future<AddDocumentResult> addDocument({
+  required String content,
+  required List<double> embedding,
+}) => RustLib.instance.api.crateApiSimpleRagAddDocument(
+  content: content,
+  embedding: embedding,
+);
 
 /// Legacy add_document for backward compatibility.
-Future<void> addDocumentSimple(
-        {required String content, required List<double> embedding}) =>
-    RustLib.instance.api.crateApiSimpleRagAddDocumentSimple(
-        content: content, embedding: embedding);
+Future<void> addDocumentSimple({
+  required String content,
+  required List<double> embedding,
+}) => RustLib.instance.api.crateApiSimpleRagAddDocumentSimple(
+  content: content,
+  embedding: embedding,
+);
 
 /// Similarity-based search (uses HNSW).
-Future<List<String>> searchSimilar(
-        {required List<double> queryEmbedding, required int topK}) =>
-    RustLib.instance.api.crateApiSimpleRagSearchSimilar(
-        queryEmbedding: queryEmbedding, topK: topK);
+Future<List<String>> searchSimilar({
+  required List<double> queryEmbedding,
+  required int topK,
+}) => RustLib.instance.api.crateApiSimpleRagSearchSimilar(
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
 
 /// Benchmark-only entrypoint for deterministic linear scan measurement.
 ///
 /// Unlike `search_similar`, this function bypasses HNSW and executes
 /// the linear scan path directly.
-Future<List<String>> benchmarkSearchLinearScan(
-        {required List<double> queryEmbedding, required int topK}) =>
-    RustLib.instance.api.crateApiSimpleRagBenchmarkSearchLinearScan(
-        queryEmbedding: queryEmbedding, topK: topK);
+Future<List<String>> benchmarkSearchLinearScan({
+  required List<double> queryEmbedding,
+  required int topK,
+}) => RustLib.instance.api.crateApiSimpleRagBenchmarkSearchLinearScan(
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
 
 /// Get document count.
 Future<PlatformInt64> getDocumentCount() =>

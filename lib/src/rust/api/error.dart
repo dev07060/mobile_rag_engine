@@ -15,42 +15,29 @@ sealed class RagError with _$RagError implements FrbException {
   const RagError._();
 
   /// Database related error (potential for retry).
-  const factory RagError.databaseError(
-    String field0,
-  ) = RagError_DatabaseError;
+  const factory RagError.databaseError(String field0) = RagError_DatabaseError;
 
   /// I/O error (file missing, permission issues, etc.).
-  const factory RagError.ioError(
-    String field0,
-  ) = RagError_IoError;
+  const factory RagError.ioError(String field0) = RagError_IoError;
 
   /// Failed to load embedding model.
-  const factory RagError.modelLoadError(
-    String field0,
-  ) = RagError_ModelLoadError;
+  const factory RagError.modelLoadError(String field0) =
+      RagError_ModelLoadError;
 
   /// User input error (invalid query, etc.).
-  const factory RagError.invalidInput(
-    String field0,
-  ) = RagError_InvalidInput;
+  const factory RagError.invalidInput(String field0) = RagError_InvalidInput;
 
   /// Search handle became stale because collection data changed.
-  const factory RagError.staleSearchHandle(
-    String field0,
-  ) = RagError_StaleSearchHandle;
+  const factory RagError.staleSearchHandle(String field0) =
+      RagError_StaleSearchHandle;
 
   /// Search metadata creation raced with a concurrent collection mutation.
-  const factory RagError.concurrentMutation(
-    String field0,
-  ) = RagError_ConcurrentMutation;
+  const factory RagError.concurrentMutation(String field0) =
+      RagError_ConcurrentMutation;
 
   /// Internal system error (HNSW, Logic, etc.).
-  const factory RagError.internalError(
-    String field0,
-  ) = RagError_InternalError;
+  const factory RagError.internalError(String field0) = RagError_InternalError;
 
   /// Unknown error.
-  const factory RagError.unknown(
-    String field0,
-  ) = RagError_Unknown;
+  const factory RagError.unknown(String field0) = RagError_Unknown;
 }
