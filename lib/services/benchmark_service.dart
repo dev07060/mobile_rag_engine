@@ -9,6 +9,8 @@ import 'package:mobile_rag_engine/src/rust/api/ingest_session.dart' as ingest_se
 import 'package:mobile_rag_engine/src/rust/api/semantic_chunker.dart' as semantic_chunker;
 import 'package:mobile_rag_engine/src/rust/api/source_rag.dart' as source_rag;
 import 'package:path_provider/path_provider.dart';
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -654,6 +656,335 @@ class BenchmarkService {
     );
   }
 
+  /// Measure peak process RSS during each ingest entrypoint variant on the
+  /// realistic caller pattern:
+  ///
+  ///   - String path: caller does `readAsBytes` → `utf8.decode` → `addDocument`.
+  ///   - UTF-8 path:  caller does `readAsBytes`              → `addDocumentUtf8`.
+  ///   - File path:   caller passes the path only            → `addDocumentFromFile`.
+  ///
+  /// Each variant runs in isolation with a fresh DB collection. A 5 ms RSS
+  /// sampler runs in parallel and tracks the peak observed during the
+  /// operation. Reports `peak - baseline` per variant.
+  ///
+  /// Returns -1 deltas if [ProcessInfo.currentRss] is unsupported on the
+  /// current platform.
+  static Future<IngestHeapBenchResult> benchmarkIngestHeap({
+    int targetBytes = 4 * 1024 * 1024,
+    int embeddingDim = 384,
+    int maxChunkChars = 1500,
+    int overlapChars = 0,
+    int batchSize = 16,
+    String? restoreDbPath,
+    String? dbPathOverride,
+  }) async {
+    if (ProcessInfo.currentRss < 0) {
+      throw StateError(
+        'benchmarkIngestHeap: ProcessInfo.currentRss is unsupported on this platform',
+      );
+    }
+
+    final content = _generateBenchDoc(targetBytes);
+    final docUtf8Bytes = content.length;
+
+    final benchDbPath = dbPathOverride ??
+        "${(await getApplicationDocumentsDirectory()).path}/ingest_heap_bench.sqlite";
+    final benchFile = File(benchDbPath);
+    if (await benchFile.exists()) {
+      await benchFile.delete();
+    }
+    final benchTextFile = File('$benchDbPath.txt');
+    if (await benchTextFile.exists()) {
+      await benchTextFile.delete();
+    }
+    await benchTextFile.writeAsString(content, flush: true);
+
+    await initDbPool(dbPath: benchDbPath, maxSize: 4);
+    await initDb();
+    await source_rag.initSourceDb();
+
+    final stubEmbedding = Float32List(embeddingDim);
+
+    Future<int> drainAndDelete(
+      ingest_session.PreparedIngestion prepared,
+      String collectionId,
+    ) async {
+      final session = prepared.session;
+      if (session == null) {
+        throw StateError(
+          'benchmarkIngestHeap: prepare returned no session '
+          '(state=${prepared.state}); benchmark requires a fresh collection.',
+        );
+      }
+      try {
+        var saved = 0;
+        while (saved < prepared.totalChunks) {
+          final batch = await session.takeEmbeddingBatch(batchSize: batchSize);
+          if (batch.isEmpty) break;
+          final embeddings = batch
+              .map(
+                (req) => ingest_session.ChunkEmbedding(
+                  chunkIndex: req.chunkIndex,
+                  embedding: stubEmbedding,
+                ),
+              )
+              .toList(growable: false);
+          saved += await session.commitEmbeddings(embeddings: embeddings);
+        }
+        await session.finalize();
+      } finally {
+        await session.dispose();
+      }
+      await source_rag.deleteSourceInCollection(
+        collectionId: collectionId,
+        sourceId: prepared.sourceId,
+      );
+      return prepared.totalChunks;
+    }
+
+    Future<int> measureVariant(Future<void> Function() runVariant) async {
+      // Two-phase: baseline (let any prior GC settle), then sample peak
+      // during the variant. 5 ms cadence is fast enough to catch the
+      // body-allocation spike for a multi-MB doc.
+      await Future.delayed(const Duration(milliseconds: 50));
+      final baseline = ProcessInfo.currentRss;
+      var peak = baseline;
+      final stopwatch = Stopwatch()..start();
+      final sampler = Timer.periodic(const Duration(milliseconds: 5), (_) {
+        final r = ProcessInfo.currentRss;
+        if (r > peak) peak = r;
+      });
+      try {
+        await runVariant();
+      } finally {
+        sampler.cancel();
+        stopwatch.stop();
+        final r = ProcessInfo.currentRss;
+        if (r > peak) peak = r;
+      }
+      return peak - baseline;
+    }
+
+    final stringDelta = await measureVariant(() async {
+      final bytes = await benchTextFile.readAsBytes();
+      // Caller-side String materialization — this is what from_utf8 / from_file avoid.
+      final s = utf8.decode(bytes);
+      final prepared = await ingest_session.prepareSourceIngestion(
+        collectionId: 'bench-heap-string',
+        content: s,
+        metadata: null,
+        name: 'bench-heap-string',
+        strategy: ingest_session.IngestStrategy.recursive,
+        maxChars: maxChunkChars,
+        overlapChars: overlapChars,
+      );
+      await drainAndDelete(prepared, 'bench-heap-string');
+    });
+
+    final utf8Delta = await measureVariant(() async {
+      final bytes = await benchTextFile.readAsBytes();
+      final prepared = await ingest_session.prepareSourceIngestionFromUtf8(
+        collectionId: 'bench-heap-utf8',
+        contentBytes: bytes,
+        metadata: null,
+        name: 'bench-heap-utf8',
+        strategy: ingest_session.IngestStrategy.recursive,
+        maxChars: maxChunkChars,
+        overlapChars: overlapChars,
+      );
+      await drainAndDelete(prepared, 'bench-heap-utf8');
+    });
+
+    final fileDelta = await measureVariant(() async {
+      final prepared = await ingest_session.prepareSourceIngestionFromFile(
+        collectionId: 'bench-heap-file',
+        filePath: benchTextFile.path,
+        metadata: null,
+        name: 'bench-heap-file',
+        strategyHint: ingest_session.IngestStrategy.recursive,
+        maxChars: maxChunkChars,
+        overlapChars: overlapChars,
+      );
+      await drainAndDelete(prepared, 'bench-heap-file');
+    });
+
+    await closeDbPool();
+    if (await benchFile.exists()) {
+      await benchFile.delete();
+    }
+    if (await benchTextFile.exists()) {
+      await benchTextFile.delete();
+    }
+    if (restoreDbPath != null) {
+      await initDbPool(dbPath: restoreDbPath, maxSize: 4);
+    }
+
+    return IngestHeapBenchResult(
+      docBytes: docUtf8Bytes,
+      stringPathPeakDeltaBytes: stringDelta,
+      utf8PathPeakDeltaBytes: utf8Delta,
+      filePathPeakDeltaBytes: fileDelta,
+    );
+  }
+
+  /// Measure wall-clock latency of the full prepare → drain → finalize →
+  /// delete cycle across the three ingest entrypoint variants. Stub
+  /// embeddings (zeroed [Float32List]) keep the measurement focused on the
+  /// FFI + Rust pipeline cost rather than ONNX inference time.
+  ///
+  /// Each variant runs [warmupRuns] warmup iterations followed by
+  /// [measuredRuns] measured iterations. Reports p50 / p95 / mean / stdev
+  /// in milliseconds per variant.
+  static Future<IngestLatencyBenchResult> benchmarkIngestLatency({
+    int targetBytes = 1 * 1024 * 1024,
+    int embeddingDim = 384,
+    int maxChunkChars = 1500,
+    int overlapChars = 0,
+    int batchSize = 16,
+    int warmupRuns = 2,
+    int measuredRuns = 5,
+    String? restoreDbPath,
+    String? dbPathOverride,
+  }) async {
+    final content = _generateBenchDoc(targetBytes);
+    final docUtf8Bytes = content.length;
+
+    final benchDbPath = dbPathOverride ??
+        "${(await getApplicationDocumentsDirectory()).path}/ingest_latency_bench.sqlite";
+    final benchFile = File(benchDbPath);
+    if (await benchFile.exists()) {
+      await benchFile.delete();
+    }
+    final benchTextFile = File('$benchDbPath.txt');
+    if (await benchTextFile.exists()) {
+      await benchTextFile.delete();
+    }
+    await benchTextFile.writeAsString(content, flush: true);
+
+    await initDbPool(dbPath: benchDbPath, maxSize: 4);
+    await initDb();
+    await source_rag.initSourceDb();
+
+    final stubEmbedding = Float32List(embeddingDim);
+    final contentBytes = Uint8List.fromList(content.codeUnits);
+
+    Future<double> runOnce(_LatencyVariant variant, int iteration) async {
+      final collectionId = 'bench-latency-${variant.name}-$iteration';
+      final sw = Stopwatch()..start();
+      late ingest_session.PreparedIngestion prepared;
+      switch (variant) {
+        case _LatencyVariant.string:
+          prepared = await ingest_session.prepareSourceIngestion(
+            collectionId: collectionId,
+            content: content,
+            metadata: null,
+            name: collectionId,
+            strategy: ingest_session.IngestStrategy.recursive,
+            maxChars: maxChunkChars,
+            overlapChars: overlapChars,
+          );
+          break;
+        case _LatencyVariant.utf8:
+          prepared = await ingest_session.prepareSourceIngestionFromUtf8(
+            collectionId: collectionId,
+            contentBytes: contentBytes,
+            metadata: null,
+            name: collectionId,
+            strategy: ingest_session.IngestStrategy.recursive,
+            maxChars: maxChunkChars,
+            overlapChars: overlapChars,
+          );
+          break;
+        case _LatencyVariant.file:
+          prepared = await ingest_session.prepareSourceIngestionFromFile(
+            collectionId: collectionId,
+            filePath: benchTextFile.path,
+            metadata: null,
+            name: collectionId,
+            strategyHint: ingest_session.IngestStrategy.recursive,
+            maxChars: maxChunkChars,
+            overlapChars: overlapChars,
+          );
+          break;
+      }
+      final session = prepared.session;
+      if (session == null) {
+        throw StateError(
+          'benchmarkIngestLatency: prepare returned no session for variant '
+          '${variant.name} (state=${prepared.state}).',
+        );
+      }
+      try {
+        var saved = 0;
+        while (saved < prepared.totalChunks) {
+          final batch = await session.takeEmbeddingBatch(batchSize: batchSize);
+          if (batch.isEmpty) break;
+          final embeddings = batch
+              .map(
+                (req) => ingest_session.ChunkEmbedding(
+                  chunkIndex: req.chunkIndex,
+                  embedding: stubEmbedding,
+                ),
+              )
+              .toList(growable: false);
+          saved += await session.commitEmbeddings(embeddings: embeddings);
+        }
+        await session.finalize();
+      } finally {
+        await session.dispose();
+      }
+      sw.stop();
+      await source_rag.deleteSourceInCollection(
+        collectionId: collectionId,
+        sourceId: prepared.sourceId,
+      );
+      return sw.elapsedMicroseconds / 1000.0;
+    }
+
+    Future<IngestLatencyStats> measureVariant(_LatencyVariant variant) async {
+      for (var i = 0; i < warmupRuns; i++) {
+        await runOnce(variant, -1 - i);
+      }
+      final samples = <double>[];
+      for (var i = 0; i < measuredRuns; i++) {
+        samples.add(await runOnce(variant, i));
+      }
+      samples.sort();
+      final mean = samples.reduce((a, b) => a + b) / samples.length;
+      return IngestLatencyStats(
+        p50Ms: _percentileFromSorted(samples, 0.5),
+        p95Ms: _percentileFromSorted(samples, 0.95),
+        meanMs: mean,
+        stdevMs: _stdDev(samples, mean),
+        samples: List.unmodifiable(samples),
+      );
+    }
+
+    final stringStats = await measureVariant(_LatencyVariant.string);
+    final utf8Stats = await measureVariant(_LatencyVariant.utf8);
+    final fileStats = await measureVariant(_LatencyVariant.file);
+
+    await closeDbPool();
+    if (await benchFile.exists()) {
+      await benchFile.delete();
+    }
+    if (await benchTextFile.exists()) {
+      await benchTextFile.delete();
+    }
+    if (restoreDbPath != null) {
+      await initDbPool(dbPath: restoreDbPath, maxSize: 4);
+    }
+
+    return IngestLatencyBenchResult(
+      docBytes: docUtf8Bytes,
+      warmupRuns: warmupRuns,
+      measuredRuns: measuredRuns,
+      stringPath: stringStats,
+      utf8Path: utf8Stats,
+      filePath: fileStats,
+    );
+  }
+
   /// Builds a deterministic ASCII document of roughly [targetBytes] bytes by
   /// repeating a paragraph fixture. ASCII-only so `String.length` == UTF-8
   /// byte count.
@@ -772,6 +1103,124 @@ class IngestFfiEntrypointBenchResult {
       '  prepareSourceIngestion(String):   prepare_in=${fmt(stringPrepareInBytes)}',
       '  prepareSourceIngestionFromUtf8:   prepare_in=${fmt(utf8PrepareInBytes)}',
       '  prepareSourceIngestionFromFile:   prepare_in=${fmt(filePrepareInBytes)}',
+    ].join('\n');
+  }
+}
+
+/// Result of [BenchmarkService.benchmarkIngestHeap].
+///
+/// Each `*PeakDeltaBytes` field is `peak_rss - baseline_rss` in bytes
+/// observed during that variant's run, with a 5 ms sampler. Useful for
+/// confirming the empirical "from_file holds no Dart-side body" claim.
+///
+/// Caveats: full-process RSS is noisy and includes Rust + ONNX + framework
+/// allocations. Use the relative ordering and approximate magnitude, not
+/// absolute numbers.
+class IngestHeapBenchResult {
+  /// Document size in UTF-8 bytes.
+  final int docBytes;
+
+  /// peak_rss − baseline_rss for `prepareSourceIngestion(String)` path (the
+  /// caller reads bytes then `utf8.decode`s into a Dart `String`).
+  final int stringPathPeakDeltaBytes;
+
+  /// peak_rss − baseline_rss for `prepareSourceIngestionFromUtf8`.
+  final int utf8PathPeakDeltaBytes;
+
+  /// peak_rss − baseline_rss for `prepareSourceIngestionFromFile`. The
+  /// caller never holds the body; the only Dart-side memory it pays for is
+  /// the path string.
+  final int filePathPeakDeltaBytes;
+
+  const IngestHeapBenchResult({
+    required this.docBytes,
+    required this.stringPathPeakDeltaBytes,
+    required this.utf8PathPeakDeltaBytes,
+    required this.filePathPeakDeltaBytes,
+  });
+
+  String renderSummary() {
+    String fmt(int bytes) {
+      final kb = bytes / 1024;
+      if (kb.abs() >= 1024) {
+        return '${(kb / 1024).toStringAsFixed(2)} MB';
+      }
+      return '${kb.toStringAsFixed(1)} KB';
+    }
+
+    return [
+      'Ingest peak-RSS delta ($docBytes B doc, baseline-subtracted):',
+      '  prepareSourceIngestion(String):   peak_delta=${fmt(stringPathPeakDeltaBytes)}',
+      '  prepareSourceIngestionFromUtf8:   peak_delta=${fmt(utf8PathPeakDeltaBytes)}',
+      '  prepareSourceIngestionFromFile:   peak_delta=${fmt(filePathPeakDeltaBytes)}',
+    ].join('\n');
+  }
+}
+
+enum _LatencyVariant { string, utf8, file }
+
+class IngestLatencyStats {
+  final double p50Ms;
+  final double p95Ms;
+  final double meanMs;
+  final double stdevMs;
+  final List<double> samples;
+  const IngestLatencyStats({
+    required this.p50Ms,
+    required this.p95Ms,
+    required this.meanMs,
+    required this.stdevMs,
+    required this.samples,
+  });
+}
+
+/// Result of [BenchmarkService.benchmarkIngestLatency].
+///
+/// Wall-clock ms for the full prepare → drain → finalize → delete cycle of
+/// each variant. Stub embeddings (zeroed [Float32List]) keep the
+/// measurement focused on FFI + Rust pipeline cost rather than ONNX time.
+class IngestLatencyBenchResult {
+  /// Document size in UTF-8 bytes.
+  final int docBytes;
+
+  /// Number of warmup iterations excluded from stats.
+  final int warmupRuns;
+
+  /// Number of measured iterations that fed the stats.
+  final int measuredRuns;
+
+  final IngestLatencyStats stringPath;
+  final IngestLatencyStats utf8Path;
+  final IngestLatencyStats filePath;
+
+  const IngestLatencyBenchResult({
+    required this.docBytes,
+    required this.warmupRuns,
+    required this.measuredRuns,
+    required this.stringPath,
+    required this.utf8Path,
+    required this.filePath,
+  });
+
+  double get stringP50Ms => stringPath.p50Ms;
+  double get utf8P50Ms => utf8Path.p50Ms;
+  double get fileP50Ms => filePath.p50Ms;
+
+  double get stringP95Ms => stringPath.p95Ms;
+  double get utf8P95Ms => utf8Path.p95Ms;
+  double get fileP95Ms => filePath.p95Ms;
+
+  String renderSummary() {
+    String row(String label, IngestLatencyStats s) =>
+        '  $label  p50=${s.p50Ms.toStringAsFixed(2)}ms  '
+        'p95=${s.p95Ms.toStringAsFixed(2)}ms  '
+        'mean=${s.meanMs.toStringAsFixed(2)}ms  '
+        '±${s.stdevMs.toStringAsFixed(2)}ms';
+    return [
+      'Ingest latency ($docBytes B doc, warmup=$warmupRuns, measured=$measuredRuns):',
+      row('prepareSourceIngestion(String):  ', stringPath),
+      row('prepareSourceIngestionFromUtf8:  ', utf8Path),
+      row('prepareSourceIngestionFromFile:  ', filePath),
     ].join('\n');
   }
 }
