@@ -7,6 +7,10 @@
 // (Rust→Dart) and embedding vectors (Dart→Rust) traverse FFI per chunk.
 
 use crate::api::error::RagError;
+use crate::api::ingest_metrics::{
+    LegacyCountingGuard, SESSION_COMMIT_EMBEDDINGS_IN, SESSION_EMBEDDING_TEXT_OUT,
+    SESSION_PREPARE_CONTENT_IN,
+};
 use crate::api::semantic_chunker::{markdown_chunk, semantic_chunk_with_overlap};
 use crate::api::source_rag::{
     add_chunks, add_source_in_collection, claim_source_for_ingestion, clear_source_chunks,
@@ -153,16 +157,22 @@ impl IngestSession {
 
         let to_dispatch = take.min(self.pending.len());
         let mut out = Vec::with_capacity(to_dispatch);
+        let mut outbound_bytes: u64 = 0;
         for _ in 0..to_dispatch {
             let staged = self
                 .pending
                 .pop_front()
                 .expect("pending must have items at this point");
+            let embedding_text = render_context_text(&staged.content, &staged.chunk_type);
+            outbound_bytes += embedding_text.len() as u64;
             out.push(EmbeddingRequest {
                 chunk_index: staged.chunk_index,
-                embedding_text: render_context_text(&staged.content, &staged.chunk_type),
+                embedding_text,
             });
             self.in_flight.push(staged);
+        }
+        if outbound_bytes > 0 {
+            SESSION_EMBEDDING_TEXT_OUT.record(outbound_bytes);
         }
 
         debug!(
@@ -183,6 +193,15 @@ impl IngestSession {
         embeddings: Vec<ChunkEmbedding>,
     ) -> Result<i32, RagError> {
         self.ensure_active()?;
+        // 4 bytes per f32 dim; gives the embedding vector traffic for the
+        // Dart→Rust direction (separate from the text-body counters).
+        let vector_bytes: u64 = embeddings
+            .iter()
+            .map(|e| (e.embedding.len() as u64) * 4)
+            .sum();
+        if vector_bytes > 0 {
+            SESSION_COMMIT_EMBEDDINGS_IN.record(vector_bytes);
+        }
         if self.in_flight.is_empty() {
             return Err(RagError::InvalidInput(
                 "no in-flight batch to commit; call take_embedding_batch first".to_string(),
@@ -235,7 +254,10 @@ impl IngestSession {
             });
         }
 
+        // Suppress legacy counters for the internal add_chunks delegation.
+        let _legacy_guard = LegacyCountingGuard::enter();
         let saved = add_chunks(self.source_id, to_commit)?;
+        drop(_legacy_guard);
         self.committed_count += saved;
         debug!(
             "[IngestSession] committed batch of {} (total committed {} / {})",
@@ -309,6 +331,14 @@ pub fn prepare_source_ingestion(
     max_chars: i32,
     overlap_chars: i32,
 ) -> Result<PreparedIngestion, RagError> {
+    // Record the FFI byte traffic from Dart→Rust before delegating to internal
+    // helpers. The guard suppresses legacy counter increments for the nested
+    // calls (add_source_in_collection, semantic_chunk_with_overlap,
+    // markdown_chunk) so a session-path run does not double-charge legacy
+    // counters.
+    SESSION_PREPARE_CONTENT_IN.record(content.len() as u64);
+    let _legacy_guard = LegacyCountingGuard::enter();
+
     let add_result =
         add_source_in_collection(collection_id, content.clone(), metadata, name)?;
     let source_id = add_result.source_id;

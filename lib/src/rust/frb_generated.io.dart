@@ -11,6 +11,7 @@ import 'api/error.dart';
 import 'api/hnsw_index.dart';
 import 'api/hybrid_search.dart';
 import 'api/incremental_index.dart';
+import 'api/ingest_metrics.dart';
 import 'api/ingest_session.dart';
 import 'api/logger.dart';
 import 'api/semantic_chunker.dart';
@@ -137,6 +138,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
   @protected
+  IngestTrafficStats dco_decode_box_autoadd_ingest_traffic_stats(dynamic raw);
+
+  @protected
   (int, int, int) dco_decode_box_autoadd_record_u_32_u_32_u_32(dynamic raw);
 
   @protected
@@ -215,6 +219,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   IngestStrategy dco_decode_ingest_strategy(dynamic raw);
+
+  @protected
+  IngestTrafficStats dco_decode_ingest_traffic_stats(dynamic raw);
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
@@ -494,6 +501,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
+  IngestTrafficStats sse_decode_box_autoadd_ingest_traffic_stats(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   (int, int, int) sse_decode_box_autoadd_record_u_32_u_32_u_32(
     SseDeserializer deserializer,
   );
@@ -590,6 +602,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   IngestStrategy sse_decode_ingest_strategy(SseDeserializer deserializer);
+
+  @protected
+  IngestTrafficStats sse_decode_ingest_traffic_stats(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
@@ -934,6 +951,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ingest_traffic_stats(
+    IngestTrafficStats self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_record_u_32_u_32_u_32(
     (int, int, int) self,
     SseSerializer serializer,
@@ -1062,6 +1085,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ingest_strategy(
     IngestStrategy self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ingest_traffic_stats(
+    IngestTrafficStats self,
     SseSerializer serializer,
   );
 

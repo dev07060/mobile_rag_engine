@@ -19,6 +19,9 @@
 use crate::api::bm25_search::{bm25_add_documents, bm25_clear_index, is_bm25_index_loaded};
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
+use crate::api::ingest_metrics::{
+    legacy_counters_enabled, LEGACY_ADD_CHUNKS_IN, LEGACY_ADD_SOURCE_IN,
+};
 use crate::api::hnsw_index::{
     build_hnsw_index, clear_hnsw_index, is_hnsw_index_loaded, load_hnsw_index, save_hnsw_index,
     search_hnsw,
@@ -471,6 +474,9 @@ pub fn add_source_in_collection(
     metadata: Option<String>,
     name: Option<String>,
 ) -> Result<AddSourceResult, RagError> {
+    if legacy_counters_enabled() {
+        LEGACY_ADD_SOURCE_IN.record(content.len() as u64);
+    }
     let collection_id = normalize_collection_id(collection_id);
     info!(
         "[add_source_in_collection] collection={}, chars={}, name={:?}",
@@ -684,6 +690,10 @@ pub struct ChunkData {
 
 /// Add chunks for a source (uses transaction for atomicity).
 pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagError> {
+    if legacy_counters_enabled() {
+        LEGACY_ADD_CHUNKS_IN
+            .record(chunks.iter().map(|c| c.content.len() as u64).sum());
+    }
     info!(
         "[add_chunks] Adding {} chunks for source {}",
         chunks.len(),
