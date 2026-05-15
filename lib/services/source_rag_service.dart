@@ -15,9 +15,9 @@ import 'package:flutter/foundation.dart';
 import '../src/rust/api/error.dart';
 import '../src/rust/api/source_rag.dart' as rust_rag;
 import '../src/rust/api/source_rag.dart'
-    show SourceStats, ChunkSearchResult, ChunkData, SourceEntry;
+    show SourceStats, ChunkSearchResult, SourceEntry;
 import '../src/rust/api/document_parser.dart' as rust_document_parser;
-import '../src/rust/api/semantic_chunker.dart';
+import '../src/rust/api/ingest_session.dart' as rust_ingest;
 import '../src/rust/api/hybrid_search.dart' as hybrid;
 import 'context_builder.dart';
 import 'embedding_service.dart';
@@ -542,197 +542,126 @@ class SourceRagService {
     Duration? chunkDelay,
     void Function(int done, int total)? onProgress,
   }) async {
-    // 1. Determine chunking strategy
     final effectiveStrategy = strategy ??
         (filePath != null &&
                 (filePath.endsWith('.md') || filePath.endsWith('.markdown'))
             ? ChunkingStrategy.markdown
             : ChunkingStrategy.recursive);
 
-    // 2. Create source row first for crash recovery visibility.
-    // This ensures unfinished ingests remain visible as pending/failed states.
-    final sourceEntry = await rust_rag.addSourceInCollection(
+    // Hand the document body to Rust exactly once. `prepareSourceIngestion`
+    // performs the source-row INSERT, claim, duplicate decision, chunker run,
+    // and stages chunk content in a Rust-resident IngestSession — so neither
+    // the chunk content nor the full document round-trips back to Dart.
+    final prepared = await rust_ingest.prepareSourceIngestion(
       collectionId: collectionId,
       content: content,
       metadata: metadata,
-      name: name ?? filePath, // Use available identifier
+      name: name ?? filePath,
+      strategy: _toIngestStrategy(effectiveStrategy),
+      maxChars: maxChunkChars,
+      overlapChars: overlapChars,
     );
-    final sourceId = sourceEntry.sourceId;
-    var resumedExistingSource = sourceEntry.isDuplicate;
+    final sourceId = prepared.sourceId.toInt();
 
-    // 3. Attempt to claim source for ingestion.
-    //    Only pending/failed sources can transition to processing.
-    var claimed = await rust_rag.claimSourceForIngestion(sourceId: sourceId);
-    if (!claimed) {
-      final status = await rust_rag.getSourceStatus(sourceId: sourceId);
-      final existingChunkCount = await rust_rag.getSourceChunkCount(
-        sourceId: sourceId,
+    switch (prepared.state) {
+      case rust_ingest.PreparedSourceState.duplicateSkip:
+        return SourceAddResult(
+          sourceId: sourceId,
+          isDuplicate: true,
+          chunkCount: 0,
+          message: prepared.message,
+        );
+      case rust_ingest.PreparedSourceState.duplicateInProgress:
+        return SourceAddResult(
+          sourceId: sourceId,
+          isDuplicate: true,
+          chunkCount: 0,
+          message: prepared.message,
+        );
+      case rust_ingest.PreparedSourceState.createdReady:
+      case rust_ingest.PreparedSourceState.resumeReady:
+        break;
+    }
+
+    final session = prepared.session;
+    if (session == null) {
+      throw StateError(
+        'prepareSourceIngestion returned ${prepared.state} without a session handle.',
       );
-      switch (decideDuplicateSourceIngestion(
-        status: status,
-        chunkCount: existingChunkCount,
-      )) {
-        case DuplicateSourceIngestionDecision.skipCompleted:
-          await rust_rag.updateSourceStatus(
-            sourceId: sourceId,
-            status: 'completed',
-          );
-          return SourceAddResult(
-            sourceId: sourceId.toInt(),
-            isDuplicate: true,
-            chunkCount: 0,
-            message: sourceEntry.message,
-          );
-        case DuplicateSourceIngestionDecision.alreadyInProgress:
-          return SourceAddResult(
-            sourceId: sourceId.toInt(),
-            isDuplicate: true,
-            chunkCount: 0,
-            message: 'Source ingestion already in progress',
-          );
-        case DuplicateSourceIngestionDecision.resetAndResume:
-          resumedExistingSource = true;
-          await rust_rag.clearSourceChunks(sourceId: sourceId);
-          claimed = await rust_rag.claimSourceForIngestion(sourceId: sourceId);
-          if (!claimed) {
-            return SourceAddResult(
-              sourceId: sourceId.toInt(),
-              isDuplicate: true,
-              chunkCount: 0,
-              message: 'Source ingestion already in progress',
-            );
-          }
-      }
     }
 
-    // Duplicate resume path: defensively clear stale partial chunks left by
-    // older versions that failed before strict rollback was introduced.
-    if (sourceEntry.isDuplicate && claimed) {
-      resumedExistingSource = true;
-      final staleChunkCount = await rust_rag.getSourceChunkCount(
-        sourceId: sourceId,
-      );
-      if (staleChunkCount > 0) {
-        await rust_rag.clearSourceChunks(sourceId: sourceId);
-      }
-    }
+    final isResume =
+        prepared.state == rust_ingest.PreparedSourceState.resumeReady;
+    final total = prepared.totalChunks;
+    debugPrint(
+      '[SourceRagService] Prepared $total chunks (resume=$isResume). Starting streaming ingestion...',
+    );
 
-    // Mark dirty only when ingestion will actually run.
-    if (!claimed) {
-      throw StateError('Unable to claim source $sourceId for ingestion.');
-    }
+    // Mark dirty only when ingestion will actually run (parity with old path).
     await _markDirty();
 
-    // 4. Streaming micro-batch ingestion pipeline
-    //    - Embed kIngestionBatchSize chunks at a time
-    //    - Save to DB immediately (incremental commit)
-    //    - Release memory and yield to event loop
     final effectiveDelay = chunkDelay ?? const Duration(milliseconds: 10);
-    int savedCount = 0;
+    var savedCount = 0;
+    var sessionDisposed = false;
 
     try {
-      // Chunking runs on main isolate (no ONNX double-loading).
-      debugPrint('[SourceRagService] Chunking content...');
-      final List<dynamic> rawChunks;
-      if (effectiveStrategy == ChunkingStrategy.markdown) {
-        rawChunks = markdownChunk(text: content, maxChars: maxChunkChars);
-      } else {
-        rawChunks = semanticChunkWithOverlap(
-          text: content,
-          maxChars: maxChunkChars,
-          overlapChars: overlapChars,
-        );
-      }
+      while (savedCount < total) {
+        final batch =
+            await session.takeEmbeddingBatch(batchSize: kIngestionBatchSize);
+        if (batch.isEmpty) break;
 
-      final total = rawChunks.length;
-      debugPrint(
-        '[SourceRagService] Got $total chunks. Starting streaming ingestion...',
-      );
-
-      for (var i = 0; i < total; i += kIngestionBatchSize) {
-        final batchEnd = (i + kIngestionBatchSize).clamp(0, total);
-        final batchChunks = <ChunkData>[];
-
-        for (var j = i; j < batchEnd; j++) {
-          final rawChunk = rawChunks[j];
-          String contentStr;
-          String embeddingText;
-          String chunkType;
-          int chunkIdx;
-          int startPos;
-          int endPos;
-
-          if (effectiveStrategy == ChunkingStrategy.markdown) {
-            final c = rawChunk as StructuredChunk;
-            contentStr = c.content;
-            chunkType = _encodeStructuredChunkType(
-              c.chunkType,
-              headerPath: c.headerPath,
-            );
-            embeddingText = buildChunkEmbeddingText(
-              content: c.content,
-              chunkType: chunkType,
-            );
-            chunkIdx = c.index;
-            startPos = c.startPos;
-            endPos = c.endPos;
-          } else {
-            final c = rawChunk as SemanticChunk;
-            contentStr = c.content;
-            embeddingText = c.content;
-            chunkType = c.chunkType;
-            chunkIdx = c.index;
-            startPos = c.startPos;
-            endPos = c.endPos;
-          }
-
-          // Embed using the already-loaded ONNX session (no double-loading)
-          final embedding = await EmbeddingService.embed(embeddingText);
-
-          batchChunks.add(
-            ChunkData(
-              content: contentStr,
-              chunkIndex: chunkIdx,
-              startPos: startPos,
-              endPos: endPos,
-              chunkType: chunkType,
+        final embeddings = <rust_ingest.ChunkEmbedding>[];
+        for (final request in batch) {
+          final embedding =
+              await EmbeddingService.embed(request.embeddingText);
+          embeddings.add(
+            rust_ingest.ChunkEmbedding(
+              chunkIndex: request.chunkIndex,
               embedding: embedding,
             ),
           );
         }
 
-        // Incremental DB save — batch is committed and can be released
-        await rust_rag.addChunks(sourceId: sourceId, chunks: batchChunks);
-        savedCount += batchChunks.length;
+        final committed =
+            await session.commitEmbeddings(embeddings: embeddings);
+        savedCount += committed;
         onProgress?.call(savedCount, total);
 
-        // Yield to event loop: allows GC, UI updates, and thermal cooldown
-        if (i + kIngestionBatchSize < total) {
+        if (savedCount < total) {
           await Future.delayed(effectiveDelay);
         }
       }
 
-      await rust_rag.updateSourceStatus(
-        sourceId: sourceId,
-        status: 'completed',
-      );
-
+      await session.finalize();
       return SourceAddResult(
-        sourceId: sourceId.toInt(),
-        isDuplicate: sourceEntry.isDuplicate,
+        sourceId: sourceId,
+        isDuplicate: isResume,
         chunkCount: savedCount,
-        message: resumedExistingSource
-            ? 'Source resumed and completed'
-            : sourceEntry.message,
+        message: isResume ? 'Source resumed and completed' : prepared.message,
       );
     } catch (e) {
       try {
-        await rust_rag.clearSourceChunks(sourceId: sourceId);
-      } catch (_) {}
-      try {
-        await rust_rag.updateSourceStatus(sourceId: sourceId, status: 'failed');
-      } catch (_) {}
+        await session.abort();
+      } catch (_) {
+        // best-effort: abort errors are surfaced via the rethrow below
+      }
       rethrow;
+    } finally {
+      if (!sessionDisposed) {
+        sessionDisposed = true;
+        try {
+          await session.dispose();
+        } catch (_) {}
+      }
+    }
+  }
+
+  rust_ingest.IngestStrategy _toIngestStrategy(ChunkingStrategy strategy) {
+    switch (strategy) {
+      case ChunkingStrategy.markdown:
+        return rust_ingest.IngestStrategy.markdown;
+      case ChunkingStrategy.recursive:
+        return rust_ingest.IngestStrategy.recursive;
     }
   }
 

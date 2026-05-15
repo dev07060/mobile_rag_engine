@@ -27,8 +27,10 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 /// init_db_pool("/path/to/rag.sqlite", 4)?;
 /// ```
 Future<void> initDbPool({required String dbPath, required int maxSize}) =>
-    RustLib.instance.api
-        .crateApiDbPoolInitDbPool(dbPath: dbPath, maxSize: maxSize);
+    RustLib.instance.api.crateApiDbPoolInitDbPool(
+      dbPath: dbPath,
+      maxSize: maxSize,
+    );
 
 /// Check if the connection pool is initialized.
 Future<bool> isPoolInitialized() =>
