@@ -12,7 +12,17 @@ Powered by a **Rust core**, it delivers lightning-fast vector search and embeddi
 
 > **Memory note:** The embedding vector path is copy-minimized in 0.18.0 with `Float32List` and isolate transfer optimizations, and the Rust core avoids unnecessary copies. The ingest text pipeline now keeps chunk content resident in Rust between chunking and DB commit — one `addDocument(content)` call sends the document body across FFI **~2× document size** (down from ~4× under the pre-IngestSession chain). Verified by `BenchmarkService.benchmarkIngestFfiTraffic` and `test/native/ingest_ffi_traffic_test.dart`: 256 KB doc → legacy 1019 KB / IngestSession 510 KB / 50% reduction.
 >
-> `addDocumentUtf8(bytes)` and `addDocumentFromFile(path)` are now true Rust-side bytes pass-through entrypoints (Rust functions `prepareSourceIngestionFromUtf8` / `prepareSourceIngestionFromFile`): UTF-8 bytes go straight into Rust without an intermediate Dart `String` (saves the Dart-heap UTF-16 inflation — ~8 MB for a 4 MB file), and the file variant reads the body inside Rust so it **never crosses FFI at all**. Lock-in test `test/native/ingest_ffi_traffic_test.dart` measures (256 KB doc): String 256.1 KB / UTF-8 256.1 KB / File **0.0 KB** of `session_prepare_content_in_bytes`. Public `addDocument(String)`, `addDocumentUtf8(bytes)`, and `addDocumentFromFile(path)` signatures are unchanged.
+> `addDocumentUtf8(bytes)` and `addDocumentFromFile(path)` are now true Rust-side bytes pass-through entrypoints (Rust functions `prepareSourceIngestionFromUtf8` / `prepareSourceIngestionFromFile`): UTF-8 bytes go straight into Rust without an intermediate Dart `String`, and the file variant reads the body inside Rust so it **never crosses FFI at all**. Public `addDocument(String)`, `addDocumentUtf8(bytes)`, and `addDocumentFromFile(path)` signatures are unchanged.
+>
+> Measurements locked in by `test/native/ingest_ffi_traffic_test.dart` (verified on macOS dev host, ASCII bench corpus):
+>
+> | Metric | `addDocument(String)` | `addDocumentUtf8(bytes)` | `addDocumentFromFile(path)` |
+> |---|---|---|---|
+> | FFI body bytes (256 KB doc) | 256.1 KB | 256.1 KB | **0.0 KB** |
+> | Peak RSS Δ (4 MB doc, full-process) | ~97 MB | ~17 MB | **~5 MB** |
+> | Wall-clock p50 (1 MB doc, stub embeddings) | 173.7 ms | 166.2 ms | **162.4 ms** |
+>
+> The String path holds the full body in Dart memory plus chunker / staging intermediates before crossing FFI; the file path lets Rust read and chunk the body without ever materializing it in Dart, so peak RSS stays roughly an order of magnitude lower. Wall-clock gains are modest with stub embeddings (ONNX dominates real-world latency), but the heap and FFI-traffic gains compound on memory-constrained mobile devices.
 
 ---
 

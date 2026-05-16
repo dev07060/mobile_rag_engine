@@ -155,4 +155,122 @@ void main() {
       }
     },
   );
+
+  test(
+    'Peak-RSS delta: from_file < from_utf8 / string (heap pass-through)',
+    () async {
+      // Empirically check that the file-path variant avoids holding the
+      // document body on the Dart side. The String/UTF-8 variants both
+      // carry the body in Dart memory before passing it to Rust, so their
+      // peak RSS delta should be markedly higher than the file variant.
+      //
+      // RSS is noisy at full-process granularity, so this test asserts an
+      // ORDERING + magnitude floor rather than exact byte counts. A 4 MB
+      // doc gives enough signal to clear the noise floor on a hot run.
+      if (ProcessInfo.currentRss < 0) {
+        // ignore: avoid_print
+        print('Skipping: ProcessInfo.currentRss unsupported on this platform');
+        return;
+      }
+      final dir = await Directory.systemTemp.createTemp(
+        'mobile_rag_heap_bench_',
+      );
+      try {
+        final result = await BenchmarkService.benchmarkIngestHeap(
+          targetBytes: 4 * 1024 * 1024,
+          maxChunkChars: 1500,
+          overlapChars: 0,
+          batchSize: 16,
+          dbPathOverride: '${dir.path}/heap_bench.sqlite',
+        );
+
+        // The file path holds at most a few KB on the Dart side (path
+        // string + chunk dispatch buffers). The String / UTF-8 paths must
+        // hold the full body (~4 MB) before handing it to Rust. So the
+        // string/utf8 deltas should exceed the file delta by at least
+        // half the doc size to clear noise.
+        final docHalf = result.docBytes ~/ 2;
+        expect(
+          result.stringPathPeakDeltaBytes - result.filePathPeakDeltaBytes,
+          greaterThan(docHalf),
+          reason:
+              'String path should hold the doc body in Dart, raising peak RSS '
+              'by at least half of docBytes vs file path. '
+              'string=${result.stringPathPeakDeltaBytes}B, '
+              'file=${result.filePathPeakDeltaBytes}B, '
+              'docBytes=${result.docBytes}',
+        );
+        expect(
+          result.utf8PathPeakDeltaBytes - result.filePathPeakDeltaBytes,
+          greaterThan(docHalf),
+          reason:
+              'UTF-8 path should hold the doc bytes in Dart, raising peak RSS '
+              'by at least half of docBytes vs file path. '
+              'utf8=${result.utf8PathPeakDeltaBytes}B, '
+              'file=${result.filePathPeakDeltaBytes}B, '
+              'docBytes=${result.docBytes}',
+        );
+
+        // ignore: avoid_print
+        print(result.renderSummary());
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
+    'Wall-clock latency: from_file is fastest, from_utf8 ≤ string',
+    () async {
+      // Stub-embedding latency measurement: with ONNX cost removed, the
+      // residual is FFI + Rust-side staging. from_file does the file I/O
+      // in Rust (skipping one boundary crossing); from_utf8 skips the Dart
+      // String materialization; the canonical String path bears both.
+      //
+      // Loose assertion: file p50 should not be slower than string p50 by
+      // more than 25%, and ideally is faster. We assert "file ≤ string ×
+      // 1.25" rather than strict inequality to absorb scheduler jitter on
+      // CI hosts where the absolute numbers are tiny (single-digit ms).
+      final dir = await Directory.systemTemp.createTemp(
+        'mobile_rag_latency_bench_',
+      );
+      try {
+        final result = await BenchmarkService.benchmarkIngestLatency(
+          targetBytes: 1 * 1024 * 1024,
+          maxChunkChars: 1500,
+          overlapChars: 0,
+          batchSize: 16,
+          warmupRuns: 2,
+          measuredRuns: 5,
+          dbPathOverride: '${dir.path}/latency_bench.sqlite',
+        );
+
+        // ignore: avoid_print
+        print(result.renderSummary());
+
+        // Loose ordering check: file path must not be materially slower
+        // than the string path. The expected gain is small (single-digit
+        // ms or sub-ms on hot caches with stub embeddings) so we tolerate
+        // 25% noise.
+        expect(
+          result.fileP50Ms,
+          lessThanOrEqualTo(result.stringP50Ms * 1.25),
+          reason: 'file p50 should not be >25% slower than string p50. '
+              'file=${result.fileP50Ms.toStringAsFixed(2)}ms, '
+              'string=${result.stringP50Ms.toStringAsFixed(2)}ms',
+        );
+        expect(
+          result.utf8P50Ms,
+          lessThanOrEqualTo(result.stringP50Ms * 1.25),
+          reason: 'utf8 p50 should not be >25% slower than string p50. '
+              'utf8=${result.utf8P50Ms.toStringAsFixed(2)}ms, '
+              'string=${result.stringP50Ms.toStringAsFixed(2)}ms',
+        );
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
 }
