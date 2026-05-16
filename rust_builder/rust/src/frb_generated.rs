@@ -5722,12 +5722,16 @@ impl SseDecode for crate::api::ingest_session::PreparedIngestion {
         let mut var_state =
             <crate::api::ingest_session::PreparedSourceState>::sse_decode(deserializer);
         let mut var_totalChunks = <i32>::sse_decode(deserializer);
+        let mut var_bodyByteLength = <i32>::sse_decode(deserializer);
+        let mut var_bodyCharLength = <i32>::sse_decode(deserializer);
         let mut var_message = <String>::sse_decode(deserializer);
         let mut var_session = <Option<RustAutoOpaqueMoi<IngestSession>>>::sse_decode(deserializer);
         return crate::api::ingest_session::PreparedIngestion {
             source_id: var_sourceId,
             state: var_state,
             total_chunks: var_totalChunks,
+            body_byte_length: var_bodyByteLength,
+            body_char_length: var_bodyCharLength,
             message: var_message,
             session: var_session,
         };
@@ -7217,6 +7221,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::ingest_session::PreparedInges
             self.source_id.into_into_dart().into_dart(),
             self.state.into_into_dart().into_dart(),
             self.total_chunks.into_into_dart().into_dart(),
+            self.body_byte_length.into_into_dart().into_dart(),
+            self.body_char_length.into_into_dart().into_dart(),
             self.message.into_into_dart().into_dart(),
             self.session.into_into_dart().into_dart(),
         ]
@@ -8216,6 +8222,8 @@ impl SseEncode for crate::api::ingest_session::PreparedIngestion {
         <i64>::sse_encode(self.source_id, serializer);
         <crate::api::ingest_session::PreparedSourceState>::sse_encode(self.state, serializer);
         <i32>::sse_encode(self.total_chunks, serializer);
+        <i32>::sse_encode(self.body_byte_length, serializer);
+        <i32>::sse_encode(self.body_char_length, serializer);
         <String>::sse_encode(self.message, serializer);
         <Option<RustAutoOpaqueMoi<IngestSession>>>::sse_encode(self.session, serializer);
     }

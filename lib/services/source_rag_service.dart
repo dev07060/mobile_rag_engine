@@ -142,11 +142,22 @@ class SourceAddResult {
   final int chunkCount;
   final String message;
 
+  /// UTF-8 byte length of the text body after file parsing / decoding.
+  final int? bodyByteLength;
+
+  /// Text length as Dart `String.length` would report it (UTF-16 code units).
+  ///
+  /// This lets file-path ingest callers display the same "extracted text
+  /// length" style UI without materializing the full body in Dart.
+  final int? bodyCharLength;
+
   SourceAddResult({
     required this.sourceId,
     required this.isDuplicate,
     required this.chunkCount,
     required this.message,
+    this.bodyByteLength,
+    this.bodyCharLength,
   });
 }
 
@@ -586,6 +597,8 @@ class SourceRagService {
           isDuplicate: true,
           chunkCount: 0,
           message: prepared.message,
+          bodyByteLength: prepared.bodyByteLength,
+          bodyCharLength: prepared.bodyCharLength,
         );
       case rust_ingest.PreparedSourceState.duplicateInProgress:
         return SourceAddResult(
@@ -593,6 +606,8 @@ class SourceRagService {
           isDuplicate: true,
           chunkCount: 0,
           message: prepared.message,
+          bodyByteLength: prepared.bodyByteLength,
+          bodyCharLength: prepared.bodyCharLength,
         );
       case rust_ingest.PreparedSourceState.createdReady:
       case rust_ingest.PreparedSourceState.resumeReady:
@@ -654,6 +669,8 @@ class SourceRagService {
         isDuplicate: isResume,
         chunkCount: savedCount,
         message: isResume ? 'Source resumed and completed' : prepared.message,
+        bodyByteLength: prepared.bodyByteLength,
+        bodyCharLength: prepared.bodyCharLength,
       );
     } catch (e) {
       try {

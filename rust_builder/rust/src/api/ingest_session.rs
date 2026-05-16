@@ -63,6 +63,8 @@ pub struct PreparedIngestion {
     pub source_id: i64,
     pub state: PreparedSourceState,
     pub total_chunks: i32,
+    pub body_byte_length: i32,
+    pub body_char_length: i32,
     pub message: String,
     pub session: Option<RustAutoOpaque<IngestSession>>,
 }
@@ -449,6 +451,12 @@ fn prepare_source_ingestion_inner(
     max_chars: i32,
     overlap_chars: i32,
 ) -> Result<PreparedIngestion, RagError> {
+    let body_byte_length = content.len() as i32;
+    // Dart's String.length reports UTF-16 code units. Mirror that so callers
+    // can preserve existing "extracted text length" UI without materializing
+    // the body in Dart on file-path ingest.
+    let body_char_length = content.encode_utf16().count() as i32;
+
     // The guard suppresses legacy counter increments for the nested calls
     // (add_source_in_collection, semantic_chunk_with_overlap, markdown_chunk)
     // so a session-path run does not double-charge legacy counters.
@@ -478,6 +486,8 @@ fn prepare_source_ingestion_inner(
                     source_id,
                     state: PreparedSourceState::DuplicateSkip,
                     total_chunks: 0,
+                    body_byte_length,
+                    body_char_length,
                     message: add_result.message,
                     session: None,
                 });
@@ -487,6 +497,8 @@ fn prepare_source_ingestion_inner(
                     source_id,
                     state: PreparedSourceState::DuplicateInProgress,
                     total_chunks: 0,
+                    body_byte_length,
+                    body_char_length,
                     message: "Source ingestion already in progress".to_string(),
                     session: None,
                 });
@@ -499,6 +511,8 @@ fn prepare_source_ingestion_inner(
                         source_id,
                         state: PreparedSourceState::DuplicateInProgress,
                         total_chunks: 0,
+                        body_byte_length,
+                        body_char_length,
                         message: "Source ingestion already in progress".to_string(),
                         session: None,
                     });
@@ -561,6 +575,8 @@ fn prepare_source_ingestion_inner(
         source_id,
         state,
         total_chunks: total,
+        body_byte_length,
+        body_char_length,
         message: add_result.message,
         session: Some(RustAutoOpaque::new(IngestSession {
             source_id,

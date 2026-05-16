@@ -1,7 +1,13 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_rag_engine/services/benchmark_service.dart';
+import 'package:mobile_rag_engine/src/rust/api/db_pool.dart';
+import 'package:mobile_rag_engine/src/rust/api/ingest_session.dart'
+    as ingest_session;
+import 'package:mobile_rag_engine/src/rust/api/simple_rag.dart';
+import 'package:mobile_rag_engine/src/rust/api/source_rag.dart' as source_rag;
 import 'package:mobile_rag_engine/src/rust/frb_generated.dart';
 
 Future<void> _ensureRustLoaded() async {
@@ -155,6 +161,50 @@ void main() {
       }
     },
   );
+
+  test('PreparedIngestion reports body byte and text lengths', () async {
+    final dir = await Directory.systemTemp.createTemp(
+      'mobile_rag_body_length_',
+    );
+    var poolOpen = false;
+    try {
+      final dbPath = '${dir.path}/body_length.sqlite';
+      await initDbPool(dbPath: dbPath, maxSize: 4);
+      poolOpen = true;
+      await initDb();
+      await source_rag.initSourceDb();
+
+      const text = '보험 약관 test 😀';
+      final file = File('${dir.path}/body.txt');
+      await file.writeAsString(text, flush: true);
+
+      final prepared = await ingest_session.prepareSourceIngestionFromFile(
+        collectionId: 'body-length',
+        filePath: file.path,
+        metadata: null,
+        name: 'body.txt',
+        strategyHint: ingest_session.IngestStrategy.recursive,
+        maxChars: 1500,
+        overlapChars: 0,
+      );
+
+      expect(prepared.bodyByteLength, utf8.encode(text).length);
+      expect(prepared.bodyCharLength, text.length);
+
+      final session = prepared.session;
+      if (session != null) {
+        await session.abort();
+        await session.dispose();
+      }
+    } finally {
+      if (poolOpen) {
+        try {
+          await closeDbPool();
+        } catch (_) {}
+      }
+      await dir.delete(recursive: true);
+    }
+  });
 
   test(
     'Peak-RSS delta: from_file < from_utf8 / string (heap pass-through)',

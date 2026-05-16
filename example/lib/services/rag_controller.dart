@@ -312,7 +312,7 @@ class RagController extends ChangeNotifier {
       _isDefaultCollection ? fileName : "[$activeCollectionId] $fileName";
 
   String _formatImportedTextSummary(_PickedImportResult result) {
-    final textLength = result.textLength;
+    final textLength = result.addResult.bodyCharLength ?? result.textLength;
     if (textLength != null) {
       return "📝 Text: $textLength chars";
     }
