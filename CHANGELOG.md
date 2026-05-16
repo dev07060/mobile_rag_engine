@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.18.2
+* **Ingest fast path**:
+  - Updated example/evaluation runners to use `addDocumentFromFile(...)` so PDF and asset-backed ingestion exercise the Rust-side file fast path instead of the removed byte-ingest compatibility call.
+  - Exposed extracted body byte/character lengths through `SourceAddResult` for file-path ingest UIs without materializing the full body in Dart.
+* **Compatibility**:
+  - Bumped dependency constraint to `rag_engine_flutter: ^0.18.1` because the body-length fields are part of the generated Rust FFI surface.
+* **Packaging**:
+  - Excluded generated docs and local scratch output directories from the published archive.
+
 ## 0.18.1
 * **Compatibility**:
   - Bumped dependency constraint to `rag_engine_flutter: ^0.18.0` so consumers actually receive the matching native release with the 0.18.0 retrieval hot-path optimizations. The 0.18.0 publish shipped with the prior `^0.17.0` constraint by mistake and resolved to `rag_engine_flutter 0.17.0` for new installs.
