@@ -309,6 +309,18 @@ class BenchmarkService {
       nativeScopedExactScanContentBytes: _bigIntToInt(
         nativeReadStats?.scopedExactScanContentBytes ?? BigInt.zero,
       ),
+      nativeScopedExactScanTokenizedRows: _bigIntToInt(
+        nativeReadStats?.scopedExactScanTokenizedRows ?? BigInt.zero,
+      ),
+      nativeScopedExactScanTokenizedContentBytes: _bigIntToInt(
+        nativeReadStats?.scopedExactScanTokenizedContentBytes ?? BigInt.zero,
+      ),
+      nativeScopedExactScanTokens: _bigIntToInt(
+        nativeReadStats?.scopedExactScanTokens ?? BigInt.zero,
+      ),
+      nativeScopedExactScanTokenizationNanos: _bigIntToInt(
+        nativeReadStats?.scopedExactScanTokenizationNanos ?? BigInt.zero,
+      ),
     );
   }
 
@@ -1928,6 +1940,10 @@ class QueryPayloadVariantStats {
   /// work, not result hydration.
   final int nativeScopedExactScanRows;
   final int nativeScopedExactScanContentBytes;
+  final int nativeScopedExactScanTokenizedRows;
+  final int nativeScopedExactScanTokenizedContentBytes;
+  final int nativeScopedExactScanTokens;
+  final int nativeScopedExactScanTokenizationNanos;
 
   const QueryPayloadVariantStats({
     required this.label,
@@ -1949,6 +1965,10 @@ class QueryPayloadVariantStats {
     required this.nativeUnclassifiedContentBytes,
     required this.nativeScopedExactScanRows,
     required this.nativeScopedExactScanContentBytes,
+    required this.nativeScopedExactScanTokenizedRows,
+    required this.nativeScopedExactScanTokenizedContentBytes,
+    required this.nativeScopedExactScanTokens,
+    required this.nativeScopedExactScanTokenizationNanos,
   });
 
   int get totalStringBytes =>
@@ -1970,6 +1990,9 @@ class QueryPayloadVariantStats {
       nativeAssemblyContentBytes +
       nativeUnclassifiedContentBytes;
 
+  double get nativeScopedExactScanTokenizationMs =>
+      nativeScopedExactScanTokenizationNanos / 1000000.0;
+
   String renderSummary() {
     String fmt(int bytes) => '${(bytes / 1024).toStringAsFixed(1)} KB';
     return [
@@ -1984,7 +2007,11 @@ class QueryPayloadVariantStats {
           'preview=${fmt(nativePreviewContentBytes)} '
           'unclassified=${fmt(nativeUnclassifiedContentBytes)}',
       '    scoped_exact_scan rows=$nativeScopedExactScanRows '
-          'bytes=${fmt(nativeScopedExactScanContentBytes)}',
+          'bytes=${fmt(nativeScopedExactScanContentBytes)} '
+          'tokenized_rows=$nativeScopedExactScanTokenizedRows '
+          'tokenized_bytes=${fmt(nativeScopedExactScanTokenizedContentBytes)} '
+          'tokens=$nativeScopedExactScanTokens '
+          'tokenize=${nativeScopedExactScanTokenizationMs.toStringAsFixed(3)}ms',
     ].join('\n');
   }
 }

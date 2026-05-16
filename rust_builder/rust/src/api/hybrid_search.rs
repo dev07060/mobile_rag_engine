@@ -18,6 +18,7 @@
 
 use log::{debug, info};
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 use crate::api::bm25_search::{bm25_search, tokenize_for_bm25, Bm25SearchResult};
 use crate::api::db_pool::get_connection;
@@ -25,6 +26,7 @@ use crate::api::error::RagError;
 use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw_slice, HnswSearchResult};
 use crate::api::query_metrics::{
     record_hybrid_result_content_read, record_scoped_exact_scan_content_read,
+    record_scoped_exact_scan_tokenization,
 };
 use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
@@ -336,7 +338,18 @@ fn compute_hybrid_rrf_scores(
 
                     if need_bm25 {
                         if let Some(content_str) = content {
+                            let tokenization_start = Instant::now();
                             let doc_tokens = tokenize_for_bm25(&content_str);
+                            let tokenization_nanos = tokenization_start
+                                .elapsed()
+                                .as_nanos()
+                                .min(u128::from(u64::MAX))
+                                as u64;
+                            record_scoped_exact_scan_tokenization(
+                                content_str.len() as u64,
+                                doc_tokens.len() as u64,
+                                tokenization_nanos,
+                            );
                             let doc_length = doc_tokens.len();
                             if doc_length > 0 {
                                 scoped_doc_count += 1;

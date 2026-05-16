@@ -6,8 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `enter`, `record_hybrid_result_content_read`, `record_hydrated_content_read`, `record_scoped_exact_scan_content_read`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `QueryContentReadGuard`, `QueryContentReadPhase`
+// These functions are ignored because they are not marked as `pub`: `enter`, `new`, `record_hybrid_result_content_read`, `record_hydrated_content_read`, `record_scoped_exact_scan_content_read`, `record_scoped_exact_scan_tokenization`, `record`, `reset`, `snapshot`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AtomicTokenizationCounter`, `QueryContentReadGuard`, `QueryContentReadPhase`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `drop`, `eq`, `fmt`, `fmt`
 
 QueryContentReadStats queryContentReadStats() =>
@@ -32,6 +32,10 @@ class QueryContentReadStats {
   final BigInt unclassifiedContentBytes;
   final BigInt scopedExactScanRows;
   final BigInt scopedExactScanContentBytes;
+  final BigInt scopedExactScanTokenizedRows;
+  final BigInt scopedExactScanTokenizedContentBytes;
+  final BigInt scopedExactScanTokens;
+  final BigInt scopedExactScanTokenizationNanos;
 
   const QueryContentReadStats({
     required this.hybridResultRows,
@@ -46,6 +50,10 @@ class QueryContentReadStats {
     required this.unclassifiedContentBytes,
     required this.scopedExactScanRows,
     required this.scopedExactScanContentBytes,
+    required this.scopedExactScanTokenizedRows,
+    required this.scopedExactScanTokenizedContentBytes,
+    required this.scopedExactScanTokens,
+    required this.scopedExactScanTokenizationNanos,
   });
 
   /// Materialized result bytes only — see [`Self::rows_total`].
@@ -79,7 +87,11 @@ class QueryContentReadStats {
       unclassifiedRows.hashCode ^
       unclassifiedContentBytes.hashCode ^
       scopedExactScanRows.hashCode ^
-      scopedExactScanContentBytes.hashCode;
+      scopedExactScanContentBytes.hashCode ^
+      scopedExactScanTokenizedRows.hashCode ^
+      scopedExactScanTokenizedContentBytes.hashCode ^
+      scopedExactScanTokens.hashCode ^
+      scopedExactScanTokenizationNanos.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -97,5 +109,11 @@ class QueryContentReadStats {
           unclassifiedRows == other.unclassifiedRows &&
           unclassifiedContentBytes == other.unclassifiedContentBytes &&
           scopedExactScanRows == other.scopedExactScanRows &&
-          scopedExactScanContentBytes == other.scopedExactScanContentBytes;
+          scopedExactScanContentBytes == other.scopedExactScanContentBytes &&
+          scopedExactScanTokenizedRows == other.scopedExactScanTokenizedRows &&
+          scopedExactScanTokenizedContentBytes ==
+              other.scopedExactScanTokenizedContentBytes &&
+          scopedExactScanTokens == other.scopedExactScanTokens &&
+          scopedExactScanTokenizationNanos ==
+              other.scopedExactScanTokenizationNanos;
 }

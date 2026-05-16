@@ -7,14 +7,16 @@ import '../frb_generated.dart';
 import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `rrf_score`, `search_hybrid_inner`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `compute_hybrid_rrf_scores`, `rrf_score`, `search_hybrid_inner`, `search_hybrid_meta_inner`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `HybridSearchMeta`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Perform hybrid search combining vector and keyword search.
 ///
 /// Owned-vector entrypoint kept stable for the flutter_rust_bridge
 /// surface; internal Rust callers should prefer [`search_hybrid_inner`]
-/// to avoid cloning the query embedding when it is already held by
+/// (content-hydrating) or [`search_hybrid_meta_inner`] (meta-only) to
+/// avoid cloning the query embedding when it is already held by
 /// reference (e.g. inside `search_meta_hybrid`'s retry loop).
 Future<List<HybridSearchResult>> searchHybrid({
   required String queryText,
