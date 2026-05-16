@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.18.2
 * **Scoped BM25 search**:
   - Added scoped BM25 ranking over the existing in-memory inverted index, restricted by the scoped chunk ids collected during exact vector scan.
   - Removed query-time chunk-body reads/tokenization from the source/metadata scoped exact-scan path when BM25 is enabled.
