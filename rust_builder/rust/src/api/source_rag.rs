@@ -27,6 +27,9 @@ use crate::api::hnsw_index::{
     search_hnsw,
 };
 use crate::api::hybrid_search::{search_hybrid_inner, RrfConfig, SearchFilter};
+use crate::api::query_metrics::{
+    record_hydrated_content_read, QueryContentReadGuard, QueryContentReadPhase,
+};
 use crate::api::tokenizer::count_plain_text_tokens_untruncated;
 use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
@@ -1144,6 +1147,7 @@ impl SearchHandle {
         let requested_ids = self.validate_requested_chunk_ids(chunk_ids)?;
         run_handle_hydration_test_hook();
 
+        let _read_guard = QueryContentReadGuard::enter(QueryContentReadPhase::FullHydrate);
         let (hydrated, missing_ids) = hydrate_chunk_search_results(
             &conn,
             &self.collection_id,
@@ -1170,6 +1174,7 @@ impl SearchHandle {
         let requested_ids = self.validate_requested_chunk_ids(chunk_ids)?;
         run_handle_hydration_test_hook();
 
+        let _read_guard = QueryContentReadGuard::enter(QueryContentReadPhase::Preview);
         let (hydrated, missing_ids) = hydrate_chunk_search_results(
             &conn,
             &self.collection_id,
@@ -1546,6 +1551,7 @@ fn hydrate_chunk_search_results(
     let mut hydrated_by_id = HashMap::new();
     for row in rows {
         let mut hydrated = row.map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        record_hydrated_content_read(hydrated.content.len() as u64);
         if let Some(hit) = hit_by_id.get(&hydrated.chunk_id) {
             hydrated.similarity = hit.similarity;
         }
@@ -1822,6 +1828,7 @@ fn hydrate_rows_for_assembly(
         return Ok((Vec::new(), Vec::new()));
     }
 
+    let _read_guard = QueryContentReadGuard::enter(QueryContentReadPhase::Assembly);
     let (hydrated, missing_ids) = hydrate_chunk_search_results(
         conn,
         collection_id,

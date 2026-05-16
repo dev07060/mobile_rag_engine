@@ -23,6 +23,7 @@ use crate::api::bm25_search::{bm25_search, tokenize_for_bm25, Bm25SearchResult};
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
 use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw_slice, HnswSearchResult};
+use crate::api::query_metrics::record_hybrid_result_content_read;
 use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{cosine_with_query_norm_i8_blob, l2_norm_i8, quantize_f32_to_i8};
@@ -520,6 +521,7 @@ pub(crate) fn search_hybrid_inner(
             if let Ok(rows) = found_docs {
                 for row in rows {
                     if let Ok((id, content)) = row {
+                        record_hybrid_result_content_read(content.len() as u64);
                         content_map.insert(id, (content, id, None, 0));
                     }
                 }
@@ -558,6 +560,7 @@ pub(crate) fn search_hybrid_inner(
             if let Ok(results_iter) = found_chunks {
                 for row in results_iter {
                     if let Ok((id, content, source_id, metadata, chunk_index)) = row {
+                        record_hybrid_result_content_read(content.len() as u64);
                         content_map.insert(id, (content, source_id, metadata, chunk_index));
                     }
                 }

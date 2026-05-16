@@ -14,6 +14,7 @@ import 'api/incremental_index.dart';
 import 'api/ingest_metrics.dart';
 import 'api/ingest_session.dart';
 import 'api/logger.dart';
+import 'api/query_metrics.dart';
 import 'api/semantic_chunker.dart';
 import 'api/simple.dart';
 import 'api/simple_rag.dart';
@@ -82,7 +83,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 1317836089;
+  int get rustContentHash => 1940785977;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -480,6 +481,25 @@ abstract class RustLibApi extends BaseApi {
     required int overlapChars,
   });
 
+  QueryContentReadStats crateApiQueryMetricsQueryContentReadStats();
+
+  Future<BigInt> crateApiQueryMetricsQueryContentReadStatsContentBytesTotal({
+    required QueryContentReadStats that,
+  });
+
+  Future<BigInt>
+  crateApiQueryMetricsQueryContentReadStatsHydrationContentBytesTotal({
+    required QueryContentReadStats that,
+  });
+
+  Future<BigInt> crateApiQueryMetricsQueryContentReadStatsHydrationRowsTotal({
+    required QueryContentReadStats that,
+  });
+
+  Future<BigInt> crateApiQueryMetricsQueryContentReadStatsRowsTotal({
+    required QueryContentReadStats that,
+  });
+
   Future<void> crateApiSimpleRagRebuildBm25Index();
 
   Future<void> crateApiSourceRagRebuildChunkBm25Index();
@@ -497,6 +517,8 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiSimpleRagRebuildHnswIndex();
 
   void crateApiIngestMetricsResetIngestTrafficStats();
+
+  void crateApiQueryMetricsResetQueryContentReadStats();
 
   Future<RrfConfig> crateApiHybridSearchRrfConfigDefault();
 
@@ -585,6 +607,8 @@ abstract class RustLibApi extends BaseApi {
   Future<List<String>> crateApiCompressionUtilsSplitSentences({
     required String text,
   });
+
+  QueryContentReadStats crateApiQueryMetricsTakeQueryContentReadStats();
 
   Uint32List crateApiTokenizerTokenize({required String text});
 
@@ -3874,6 +3898,172 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  QueryContentReadStats crateApiQueryMetricsQueryContentReadStats() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 100,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_query_content_read_stats,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiQueryMetricsQueryContentReadStatsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiQueryMetricsQueryContentReadStatsConstMeta =>
+      const TaskConstMeta(debugName: "query_content_read_stats", argNames: []);
+
+  @override
+  Future<BigInt> crateApiQueryMetricsQueryContentReadStatsContentBytesTotal({
+    required QueryContentReadStats that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_query_content_read_stats(that, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 101,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiQueryMetricsQueryContentReadStatsContentBytesTotalConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiQueryMetricsQueryContentReadStatsContentBytesTotalConstMeta =>
+      const TaskConstMeta(
+        debugName: "query_content_read_stats_content_bytes_total",
+        argNames: ["that"],
+      );
+
+  @override
+  Future<BigInt>
+  crateApiQueryMetricsQueryContentReadStatsHydrationContentBytesTotal({
+    required QueryContentReadStats that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_query_content_read_stats(that, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 102,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiQueryMetricsQueryContentReadStatsHydrationContentBytesTotalConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiQueryMetricsQueryContentReadStatsHydrationContentBytesTotalConstMeta =>
+      const TaskConstMeta(
+        debugName: "query_content_read_stats_hydration_content_bytes_total",
+        argNames: ["that"],
+      );
+
+  @override
+  Future<BigInt> crateApiQueryMetricsQueryContentReadStatsHydrationRowsTotal({
+    required QueryContentReadStats that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_query_content_read_stats(that, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 103,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiQueryMetricsQueryContentReadStatsHydrationRowsTotalConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiQueryMetricsQueryContentReadStatsHydrationRowsTotalConstMeta =>
+      const TaskConstMeta(
+        debugName: "query_content_read_stats_hydration_rows_total",
+        argNames: ["that"],
+      );
+
+  @override
+  Future<BigInt> crateApiQueryMetricsQueryContentReadStatsRowsTotal({
+    required QueryContentReadStats that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_query_content_read_stats(that, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 104,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiQueryMetricsQueryContentReadStatsRowsTotalConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiQueryMetricsQueryContentReadStatsRowsTotalConstMeta =>
+      const TaskConstMeta(
+        debugName: "query_content_read_stats_rows_total",
+        argNames: ["that"],
+      );
+
+  @override
   Future<void> crateApiSimpleRagRebuildBm25Index() {
     return handler.executeNormal(
       NormalTask(
@@ -3882,7 +4072,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 100,
+            funcId: 105,
             port: port_,
           );
         },
@@ -3909,7 +4099,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 101,
+            funcId: 106,
             port: port_,
           );
         },
@@ -3939,7 +4129,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 102,
+            funcId: 107,
             port: port_,
           );
         },
@@ -3971,7 +4161,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 103,
+            funcId: 108,
             port: port_,
           );
         },
@@ -4001,7 +4191,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 104,
+            funcId: 109,
             port: port_,
           );
         },
@@ -4033,7 +4223,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 105,
+            funcId: 110,
             port: port_,
           );
         },
@@ -4060,7 +4250,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 106,
+            funcId: 111,
           )!;
         },
         codec: SseCodec(
@@ -4081,6 +4271,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  void crateApiQueryMetricsResetQueryContentReadStats() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 112,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiQueryMetricsResetQueryContentReadStatsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiQueryMetricsResetQueryContentReadStatsConstMeta =>
+      const TaskConstMeta(
+        debugName: "reset_query_content_read_stats",
+        argNames: [],
+      );
+
+  @override
   Future<RrfConfig> crateApiHybridSearchRrfConfigDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -4089,7 +4308,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 107,
+            funcId: 113,
             port: port_,
           );
         },
@@ -4121,7 +4340,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 108,
+            funcId: 114,
             port: port_,
           );
         },
@@ -4152,7 +4371,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 109,
+            funcId: 115,
             port: port_,
           );
         },
@@ -4184,7 +4403,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 110,
+            funcId: 116,
             port: port_,
           );
         },
@@ -4221,7 +4440,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 111,
+            funcId: 117,
             port: port_,
           );
         },
@@ -4256,7 +4475,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 112,
+            funcId: 118,
             port: port_,
           );
         },
@@ -4291,7 +4510,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 113,
+            funcId: 119,
             port: port_,
           );
         },
@@ -4332,7 +4551,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 114,
+            funcId: 120,
             port: port_,
           );
         },
@@ -4369,7 +4588,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 115,
+            funcId: 121,
             port: port_,
           );
         },
@@ -4410,7 +4629,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 116,
+            funcId: 122,
             port: port_,
           );
         },
@@ -4458,7 +4677,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 117,
+            funcId: 123,
             port: port_,
           );
         },
@@ -4494,7 +4713,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 118,
+            funcId: 124,
             port: port_,
           );
         },
@@ -4529,7 +4748,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 119,
+            funcId: 125,
           )!;
         },
         codec: SseCodec(
@@ -4565,7 +4784,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 120,
+            funcId: 126,
           )!;
         },
         codec: SseCodec(
@@ -4597,7 +4816,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 121,
+            funcId: 127,
             port: port_,
           );
         },
@@ -4629,7 +4848,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 122,
+            funcId: 128,
             port: port_,
           );
         },
@@ -4662,7 +4881,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 123,
+            funcId: 129,
             port: port_,
           );
         },
@@ -4681,6 +4900,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "split_sentences", argNames: ["text"]);
 
   @override
+  QueryContentReadStats crateApiQueryMetricsTakeQueryContentReadStats() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 130,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_query_content_read_stats,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiQueryMetricsTakeQueryContentReadStatsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiQueryMetricsTakeQueryContentReadStatsConstMeta =>
+      const TaskConstMeta(
+        debugName: "take_query_content_read_stats",
+        argNames: [],
+      );
+
+  @override
   Uint32List crateApiTokenizerTokenize({required String text}) {
     return handler.executeSync(
       SyncTask(
@@ -4690,7 +4938,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 124,
+            funcId: 131,
           )!;
         },
         codec: SseCodec(
@@ -4721,7 +4969,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 125,
+            funcId: 132,
             port: port_,
           );
         },
@@ -4756,7 +5004,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 126,
+            funcId: 133,
             port: port_,
           );
         },
@@ -4789,7 +5037,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 127,
+            funcId: 134,
             port: port_,
           );
         },
@@ -4822,7 +5070,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 128,
+            funcId: 135,
             port: port_,
           );
         },
@@ -5072,6 +5320,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   IngestTrafficStats dco_decode_box_autoadd_ingest_traffic_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_ingest_traffic_stats(raw);
+  }
+
+  @protected
+  QueryContentReadStats dco_decode_box_autoadd_query_content_read_stats(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_query_content_read_stats(raw);
   }
 
   @protected
@@ -5630,6 +5886,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QueryContentReadStats dco_decode_query_content_read_stats(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return QueryContentReadStats(
+      hybridResultRows: dco_decode_u_64(arr[0]),
+      hybridResultContentBytes: dco_decode_u_64(arr[1]),
+      fullHydrateRows: dco_decode_u_64(arr[2]),
+      fullHydrateContentBytes: dco_decode_u_64(arr[3]),
+      previewRows: dco_decode_u_64(arr[4]),
+      previewContentBytes: dco_decode_u_64(arr[5]),
+      assemblyRows: dco_decode_u_64(arr[6]),
+      assemblyContentBytes: dco_decode_u_64(arr[7]),
+      unclassifiedRows: dco_decode_u_64(arr[8]),
+      unclassifiedContentBytes: dco_decode_u_64(arr[9]),
+    );
+  }
+
+  @protected
   RagError dco_decode_rag_error(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     switch (raw[0]) {
@@ -6117,6 +6393,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_ingest_traffic_stats(deserializer));
+  }
+
+  @protected
+  QueryContentReadStats sse_decode_box_autoadd_query_content_read_stats(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_query_content_read_stats(deserializer));
   }
 
   @protected
@@ -6903,6 +7187,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QueryContentReadStats sse_decode_query_content_read_stats(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_hybridResultRows = sse_decode_u_64(deserializer);
+    var var_hybridResultContentBytes = sse_decode_u_64(deserializer);
+    var var_fullHydrateRows = sse_decode_u_64(deserializer);
+    var var_fullHydrateContentBytes = sse_decode_u_64(deserializer);
+    var var_previewRows = sse_decode_u_64(deserializer);
+    var var_previewContentBytes = sse_decode_u_64(deserializer);
+    var var_assemblyRows = sse_decode_u_64(deserializer);
+    var var_assemblyContentBytes = sse_decode_u_64(deserializer);
+    var var_unclassifiedRows = sse_decode_u_64(deserializer);
+    var var_unclassifiedContentBytes = sse_decode_u_64(deserializer);
+    return QueryContentReadStats(
+      hybridResultRows: var_hybridResultRows,
+      hybridResultContentBytes: var_hybridResultContentBytes,
+      fullHydrateRows: var_fullHydrateRows,
+      fullHydrateContentBytes: var_fullHydrateContentBytes,
+      previewRows: var_previewRows,
+      previewContentBytes: var_previewContentBytes,
+      assemblyRows: var_assemblyRows,
+      assemblyContentBytes: var_assemblyContentBytes,
+      unclassifiedRows: var_unclassifiedRows,
+      unclassifiedContentBytes: var_unclassifiedContentBytes,
+    );
+  }
+
+  @protected
   RagError sse_decode_rag_error(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -7425,6 +7738,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_ingest_traffic_stats(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_query_content_read_stats(
+    QueryContentReadStats self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_query_content_read_stats(self, serializer);
   }
 
   @protected
@@ -8137,6 +8459,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_query_content_read_stats(
+    QueryContentReadStats self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.hybridResultRows, serializer);
+    sse_encode_u_64(self.hybridResultContentBytes, serializer);
+    sse_encode_u_64(self.fullHydrateRows, serializer);
+    sse_encode_u_64(self.fullHydrateContentBytes, serializer);
+    sse_encode_u_64(self.previewRows, serializer);
+    sse_encode_u_64(self.previewContentBytes, serializer);
+    sse_encode_u_64(self.assemblyRows, serializer);
+    sse_encode_u_64(self.assemblyContentBytes, serializer);
+    sse_encode_u_64(self.unclassifiedRows, serializer);
+    sse_encode_u_64(self.unclassifiedContentBytes, serializer);
   }
 
   @protected
