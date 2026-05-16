@@ -63,7 +63,13 @@ pub struct PreparedIngestion {
     pub source_id: i64,
     pub state: PreparedSourceState,
     pub total_chunks: i32,
+    /// UTF-8 byte length of the decoded text body after parsing / decoding.
+    ///
+    /// For `from_file`, this may be non-zero even though
+    /// `SESSION_PREPARE_CONTENT_IN` remains zero: the former describes the
+    /// extracted text body, while the latter counts text bytes that crossed FFI.
     pub body_byte_length: i32,
+    /// Text length using Dart `String.length` semantics (UTF-16 code units).
     pub body_char_length: i32,
     pub message: String,
     pub session: Option<RustAutoOpaque<IngestSession>>,
@@ -451,11 +457,11 @@ fn prepare_source_ingestion_inner(
     max_chars: i32,
     overlap_chars: i32,
 ) -> Result<PreparedIngestion, RagError> {
-    let body_byte_length = content.len() as i32;
+    let body_byte_length = saturating_i32(content.len());
     // Dart's String.length reports UTF-16 code units. Mirror that so callers
     // can preserve existing "extracted text length" UI without materializing
     // the body in Dart on file-path ingest.
-    let body_char_length = content.encode_utf16().count() as i32;
+    let body_char_length = saturating_i32(content.encode_utf16().count());
 
     // The guard suppresses legacy counter increments for the nested calls
     // (add_source_in_collection, semantic_chunk_with_overlap, markdown_chunk)
@@ -587,6 +593,10 @@ fn prepare_source_ingestion_inner(
             state: SessionState::Draining,
         })),
     })
+}
+
+fn saturating_i32(value: usize) -> i32 {
+    i32::try_from(value).unwrap_or(i32::MAX)
 }
 
 // ---------------------------------------------------------------------------
@@ -724,6 +734,13 @@ mod tests {
     }
 
     #[test]
+    fn test_saturating_i32_caps_overflow() {
+        assert_eq!(saturating_i32(i32::MAX as usize), i32::MAX);
+        assert_eq!(saturating_i32(i32::MAX as usize + 1), i32::MAX);
+        assert_eq!(saturating_i32(usize::MAX), i32::MAX);
+    }
+
+    #[test]
     fn test_prepare_new_source_creates_ready_session() {
         let _guard = test_guard();
         let db_path = setup_test_db("test_ingest_prepare_new.db");
@@ -768,6 +785,8 @@ mod tests {
         let db_path = setup_test_db("test_ingest_prepare_dup_completed.db");
 
         let content = "Reusable document body.".to_string();
+        let expected_body_byte_length = content.len() as i32;
+        let expected_body_char_length = content.encode_utf16().count() as i32;
         // First ingest, finalize completed.
         let first = prepare_source_ingestion(
             "__default__".to_string(),
@@ -800,6 +819,8 @@ mod tests {
         assert_eq!(second.state, PreparedSourceState::DuplicateSkip);
         assert!(second.session.is_none());
         assert_eq!(second.source_id, first.source_id);
+        assert_eq!(second.body_byte_length, expected_body_byte_length);
+        assert_eq!(second.body_char_length, expected_body_char_length);
 
         teardown_test_db(db_path);
     }
@@ -1128,6 +1149,8 @@ mod tests {
         let db_path = setup_test_db("test_ingest_prepare_from_utf8_ok.db");
 
         let content = "Bytes path body. 한글 포함.".to_string();
+        let expected_body_byte_length = content.len() as i32;
+        let expected_body_char_length = content.encode_utf16().count() as i32;
         let prepared = prepare_source_ingestion_from_utf8(
             "__default__".to_string(),
             content.into_bytes(),
@@ -1141,6 +1164,8 @@ mod tests {
 
         assert_eq!(prepared.state, PreparedSourceState::CreatedReady);
         assert!(prepared.total_chunks >= 1);
+        assert_eq!(prepared.body_byte_length, expected_body_byte_length);
+        assert_eq!(prepared.body_char_length, expected_body_char_length);
         let session_opaque = prepared.session.unwrap();
         let mut session = session_opaque.blocking_write();
         let saved = drain_session_with_fake_embeddings(&mut session);
@@ -1200,6 +1225,8 @@ mod tests {
             PreparedSourceState::CreatedReady | PreparedSourceState::ResumeReady,
         ));
         assert_eq!(prepared.total_chunks, 0);
+        assert_eq!(prepared.body_byte_length, 0);
+        assert_eq!(prepared.body_char_length, 0);
         let session_opaque = prepared.session.unwrap();
         let mut session = session_opaque.blocking_write();
         session.finalize().unwrap();

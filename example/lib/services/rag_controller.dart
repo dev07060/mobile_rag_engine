@@ -437,7 +437,7 @@ class RagController extends ChangeNotifier {
 
     status = "Extracting text from ${file.name}...";
     notifyListeners();
-    final extractedText = await DocumentParser.parse(bytes.toList());
+    final extractedText = await DocumentParser.parse(bytes);
     if (extractedText.isEmpty) {
       _updateState("⚠️ No text extracted from file", newIsLoading: false);
       return null;
