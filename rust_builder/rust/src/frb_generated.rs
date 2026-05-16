@@ -5986,6 +5986,10 @@ impl SseDecode for crate::api::query_metrics::QueryContentReadStats {
         let mut var_unclassifiedContentBytes = <u64>::sse_decode(deserializer);
         let mut var_scopedExactScanRows = <u64>::sse_decode(deserializer);
         let mut var_scopedExactScanContentBytes = <u64>::sse_decode(deserializer);
+        let mut var_scopedExactScanTokenizedRows = <u64>::sse_decode(deserializer);
+        let mut var_scopedExactScanTokenizedContentBytes = <u64>::sse_decode(deserializer);
+        let mut var_scopedExactScanTokens = <u64>::sse_decode(deserializer);
+        let mut var_scopedExactScanTokenizationNanos = <u64>::sse_decode(deserializer);
         return crate::api::query_metrics::QueryContentReadStats {
             hybrid_result_rows: var_hybridResultRows,
             hybrid_result_content_bytes: var_hybridResultContentBytes,
@@ -5999,6 +6003,10 @@ impl SseDecode for crate::api::query_metrics::QueryContentReadStats {
             unclassified_content_bytes: var_unclassifiedContentBytes,
             scoped_exact_scan_rows: var_scopedExactScanRows,
             scoped_exact_scan_content_bytes: var_scopedExactScanContentBytes,
+            scoped_exact_scan_tokenized_rows: var_scopedExactScanTokenizedRows,
+            scoped_exact_scan_tokenized_content_bytes: var_scopedExactScanTokenizedContentBytes,
+            scoped_exact_scan_tokens: var_scopedExactScanTokens,
+            scoped_exact_scan_tokenization_nanos: var_scopedExactScanTokenizationNanos,
         };
     }
 }
@@ -7132,6 +7140,16 @@ impl flutter_rust_bridge::IntoDart for crate::api::query_metrics::QueryContentRe
             self.scoped_exact_scan_content_bytes
                 .into_into_dart()
                 .into_dart(),
+            self.scoped_exact_scan_tokenized_rows
+                .into_into_dart()
+                .into_dart(),
+            self.scoped_exact_scan_tokenized_content_bytes
+                .into_into_dart()
+                .into_dart(),
+            self.scoped_exact_scan_tokens.into_into_dart().into_dart(),
+            self.scoped_exact_scan_tokenization_nanos
+                .into_into_dart()
+                .into_dart(),
         ]
         .into_dart()
     }
@@ -8146,6 +8164,10 @@ impl SseEncode for crate::api::query_metrics::QueryContentReadStats {
         <u64>::sse_encode(self.unclassified_content_bytes, serializer);
         <u64>::sse_encode(self.scoped_exact_scan_rows, serializer);
         <u64>::sse_encode(self.scoped_exact_scan_content_bytes, serializer);
+        <u64>::sse_encode(self.scoped_exact_scan_tokenized_rows, serializer);
+        <u64>::sse_encode(self.scoped_exact_scan_tokenized_content_bytes, serializer);
+        <u64>::sse_encode(self.scoped_exact_scan_tokens, serializer);
+        <u64>::sse_encode(self.scoped_exact_scan_tokenization_nanos, serializer);
     }
 }
 

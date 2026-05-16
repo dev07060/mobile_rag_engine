@@ -5889,8 +5889,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   QueryContentReadStats dco_decode_query_content_read_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 16)
+      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
     return QueryContentReadStats(
       hybridResultRows: dco_decode_u_64(arr[0]),
       hybridResultContentBytes: dco_decode_u_64(arr[1]),
@@ -5904,6 +5904,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       unclassifiedContentBytes: dco_decode_u_64(arr[9]),
       scopedExactScanRows: dco_decode_u_64(arr[10]),
       scopedExactScanContentBytes: dco_decode_u_64(arr[11]),
+      scopedExactScanTokenizedRows: dco_decode_u_64(arr[12]),
+      scopedExactScanTokenizedContentBytes: dco_decode_u_64(arr[13]),
+      scopedExactScanTokens: dco_decode_u_64(arr[14]),
+      scopedExactScanTokenizationNanos: dco_decode_u_64(arr[15]),
     );
   }
 
@@ -7205,6 +7209,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_unclassifiedContentBytes = sse_decode_u_64(deserializer);
     var var_scopedExactScanRows = sse_decode_u_64(deserializer);
     var var_scopedExactScanContentBytes = sse_decode_u_64(deserializer);
+    var var_scopedExactScanTokenizedRows = sse_decode_u_64(deserializer);
+    var var_scopedExactScanTokenizedContentBytes = sse_decode_u_64(
+      deserializer,
+    );
+    var var_scopedExactScanTokens = sse_decode_u_64(deserializer);
+    var var_scopedExactScanTokenizationNanos = sse_decode_u_64(deserializer);
     return QueryContentReadStats(
       hybridResultRows: var_hybridResultRows,
       hybridResultContentBytes: var_hybridResultContentBytes,
@@ -7218,6 +7228,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       unclassifiedContentBytes: var_unclassifiedContentBytes,
       scopedExactScanRows: var_scopedExactScanRows,
       scopedExactScanContentBytes: var_scopedExactScanContentBytes,
+      scopedExactScanTokenizedRows: var_scopedExactScanTokenizedRows,
+      scopedExactScanTokenizedContentBytes:
+          var_scopedExactScanTokenizedContentBytes,
+      scopedExactScanTokens: var_scopedExactScanTokens,
+      scopedExactScanTokenizationNanos: var_scopedExactScanTokenizationNanos,
     );
   }
 
@@ -8485,6 +8500,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.unclassifiedContentBytes, serializer);
     sse_encode_u_64(self.scopedExactScanRows, serializer);
     sse_encode_u_64(self.scopedExactScanContentBytes, serializer);
+    sse_encode_u_64(self.scopedExactScanTokenizedRows, serializer);
+    sse_encode_u_64(self.scopedExactScanTokenizedContentBytes, serializer);
+    sse_encode_u_64(self.scopedExactScanTokens, serializer);
+    sse_encode_u_64(self.scopedExactScanTokenizationNanos, serializer);
   }
 
   @protected

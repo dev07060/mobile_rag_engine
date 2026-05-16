@@ -143,26 +143,41 @@ per-row BM25 collector can tokenize the chunk body.</p>
 
 <h2>Instrumentation (landed first)</h2>
 
-<p>Before changing behavior we landed a counter in <code>query_metrics</code> so the cost was
-measurable end-to-end:</p>
+<p>Before changing behavior we landed two counter families in <code>query_metrics</code> so
+the I/O cost <em>and</em> the CPU cost are both measurable end-to-end:</p>
 
 <pre><code>// rust_builder/rust/src/api/query_metrics.rs
-static SCOPED_EXACT_SCAN_CONTENT: AtomicCounter = AtomicCounter::new();
+static SCOPED_EXACT_SCAN_CONTENT:      AtomicCounter             = AtomicCounter::new();
+static SCOPED_EXACT_SCAN_TOKENIZATION: AtomicTokenizationCounter = AtomicTokenizationCounter::new();
 
-pub(crate) fn record_scoped_exact_scan_content_read(content_bytes: u64) {
-    SCOPED_EXACT_SCAN_CONTENT.record(content_bytes);
-}
+pub(crate) fn record_scoped_exact_scan_content_read(content_bytes: u64) { … }
+
+pub(crate) fn record_scoped_exact_scan_tokenization(
+    content_bytes: u64,
+    tokens: u64,
+    elapsed_nanos: u64,
+) { … }
 
 pub struct QueryContentReadStats {
     // … existing fields …
-    pub scoped_exact_scan_rows: u64,
-    pub scoped_exact_scan_content_bytes: u64,
+    pub scoped_exact_scan_rows:                    u64,  // SELECT rows that returned content
+    pub scoped_exact_scan_content_bytes:           u64,  // bytes read from c.content
+    pub scoped_exact_scan_tokenized_rows:          u64,  // rows that fed tokenize_for_bm25
+    pub scoped_exact_scan_tokenized_content_bytes: u64,  // bytes handed to tokenizer
+    pub scoped_exact_scan_tokens:                  u64,  // tokens produced (post-normalization)
+    pub scoped_exact_scan_tokenization_nanos:      u64,  // wall-time spent tokenizing
 }</code></pre>
 
-<p>The counter is intentionally <em>not</em> included in <code>rows_total()</code> /
-<code>content_bytes_total()</code> — those describe materialized result reads, while this one
-measures <em>backend scan</em> reads. A scoped chunk that survives RRF is read once during the
+<p>The counters are intentionally <em>not</em> included in <code>rows_total()</code> /
+<code>content_bytes_total()</code> — those describe materialized result reads, while these
+measure <em>backend scan</em> work. A scoped chunk that survives RRF is read once during the
 scan and (if needed) once again during hydration; conflating them would double-count.</p>
+
+<p>The tokenization counter is a separate atomic family because it answers a different
+question than the I/O counter. After this P0 lands, <code>scoped_exact_scan_content_bytes</code>
+becomes zero on the elided path, but the bm25-on path still pays the tokenization cost
+proportional to scope size, not <code>top_k</code> — that signal is what surfaces the next
+P1 candidate.</p>
 
 <h2>Change</h2>
 
@@ -275,6 +290,65 @@ with a small distractor source so the scope filter has something to exclude.</p>
 <code>scoped_exact_scan_*</code> counter. Source: <code>test/native/scoped_exact_scan_bench_test.dart</code>,
 release-profile Rust build on macOS / arm64.</p>
 
+<h3>Scoped exact-scan tokenization (per query, after P0)</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Scope size</th><th>bm25_weight</th>
+      <th class="num">tokenized_rows</th>
+      <th class="num">tokenized_bytes</th>
+      <th class="num">tokens emitted</th>
+      <th class="num">tokenize wall-time</th>
+      <th class="num">total elapsed</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>50 chunks</td><td>0.0</td>
+      <td class="num good">0</td><td class="num good">0 KB</td>
+      <td class="num good">0</td><td class="num good">0.000 ms</td>
+      <td class="num">6.82 ms*</td>
+    </tr>
+    <tr>
+      <td>50 chunks</td><td>0.5</td>
+      <td class="num">50</td><td class="num">12.5 KB</td>
+      <td class="num">1,705</td><td class="num">0.181 ms</td>
+      <td class="num">0.69 ms</td>
+    </tr>
+    <tr>
+      <td>500 chunks</td><td>0.0</td>
+      <td class="num good">0</td><td class="num good">0 KB</td>
+      <td class="num good">0</td><td class="num good">0.000 ms</td>
+      <td class="num">0.76 ms</td>
+    </tr>
+    <tr>
+      <td>500 chunks</td><td>0.5</td>
+      <td class="num">500</td><td class="num">125 KB</td>
+      <td class="num">17,050</td><td class="num">1.588 ms</td>
+      <td class="num">2.73 ms</td>
+    </tr>
+  </tbody>
+</table>
+<p class="legend">*The 6.82 ms first sample includes DB pool initialization / pragma setup
+for the temp file — not directly comparable; the 50-chunk path is much faster on the second
+and subsequent benchmark variants. Tokenization wall-time is the sum of per-chunk
+<code>tokenize_for_bm25</code> durations measured by <code>Instant::now()</code> deltas inside
+the scan loop. Tokens are post-normalization (lowercase + alphanum filter).</p>
+
+<p>Two signals worth flagging:</p>
+<ul>
+  <li><strong>I/O is gone</strong> on the elided path: scope 500 drops from 125 KB to 0
+  bytes of SQLite content reads, and wall-clock from 2.73 ms to 0.76 ms — <strong>~3.6×
+  faster</strong> on the same fixture for the most common scoped query shape
+  (vector-only re-ranking under <code>source_ids</code>).</li>
+  <li><strong>Tokenization scales with scope, not top-K.</strong> 50→500 scope grows
+  tokens 1,705→17,050 (10×) and tokenize time 0.181→1.588 ms (~8.8×), confirming the
+  P1 candidate flagged in the follow-ups section: when <code>bm25_weight != 0</code>
+  and <code>top_k</code> is tiny, we still tokenize every body in the scope. A
+  scoped BM25 index keyed by source — or even a precomputed per-chunk term-stats
+  blob — would cut this to <code>O(top_k)</code> instead of <code>O(scope)</code>.</li>
+</ul>
+
 <h3>Adjacent baseline (post-PR #49 handle-content-cache)</h3>
 
 <p>Re-running <code>query_payload_bench_test</code> on the rebased base confirms the
@@ -347,7 +421,11 @@ trigger the scoped exact-scan path. Captured from
   still passes (collection-only filter does not trigger scoped scan).</li>
   <li><strong>Dart</strong> — <code>test/native/scoped_exact_scan_bench_test.dart</code> drives
   <code>searchMetaHybrid</code> across {50, 500} scoped chunks × {0.0, 0.5} BM25 weights and
-  asserts the counter is zero on the elided path and scales linearly on the BM25 path.</li>
+  asserts all six scoped counters (<code>rows</code>, <code>content_bytes</code>,
+  <code>tokenized_rows</code>, <code>tokenized_content_bytes</code>, <code>tokens</code>,
+  <code>tokenization_nanos</code>) are zero on the elided path, scale exactly 10× in
+  <code>tokenized_rows</code> across the 10× scope expansion, and emit non-zero
+  <code>tokens</code> / <code>tokenize_nanos</code> on the bm25-on path.</li>
   <li><strong>Dart</strong> — pre-existing <code>test/native/query_payload_bench_test.dart</code>
   unchanged in semantics; renderer now includes a <code>scoped_exact_scan</code> row that
   reads 0 / 0 KB for non-scoped variants.</li>
@@ -360,15 +438,19 @@ trigger the scoped exact-scan path. Captured from
   <tbody>
     <tr>
       <td><code>rust_builder/rust/src/api/query_metrics.rs</code></td>
-      <td>Add <code>SCOPED_EXACT_SCAN_CONTENT</code> counter,
-      <code>record_scoped_exact_scan_content_read</code>, two struct fields, snapshot/reset
-      wiring.</td>
+      <td>Add <code>SCOPED_EXACT_SCAN_CONTENT</code> counter +
+      <code>AtomicTokenizationCounter</code> with the per-tokenize-call atomic family,
+      <code>record_scoped_exact_scan_content_read</code> /
+      <code>record_scoped_exact_scan_tokenization</code>, six new struct fields, full
+      snapshot/reset wiring.</td>
     </tr>
     <tr>
       <td><code>rust_builder/rust/src/api/hybrid_search.rs</code></td>
       <td>Hoist tokenization, compute <code>need_bm25</code>, switch SELECT projection,
       tolerate <code>NULL</code> content, gate counter + BM25 collection + post-scan scoring on
-      <code>need_bm25</code>. New cargo test.</td>
+      <code>need_bm25</code>. Wrap <code>tokenize_for_bm25</code> in an
+      <code>Instant::now()</code> delta and feed the tokenization counter
+      (content bytes / token count / nanos). New cargo test.</td>
     </tr>
     <tr>
       <td><code>lib/src/rust/api/query_metrics.dart</code></td>
@@ -393,26 +475,40 @@ trigger the scoped exact-scan path. Captured from
   <li>No public API surface changes. <code>SearchFilter</code>, <code>RrfConfig</code>,
   <code>SearchMetaHybridOptions</code>, and the Dart-side wrappers are byte-for-byte
   identical for callers.</li>
-  <li>FRB struct shape gained two trailing fields. The native dylib and Dart bindings must
-  be rebuilt together — older clients pinned to the previous bindings will fail to decode
-  the stats struct.</li>
+  <li>FRB struct shape gained trailing query-metric fields. P0 added scoped exact-scan
+  read rows/bytes; P1 adds tokenized rows/bytes, token count, and tokenization time. The
+  native dylib and Dart bindings must be rebuilt together — older clients pinned to the
+  previous bindings will fail to decode the stats struct.</li>
   <li>Behavior of <code>search_hybrid</code> / <code>search_hybrid_simple</code> /
   <code>search_hybrid_weighted</code> is unchanged for every input that previously produced a
   ranked result; only the SQL projection and a counter are different.</li>
 </ul>
 
-<h2>Follow-ups (deferred)</h2>
+<h2>Follow-ups (P1 candidates, now quantified)</h2>
 
 <ul>
-  <li>When <code>bm25_weight != 0</code> but <code>top_k</code> is tiny relative to scope (say
-  500 → 4), we still tokenize 500 bodies to score 4 winners. Possible next P1: precomputed
-  per-chunk BM25 term stats, or a scoped BM25 index keyed by source.</li>
-  <li>Tokenization itself still allocates per-token <code>String</code>s — orthogonal to this
-  change; tracked separately as the copy-elision candidate the user flagged in the same
-  triage.</li>
-  <li>The benchmark fixture uses synthetic 256 B chunks; real-world chunk bodies are
-  typically 1–4 KB, so the absolute scan-bytes savings on a 500-chunk scope scale to
-  0.5–2 MB per query, not 125 KB.</li>
+  <li><strong>P1: scoped BM25 indexing.</strong> The tokenization counter now puts a
+  number on the previously-hand-wavy "we tokenize 500 bodies to score 4 winners" claim
+  — at 256 B / chunk we see <strong>17,050 tokens / 1.588 ms</strong> per query on the
+  500-chunk scope, roughly <strong>58% of the bm25-on wall-clock budget</strong>
+  (1.588 / 2.73 ms) and growing linearly with scope size. Two viable directions:
+    <ul>
+      <li>Precomputed per-chunk BM25 term stats stored alongside the chunk row, so
+      the scan reads <em>stats</em> not <em>bodies</em>.</li>
+      <li>A scoped BM25 inverted index keyed by <code>source_id</code> (or
+      <code>collection_id</code>) so the scan only touches documents that contain
+      query terms — turning <code>O(scope)</code> into <code>O(top_k)</code>.</li>
+    </ul>
+  </li>
+  <li><strong>Per-token <code>String</code> allocation.</strong> Orthogonal to this
+  change; still tracked as the copy-elision candidate from the same triage. The
+  <code>scoped_exact_scan_tokens</code> counter now provides the lower-bound
+  allocation count to compare against any allocation-free alternative.</li>
+  <li><strong>Benchmark realism.</strong> The fixture uses synthetic 256 B chunks; real
+  chunk bodies are typically 1–4 KB. Absolute scan-bytes savings on a 500-chunk scope
+  scale to 0.5–2 MB per query (not 125 KB), and tokenize-time scales with body length
+  — so the production ROI on a vector-only scoped query is materially larger than the
+  synthetic numbers above.</li>
 </ul>
 
 <h2>How to reproduce the numbers</h2>

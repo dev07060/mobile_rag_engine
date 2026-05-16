@@ -37,14 +37,28 @@ void main() {
       final smallZero = small.variants[0];
       expect(smallZero.nativeScopedExactScanRows, 0);
       expect(smallZero.nativeScopedExactScanContentBytes, 0);
+      expect(smallZero.nativeScopedExactScanTokenizedRows, 0);
+      expect(smallZero.nativeScopedExactScanTokenizedContentBytes, 0);
+      expect(smallZero.nativeScopedExactScanTokens, 0);
+      expect(smallZero.nativeScopedExactScanTokenizationNanos, 0);
 
-      // bm25_weight>0 → every scoped chunk body is read.
+      // bm25_weight>0 → every scoped chunk body is read and tokenized.
       final smallBm25 = small.variants[1];
       expect(smallBm25.nativeScopedExactScanRows, small.scopedChunkCount);
       expect(
         smallBm25.nativeScopedExactScanContentBytes,
         greaterThanOrEqualTo(small.scopedChunkCount * chunkBytes),
       );
+      expect(
+        smallBm25.nativeScopedExactScanTokenizedRows,
+        small.scopedChunkCount,
+      );
+      expect(
+        smallBm25.nativeScopedExactScanTokenizedContentBytes,
+        greaterThanOrEqualTo(small.scopedChunkCount * chunkBytes),
+      );
+      expect(smallBm25.nativeScopedExactScanTokens, greaterThan(0));
+      expect(smallBm25.nativeScopedExactScanTokenizationNanos, greaterThan(0));
 
       final large = await BenchmarkService.benchmarkScopedExactScan(
         scopedChunkCount: 500,
@@ -59,6 +73,10 @@ void main() {
       final largeZero = large.variants[0];
       expect(largeZero.nativeScopedExactScanRows, 0);
       expect(largeZero.nativeScopedExactScanContentBytes, 0);
+      expect(largeZero.nativeScopedExactScanTokenizedRows, 0);
+      expect(largeZero.nativeScopedExactScanTokenizedContentBytes, 0);
+      expect(largeZero.nativeScopedExactScanTokens, 0);
+      expect(largeZero.nativeScopedExactScanTokenizationNanos, 0);
 
       final largeBm25 = large.variants[1];
       expect(largeBm25.nativeScopedExactScanRows, large.scopedChunkCount);
@@ -66,11 +84,35 @@ void main() {
         largeBm25.nativeScopedExactScanContentBytes,
         greaterThanOrEqualTo(large.scopedChunkCount * chunkBytes),
       );
+      expect(
+        largeBm25.nativeScopedExactScanTokenizedRows,
+        large.scopedChunkCount,
+      );
+      expect(
+        largeBm25.nativeScopedExactScanTokenizedContentBytes,
+        greaterThanOrEqualTo(large.scopedChunkCount * chunkBytes),
+      );
+      expect(largeBm25.nativeScopedExactScanTokens, greaterThan(0));
+      expect(largeBm25.nativeScopedExactScanTokenizationNanos, greaterThan(0));
 
-      // 10× scope → ≥ 10× scoped-scan bytes for the bm25-on path.
+      // 10× scope → ≥ 10× scoped-scan bytes/tokenization rows for bm25-on.
       expect(
         largeBm25.nativeScopedExactScanContentBytes,
         greaterThanOrEqualTo(smallBm25.nativeScopedExactScanContentBytes * 10),
+      );
+      expect(
+        largeBm25.nativeScopedExactScanTokenizedRows,
+        smallBm25.nativeScopedExactScanTokenizedRows * 10,
+      );
+      expect(
+        largeBm25.nativeScopedExactScanTokenizedContentBytes,
+        greaterThanOrEqualTo(
+          smallBm25.nativeScopedExactScanTokenizedContentBytes * 10,
+        ),
+      );
+      expect(
+        largeBm25.nativeScopedExactScanTokens,
+        greaterThan(smallBm25.nativeScopedExactScanTokens),
       );
 
       // searchMetaHybrid is meta-only: no result body is materialized.

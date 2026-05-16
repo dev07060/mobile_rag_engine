@@ -73,12 +73,56 @@ impl AtomicCounter {
     }
 }
 
+struct AtomicTokenizationCounter {
+    rows: AtomicU64,
+    content_bytes: AtomicU64,
+    tokens: AtomicU64,
+    elapsed_nanos: AtomicU64,
+}
+
+impl AtomicTokenizationCounter {
+    const fn new() -> Self {
+        Self {
+            rows: AtomicU64::new(0),
+            content_bytes: AtomicU64::new(0),
+            tokens: AtomicU64::new(0),
+            elapsed_nanos: AtomicU64::new(0),
+        }
+    }
+
+    fn record(&self, content_bytes: u64, tokens: u64, elapsed_nanos: u64) {
+        self.rows.fetch_add(1, Ordering::Relaxed);
+        self.content_bytes
+            .fetch_add(content_bytes, Ordering::Relaxed);
+        self.tokens.fetch_add(tokens, Ordering::Relaxed);
+        self.elapsed_nanos
+            .fetch_add(elapsed_nanos, Ordering::Relaxed);
+    }
+
+    fn snapshot(&self) -> (u64, u64, u64, u64) {
+        (
+            self.rows.load(Ordering::Relaxed),
+            self.content_bytes.load(Ordering::Relaxed),
+            self.tokens.load(Ordering::Relaxed),
+            self.elapsed_nanos.load(Ordering::Relaxed),
+        )
+    }
+
+    fn reset(&self) {
+        self.rows.store(0, Ordering::Relaxed);
+        self.content_bytes.store(0, Ordering::Relaxed);
+        self.tokens.store(0, Ordering::Relaxed);
+        self.elapsed_nanos.store(0, Ordering::Relaxed);
+    }
+}
+
 static HYBRID_RESULT_CONTENT: AtomicCounter = AtomicCounter::new();
 static FULL_HYDRATE_CONTENT: AtomicCounter = AtomicCounter::new();
 static PREVIEW_CONTENT: AtomicCounter = AtomicCounter::new();
 static ASSEMBLY_CONTENT: AtomicCounter = AtomicCounter::new();
 static UNCLASSIFIED_CONTENT: AtomicCounter = AtomicCounter::new();
 static SCOPED_EXACT_SCAN_CONTENT: AtomicCounter = AtomicCounter::new();
+static SCOPED_EXACT_SCAN_TOKENIZATION: AtomicTokenizationCounter = AtomicTokenizationCounter::new();
 
 /// Record content read by `hybrid_search` while materializing legacy
 /// `HybridSearchResult.content`.
@@ -107,6 +151,17 @@ pub(crate) fn record_scoped_exact_scan_content_read(content_bytes: u64) {
     SCOPED_EXACT_SCAN_CONTENT.record(content_bytes);
 }
 
+/// Record BM25 tokenization work performed by the scoped exact-scan path.
+/// This is separate from content read volume so P1 can distinguish SQLite
+/// body I/O from CPU/string work after the body is loaded.
+pub(crate) fn record_scoped_exact_scan_tokenization(
+    content_bytes: u64,
+    tokens: u64,
+    elapsed_nanos: u64,
+) {
+    SCOPED_EXACT_SCAN_TOKENIZATION.record(content_bytes, tokens, elapsed_nanos);
+}
+
 #[derive(Debug, Clone)]
 pub struct QueryContentReadStats {
     pub hybrid_result_rows: u64,
@@ -121,6 +176,10 @@ pub struct QueryContentReadStats {
     pub unclassified_content_bytes: u64,
     pub scoped_exact_scan_rows: u64,
     pub scoped_exact_scan_content_bytes: u64,
+    pub scoped_exact_scan_tokenized_rows: u64,
+    pub scoped_exact_scan_tokenized_content_bytes: u64,
+    pub scoped_exact_scan_tokens: u64,
+    pub scoped_exact_scan_tokenization_nanos: u64,
 }
 
 impl QueryContentReadStats {
@@ -156,6 +215,8 @@ pub fn query_content_read_stats() -> QueryContentReadStats {
     let (assembly_rows, assembly_bytes) = ASSEMBLY_CONTENT.snapshot();
     let (unclassified_rows, unclassified_bytes) = UNCLASSIFIED_CONTENT.snapshot();
     let (scoped_rows, scoped_bytes) = SCOPED_EXACT_SCAN_CONTENT.snapshot();
+    let (scoped_tokenized_rows, scoped_tokenized_bytes, scoped_tokens, scoped_tokenization_nanos) =
+        SCOPED_EXACT_SCAN_TOKENIZATION.snapshot();
     QueryContentReadStats {
         hybrid_result_rows: hybrid_rows,
         hybrid_result_content_bytes: hybrid_bytes,
@@ -169,6 +230,10 @@ pub fn query_content_read_stats() -> QueryContentReadStats {
         unclassified_content_bytes: unclassified_bytes,
         scoped_exact_scan_rows: scoped_rows,
         scoped_exact_scan_content_bytes: scoped_bytes,
+        scoped_exact_scan_tokenized_rows: scoped_tokenized_rows,
+        scoped_exact_scan_tokenized_content_bytes: scoped_tokenized_bytes,
+        scoped_exact_scan_tokens: scoped_tokens,
+        scoped_exact_scan_tokenization_nanos: scoped_tokenization_nanos,
     }
 }
 
@@ -180,6 +245,7 @@ pub fn reset_query_content_read_stats() {
     ASSEMBLY_CONTENT.reset();
     UNCLASSIFIED_CONTENT.reset();
     SCOPED_EXACT_SCAN_CONTENT.reset();
+    SCOPED_EXACT_SCAN_TOKENIZATION.reset();
 }
 
 #[frb(sync)]
