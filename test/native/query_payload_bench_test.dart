@@ -42,7 +42,10 @@ void main() {
       expect(result.handleFull.nativeHybridResultRows, 0);
       expect(result.handleFull.nativeHybridResultContentBytes, 0);
       expect(result.handleFull.nativeAssemblyRows, greaterThan(0));
-      expect(result.handleFull.nativeFullHydrateRows, greaterThan(0));
+      // assemble_context runs first, populates the handle's content cache;
+      // hydrate_chunks then serves every hit from cache → no SQLite read.
+      expect(result.handleFull.nativeFullHydrateRows, 0);
+      expect(result.handleFull.nativeFullHydrateContentBytes, 0);
       expect(result.handleFull.nativePreviewRows, 0);
       expect(result.handleFull.nativeUnclassifiedRows, 0);
 
@@ -56,14 +59,11 @@ void main() {
       expect(result.handlePreview.nativeHybridResultContentBytes, 0);
       expect(result.handlePreview.nativeAssemblyRows, greaterThan(0));
       expect(result.handlePreview.nativeFullHydrateRows, 0);
-      expect(result.handlePreview.nativePreviewRows, greaterThan(0));
+      // Cache hit: get_chunk_excerpts truncates from cached full content
+      // instead of issuing the bounded SUBSTR SELECT.
+      expect(result.handlePreview.nativePreviewRows, 0);
+      expect(result.handlePreview.nativePreviewContentBytes, 0);
       expect(result.handlePreview.nativeUnclassifiedRows, 0);
-      // SUBSTR projection: preview rows read strictly fewer body bytes
-      // than full hydrate rows of the same hits.
-      expect(
-        result.handlePreview.nativePreviewContentBytes,
-        lessThan(result.handleFull.nativeFullHydrateContentBytes),
-      );
 
       expect(
         result.handleContextOnly.contextBytes,
@@ -84,6 +84,27 @@ void main() {
       expect(
         result.handlePreview.totalStringBytes,
         lessThan(result.handleFull.totalStringBytes),
+      );
+
+      // With the per-handle content cache, assembly is the only SQLite
+      // body read on the handle path. All three handle variants read the
+      // same hit + adjacent chunks via the same SELECT, so their
+      // assembly-phase counters converge byte-for-byte.
+      expect(
+        result.handleFull.nativeAssemblyRows,
+        result.handleContextOnly.nativeAssemblyRows,
+      );
+      expect(
+        result.handlePreview.nativeAssemblyRows,
+        result.handleContextOnly.nativeAssemblyRows,
+      );
+      expect(
+        result.handleFull.nativeAssemblyContentBytes,
+        result.handleContextOnly.nativeAssemblyContentBytes,
+      );
+      expect(
+        result.handlePreview.nativeAssemblyContentBytes,
+        result.handleContextOnly.nativeAssemblyContentBytes,
       );
 
       // ignore: avoid_print
