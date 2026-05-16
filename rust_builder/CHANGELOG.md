@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.1
+* **Ingest session**:
+  - Added extracted body byte/character lengths to `PreparedIngestion` so Dart file-ingest callers can display body-size metadata without materializing the full body.
+  - Kept `prepare_source_ingestion_from_file` on the path-only fast path: the extracted body is measured in Rust while document text still avoids Dart FFI body transfer.
+
 ## 0.18.0
 * **Retrieval hot path (copy-minimized Rust core)**:
   - Added `search_hnsw_slice(&[f32], usize)` and `search_hybrid_inner(String, &[f32], ...)` as borrowed-slice variants of the existing FFI-public entrypoints. The owned-`Vec<f32>` signatures of `search_hnsw` and `search_hybrid` are preserved for `flutter_rust_bridge` compatibility and now delegate to the slice helpers.

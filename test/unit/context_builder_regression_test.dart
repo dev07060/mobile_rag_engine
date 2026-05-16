@@ -260,7 +260,7 @@ void main() {
     test(
       'deriveContextBudgetForPrompt can use a target prompt token counter',
       () {
-        final counter = (String text) => RegExp(r'\S+').allMatches(text).length;
+        int counter(String text) => RegExp(r'\S+').allMatches(text).length;
         const query = 'Where is the guide?';
         final expectedSkeleton = 'Answer the question based ONLY on the '
             'documents below. If the information is not in the documents, '

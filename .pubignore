@@ -28,6 +28,9 @@ artifacts/faer_int8_*
 # 빌드 산출물
 build/
 platform-build/
+doc/
+output/
+tmp/
 rust/target/
 rust/tests/
 
