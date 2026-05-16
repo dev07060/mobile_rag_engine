@@ -45,7 +45,7 @@ use regex::Regex;
 use rusqlite::{params, OptionalExtension};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::sync::RwLock;
+use std::sync::{Arc, Mutex, RwLock};
 
 pub const DEFAULT_COLLECTION_ID: &str = "__default__";
 
@@ -1077,6 +1077,16 @@ pub struct SearchHandle {
     base_hits: Vec<SearchHitMeta>,
     ordered_hits: Vec<SearchHitMeta>,
     _query_options: SearchMetaHybridOptions,
+    /// Per-handle full-content cache shared across `assemble_context`,
+    /// `hydrate_chunks`, and `get_chunk_excerpts`. The first call that
+    /// pulls full chunk content for a chunk_id populates the entry; the
+    /// subsequent calls on the same handle return from cache without
+    /// hitting SQLite. Bounded reads (preview SUBSTR) intentionally do
+    /// not populate the cache because the content is truncated. The
+    /// handle's `data_generation` guard keeps the cache coherent —
+    /// any mutation to the underlying collection invalidates the whole
+    /// handle, the cache is discarded with it.
+    content_cache: Arc<Mutex<HashMap<i64, ChunkSearchResult>>>,
 }
 
 impl SearchHandle {
@@ -1162,20 +1172,41 @@ impl SearchHandle {
         run_handle_hydration_test_hook();
 
         let _read_guard = QueryContentReadGuard::enter(QueryContentReadPhase::FullHydrate);
-        let (hydrated, missing_ids) = hydrate_chunk_search_results(
+
+        // Cache check: any chunk whose full content was already pulled by
+        // a previous call on this handle (typically `assemble_context`)
+        // returns from the cache and bypasses SQLite entirely.
+        let (from_cache, missing) = partition_by_cache(&self.content_cache, &requested_ids);
+
+        let (newly_fetched, stale_missing) = hydrate_chunk_search_results(
             &conn,
             &self.collection_id,
-            requested_ids,
+            missing,
             &self.ordered_hits,
         )?;
         self.ensure_generation_unchanged_with_conn(&conn, start_generation)?;
-        if let Some(missing) = missing_ids.first() {
+        if let Some(missing) = stale_missing.first() {
             return Err(RagError::StaleSearchHandle(format!(
                 "chunk_id {} disappeared while hydrating search results",
                 missing
             )));
         }
-        Ok(hydrated)
+        populate_cache(&self.content_cache, &newly_fetched);
+
+        let mut by_id: HashMap<i64, ChunkSearchResult> = from_cache
+            .into_iter()
+            .map(|c| (c.chunk_id, c))
+            .collect();
+        for chunk in newly_fetched {
+            by_id.insert(chunk.chunk_id, chunk);
+        }
+        let mut ordered = Vec::with_capacity(requested_ids.len());
+        for id in requested_ids {
+            if let Some(chunk) = by_id.remove(&id) {
+                ordered.push(chunk);
+            }
+        }
+        Ok(ordered)
     }
 
     pub fn get_chunk_excerpts(
@@ -1189,37 +1220,50 @@ impl SearchHandle {
         run_handle_hydration_test_hook();
 
         let _read_guard = QueryContentReadGuard::enter(QueryContentReadPhase::Preview);
-        let (hydrated, missing_ids) = hydrate_chunk_previews(
+
+        // Cache check: chunks whose full content is already in the cache
+        // are truncated in Rust and surfaced without any SQLite read. The
+        // bounded SUBSTR path runs only for the remaining ids, and its
+        // truncated rows are intentionally NOT inserted into the cache
+        // (would corrupt later full-hydrate calls).
+        let (from_cache, missing) = partition_by_cache(&self.content_cache, &requested_ids);
+
+        let (newly_fetched, stale_missing) = hydrate_chunk_previews(
             &conn,
             &self.collection_id,
-            requested_ids,
+            missing,
             &self.ordered_hits,
             max_bytes,
         )?;
         self.ensure_generation_unchanged_with_conn(&conn, start_generation)?;
-        if let Some(missing) = missing_ids.first() {
+        if let Some(missing) = stale_missing.first() {
             return Err(RagError::StaleSearchHandle(format!(
                 "chunk_id {} disappeared while hydrating search results",
                 missing
             )));
         }
 
-        Ok(hydrated
+        let mut by_id: HashMap<i64, ChunkSearchResult> = from_cache
             .into_iter()
-            .map(|chunk| {
+            .map(|c| (c.chunk_id, c))
+            .collect();
+        for chunk in newly_fetched {
+            by_id.insert(chunk.chunk_id, chunk);
+        }
+
+        Ok(requested_ids
+            .into_iter()
+            .filter_map(|id| {
+                let chunk = by_id.remove(&id)?;
                 let (raw_type, header_path) = decode_structured_chunk_type(&chunk.chunk_type);
-                // `hydrate_chunk_previews` already bounded `chunk.content` to
-                // at most `max_bytes` and trimmed at a UTF-8 boundary, so the
-                // call below is a no-op in the happy path. Kept as a
-                // defensive guard for future callers that bypass that path.
-                ChunkExcerptResult {
+                Some(ChunkExcerptResult {
                     chunk_id: chunk.chunk_id,
                     source_id: chunk.source_id,
                     chunk_index: chunk.chunk_index,
                     raw_type: raw_type.to_string(),
                     header_path_preview: header_path.map(|path| truncate_utf8_bytes(path, 256)),
                     excerpt: truncate_utf8_bytes(&chunk.content, max_bytes as usize),
-                }
+                })
             })
             .collect())
     }
@@ -1520,7 +1564,41 @@ fn search_meta_hybrid_once(
         base_hits,
         ordered_hits,
         _query_options: options.clone(),
+        content_cache: Arc::new(Mutex::new(HashMap::new())),
     })
+}
+
+/// Split `requested_ids` into rows already present in the handle's
+/// content cache and chunk ids that still need a SQLite fetch. The
+/// lock is held only long enough to clone matched entries out.
+fn partition_by_cache(
+    cache: &Mutex<HashMap<i64, ChunkSearchResult>>,
+    requested_ids: &[i64],
+) -> (Vec<ChunkSearchResult>, Vec<i64>) {
+    let guard = cache.lock().expect("content_cache mutex poisoned");
+    let mut from_cache = Vec::new();
+    let mut missing = Vec::new();
+    for &id in requested_ids {
+        match guard.get(&id) {
+            Some(cached) => from_cache.push(cached.clone()),
+            None => missing.push(id),
+        }
+    }
+    (from_cache, missing)
+}
+
+/// Insert newly-fetched full-content rows into the cache. `or_insert_with`
+/// keeps the first writer's value if two calls race for the same id.
+fn populate_cache(
+    cache: &Mutex<HashMap<i64, ChunkSearchResult>>,
+    rows: &[ChunkSearchResult],
+) {
+    let mut guard = cache.lock().expect("content_cache mutex poisoned");
+    for row in rows {
+        guard
+            .entry(row.chunk_id)
+            .or_insert_with(|| row.clone());
+    }
 }
 
 fn hydrate_chunk_search_results(
@@ -1928,34 +2006,44 @@ fn hydrate_rows_for_assembly(
     conn: &rusqlite::Connection,
     collection_id: &str,
     hits: &[SearchHitMeta],
+    cache: &Mutex<HashMap<i64, ChunkSearchResult>>,
 ) -> Result<(Vec<HydratedChunkRow>, Vec<i64>), RagError> {
     if hits.is_empty() {
         return Ok((Vec::new(), Vec::new()));
     }
 
     let _read_guard = QueryContentReadGuard::enter(QueryContentReadPhase::Assembly);
-    let (hydrated, missing_ids) = hydrate_chunk_search_results(
-        conn,
-        collection_id,
-        hits.iter().map(|hit| hit.chunk_id).collect(),
-        hits,
-    )?;
 
-    Ok((
-        hydrated
-            .into_iter()
-            .map(|chunk| HydratedChunkRow {
-                chunk_id: chunk.chunk_id,
-                source_id: chunk.source_id,
-                chunk_index: chunk.chunk_index,
-                content: chunk.content,
-                chunk_type: chunk.chunk_type,
-                similarity: chunk.similarity,
-                metadata: chunk.metadata,
-            })
-            .collect(),
-        missing_ids,
-    ))
+    let requested_ids: Vec<i64> = hits.iter().map(|hit| hit.chunk_id).collect();
+    let (from_cache, missing) = partition_by_cache(cache, &requested_ids);
+
+    let (newly_fetched, missing_ids) =
+        hydrate_chunk_search_results(conn, collection_id, missing, hits)?;
+    populate_cache(cache, &newly_fetched);
+
+    let mut by_id: HashMap<i64, ChunkSearchResult> = from_cache
+        .into_iter()
+        .map(|c| (c.chunk_id, c))
+        .collect();
+    for chunk in newly_fetched {
+        by_id.insert(chunk.chunk_id, chunk);
+    }
+
+    let ordered: Vec<HydratedChunkRow> = requested_ids
+        .into_iter()
+        .filter_map(|id| by_id.remove(&id))
+        .map(|chunk| HydratedChunkRow {
+            chunk_id: chunk.chunk_id,
+            source_id: chunk.source_id,
+            chunk_index: chunk.chunk_index,
+            content: chunk.content,
+            chunk_type: chunk.chunk_type,
+            similarity: chunk.similarity,
+            metadata: chunk.metadata,
+        })
+        .collect();
+
+    Ok((ordered, missing_ids))
 }
 
 enum AssemblyBuildResult {
@@ -1980,8 +2068,12 @@ fn assemble_context_internal(
     }
 
     let selected_source_id = if options.single_source_mode {
-        let (base_chunks, missing_ids) =
-            hydrate_rows_for_assembly(conn, &handle.collection_id, &handle.base_hits)?;
+        let (base_chunks, missing_ids) = hydrate_rows_for_assembly(
+            conn,
+            &handle.collection_id,
+            &handle.base_hits,
+            &handle.content_cache,
+        )?;
         if !missing_ids.is_empty() {
             return Ok(AssemblyBuildResult::MissingChunks(missing_ids));
         }
@@ -2000,8 +2092,12 @@ fn assemble_context_internal(
         None => handle.ordered_hits.clone(),
     };
 
-    let (mut chunks, missing_ids) =
-        hydrate_rows_for_assembly(conn, &handle.collection_id, &candidate_hits)?;
+    let (mut chunks, missing_ids) = hydrate_rows_for_assembly(
+        conn,
+        &handle.collection_id,
+        &candidate_hits,
+        &handle.content_cache,
+    )?;
     if !missing_ids.is_empty() {
         return Ok(AssemblyBuildResult::MissingChunks(missing_ids));
     }
@@ -2769,6 +2865,7 @@ mod tests {
                 source_ids: None,
                 adjacent_chunks: 0,
             },
+            content_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
