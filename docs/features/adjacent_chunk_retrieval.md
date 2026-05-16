@@ -47,7 +47,7 @@ final currentIndex = chunk.chunkIndex; // The sequential index of this chunk in 
 
 ### Fetching Neighbors
 
-You can access the low-level `service` to call `getAdjacentChunks`.
+Use `getAdjacentChunks` when you already have a source ID and chunk index.
 
 ```dart
 // 1. Calculate the range you want
@@ -55,8 +55,8 @@ You can access the low-level `service` to call `getAdjacentChunks`.
 final minIndex = (currentIndex - 2).clamp(0, 999999);
 final maxIndex = currentIndex + 2;
 
-// 2. Call the service
-final neighbors = await MobileRag.instance.engine.service.getAdjacentChunks(
+// 2. Fetch adjacent chunks
+final neighbors = await MobileRag.instance.getAdjacentChunks(
   sourceId: currentSourceId,
   minIndex: minIndex,
   maxIndex: maxIndex,

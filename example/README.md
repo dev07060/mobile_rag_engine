@@ -1,6 +1,6 @@
 # Mobile RAG Engine Example
 
-This example demonstrates the `mobile_rag_engine` package with the simplified `RagEngine` API.
+This example demonstrates the `mobile_rag_engine` package with the `MobileRag` facade.
 
 ## Quick Start
 
@@ -23,6 +23,7 @@ void main() async {
 
 // 2. Add documents
 await MobileRag.instance.addDocument('Your document text here');
+await MobileRag.instance.addDocumentFromFile('/path/to/document.pdf');
 await MobileRag.instance.rebuildIndex();
 
 // 3. Search
@@ -35,8 +36,8 @@ print(result.context.text);
 1. Download model files to `assets/`:
    ```bash
    cd assets
-   curl -L -o model.onnx "https://huggingface.co/Teradata/bge-m3/onnx/model_int8.onnx"
-   curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/tokenizer.json"
+   curl -L -o model.onnx "https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx"
+   curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer.json"
    ```
 
 2. Run:

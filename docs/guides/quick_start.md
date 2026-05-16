@@ -111,11 +111,16 @@ await MobileRag.instance.addDocument(
   'Flutter is Google\'s UI toolkit for building beautiful apps.',
 );
 
-// Add PDF/DOCX
-// See [Markdown Chunker](../features/markdown_chunker.md) for structural handling
-final bytes = await File('document.pdf').readAsBytes();
-final text = await DocumentParser.parse(bytes.toList());
-await MobileRag.instance.addDocument(text, filePath: 'document.pdf');
+// Add PDF/DOCX or other local files by path.
+// This lets Rust read and chunk the file directly.
+await MobileRag.instance.addDocumentFromFile(
+  'document.pdf',
+  name: 'document.pdf',
+);
+
+// If a stable local path is not available, fall back to bytes/text ingestion.
+final bytes = await File('notes.md').readAsBytes();
+await MobileRag.instance.addDocumentUtf8(bytes, name: 'notes.md');
 
 // Optional: force immediate rebuild if you need deterministic timing.
 // In most apps this is not required because indexing is auto-managed.
@@ -146,12 +151,12 @@ for (final chunk in result.chunks) {
 ```
 
 Notes:
-- `tokenBudget` is measured against `context.text`, not the full prompt wrapper added by `formatForPrompt()`.
+- `tokenBudget` is measured against `context.text`, not the full prompt wrapper added by `formatPrompt()`.
 - In compressed paths, `includedChunks` represents source provenance for the compressed context, not a 1:1 segment map of the final compressed text.
 
 ---
 
-## Step 6: Source-Filtered Search (New!)
+## Step 6: Source-Filtered Search
 
 You can search within specific documents using `searchHybrid` with `sourceIds`. See [Search by Source](../features/search_by_source.md) for full guide.
 
@@ -246,7 +251,7 @@ For fine-grained control, you can still use the low-level APIs:
 
 ```dart
 // Use services directly for custom flows
-final text = await DocumentParser.parsePdf(pdfBytes);
+final text = await DocumentParser.parse(pdfBytes);
 final intent = IntentParser.classify('Summarize this');
 ```
 

@@ -1,6 +1,6 @@
 name: mobile_rag_engine
-description: A high-performance, on-device RAG (Retrieval-Augmented Generation) engine for Flutter. Run semantic search completely offline on iOS and Android with HNSW vector indexing.
-version: 0.18.2
+description: A high-performance, on-device RAG (Retrieval-Augmented Generation) engine for Flutter. Run semantic search completely offline on iOS, Android, and macOS with HNSW vector indexing.
+version: 0.18.3
 homepage: https://github.com/dev07060/mobile_rag_engine
 repository: https://github.com/dev07060/mobile_rag_engine
 issue_tracker: https://github.com/dev07060/mobile_rag_engine/issues

@@ -14,13 +14,24 @@ The ONNX embedding model is the single largest contributor to your app's downloa
 | BGE-m3 (INT8) | ~542 MB | **Exceeds Play Store 150 MB limit** |
 
 **For development**, bundle the model in `assets/` for quick iteration.
-**For production releases**, download the model at runtime to keep your bundle small:
+**For production releases**, download the model at runtime to keep your bundle small.
+
+`MobileRag.initialize` only accepts asset paths today (`tokenizerAsset`, `modelAsset`), but the engine resolves `modelAsset` to `<appDocumentsDirectory>/<basename>` and skips the asset copy if that file already exists. You can use this to ship without the model in your bundle:
 
 ```dart
-// Initialize with a file path instead of an asset path
+// 1. Before initialize, write the downloaded model to the destination filename
+//    used by MobileRag (matches the basename of modelAsset).
+final dir = await getApplicationDocumentsDirectory();
+final modelFile = File('${dir.path}/model.onnx');
+if (!await modelFile.exists()) {
+  await downloadModel(modelFile); // your CDN / Hugging Face fetch
+}
+
+// 2. Initialize as usual. The asset copy is skipped because the file exists.
+//    Do NOT list assets/model.onnx in pubspec.yaml when shipping this flow.
 await MobileRag.initialize(
-  tokenizerAsset: 'assets/tokenizer.json',  // small (~750KB), safe to bundle
-  modelPath: '${appDocDir.path}/model.onnx', // downloaded at runtime
+  tokenizerAsset: 'assets/tokenizer.json', // small (~750KB), safe to bundle
+  modelAsset: 'assets/model.onnx',         // basename only is significant here
 );
 ```
 
@@ -43,7 +54,7 @@ The following are bundled automatically and cannot be removed:
 
 ## pdfrx Users
 
-If your app uses [`pdfrx`](https://pub.dev/packages/pdfrx) for PDF rendering, it bundles a `pdfium.wasm` file (~2 MB) intended for web builds. This is unnecessary in native release builds.
+This package does not require `pdfrx`. If your app also uses [`pdfrx`](https://pub.dev/packages/pdfrx) for PDF rendering, it bundles a `pdfium.wasm` file (~2 MB) intended for web builds. This is unnecessary in native release builds.
 
 Remove it before building:
 

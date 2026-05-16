@@ -359,16 +359,16 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  mobile_rag_engine: ^0.4.0
+  mobile_rag_engine: ^0.18.2
 ```
 
 ## API Reference
 
 | Function | Description |
 |----------|-------------|
-| `initDb()` | Initialize database |
-| `addDocument()` | Add document with embedding |
-| `searchSimilar()` | Vector similarity search |
+| `MobileRag.initialize()` | Initialize the local RAG engine |
+| `addDocumentFromFile()` | Add and chunk a local document |
+| `searchHybridWithContext()` | Search and assemble LLM-ready context |
 
 ## License
 

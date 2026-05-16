@@ -13,16 +13,17 @@ Mobile RAG Engine includes a built-in **Prompt Compressor** inspired by REFRAG p
 The easiest way to use compression is via `ContextBuilder.buildWithCompression`.
 
 ```dart
-final results = await MobileRag.instance.search('query');
+final result = await MobileRag.instance.search('query');
+final originalContext = result.context;
 
 // Build context with compression
 final context = await ContextBuilder.buildWithCompression(
-  searchResults: results.chunks,
+  searchResults: result.chunks,
   tokenBudget: 1000, // Stricter budget
   compressionLevel: 1, // Balanced
 );
 
-print('Original: ${context.text.length} chars');
+print('Original: ${originalContext.text.length} chars');
 print('Compressed: ${context.text.length} chars');
 ```
 
@@ -43,10 +44,11 @@ For advanced use cases, you can use the **Semantic Sentence Selector**. This bre
 ```dart
 // 1. Get query embedding
 final queryEmb = await EmbeddingService.embed('What is the battery life?');
+final result = await MobileRag.instance.search('battery life');
 
 // 2. Compress by selecting top 15 relevant sentences
 final compressed = await PromptCompressor.compressWithSimilarity(
-  chunks: searchResults,
+  chunks: result.chunks,
   queryEmbedding: queryEmb,
   maxSentences: 15,
   minSimilarity: 0.3,

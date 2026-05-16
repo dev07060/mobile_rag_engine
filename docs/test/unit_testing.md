@@ -59,6 +59,8 @@ void main() {
 
 ## Testing Scenarios
 
+> **Type note:** ID-bearing fields such as `chunkId`, `sourceId`, and the counters on `SourceStats` are typed as `PlatformInt64` in the generated FFI. On the supported platforms (iOS / Android / macOS) this is an `int` alias, so the `int` literals in the snippets below compile as-is. If you ever target the web, switch to `BigInt`-backed literals.
+
 ### Scenario 1: Mocking Search Results
 
 When testing UI code that displays search results, you don't need the real engine to run a query. You just need to return a predefined `RagSearchResult`.
@@ -68,7 +70,9 @@ test('SearchScreen displays results correctly', () async {
   // 1. Arrange
   final mockContext = AssembledContext(
     text: "Flutter is a UI toolkit.", 
-    tokens: 5,
+    estimatedTokens: 5,
+    includedChunks: [],
+    remainingBudget: 1000,
   );
   
   // Mock the search method
@@ -90,11 +94,15 @@ test('SearchScreen displays results correctly', () async {
 
   // 2. Act
   // Calling the singleton now routes to your mock
-  final result = await MobileRag.instance.search('What is Flutter?');
+  final result = await MobileRag.instance.search(
+    'What is Flutter?',
+    tokenBudget: 1000,
+  );
 
   // 3. Assert
   expect(result.context.text, equals("Flutter is a UI toolkit."));
-  verify(() => mockRag.search(any())).called(1);
+  verify(() => mockRag.search(any(), tokenBudget: any(named: 'tokenBudget')))
+      .called(1);
 });
 ```
 

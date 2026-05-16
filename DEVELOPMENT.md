@@ -53,6 +53,10 @@ flutter pub publish --dry-run
 
 The root package should only bump its `rag_engine_flutter` dependency after the matching native package version is available on pub.dev. This keeps CI and package resolution valid between the two releases.
 
+### Public Documentation Guard
+
+README and other public-facing documentation changes should be reviewed as their own release scope. Do not fold incidental README rewrites into a publish commit unless the release explicitly includes public documentation updates.
+
 ## Troubleshooting
 
 ### Error: "Content hash on Dart side is different from Rust side"

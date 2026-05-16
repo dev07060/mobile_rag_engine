@@ -1,7 +1,8 @@
 /// Mobile RAG Engine
 ///
 /// A high-performance, on-device RAG (Retrieval-Augmented Generation) engine
-/// for Flutter. Run semantic search completely offline on iOS and Android.
+/// for Flutter. Run semantic search completely offline on iOS, Android, and
+/// macOS.
 ///
 /// ## Quick Start (Recommended)
 ///
@@ -30,9 +31,10 @@
 /// // Send prompt to LLM
 /// ```
 ///
-/// ## Advanced Usage (Low-Level API)
+/// ## Advanced Usage
 ///
-/// For fine-grained control, use the individual services directly:
+/// Most apps should use the [MobileRag] facade. For fine-grained workflows,
+/// use the public APIs exported by this package:
 ///
 /// ```dart
 /// await MobileRag.initialize(...) // Preferred
@@ -55,7 +57,7 @@ export 'services/text_chunker.dart';
 
 // Document parsing
 export 'services/document_parser.dart';
-// Re-export raw functions for backward compatibility
+// Re-export document parser functions for backward compatibility.
 export 'src/rust/api/document_parser.dart';
 
 // Intent parsing
@@ -88,5 +90,5 @@ export 'src/rust/api/semantic_chunker.dart'
 // Error Types
 export 'src/rust/api/error.dart' show RagError;
 
-// Note: Low-level Rust exports are hidden by default for better DX.
+// Note: other low-level Rust exports are hidden by default for better DX.
 // If you need them, import 'package:mobile_rag_engine/src/rust/api/...' directly.

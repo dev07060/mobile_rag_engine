@@ -55,7 +55,7 @@ final result = await MobileRag.instance.searchHybridWithContext(
 - **Default**: `2000`
 - **Description**: The maximum number of **engine tokenizer** tokens the final `context.text` string can contain.
 - **Counting basis**: document wrappers, metadata, and markdown header-path contextual text are included in this count because the engine measures the fully rendered context string.
-- **Scope note**: This budget applies to `context.text` only. It does **not** automatically include the extra system instruction, question, or answer wrapper added later by `formatForPrompt()`.
+- **Scope note**: This budget applies to `context.text` only. It does **not** automatically include the extra system instruction, question, or answer wrapper added later by `formatPrompt()`.
 - **Tip**: Set this based on your LLM's context window minus your prompt size. (e.g., for 4k model, use ~3000).
 
 ### `adjacentChunks`

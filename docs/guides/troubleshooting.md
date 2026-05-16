@@ -38,17 +38,22 @@ Exception: Failed to initialize tokenizer
 
 | Cause | Solution |
 |:------|:---------|
-| Wrong file path | Use absolute path |
+| Asset path not registered | Add the tokenizer to `pubspec.yaml` assets and pass the same asset path |
 | Wrong file format | Must be HuggingFace `tokenizer.json` (not SentencePiece) |
 | Corrupted file | Re-download |
 
 ```dart
-// ✅ Correct: absolute path
-final dir = await getApplicationDocumentsDirectory();
-await initTokenizer(tokenizerPath: '${dir.path}/tokenizer.json');
+// Correct: use the asset path registered in pubspec.yaml.
+await MobileRag.initialize(
+  tokenizerAsset: 'assets/tokenizer.json',
+  modelAsset: 'assets/model.onnx',
+);
 
-// ❌ Wrong: relative path
-await initTokenizer(tokenizerPath: 'assets/tokenizer.json');
+// Wrong: passing a filesystem path as tokenizerAsset.
+await MobileRag.initialize(
+  tokenizerAsset: '/tmp/tokenizer.json',
+  modelAsset: 'assets/model.onnx',
+);
 ```
 
 ---
@@ -68,10 +73,12 @@ OnnxRuntimeException: Failed to create session
 - [ ] Verify model is compatible with ONNX Runtime
 
 ```dart
-// Verify file exists
-final file = File(modelPath);
+// The engine copies modelAsset to <appDocumentsDirectory>/<basename>.
+// Verify the resolved file the engine actually loads.
+final dir = await getApplicationDocumentsDirectory();
+final file = File('${dir.path}/model.onnx');
 if (!await file.exists()) {
-  throw Exception('Model file not found: $modelPath');
+  throw Exception('Model file not found at expected path: ${file.path}');
 }
 
 // Verify file size (corruption check)
@@ -94,7 +101,7 @@ Missing Input: token_type_ids
 **Cause:** The ONNX model requires `token_type_ids` as a mandatory input.
 
 **Solution:**
-1. Update to the latest `0.14.x` patch (`>=0.14.2`), which auto-fills zero `token_type_ids` when required.
+1. Update to a current release. The engine auto-fills zero `token_type_ids` when the model requires them.
 2. If the error persists, inspect model input names and confirm required inputs are limited to:
    - `input_ids`
    - `attention_mask`
@@ -125,9 +132,9 @@ final dbPath = MobileRag.instance.dbPath;
 // ... delete file at dbPath ...
 await MobileRag.initialize(...); // Re-initialize
 
-// Or regenerate embeddings in-place
-await MobileRag.instance.regenerateAllEmbeddings();
-await MobileRag.instance.rebuildIndex(force: true);
+// Advanced recovery: regenerate embeddings in-place.
+await MobileRag.instance.engine.regenerateAllEmbeddings();
+await MobileRag.instance.engine.rebuildIndex(force: true);
 ```
 
 ---
@@ -153,7 +160,15 @@ await MobileRag.instance.rebuildIndex();
 
 **Solutions:**
 
-1. **Limit file size** (50MB recommended):
+1. **Use file-path ingest for local files**:
+   ```dart
+   await MobileRag.instance.addDocumentFromFile(
+     file.path,
+     name: file.uri.pathSegments.last,
+   );
+   ```
+
+2. **Limit file size** (50MB recommended):
    ```dart
    final bytes = await file.readAsBytes();
    if (bytes.length > 50 * 1024 * 1024) {
@@ -161,10 +176,10 @@ await MobileRag.instance.rebuildIndex();
    }
    ```
 
-2. **Process in chunks**:
+3. **Use progress callbacks for long ingests**:
    ```dart
-   await MobileRag.instance.addDocument(
-     text,
+   await MobileRag.instance.addDocumentFromFile(
+     file.path,
      onProgress: (done, total) => print('Progress: $done/$total'),
    );
    ```

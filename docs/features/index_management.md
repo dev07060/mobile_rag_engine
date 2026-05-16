@@ -38,7 +38,7 @@ await MobileRag.instance.removeSource(sourceId);
 
 ## 3. Data Migration & Re-embedding
 
-If you update your embedding model (e.g., switch from a 384-dim model to a 512-dim model), existing vectors become invalid. Mobile RAG Engine provides a utility to **re-calculate embeddings** for all existing chunks without re-parsing original files.
+If you update your embedding model (e.g., switch from a 384-dim model to a 512-dim model), existing vectors become invalid. The advanced `RagEngine` API provides a utility to **re-calculate embeddings** for all existing chunks without re-parsing original files.
 
 ```dart
 // Run this after initializing the engine with a NEW model

@@ -13,14 +13,14 @@ This guide covers embedding model selection, download, and deployment strategies
 
 > **Dimension Matters**: The embedding dimension affects your vector index. Once you choose a model, all documents must use the same dimension. Switching models requires re-embedding all documents.
 
-### Officially Validated ONNX Artifacts (0.14.x)
+### Validated ONNX Artifacts
 
 - MiniLM: `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx`
 - BGE-m3: `https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx`
 
 These are the regression-tested artifacts for each patch release.
 
-Compatibility was expanded in 0.14.x patches:
+Compatibility improvements introduced in the `0.14.x` hardening patches remain available in current releases:
 - models requiring `token_type_ids` are now supported without re-export
 - the engine reads ONNX `inputNames` and injects zero `token_type_ids` only when required
 
@@ -166,7 +166,10 @@ This package uses the [`onnxruntime`](https://pub.dev/packages/onnxruntime) Flut
 1. **Use INT8 quantized models** - 2-4x smaller, similar accuracy
 2. **Batch embeddings** when processing many documents:
    ```dart
-   await EmbeddingService.embedBatch(texts, onProgress: (i, n) => ...);
+   await EmbeddingService.embedBatch(
+     texts,
+     onProgress: (done, total) => print('$done / $total'),
+   );
    ```
 3. **Run in isolate** for heavy processing to avoid UI jank
 

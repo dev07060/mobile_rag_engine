@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
 
+const _defaultCollectionId = '__default__';
+
 class _PickedImportResult {
   final SourceAddResult addResult;
   final int? textLength;
@@ -25,18 +27,17 @@ class RagController extends ChangeNotifier {
   int? selectedSourceId;
   int topK = 5;
   final TextEditingController collectionController = TextEditingController(
-    text: SourceRagService.defaultCollectionId,
+    text: _defaultCollectionId,
   );
-  String activeCollectionId = SourceRagService.defaultCollectionId;
+  String activeCollectionId = _defaultCollectionId;
   final Set<String> knownCollectionIds = {
-    SourceRagService.defaultCollectionId,
+    _defaultCollectionId,
     'business',
     'travel',
     'personal',
   };
 
-  bool get _isDefaultCollection =>
-      activeCollectionId == SourceRagService.defaultCollectionId;
+  bool get _isDefaultCollection => activeCollectionId == _defaultCollectionId;
   CollectionRag get _activeCollection =>
       MobileRag.instance.inCollection(activeCollectionId);
 
@@ -79,7 +80,7 @@ class RagController extends ChangeNotifier {
 
   String _normalizeCollectionId(String raw) {
     final trimmed = raw.trim();
-    if (trimmed.isEmpty) return SourceRagService.defaultCollectionId;
+    if (trimmed.isEmpty) return _defaultCollectionId;
     return trimmed;
   }
 
@@ -547,7 +548,7 @@ class RagController extends ChangeNotifier {
     try {
       late final SourceStats stats;
       if (_isDefaultCollection) {
-        stats = await MobileRag.instance.engine.getStats();
+        stats = await MobileRag.instance.getStats();
         await MobileRag.instance.clearAllData();
       } else {
         stats = await _activeCollection.getStats();
