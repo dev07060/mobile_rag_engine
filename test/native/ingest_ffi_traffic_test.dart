@@ -97,4 +97,62 @@ void main() {
       await dir.delete(recursive: true);
     }
   });
+
+  test(
+    'FFI text traffic: from_utf8 / from_file deliver promised pass-through',
+    () async {
+      // Locks in the claim that:
+      //   - prepareSourceIngestion(String):   prepare_in == doc body bytes
+      //   - prepareSourceIngestionFromUtf8:   prepare_in == doc body bytes
+      //     (same FFI traffic, but Dart heap allocation is avoided —
+      //     measurable only at runtime, not in counters)
+      //   - prepareSourceIngestionFromFile:   prepare_in == 0
+      //     (body never crosses FFI; only the path string does)
+      final dir = await Directory.systemTemp.createTemp(
+        'mobile_rag_ffi_entrypoints_',
+      );
+      try {
+        final result = await BenchmarkService.benchmarkIngestFfiEntrypoints(
+          targetBytes: 256 * 1024,
+          maxChunkChars: 1500,
+          overlapChars: 0,
+          batchSize: 16,
+          dbPathOverride: '${dir.path}/ffi_entrypoints_bench.sqlite',
+        );
+
+        // String entrypoint records full body once.
+        expect(
+          result.stringPrepareInBytes,
+          result.docBytes,
+          reason: 'String path should record exactly docBytes into '
+              'session_prepare_content_in_bytes; got '
+              '${result.stringPrepareInBytes} vs docBytes=${result.docBytes}',
+        );
+
+        // UTF-8 entrypoint records the same byte count: bytes flow straight
+        // into Rust without a Dart String round-trip.
+        expect(
+          result.utf8PrepareInBytes,
+          result.docBytes,
+          reason: 'UTF-8 path should record exactly docBytes into '
+              'session_prepare_content_in_bytes; got '
+              '${result.utf8PrepareInBytes} vs docBytes=${result.docBytes}',
+        );
+
+        // File entrypoint records ZERO: the body never crosses FFI.
+        expect(
+          result.filePrepareInBytes,
+          0,
+          reason: 'File path must not credit body bytes to '
+              'session_prepare_content_in_bytes; the body never crosses FFI. '
+              'Got ${result.filePrepareInBytes}',
+        );
+
+        // ignore: avoid_print
+        print(result.renderSummary());
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    },
+  );
 }

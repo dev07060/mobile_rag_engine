@@ -331,12 +331,127 @@ pub fn prepare_source_ingestion(
     max_chars: i32,
     overlap_chars: i32,
 ) -> Result<PreparedIngestion, RagError> {
-    // Record the FFI byte traffic from Dart→Rust before delegating to internal
-    // helpers. The guard suppresses legacy counter increments for the nested
-    // calls (add_source_in_collection, semantic_chunk_with_overlap,
-    // markdown_chunk) so a session-path run does not double-charge legacy
-    // counters.
+    // Record the FFI byte traffic from Dart→Rust before delegating to the inner
+    // helper. `content.len()` matches the encoded UTF-8 byte length for ASCII
+    // and ≤ the actual Dart String memory cost for any input.
     SESSION_PREPARE_CONTENT_IN.record(content.len() as u64);
+    prepare_source_ingestion_inner(
+        collection_id,
+        content,
+        metadata,
+        name,
+        strategy,
+        max_chars,
+        overlap_chars,
+    )
+}
+
+/// UTF-8 bytes variant: skips the Dart `String` materialization step. The
+/// caller hands raw bytes (typically a `Uint8List` from a file/network read);
+/// the Rust side performs UTF-8 decoding once. Identical staging behavior to
+/// `prepare_source_ingestion` once the bytes are decoded.
+pub fn prepare_source_ingestion_from_utf8(
+    collection_id: String,
+    content_bytes: Vec<u8>,
+    metadata: Option<String>,
+    name: Option<String>,
+    strategy: IngestStrategy,
+    max_chars: i32,
+    overlap_chars: i32,
+) -> Result<PreparedIngestion, RagError> {
+    // `content_bytes.len()` equals the actual Dart→Rust FFI byte traffic on
+    // this entrypoint — bytes flow straight into Rust without intermediate
+    // String creation in Dart.
+    SESSION_PREPARE_CONTENT_IN.record(content_bytes.len() as u64);
+    let content = String::from_utf8(content_bytes)
+        .map_err(|e| RagError::InvalidInput(format!("UTF-8 decode failed: {}", e)))?;
+    prepare_source_ingestion_inner(
+        collection_id,
+        content,
+        metadata,
+        name,
+        strategy,
+        max_chars,
+        overlap_chars,
+    )
+}
+
+/// File-path variant: Rust reads the file and never round-trips its body
+/// through Dart. Only the path string crosses FFI (Dart→Rust). When
+/// `strategy_hint` is `None`, the chunking strategy is inferred from the
+/// extension (`.md` / `.markdown` → Markdown, otherwise Recursive). Text-like
+/// extensions (`.txt`, `.md`, `.markdown`) are decoded as UTF-8; everything
+/// else falls through to `document_parser::extract_text_from_document` (PDF /
+/// DOCX magic-byte routing).
+pub fn prepare_source_ingestion_from_file(
+    collection_id: String,
+    file_path: String,
+    metadata: Option<String>,
+    name: Option<String>,
+    strategy_hint: Option<IngestStrategy>,
+    max_chars: i32,
+    overlap_chars: i32,
+) -> Result<PreparedIngestion, RagError> {
+    let bytes = std::fs::read(&file_path)
+        .map_err(|e| RagError::IoError(format!("Failed to read file '{}': {}", file_path, e)))?;
+
+    let extension = std::path::Path::new(&file_path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase());
+    let is_text_like = matches!(extension.as_deref(), Some("txt" | "md" | "markdown"));
+
+    let content = if is_text_like {
+        String::from_utf8(bytes).map_err(|e| {
+            RagError::InvalidInput(format!("UTF-8 decode failed for '{}': {}", file_path, e))
+        })?
+    } else {
+        crate::api::document_parser::extract_text_from_document(bytes).map_err(|e| {
+            RagError::InvalidInput(format!(
+                "Document extraction failed for '{}': {}",
+                file_path, e
+            ))
+        })?
+    };
+
+    let strategy = strategy_hint.unwrap_or_else(|| {
+        if matches!(extension.as_deref(), Some("md" | "markdown")) {
+            IngestStrategy::Markdown
+        } else {
+            IngestStrategy::Recursive
+        }
+    });
+
+    // Body bytes did NOT cross FFI on this path — only the path string did.
+    // Honest counter reflects "Dart→Rust body bytes" rather than internal
+    // Rust I/O, so SESSION_PREPARE_CONTENT_IN stays unrecorded here.
+    prepare_source_ingestion_inner(
+        collection_id,
+        content,
+        metadata,
+        name,
+        strategy,
+        max_chars,
+        overlap_chars,
+    )
+}
+
+/// Shared body for all three `prepare_source_ingestion*` entrypoints.
+/// Wrappers above are responsible for counter recording and decoding inputs
+/// down to a `String` body; this function owns the source-row + claim +
+/// chunker + staging pipeline.
+fn prepare_source_ingestion_inner(
+    collection_id: String,
+    content: String,
+    metadata: Option<String>,
+    name: Option<String>,
+    strategy: IngestStrategy,
+    max_chars: i32,
+    overlap_chars: i32,
+) -> Result<PreparedIngestion, RagError> {
+    // The guard suppresses legacy counter increments for the nested calls
+    // (add_source_in_collection, semantic_chunk_with_overlap, markdown_chunk)
+    // so a session-path run does not double-charge legacy counters.
     let _legacy_guard = LegacyCountingGuard::enter();
 
     let add_result =
@@ -986,6 +1101,276 @@ mod tests {
         session.finalize().unwrap();
 
         drop(session);
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_prepare_from_utf8_matches_string_path() {
+        // Validates that `prepare_source_ingestion_from_utf8` produces an
+        // equivalent CreatedReady session for valid UTF-8 input.
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_ingest_prepare_from_utf8_ok.db");
+
+        let content = "Bytes path body. 한글 포함.".to_string();
+        let prepared = prepare_source_ingestion_from_utf8(
+            "__default__".to_string(),
+            content.into_bytes(),
+            None,
+            Some("utf8.txt".to_string()),
+            IngestStrategy::Recursive,
+            120,
+            0,
+        )
+        .unwrap();
+
+        assert_eq!(prepared.state, PreparedSourceState::CreatedReady);
+        assert!(prepared.total_chunks >= 1);
+        let session_opaque = prepared.session.unwrap();
+        let mut session = session_opaque.blocking_write();
+        let saved = drain_session_with_fake_embeddings(&mut session);
+        assert_eq!(saved, prepared.total_chunks);
+        session.finalize().unwrap();
+
+        drop(session);
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_prepare_from_utf8_rejects_invalid_bytes() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_ingest_prepare_from_utf8_invalid.db");
+
+        // 0xFF is not valid UTF-8 in any position.
+        let invalid = vec![0x48, 0x65, 0x6C, 0xFF, 0x6F];
+        let result = prepare_source_ingestion_from_utf8(
+            "__default__".to_string(),
+            invalid,
+            None,
+            Some("bad.txt".to_string()),
+            IngestStrategy::Recursive,
+            120,
+            0,
+        );
+        match result {
+            Err(RagError::InvalidInput(msg)) => {
+                assert!(msg.contains("UTF-8 decode failed"), "msg={}", msg)
+            }
+            Err(other) => panic!("expected InvalidInput, got {:?}", other),
+            Ok(_) => panic!("expected error for invalid UTF-8 bytes"),
+        }
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_prepare_from_utf8_empty_input_creates_zero_chunks() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_ingest_prepare_from_utf8_empty.db");
+
+        let prepared = prepare_source_ingestion_from_utf8(
+            "__default__".to_string(),
+            Vec::new(),
+            None,
+            Some("empty.txt".to_string()),
+            IngestStrategy::Recursive,
+            120,
+            0,
+        )
+        .unwrap();
+        // Empty body: chunker yields nothing, finalize on a zero-chunk session
+        // is allowed (matches semantic_chunk_with_overlap on empty input).
+        assert!(matches!(
+            prepared.state,
+            PreparedSourceState::CreatedReady | PreparedSourceState::ResumeReady,
+        ));
+        assert_eq!(prepared.total_chunks, 0);
+        let session_opaque = prepared.session.unwrap();
+        let mut session = session_opaque.blocking_write();
+        session.finalize().unwrap();
+        drop(session);
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_prepare_from_file_reads_txt_and_md_with_auto_strategy() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_ingest_prepare_from_file_textlike.db");
+
+        let tmp = std::env::temp_dir();
+        let txt_path = tmp.join("ingest_session_from_file_plain.txt");
+        let md_path = tmp.join("ingest_session_from_file_doc.md");
+        std::fs::write(&txt_path, "Plain text body for ingest from file test.").unwrap();
+        std::fs::write(
+            &md_path,
+            "# Header One\n\nMarkdown intro paragraph.\n\n## Sub\n\nDetail body.\n",
+        )
+        .unwrap();
+
+        // .txt → Recursive (no header_path encoding expected).
+        let txt_prepared = prepare_source_ingestion_from_file(
+            "__default__".to_string(),
+            txt_path.to_string_lossy().into_owned(),
+            None,
+            Some("plain.txt".to_string()),
+            None, // auto-detect
+            200,
+            0,
+        )
+        .unwrap();
+        assert_eq!(txt_prepared.state, PreparedSourceState::CreatedReady);
+        assert!(txt_prepared.total_chunks >= 1);
+        let txt_session_opaque = txt_prepared.session.unwrap();
+        {
+            let mut session = txt_session_opaque.blocking_write();
+            drain_session_with_fake_embeddings(&mut session);
+            session.finalize().unwrap();
+        }
+
+        // .md → Markdown (at least one chunk should carry "Header Path: ").
+        let md_prepared = prepare_source_ingestion_from_file(
+            "__default__".to_string(),
+            md_path.to_string_lossy().into_owned(),
+            None,
+            Some("doc.md".to_string()),
+            None, // auto-detect → Markdown
+            200,
+            0,
+        )
+        .unwrap();
+        assert_eq!(md_prepared.state, PreparedSourceState::CreatedReady);
+        let md_session_opaque = md_prepared.session.unwrap();
+        {
+            let mut session = md_session_opaque.blocking_write();
+            let batch = session.take_embedding_batch(md_prepared.total_chunks).unwrap();
+            let has_header_path = batch
+                .iter()
+                .any(|req| req.embedding_text.starts_with("Header Path: "));
+            assert!(
+                has_header_path,
+                "markdown auto-strategy must propagate header path through embedding_text",
+            );
+            let embeddings: Vec<ChunkEmbedding> = batch
+                .into_iter()
+                .map(|req| ChunkEmbedding {
+                    chunk_index: req.chunk_index,
+                    embedding: fake_embedding(4, req.chunk_index as f32),
+                })
+                .collect();
+            session.commit_embeddings(embeddings).unwrap();
+            session.finalize().unwrap();
+        }
+
+        let _ = std::fs::remove_file(txt_path);
+        let _ = std::fs::remove_file(md_path);
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_prepare_from_file_missing_path_returns_io_error() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_ingest_prepare_from_file_missing.db");
+
+        let missing = std::env::temp_dir()
+            .join("definitely_does_not_exist_ingest_session.txt")
+            .to_string_lossy()
+            .into_owned();
+        let result = prepare_source_ingestion_from_file(
+            "__default__".to_string(),
+            missing,
+            None,
+            None,
+            None,
+            120,
+            0,
+        );
+        match result {
+            Err(RagError::IoError(msg)) => {
+                assert!(msg.contains("Failed to read file"), "msg={}", msg)
+            }
+            Err(other) => panic!("expected IoError, got {:?}", other),
+            Ok(_) => panic!("expected error for missing file"),
+        }
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_prepare_from_file_does_not_record_session_prepare_content() {
+        // Regression guard: from_file must not record the body bytes into
+        // SESSION_PREPARE_CONTENT_IN, because the body never crossed FFI.
+        use crate::api::ingest_metrics::{reset_ingest_traffic_stats, ingest_traffic_stats};
+
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_ingest_prepare_from_file_counter.db");
+
+        let tmp = std::env::temp_dir();
+        let txt_path = tmp.join("ingest_session_from_file_counter.txt");
+        let body = "This is a sufficiently long body of text to cross a kilobyte ".repeat(64);
+        std::fs::write(&txt_path, &body).unwrap();
+
+        reset_ingest_traffic_stats();
+        let prepared = prepare_source_ingestion_from_file(
+            "__default__".to_string(),
+            txt_path.to_string_lossy().into_owned(),
+            None,
+            Some("counter.txt".to_string()),
+            None,
+            500,
+            0,
+        )
+        .unwrap();
+        let stats = ingest_traffic_stats();
+        assert_eq!(
+            stats.session_prepare_content_in_bytes, 0,
+            "from_file must not credit body bytes to SESSION_PREPARE_CONTENT_IN",
+        );
+        assert_eq!(stats.session_prepare_content_in_calls, 0);
+
+        // Clean up the session so teardown is deterministic.
+        if let Some(session_opaque) = prepared.session {
+            let mut session = session_opaque.blocking_write();
+            drain_session_with_fake_embeddings(&mut session);
+            session.finalize().unwrap();
+        }
+
+        let _ = std::fs::remove_file(txt_path);
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn test_prepare_from_utf8_records_bytes_len_into_counter() {
+        // Regression guard: from_utf8 must credit its byte payload to
+        // SESSION_PREPARE_CONTENT_IN (and exactly once).
+        use crate::api::ingest_metrics::{reset_ingest_traffic_stats, ingest_traffic_stats};
+
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_ingest_prepare_from_utf8_counter.db");
+
+        let body = "Counter check body.".to_string();
+        let expected = body.len() as u64;
+
+        reset_ingest_traffic_stats();
+        let prepared = prepare_source_ingestion_from_utf8(
+            "__default__".to_string(),
+            body.into_bytes(),
+            None,
+            Some("counter-utf8.txt".to_string()),
+            IngestStrategy::Recursive,
+            120,
+            0,
+        )
+        .unwrap();
+        let stats = ingest_traffic_stats();
+        assert_eq!(stats.session_prepare_content_in_bytes, expected);
+        assert_eq!(stats.session_prepare_content_in_calls, 1);
+
+        if let Some(session_opaque) = prepared.session {
+            let mut session = session_opaque.blocking_write();
+            drain_session_with_fake_embeddings(&mut session);
+            session.finalize().unwrap();
+        }
+
         teardown_test_db(db_path);
     }
 }

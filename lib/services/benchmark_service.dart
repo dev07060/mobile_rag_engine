@@ -515,6 +515,145 @@ class BenchmarkService {
     );
   }
 
+  /// Measure FFI text-byte traffic across the three IngestSession entrypoints
+  /// on a deterministic document: the canonical `prepareSourceIngestion`
+  /// (Dart String), `prepareSourceIngestionFromUtf8` (bytes), and
+  /// `prepareSourceIngestionFromFile` (path-only). Stub embeddings keep the
+  /// measurement focused on FFI byte traffic.
+  ///
+  /// The body bytes never round-trip back through Dart on the file variant,
+  /// so `session_prepare_content_in_bytes` should be 0 for it.
+  static Future<IngestFfiEntrypointBenchResult>
+      benchmarkIngestFfiEntrypoints({
+    int targetBytes = 1 * 1024 * 1024,
+    int embeddingDim = 384,
+    int maxChunkChars = 1500,
+    int overlapChars = 100,
+    int batchSize = 16,
+    String? restoreDbPath,
+    String? dbPathOverride,
+  }) async {
+    final content = _generateBenchDoc(targetBytes);
+    // ASCII-only doc: String length == UTF-8 byte count.
+    final docUtf8Bytes = content.length;
+
+    final benchDbPath = dbPathOverride ??
+        "${(await getApplicationDocumentsDirectory()).path}/ingest_ffi_entrypoints_bench.sqlite";
+    final benchFile = File(benchDbPath);
+    if (await benchFile.exists()) {
+      await benchFile.delete();
+    }
+    final benchTextFile = File('$benchDbPath.txt');
+    if (await benchTextFile.exists()) {
+      await benchTextFile.delete();
+    }
+    await benchTextFile.writeAsString(content, flush: true);
+
+    await initDbPool(dbPath: benchDbPath, maxSize: 4);
+    await initDb();
+    await source_rag.initSourceDb();
+
+    final stubEmbedding = Float32List(embeddingDim);
+
+    Future<ingest_metrics.IngestTrafficStats> runOne(
+      Future<ingest_session.PreparedIngestion> Function() prepare,
+      String collectionId,
+    ) async {
+      ingest_metrics.resetIngestTrafficStats();
+      final prepared = await prepare();
+      final session = prepared.session;
+      if (session == null) {
+        throw StateError(
+          'benchmarkIngestFfiEntrypoints: prepare returned no session '
+          '(state=${prepared.state}); benchmark requires a fresh collection.',
+        );
+      }
+      try {
+        var saved = 0;
+        while (saved < prepared.totalChunks) {
+          final batch = await session.takeEmbeddingBatch(batchSize: batchSize);
+          if (batch.isEmpty) break;
+          final embeddings = batch
+              .map(
+                (req) => ingest_session.ChunkEmbedding(
+                  chunkIndex: req.chunkIndex,
+                  embedding: stubEmbedding,
+                ),
+              )
+              .toList(growable: false);
+          saved += await session.commitEmbeddings(embeddings: embeddings);
+        }
+        await session.finalize();
+      } finally {
+        await session.dispose();
+      }
+      final stats = ingest_metrics.ingestTrafficStats();
+      await source_rag.deleteSourceInCollection(
+        collectionId: collectionId,
+        sourceId: prepared.sourceId,
+      );
+      return stats;
+    }
+
+    final stringStats = await runOne(
+      () => ingest_session.prepareSourceIngestion(
+        collectionId: 'bench-string',
+        content: content,
+        metadata: null,
+        name: 'bench-string',
+        strategy: ingest_session.IngestStrategy.recursive,
+        maxChars: maxChunkChars,
+        overlapChars: overlapChars,
+      ),
+      'bench-string',
+    );
+
+    final utf8Bytes = Uint8List.fromList(content.codeUnits);
+    final utf8Stats = await runOne(
+      () => ingest_session.prepareSourceIngestionFromUtf8(
+        collectionId: 'bench-utf8',
+        contentBytes: utf8Bytes,
+        metadata: null,
+        name: 'bench-utf8',
+        strategy: ingest_session.IngestStrategy.recursive,
+        maxChars: maxChunkChars,
+        overlapChars: overlapChars,
+      ),
+      'bench-utf8',
+    );
+
+    final fileStats = await runOne(
+      () => ingest_session.prepareSourceIngestionFromFile(
+        collectionId: 'bench-file',
+        filePath: benchTextFile.path,
+        metadata: null,
+        name: 'bench-file',
+        strategyHint: ingest_session.IngestStrategy.recursive,
+        maxChars: maxChunkChars,
+        overlapChars: overlapChars,
+      ),
+      'bench-file',
+    );
+
+    await closeDbPool();
+    if (await benchFile.exists()) {
+      await benchFile.delete();
+    }
+    if (await benchTextFile.exists()) {
+      await benchTextFile.delete();
+    }
+    if (restoreDbPath != null) {
+      await initDbPool(dbPath: restoreDbPath, maxSize: 4);
+    }
+
+    return IngestFfiEntrypointBenchResult(
+      docBytes: docUtf8Bytes,
+      stringPath: stringStats,
+      utf8Path: utf8Stats,
+      filePath: fileStats,
+    );
+  }
+
   /// Builds a deterministic ASCII document of roughly [targetBytes] bytes by
   /// repeating a paragraph fixture. ASCII-only so `String.length` == UTF-8
   /// byte count.
@@ -590,6 +729,49 @@ class IngestFfiBenchResult {
       '    take_embedding_batch out:    ${fmt(session.sessionEmbeddingTextOutBytes.toInt())}',
       '  Reduction: ${((1 - reductionRatio) * 100).toStringAsFixed(1)}%'
           ' (session / legacy = ${reductionRatio.toStringAsFixed(2)})',
+    ].join('\n');
+  }
+}
+
+/// Result of [BenchmarkService.benchmarkIngestFfiEntrypoints].
+///
+/// Each `*Path` field is the counter snapshot taken immediately after that
+/// entrypoint variant ran. Tests compare per-variant
+/// `session_prepare_content_in_bytes` against `docBytes` to verify the
+/// pass-through claim of [ingest_session.prepareSourceIngestionFromUtf8] and
+/// [ingest_session.prepareSourceIngestionFromFile].
+class IngestFfiEntrypointBenchResult {
+  /// Document size in UTF-8 bytes.
+  final int docBytes;
+
+  /// Counter snapshot for the canonical String entrypoint.
+  final ingest_metrics.IngestTrafficStats stringPath;
+
+  /// Counter snapshot for the UTF-8 bytes entrypoint.
+  final ingest_metrics.IngestTrafficStats utf8Path;
+
+  /// Counter snapshot for the file-path entrypoint.
+  final ingest_metrics.IngestTrafficStats filePath;
+
+  const IngestFfiEntrypointBenchResult({
+    required this.docBytes,
+    required this.stringPath,
+    required this.utf8Path,
+    required this.filePath,
+  });
+
+  int get stringPrepareInBytes =>
+      stringPath.sessionPrepareContentInBytes.toInt();
+  int get utf8PrepareInBytes => utf8Path.sessionPrepareContentInBytes.toInt();
+  int get filePrepareInBytes => filePath.sessionPrepareContentInBytes.toInt();
+
+  String renderSummary() {
+    String fmt(int bytes) => '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return [
+      'Ingest FFI entrypoint comparison ($docBytes B doc):',
+      '  prepareSourceIngestion(String):   prepare_in=${fmt(stringPrepareInBytes)}',
+      '  prepareSourceIngestionFromUtf8:   prepare_in=${fmt(utf8PrepareInBytes)}',
+      '  prepareSourceIngestionFromFile:   prepare_in=${fmt(filePrepareInBytes)}',
     ].join('\n');
   }
 }
