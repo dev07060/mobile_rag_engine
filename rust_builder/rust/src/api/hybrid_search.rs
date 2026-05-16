@@ -18,16 +18,12 @@
 
 use log::{debug, info};
 use std::collections::{HashMap, HashSet};
-use std::time::Instant;
 
-use crate::api::bm25_search::{bm25_search, tokenize_for_bm25, Bm25SearchResult};
+use crate::api::bm25_search::{bm25_search, bm25_search_scoped_tokens, tokenize_for_bm25};
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
 use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw_slice, HnswSearchResult};
-use crate::api::query_metrics::{
-    record_hybrid_result_content_read, record_scoped_exact_scan_content_read,
-    record_scoped_exact_scan_tokenization,
-};
+use crate::api::query_metrics::record_hybrid_result_content_read;
 use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{cosine_with_query_norm_i8_blob, l2_norm_i8, quantize_f32_to_i8};
@@ -216,43 +212,34 @@ fn compute_hybrid_rrf_scores(
             }
 
             // Tokenize the query first so we can decide whether the scoped
-            // BM25 leg actually needs chunk bodies. When `bm25_weight == 0`
-            // (or no query tokens survive normalization) BM25 contributes
-            // nothing to the final RRF score, so reading `c.content` for
-            // every scoped chunk is pure I/O waste. Elide the column from
-            // the SELECT in that case; row reader treats column 3 as
-            // `Option<String>` either way.
+            // BM25 leg actually needs scoring. BM25 term stats now come from
+            // the active collection BM25 index, so the exact-scan SELECT never
+            // needs `c.content`; it only walks embeddings to keep scoped vector
+            // recall exact, then asks the in-memory BM25 index for ranks
+            // restricted to the scanned chunk ids.
             //
             // Note: `!= 0.0` (not `> 0.0`) — preserves prior behavior for any
             // non-zero weight, including negative values that callers might
             // pass. RRF still applies the (potentially negative) weight; we
             // only short-circuit when the contribution is provably zero.
             let query_tokens = tokenize_for_bm25(&query_text);
-            let query_token_set: HashSet<String> = query_tokens.iter().cloned().collect();
-            let need_bm25 = config.bm25_weight != 0.0 && !query_token_set.is_empty();
-            let content_projection = if need_bm25 {
-                "c.content"
-            } else {
-                "NULL AS content"
-            };
+            let need_bm25 = config.bm25_weight != 0.0 && !query_tokens.is_empty();
 
-            // Fetch ALL chunks for this scoped set for exact vector + BM25 scoring.
+            // Fetch ALL chunks for this scoped set for exact vector scoring.
             let query_with_i8 = format!(
-                "SELECT c.id, c.embedding, {}, {}
+                "SELECT c.id, c.embedding, {}
                      FROM chunks c
                      LEFT JOIN sources s ON c.source_id = s.id
                      WHERE {}",
                 "c.embedding_i8",
-                content_projection,
                 exact_conditions.join(" AND ")
             );
             let query_without_i8 = format!(
-                "SELECT c.id, c.embedding, {}, {}
+                "SELECT c.id, c.embedding, {}
                      FROM chunks c
                      LEFT JOIN sources s ON c.source_id = s.id
                      WHERE {}",
                 "NULL AS embedding_i8",
-                content_projection,
                 exact_conditions.join(" AND ")
             );
 
@@ -268,7 +255,6 @@ fn compute_hybrid_rrf_scores(
                         row.get::<_, i64>(0)?,
                         row.get::<_, Vec<u8>>(1)?,
                         row.get::<_, Option<Vec<u8>>>(2)?,
-                        row.get::<_, Option<String>>(3)?,
                     ))
                 })
                 .map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -279,25 +265,14 @@ fn compute_hybrid_rrf_scores(
             #[cfg(feature = "vector_quant_i8")]
             let query_i8_norm = l2_norm_i8(&query_i8);
 
-            let mut scoped_doc_count = 0usize;
-            let mut scoped_total_doc_length = 0usize;
-            let mut scoped_doc_lengths: HashMap<i64, usize> = HashMap::new();
-            let mut scoped_doc_freqs: HashMap<String, usize> = HashMap::new();
-            let mut scoped_term_freqs: HashMap<i64, HashMap<String, u32>> = HashMap::new();
+            let mut scoped_doc_ids = Vec::new();
 
             // Replace global candidate sets with scoped exact scan results.
             vector_results.clear();
             bm25_results.clear();
 
             for row in chunk_iter {
-                if let Ok((id, embedding_blob, embedding_i8_blob, content)) = row {
-                    // Only count what we actually read. When `need_bm25` is
-                    // false the SELECT projects NULL for column 3 and the
-                    // counter stays at zero — which is the whole point of
-                    // the projection elision.
-                    if let Some(ref content_str) = content {
-                        record_scoped_exact_scan_content_read(content_str.len() as u64);
-                    }
+                if let Ok((id, embedding_blob, embedding_i8_blob)) = row {
                     #[cfg(not(feature = "vector_quant_i8"))]
                     let _ = &embedding_i8_blob;
                     #[cfg(feature = "vector_quant_i8")]
@@ -335,42 +310,7 @@ fn compute_hybrid_rrf_scores(
                         id,
                         distance: (1.0 - sim) as f32, // lower is better
                     });
-
-                    if need_bm25 {
-                        if let Some(content_str) = content {
-                            let tokenization_start = Instant::now();
-                            let doc_tokens = tokenize_for_bm25(&content_str);
-                            let tokenization_nanos = tokenization_start
-                                .elapsed()
-                                .as_nanos()
-                                .min(u128::from(u64::MAX))
-                                as u64;
-                            record_scoped_exact_scan_tokenization(
-                                content_str.len() as u64,
-                                doc_tokens.len() as u64,
-                                tokenization_nanos,
-                            );
-                            let doc_length = doc_tokens.len();
-                            if doc_length > 0 {
-                                scoped_doc_count += 1;
-                                scoped_total_doc_length += doc_length;
-                                scoped_doc_lengths.insert(id, doc_length);
-
-                                let mut term_freqs: HashMap<String, u32> = HashMap::new();
-                                for token in doc_tokens {
-                                    if query_token_set.contains(&token) {
-                                        *term_freqs.entry(token).or_insert(0) += 1;
-                                    }
-                                }
-                                for term in term_freqs.keys() {
-                                    *scoped_doc_freqs.entry(term.clone()).or_insert(0) += 1;
-                                }
-                                if !term_freqs.is_empty() {
-                                    scoped_term_freqs.insert(id, term_freqs);
-                                }
-                            }
-                        }
-                    }
+                    scoped_doc_ids.push(id);
                 }
             }
 
@@ -382,45 +322,9 @@ fn compute_hybrid_rrf_scores(
             });
             vector_results.truncate(candidate_k);
 
-            if need_bm25 && scoped_doc_count > 0 {
-                let avg_doc_length = scoped_total_doc_length as f64 / scoped_doc_count as f64;
-                let k1 = 1.2;
-                let b = 0.75;
-                let mut scoped_bm25_scores: Vec<Bm25SearchResult> = Vec::new();
-
-                for (doc_id, term_freqs) in scoped_term_freqs {
-                    let Some(doc_len) = scoped_doc_lengths.get(&doc_id) else {
-                        continue;
-                    };
-                    let mut score = 0.0;
-                    for token in &query_tokens {
-                        let Some(tf) = term_freqs.get(token) else {
-                            continue;
-                        };
-                        let Some(df) = scoped_doc_freqs.get(token) else {
-                            continue;
-                        };
-
-                        let n = *df as f64;
-                        let idf = ((scoped_doc_count as f64 - n + 0.5) / (n + 0.5) + 1.0).ln();
-                        let tf_f = *tf as f64;
-                        let doc_len_f = *doc_len as f64;
-                        let tf_component = (tf_f * (k1 + 1.0))
-                            / (tf_f + k1 * (1.0 - b + b * (doc_len_f / avg_doc_length.max(1.0))));
-                        score += idf * tf_component;
-                    }
-                    if score > 0.0 {
-                        scoped_bm25_scores.push(Bm25SearchResult { doc_id, score });
-                    }
-                }
-
-                scoped_bm25_scores.sort_by(|a, b| {
-                    b.score
-                        .partial_cmp(&a.score)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
-                scoped_bm25_scores.truncate(candidate_k);
-                bm25_results = scoped_bm25_scores;
+            if need_bm25 {
+                bm25_results =
+                    bm25_search_scoped_tokens(&query_tokens, &scoped_doc_ids, candidate_k);
             }
 
             info!(
@@ -945,6 +849,7 @@ mod tests {
         bm25_add_document(102, "banana".to_string());
         bm25_add_document(201, "apple c".to_string());
 
+        reset_query_content_read_stats();
         let results = search_hybrid(
             "c".to_string(),
             vec![0.0, 1.0],
@@ -963,6 +868,15 @@ mod tests {
         assert!(
             results.iter().any(|r| r.bm25_rank > 0),
             "Scoped source filter path should keep BM25 ranks for exact-keyword matching"
+        );
+        let stats = query_content_read_stats();
+        assert_eq!(
+            stats.scoped_exact_scan_rows, 0,
+            "Scoped BM25 should use the in-memory term index, not chunk content reads"
+        );
+        assert_eq!(
+            stats.scoped_exact_scan_tokenized_rows, 0,
+            "Scoped BM25 should not tokenize chunk bodies at query time"
         );
 
         close_db_pool();
@@ -1056,6 +970,8 @@ mod tests {
             )
             .unwrap();
         }
+        bm25_add_document(101, "apple ".repeat(64));
+        bm25_add_document(102, "banana ".repeat(64));
 
         // BM25 disabled: scoped scan should NOT pull chunk bodies, so the
         // counter must stay at zero even though both rows match the scope.
@@ -1092,8 +1008,9 @@ mod tests {
             .map(|r| r.doc_id)
             .unwrap();
 
-        // BM25 enabled: scoped scan must pull bodies, so the counter has to
-        // record at least the combined chunk content length.
+        // BM25 enabled: scoped scan should now reuse the active in-memory
+        // BM25 term index, so it preserves BM25 ranks without pulling or
+        // tokenizing chunk bodies at query time.
         reset_query_content_read_stats();
         let bm25_results = search_hybrid(
             "apple".to_string(),
@@ -1112,12 +1029,17 @@ mod tests {
         )
         .unwrap();
         let bm25_stats = query_content_read_stats();
-        assert_eq!(bm25_stats.scoped_exact_scan_rows, 2);
+        assert_eq!(bm25_stats.scoped_exact_scan_rows, 0);
+        assert_eq!(bm25_stats.scoped_exact_scan_content_bytes, 0);
+        assert_eq!(bm25_stats.scoped_exact_scan_tokenized_rows, 0);
+        assert_eq!(bm25_stats.scoped_exact_scan_tokenized_content_bytes, 0);
+        assert_eq!(bm25_stats.scoped_exact_scan_tokens, 0);
+        assert_eq!(bm25_stats.scoped_exact_scan_tokenization_nanos, 0);
         assert!(
-            bm25_stats.scoped_exact_scan_content_bytes
-                >= ("apple ".len() * 64) as u64 + ("banana ".len() * 64) as u64,
-            "bm25_weight>0 must read both chunk bodies (got {} bytes)",
-            bm25_stats.scoped_exact_scan_content_bytes
+            bm25_results
+                .iter()
+                .any(|r| r.doc_id == 101 && r.bm25_rank > 0),
+            "bm25_weight>0 should preserve scoped BM25 ranks from the term index"
         );
 
         // Vector-only ranking must still agree on the "apple" chunk being

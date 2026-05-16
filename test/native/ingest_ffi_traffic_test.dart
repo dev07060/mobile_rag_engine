@@ -271,17 +271,18 @@ void main() {
   );
 
   test(
-    'Wall-clock latency: from_file is fastest, from_utf8 ≤ string',
+    'Wall-clock latency: entrypoints complete and report timings',
     () async {
       // Stub-embedding latency measurement: with ONNX cost removed, the
-      // residual is FFI + Rust-side staging. from_file does the file I/O
-      // in Rust (skipping one boundary crossing); from_utf8 skips the Dart
-      // String materialization; the canonical String path bears both.
+      // residual is FFI + Rust-side staging. This benchmark intentionally
+      // starts timing after the String / Uint8List inputs already exist, while
+      // from_file still pays the Rust-side file read inside the timed region.
+      // So this CI test is a smoke check for the latency benchmark itself,
+      // not a cross-runner performance ranking.
       //
-      // Loose assertion: file p50 should not be slower than string p50 by
-      // more than 25%, and ideally is faster. We assert "file ≤ string ×
-      // 1.25" rather than strict inequality to absorb scheduler jitter on
-      // CI hosts where the absolute numbers are tiny (single-digit ms).
+      // The stronger from_file guarantees are covered by the FFI byte counter
+      // and peak-RSS tests above: the document body does not cross FFI and is
+      // not held on the Dart side.
       final dir = await Directory.systemTemp.createTemp(
         'mobile_rag_latency_bench_',
       );
@@ -299,24 +300,38 @@ void main() {
         // ignore: avoid_print
         print(result.renderSummary());
 
-        // Loose ordering check: file path must not be materially slower
-        // than the string path. The expected gain is small (single-digit
-        // ms or sub-ms on hot caches with stub embeddings) so we tolerate
-        // 25% noise.
-        expect(
-          result.fileP50Ms,
-          lessThanOrEqualTo(result.stringP50Ms * 1.25),
-          reason: 'file p50 should not be >25% slower than string p50. '
-              'file=${result.fileP50Ms.toStringAsFixed(2)}ms, '
-              'string=${result.stringP50Ms.toStringAsFixed(2)}ms',
-        );
-        expect(
-          result.utf8P50Ms,
-          lessThanOrEqualTo(result.stringP50Ms * 1.25),
-          reason: 'utf8 p50 should not be >25% slower than string p50. '
-              'utf8=${result.utf8P50Ms.toStringAsFixed(2)}ms, '
-              'string=${result.stringP50Ms.toStringAsFixed(2)}ms',
-        );
+        void expectUsableStats(String label, IngestLatencyStats stats) {
+          expect(
+            stats.samples,
+            hasLength(result.measuredRuns),
+            reason: '$label should report every measured latency sample.',
+          );
+          expect(stats.p50Ms.isFinite, isTrue, reason: '$label p50 finite');
+          expect(stats.p95Ms.isFinite, isTrue, reason: '$label p95 finite');
+          expect(stats.meanMs.isFinite, isTrue, reason: '$label mean finite');
+          expect(
+            stats.stdevMs.isFinite,
+            isTrue,
+            reason: '$label stdev finite',
+          );
+          expect(stats.p50Ms, greaterThan(0), reason: '$label p50 positive');
+          expect(stats.p95Ms, greaterThan(0), reason: '$label p95 positive');
+          expect(stats.meanMs, greaterThan(0), reason: '$label mean positive');
+          expect(
+            stats.stdevMs,
+            greaterThanOrEqualTo(0),
+            reason: '$label stdev non-negative',
+          );
+          expect(
+            stats.p95Ms,
+            greaterThanOrEqualTo(stats.p50Ms),
+            reason: '$label p95 should be at least p50.',
+          );
+        }
+
+        expectUsableStats('string', result.stringPath);
+        expectUsableStats('utf8', result.utf8Path);
+        expectUsableStats('file', result.filePath);
       } finally {
         await dir.delete(recursive: true);
       }

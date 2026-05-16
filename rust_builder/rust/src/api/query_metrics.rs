@@ -90,15 +90,6 @@ impl AtomicTokenizationCounter {
         }
     }
 
-    fn record(&self, content_bytes: u64, tokens: u64, elapsed_nanos: u64) {
-        self.rows.fetch_add(1, Ordering::Relaxed);
-        self.content_bytes
-            .fetch_add(content_bytes, Ordering::Relaxed);
-        self.tokens.fetch_add(tokens, Ordering::Relaxed);
-        self.elapsed_nanos
-            .fetch_add(elapsed_nanos, Ordering::Relaxed);
-    }
-
     fn snapshot(&self) -> (u64, u64, u64, u64) {
         (
             self.rows.load(Ordering::Relaxed),
@@ -138,28 +129,6 @@ pub(crate) fn record_hydrated_content_read(content_bytes: u64) {
         QueryContentReadPhase::Assembly => ASSEMBLY_CONTENT.record(content_bytes),
         QueryContentReadPhase::Unclassified => UNCLASSIFIED_CONTENT.record(content_bytes),
     });
-}
-
-/// Record content read by the hybrid-search scoped exact-scan path (the
-/// `source_ids` / `metadata_like` branch that walks the entire scoped chunk
-/// set to compute scoped BM25). Counted per row regardless of whether the
-/// chunk ends up in the final top-K; this is the "backend scan cost"
-/// counter and is intentionally orthogonal to the materialization counters
-/// above (a scoped chunk that survives RRF will also show up in
-/// `hybrid_result_*` or `full_hydrate_*` when its body is later returned).
-pub(crate) fn record_scoped_exact_scan_content_read(content_bytes: u64) {
-    SCOPED_EXACT_SCAN_CONTENT.record(content_bytes);
-}
-
-/// Record BM25 tokenization work performed by the scoped exact-scan path.
-/// This is separate from content read volume so P1 can distinguish SQLite
-/// body I/O from CPU/string work after the body is loaded.
-pub(crate) fn record_scoped_exact_scan_tokenization(
-    content_bytes: u64,
-    tokens: u64,
-    elapsed_nanos: u64,
-) {
-    SCOPED_EXACT_SCAN_TOKENIZATION.record(content_bytes, tokens, elapsed_nanos);
 }
 
 #[derive(Debug, Clone)]
