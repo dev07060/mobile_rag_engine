@@ -47,6 +47,20 @@ pub struct HybridSearchResult {
     pub chunk_index: u32,
 }
 
+/// Meta-only mirror of [`HybridSearchResult`] for callers that need
+/// ranking + row provenance but never read the chunk body. Lets the
+/// retrieval hot path skip both the SQLite content read and the
+/// per-row `String` allocation. Fields kept here are the strict subset
+/// the `SearchHandle` machinery actually consumes; the `sources` LEFT
+/// JOIN that hydrates `metadata` is intentionally not performed.
+#[derive(Debug, Clone)]
+pub(crate) struct HybridSearchMeta {
+    pub doc_id: i64,
+    pub score: f64,
+    pub source_id: i64,
+    pub chunk_index: u32,
+}
+
 #[derive(Debug, Clone)]
 pub struct RrfConfig {
     pub k: u32,
@@ -72,7 +86,8 @@ fn rrf_score(rank: usize, k: u32) -> f64 {
 ///
 /// Owned-vector entrypoint kept stable for the flutter_rust_bridge
 /// surface; internal Rust callers should prefer [`search_hybrid_inner`]
-/// to avoid cloning the query embedding when it is already held by
+/// (content-hydrating) or [`search_hybrid_meta_inner`] (meta-only) to
+/// avoid cloning the query embedding when it is already held by
 /// reference (e.g. inside `search_meta_hybrid`'s retry loop).
 pub fn search_hybrid(
     query_text: String,
@@ -84,16 +99,18 @@ pub fn search_hybrid(
     search_hybrid_inner(query_text, &query_embedding, top_k, config, filter)
 }
 
-/// Slice-based variant of [`search_hybrid`]. The query embedding is
-/// borrowed for the lifetime of the call so retry loops and scoped
-/// thread spawns can reuse it without per-attempt `Vec<f32>` clones.
-pub(crate) fn search_hybrid_inner(
+/// Compute Reciprocal Rank Fusion scores for the current query, applying
+/// any filter-aware candidate selection. Returns at most `top_k` ranked
+/// `(doc_id, score, vector_rank, bm25_rank)` tuples along with the
+/// filter (handed back so the caller can route the subsequent
+/// content/meta SELECT without cloning).
+fn compute_hybrid_rrf_scores(
     query_text: String,
     query_embedding: &[f32],
     top_k: u32,
     config: Option<RrfConfig>,
     filter: Option<SearchFilter>,
-) -> Result<Vec<HybridSearchResult>, RagError> {
+) -> Result<(Vec<(i64, f64, u32, u32)>, Option<SearchFilter>), RagError> {
     let config = config.unwrap_or_default();
     info!("[hybrid] Starting hybrid search, top_k: {}", top_k);
 
@@ -468,7 +485,7 @@ pub(crate) fn search_hybrid_inner(
     all_doc_ids.dedup();
 
     if all_doc_ids.is_empty() {
-        return Ok(vec![]);
+        return Ok((Vec::new(), filter));
     }
 
     let mut rrf_scores: Vec<(i64, f64, u32, u32)> = Vec::with_capacity(all_doc_ids.len());
@@ -494,6 +511,27 @@ pub(crate) fn search_hybrid_inner(
 
     rrf_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     rrf_scores.truncate(top_k as usize);
+
+    Ok((rrf_scores, filter))
+}
+
+/// Slice-based variant of [`search_hybrid`]. The query embedding is
+/// borrowed for the lifetime of the call so retry loops and scoped
+/// thread spawns can reuse it without per-attempt `Vec<f32>` clones.
+pub(crate) fn search_hybrid_inner(
+    query_text: String,
+    query_embedding: &[f32],
+    top_k: u32,
+    config: Option<RrfConfig>,
+    filter: Option<SearchFilter>,
+) -> Result<Vec<HybridSearchResult>, RagError> {
+    let (rrf_scores, filter) = compute_hybrid_rrf_scores(
+        query_text,
+        query_embedding,
+        top_k,
+        config,
+        filter,
+    )?;
 
     // 4. Batch Content Fetch
     if rrf_scores.is_empty() {
@@ -539,9 +577,9 @@ pub(crate) fn search_hybrid_inner(
     if !missing_ids.is_empty() {
         let missing_list = missing_ids.join(",");
         let query_chunks = format!(
-            "SELECT c.id, c.content, c.source_id, s.metadata, c.chunk_index 
-             FROM chunks c 
-             LEFT JOIN sources s ON c.source_id = s.id 
+            "SELECT c.id, c.content, c.source_id, s.metadata, c.chunk_index
+             FROM chunks c
+             LEFT JOIN sources s ON c.source_id = s.id
              WHERE c.id IN ({})",
             missing_list
         );
@@ -586,6 +624,107 @@ pub(crate) fn search_hybrid_inner(
     }
 
     info!("[hybrid] Returning {} results", results.len());
+    Ok(results)
+}
+
+/// Meta-only variant of [`search_hybrid_inner`] that returns ranking and
+/// row provenance without materializing chunk/doc content. Consumers
+/// that only need `(doc_id, source_id, chunk_index, score, metadata)` —
+/// like the `SearchHandle` machinery — should prefer this entry point so
+/// the hot path can skip the SQLite body read and per-row `String`
+/// allocation that `search_hybrid_inner` performs.
+pub(crate) fn search_hybrid_meta_inner(
+    query_text: String,
+    query_embedding: &[f32],
+    top_k: u32,
+    config: Option<RrfConfig>,
+    filter: Option<SearchFilter>,
+) -> Result<Vec<HybridSearchMeta>, RagError> {
+    let (rrf_scores, filter) = compute_hybrid_rrf_scores(
+        query_text,
+        query_embedding,
+        top_k,
+        config,
+        filter,
+    )?;
+
+    if rrf_scores.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let target_ids: Vec<String> = rrf_scores
+        .iter()
+        .map(|(id, _, _, _)| id.to_string())
+        .collect();
+    let id_list = target_ids.join(",");
+
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    // Map: id -> (source_id, chunk_index). No content, no metadata join.
+    let mut meta_map: HashMap<i64, (i64, u32)> = HashMap::new();
+
+    if filter.is_none() {
+        let query_docs = format!("SELECT id FROM docs WHERE id IN ({})", id_list);
+        if let Ok(mut stmt) = conn.prepare(&query_docs) {
+            let found_docs = stmt.query_map([], |row| row.get::<_, i64>(0));
+            if let Ok(rows) = found_docs {
+                for row in rows {
+                    if let Ok(id) = row {
+                        // Simple RAG docs: source_id=id, chunk_index=0 by convention.
+                        meta_map.insert(id, (id, 0));
+                    }
+                }
+            }
+        }
+    }
+
+    let missing_ids: Vec<String> = rrf_scores
+        .iter()
+        .filter(|(id, _, _, _)| !meta_map.contains_key(id))
+        .map(|(id, _, _, _)| id.to_string())
+        .collect();
+
+    if !missing_ids.is_empty() {
+        let missing_list = missing_ids.join(",");
+        let query_chunks = format!(
+            "SELECT c.id, c.source_id, c.chunk_index
+             FROM chunks c
+             WHERE c.id IN ({})",
+            missing_list
+        );
+
+        if let Ok(mut stmt) = conn.prepare(&query_chunks) {
+            let found_chunks = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, u32>(2)?,
+                ))
+            });
+
+            if let Ok(results_iter) = found_chunks {
+                for row in results_iter {
+                    if let Ok((id, source_id, chunk_index)) = row {
+                        meta_map.insert(id, (source_id, chunk_index));
+                    }
+                }
+            }
+        }
+    }
+
+    let mut results: Vec<HybridSearchMeta> = Vec::with_capacity(rrf_scores.len());
+
+    for (doc_id, score, _vec_rank, _bm25_rank) in rrf_scores {
+        if let Some((source_id, chunk_index)) = meta_map.remove(&doc_id) {
+            results.push(HybridSearchMeta {
+                doc_id,
+                score,
+                source_id,
+                chunk_index,
+            });
+        }
+    }
+
+    info!("[hybrid] Returning {} meta-only results", results.len());
     Ok(results)
 }
 

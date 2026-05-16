@@ -26,7 +26,7 @@ use crate::api::hnsw_index::{
     build_hnsw_index, clear_hnsw_index, is_hnsw_index_loaded, load_hnsw_index, save_hnsw_index,
     search_hnsw,
 };
-use crate::api::hybrid_search::{search_hybrid_inner, RrfConfig, SearchFilter};
+use crate::api::hybrid_search::{search_hybrid_meta_inner, RrfConfig, SearchFilter};
 use crate::api::query_metrics::{
     record_hydrated_content_read, QueryContentReadGuard, QueryContentReadPhase,
 };
@@ -1414,7 +1414,7 @@ fn search_meta_hybrid_once(
         options.top_k
     };
 
-    let hybrid_results = search_hybrid_inner(
+    let hybrid_results = search_hybrid_meta_inner(
         query_text.to_string(),
         query_embedding,
         effective_top_k,
