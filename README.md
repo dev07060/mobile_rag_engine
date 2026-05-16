@@ -8,7 +8,7 @@
 
 **Production-ready, fully local RAG (Retrieval-Augmented Generation) engine for Flutter.**
 
-Powered by a **Rust core**, it delivers lightning-fast vector search and embedding generation directly on the device. No servers, no API costs, no latency.
+Powered by a **Rust core**, it runs vector search and embedding generation directly on the device. No servers, no API costs, no network round-trips.
 
 ---
 
@@ -24,9 +24,11 @@ This package includes **pre-compiled binaries** for iOS, Android, and macOS. Jus
 
 | Feature | Pure Dart | **Mobile RAG Engine (Rust)** |
 |:---|:---:|:---:|
-| **Tokenization** | Slow | **10x Faster** (HuggingFace tokenizers) |
-| **Vector Search** | O(n) | **O(log n)** (HNSW Index) |
-| **Memory Usage** | High | **Optimized** (copy-minimized Rust core) |
+| **Tokenization** | Slow | HuggingFace `tokenizers` (Rust) |
+| **Vector Search** | O(n) | HNSW Index — sub-linear retrieval |
+| **Memory Usage** | High | Copy-minimized Rust core, `Float32List` zero-copy transport |
+
+> Numbers vary by device and corpus. See [`benchmark_service`](https://github.com/dev07060/mobile_rag_engine/blob/main/lib/services/benchmark_service.dart) and the `0.18.0` retrieval-hot-path notes in [CHANGELOG.md](https://github.com/dev07060/mobile_rag_engine/blob/main/CHANGELOG.md) for measured deltas on your own hardware.
 
 ### 100% Offline & Private
 
@@ -97,31 +99,31 @@ curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-Mini
 ## Quick Index
 
 ### Features
-*   [Adjacent Chunk Retrieval](docs/features/adjacent_chunk_retrieval.md) - Fetch surrounding context.
-*   [Index Management](docs/features/index_management.md) - Stats, persistence, and recovery.
-*   [Markdown Chunker](docs/features/markdown_chunker.md) - Structure-aware text splitting.
-*   [Multi-Collection](docs/features/multi_collection.md) - Isolate ingest/search/rebuild by category.
-*   [Prompt Compression](docs/features/prompt_compression.md) - Reduce token usage.
-*   [Search by Source](docs/features/search_by_source.md) - Filter results by document.
-*   [Search Strategies](docs/features/search_strategies.md) - Tune ranking and retrieval.
+*   [Adjacent Chunk Retrieval](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/adjacent_chunk_retrieval.md) - Fetch surrounding context.
+*   [Index Management](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/index_management.md) - Stats, persistence, and recovery.
+*   [Markdown Chunker](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/markdown_chunker.md) - Structure-aware text splitting.
+*   [Multi-Collection](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/multi_collection.md) - Isolate ingest/search/rebuild by category.
+*   [Prompt Compression](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/prompt_compression.md) - Reduce token usage.
+*   [Search by Source](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/search_by_source.md) - Filter results by document.
+*   [Search Strategies](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/search_strategies.md) - Tune ranking and retrieval.
 
 ### Guides
-*   [Quick Start](docs/guides/quick_start.md) - Setup in 5 minutes.
-*   [Model Setup](docs/guides/model_setup.md) - Choosing and downloading models.
-*   [Release Build](docs/guides/release_build.md) - Bundle size optimization for production.
-*   [Troubleshooting](docs/guides/troubleshooting.md) - Common fixes.
-*   [FAQ](docs/guides/faq.md) - Frequently asked questions.
+*   [Quick Start](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/quick_start.md) - Setup in 5 minutes.
+*   [Model Setup](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md) - Choosing and downloading models.
+*   [Release Build](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/release_build.md) - Bundle size optimization for production.
+*   [Troubleshooting](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md) - Common fixes.
+*   [FAQ](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/faq.md) - Frequently asked questions.
 
 ### Testing
-*   [Unit Testing](docs/test/unit_testing.md) - Mocking for isolated tests.
+*   [Unit Testing](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/test/unit_testing.md) - Mocking for isolated tests.
 
 ---
 
-Initialize the engine once in your `main()` function:
+## Usage
 
+### Minimal Setup
 
-
-### Initialization Parameters 
+Initialize the engine once in your `main()` function. See the [Quick Start Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/quick_start.md#step-3-initialize) for the full parameter table.
 
 ```dart
 await MobileRag.initialize(
@@ -130,60 +132,55 @@ await MobileRag.initialize(
   deferIndexWarmup: true,
 );
 
-// Before first search:
+// Before first search, wait for BM25/HNSW warmup if you deferred it:
 if (!MobileRag.instance.isIndexReady) {
   await MobileRag.instance.warmupFuture;
 }
 ```
 
-Then use it anywhere in your app:
+### Adding Documents and Searching
 
 ```dart
 class MySearchScreen extends StatelessWidget {
   Future<void> _search() async {
-    // 2. Add Documents (auto-chunked & embedded)
+    // 1. Add Documents (auto-chunked & embedded). Indexing is auto-managed
+    //    (debounced ~500ms) — only call rebuildIndex() if you need it now.
     await MobileRag.instance.addDocument(
       'Flutter is a UI toolkit for building apps.',
     );
-    await MobileRag.instance.addDocument(
-      'Dart is the language used to build Flutter apps.',
-    );
 
-    // File/UTF-8 fast paths are useful for large local documents.
+    // File / UTF-8 fast paths are useful for large local documents.
     await MobileRag.instance.addDocumentFromFile('/path/to/manual.pdf');
     final noteBytes = await File('/path/to/notes.md').readAsBytes();
-    await MobileRag.instance.addDocumentUtf8(
-      noteBytes,
-      name: 'notes.md',
-    );
+    await MobileRag.instance.addDocumentUtf8(noteBytes, name: 'notes.md');
 
-    // File picker fallback: prefer the Rust-side file path fast path, but
-    // fall back when the selected document is not exposed as a stable local path.
-    try {
-      await MobileRag.instance.addDocumentFromFile(path, name: fileName);
-    } on RagError {
-      final bytes = await File(path).readAsBytes();
-      final lower = fileName.toLowerCase();
-      if (lower.endsWith('.txt') ||
-          lower.endsWith('.md') ||
-          lower.endsWith('.markdown')) {
-        await MobileRag.instance.addDocumentUtf8(bytes, name: fileName);
-      } else {
-        final text = await DocumentParser.parse(bytes);
-        await MobileRag.instance.addDocument(text, name: fileName);
-      }
-    }
-
-    // Indexing is automatic! (Debounced 500ms)
-    // Optional: await MobileRag.instance.rebuildIndex(); // Call if you want it done NOW
-  
-    // 3. Search with LLM-ready context
+    // 2. Search with LLM-ready context
     final result = await MobileRag.instance.search(
-      'What is Flutter?', 
+      'What is Flutter?',
       tokenBudget: 2000,
     );
-    
     print(result.context.text); // Ready to send to LLM
+  }
+}
+```
+
+### Handling File Picker Fallback
+
+`addDocumentFromFile` is the fastest path because the Rust core reads and chunks the file directly. Some platform pickers (cloud-backed pickers, content URIs without a stable local path, etc.) return data that is not exposed as a real filesystem path. In those cases, fall back to UTF-8 or parsed-text ingestion:
+
+```dart
+try {
+  await MobileRag.instance.addDocumentFromFile(path, name: fileName);
+} on RagError {
+  final bytes = await File(path).readAsBytes();
+  final lower = fileName.toLowerCase();
+  if (lower.endsWith('.txt') ||
+      lower.endsWith('.md') ||
+      lower.endsWith('.markdown')) {
+    await MobileRag.instance.addDocumentUtf8(bytes, name: fileName);
+  } else {
+    final text = await DocumentParser.parse(bytes);
+    await MobileRag.instance.addDocument(text, name: fileName);
   }
 }
 ```
@@ -266,4 +263,4 @@ Bug reports, feature requests, and PRs are all welcome!
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](https://github.com/dev07060/mobile_rag_engine/blob/main/LICENSE).

@@ -85,7 +85,7 @@ final markdownText = """
 
 // Chunk the markdown
 final chunks = await TextChunker.markdown(
-  text: markdownText,
+  markdownText,
   maxChars: 512, // Target chunk size
 );
 

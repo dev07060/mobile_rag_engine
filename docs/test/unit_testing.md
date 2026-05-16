@@ -59,6 +59,8 @@ void main() {
 
 ## Testing Scenarios
 
+> **Type note:** ID-bearing fields such as `chunkId`, `sourceId`, and the counters on `SourceStats` are typed as `PlatformInt64` in the generated FFI. On the supported platforms (iOS / Android / macOS) this is an `int` alias, so the `int` literals in the snippets below compile as-is. If you ever target the web, switch to `BigInt`-backed literals.
+
 ### Scenario 1: Mocking Search Results
 
 When testing UI code that displays search results, you don't need the real engine to run a query. You just need to return a predefined `RagSearchResult`.

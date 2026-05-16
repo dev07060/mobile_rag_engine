@@ -170,15 +170,17 @@ Currently supports **iOS, Android, and macOS** only. Web support is planned for 
 ### Q: Where is data stored?
 
 In the Documents directory as a SQLite database (via `path_provider`):
-- iOS: `~/Documents/rag.db`
-- Android: `/data/data/<package>/files/rag.db`
+- iOS: `~/Documents/rag.sqlite`
+- Android: `/data/data/<package>/files/rag.sqlite`
+
+> The default filename is `rag.sqlite`. Override it via `databaseName:` when calling `MobileRag.initialize`.
 
 ### Q: Can I backup/restore data?
 
-Copy the database file (`rag.db`):
+Copy the database file (`rag.sqlite`):
 
 ```dart
-final dbFile = File('${dir.path}/rag.db');
+final dbFile = File('${dir.path}/rag.sqlite');
 await dbFile.copy(backupPath);
 ```
 

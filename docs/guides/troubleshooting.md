@@ -73,10 +73,12 @@ OnnxRuntimeException: Failed to create session
 - [ ] Verify model is compatible with ONNX Runtime
 
 ```dart
-// Verify file exists
-final file = File(modelPath);
+// The engine copies modelAsset to <appDocumentsDirectory>/<basename>.
+// Verify the resolved file the engine actually loads.
+final dir = await getApplicationDocumentsDirectory();
+final file = File('${dir.path}/model.onnx');
 if (!await file.exists()) {
-  throw Exception('Model file not found: $modelPath');
+  throw Exception('Model file not found at expected path: ${file.path}');
 }
 
 // Verify file size (corruption check)
