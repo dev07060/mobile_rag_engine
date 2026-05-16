@@ -38,7 +38,9 @@ void main() {
       expect(result.handleFull.hitCount, greaterThanOrEqualTo(4));
       expect(result.handleFull.contextBytes, greaterThan(0));
       expect(result.handleFull.fullChunkBytes, greaterThan(0));
-      expect(result.handleFull.nativeHybridResultRows, greaterThan(0));
+      // search_meta_hybrid no longer materializes HybridSearchResult.content.
+      expect(result.handleFull.nativeHybridResultRows, 0);
+      expect(result.handleFull.nativeHybridResultContentBytes, 0);
       expect(result.handleFull.nativeAssemblyRows, greaterThan(0));
       expect(result.handleFull.nativeFullHydrateRows, greaterThan(0));
       expect(result.handleFull.nativePreviewRows, 0);
@@ -50,7 +52,8 @@ void main() {
         result.handlePreview.previewBytes,
         lessThan(result.handleFull.fullChunkBytes),
       );
-      expect(result.handlePreview.nativeHybridResultRows, greaterThan(0));
+      expect(result.handlePreview.nativeHybridResultRows, 0);
+      expect(result.handlePreview.nativeHybridResultContentBytes, 0);
       expect(result.handlePreview.nativeAssemblyRows, greaterThan(0));
       expect(result.handlePreview.nativeFullHydrateRows, 0);
       expect(result.handlePreview.nativePreviewRows, greaterThan(0));
@@ -62,7 +65,8 @@ void main() {
       );
       expect(result.handleContextOnly.fullChunkBytes, 0);
       expect(result.handleContextOnly.previewBytes, 0);
-      expect(result.handleContextOnly.nativeHybridResultRows, greaterThan(0));
+      expect(result.handleContextOnly.nativeHybridResultRows, 0);
+      expect(result.handleContextOnly.nativeHybridResultContentBytes, 0);
       expect(result.handleContextOnly.nativeAssemblyRows, greaterThan(0));
       expect(result.handleContextOnly.nativeFullHydrateRows, 0);
       expect(result.handleContextOnly.nativePreviewRows, 0);
