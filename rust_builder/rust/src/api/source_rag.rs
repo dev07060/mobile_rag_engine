@@ -118,6 +118,20 @@ fn truncate_utf8_bytes(input: &str, max_bytes: usize) -> String {
     input[..end].to_string()
 }
 
+/// Build a `String` from a byte buffer that may end mid–UTF-8 character
+/// (typical when SQLite returns `substr(CAST(content AS BLOB), 1, N)`).
+/// The trailing partial codepoint is dropped; the result is a prefix of
+/// the original UTF-8 string.
+fn utf8_string_from_blob_prefix(mut bytes: Vec<u8>) -> String {
+    let valid_up_to = match std::str::from_utf8(&bytes) {
+        Ok(_) => bytes.len(),
+        Err(err) => err.valid_up_to(),
+    };
+    bytes.truncate(valid_up_to);
+    // SAFETY: bytes[..valid_up_to] is guaranteed valid UTF-8.
+    String::from_utf8(bytes).expect("byte prefix validated as UTF-8")
+}
+
 fn get_collection_data_generation(
     conn: &rusqlite::Connection,
     collection_id: &str,
@@ -1175,11 +1189,12 @@ impl SearchHandle {
         run_handle_hydration_test_hook();
 
         let _read_guard = QueryContentReadGuard::enter(QueryContentReadPhase::Preview);
-        let (hydrated, missing_ids) = hydrate_chunk_search_results(
+        let (hydrated, missing_ids) = hydrate_chunk_previews(
             &conn,
             &self.collection_id,
             requested_ids,
             &self.ordered_hits,
+            max_bytes,
         )?;
         self.ensure_generation_unchanged_with_conn(&conn, start_generation)?;
         if let Some(missing) = missing_ids.first() {
@@ -1193,6 +1208,10 @@ impl SearchHandle {
             .into_iter()
             .map(|chunk| {
                 let (raw_type, header_path) = decode_structured_chunk_type(&chunk.chunk_type);
+                // `hydrate_chunk_previews` already bounded `chunk.content` to
+                // at most `max_bytes` and trimmed at a UTF-8 boundary, so the
+                // call below is a no-op in the happy path. Kept as a
+                // defensive guard for future callers that bypass that path.
                 ChunkExcerptResult {
                     chunk_id: chunk.chunk_id,
                     source_id: chunk.source_id,
@@ -1552,6 +1571,92 @@ fn hydrate_chunk_search_results(
     for row in rows {
         let mut hydrated = row.map_err(|e| RagError::DatabaseError(e.to_string()))?;
         record_hydrated_content_read(hydrated.content.len() as u64);
+        if let Some(hit) = hit_by_id.get(&hydrated.chunk_id) {
+            hydrated.similarity = hit.similarity;
+        }
+        hydrated_by_id.insert(hydrated.chunk_id, hydrated);
+    }
+
+    let mut ordered = Vec::with_capacity(chunk_ids.len());
+    let mut missing_ids = Vec::new();
+    for chunk_id in chunk_ids {
+        if let Some(chunk) = hydrated_by_id.remove(&chunk_id) {
+            ordered.push(chunk);
+        } else {
+            missing_ids.push(chunk_id);
+        }
+    }
+    Ok((ordered, missing_ids))
+}
+
+/// Preview-only variant of [`hydrate_chunk_search_results`] that bounds
+/// the per-row SQLite content read to `max_bytes`. Uses
+/// `substr(CAST(c.content AS BLOB), 1, ?)` so the bound is byte-exact
+/// (TEXT substr in SQLite indexes by character, which could overshoot
+/// for multi-byte UTF-8). The trailing partial codepoint is dropped in
+/// Rust via `utf8_string_from_blob_prefix`. The `sources` LEFT JOIN is
+/// skipped because the only preview consumer (`ChunkExcerptResult`)
+/// does not surface `metadata`.
+fn hydrate_chunk_previews(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+    chunk_ids: Vec<i64>,
+    hits: &[SearchHitMeta],
+    max_bytes: u32,
+) -> Result<(Vec<ChunkSearchResult>, Vec<i64>), RagError> {
+    if chunk_ids.is_empty() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+
+    let hit_by_id = hits
+        .iter()
+        .map(|hit| (hit.chunk_id, hit))
+        .collect::<HashMap<_, _>>();
+    let id_list = chunk_ids
+        .iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT c.id, c.source_id, c.chunk_index,
+                substr(CAST(c.content AS BLOB), 1, ?2),
+                COALESCE(c.chunk_type, 'general')
+         FROM chunks c
+         WHERE c.collection_id = ?1
+           AND c.id IN ({id_list})"
+    );
+
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let max_bytes_i64 = max_bytes as i64;
+    let rows = stmt
+        .query_map(params![collection_id, max_bytes_i64], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i32>(2)?,
+                row.get::<_, Vec<u8>>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    let mut hydrated_by_id = HashMap::new();
+    for row in rows {
+        let (chunk_id, source_id, chunk_index, preview_bytes, chunk_type) =
+            row.map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        record_hydrated_content_read(preview_bytes.len() as u64);
+        let content = utf8_string_from_blob_prefix(preview_bytes);
+        let mut hydrated = ChunkSearchResult {
+            chunk_id,
+            source_id,
+            chunk_index,
+            content,
+            chunk_type,
+            similarity: 0.0,
+            metadata: None,
+        };
         if let Some(hit) = hit_by_id.get(&hydrated.chunk_id) {
             hydrated.similarity = hit.similarity;
         }

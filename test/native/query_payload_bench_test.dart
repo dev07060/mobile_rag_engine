@@ -58,6 +58,12 @@ void main() {
       expect(result.handlePreview.nativeFullHydrateRows, 0);
       expect(result.handlePreview.nativePreviewRows, greaterThan(0));
       expect(result.handlePreview.nativeUnclassifiedRows, 0);
+      // SUBSTR projection: preview rows read strictly fewer body bytes
+      // than full hydrate rows of the same hits.
+      expect(
+        result.handlePreview.nativePreviewContentBytes,
+        lessThan(result.handleFull.nativeFullHydrateContentBytes),
+      );
 
       expect(
         result.handleContextOnly.contextBytes,
