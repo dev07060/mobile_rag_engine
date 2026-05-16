@@ -23,7 +23,9 @@ use crate::api::bm25_search::{bm25_search, tokenize_for_bm25, Bm25SearchResult};
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
 use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw_slice, HnswSearchResult};
-use crate::api::query_metrics::record_hybrid_result_content_read;
+use crate::api::query_metrics::{
+    record_hybrid_result_content_read, record_scoped_exact_scan_content_read,
+};
 use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{cosine_with_query_norm_i8_blob, l2_norm_i8, quantize_f32_to_i8};
@@ -211,21 +213,44 @@ fn compute_hybrid_rrf_scores(
                 exact_conditions.push(format!("s.metadata LIKE '{}'", pattern.replace("'", "''")));
             }
 
+            // Tokenize the query first so we can decide whether the scoped
+            // BM25 leg actually needs chunk bodies. When `bm25_weight == 0`
+            // (or no query tokens survive normalization) BM25 contributes
+            // nothing to the final RRF score, so reading `c.content` for
+            // every scoped chunk is pure I/O waste. Elide the column from
+            // the SELECT in that case; row reader treats column 3 as
+            // `Option<String>` either way.
+            //
+            // Note: `!= 0.0` (not `> 0.0`) — preserves prior behavior for any
+            // non-zero weight, including negative values that callers might
+            // pass. RRF still applies the (potentially negative) weight; we
+            // only short-circuit when the contribution is provably zero.
+            let query_tokens = tokenize_for_bm25(&query_text);
+            let query_token_set: HashSet<String> = query_tokens.iter().cloned().collect();
+            let need_bm25 = config.bm25_weight != 0.0 && !query_token_set.is_empty();
+            let content_projection = if need_bm25 {
+                "c.content"
+            } else {
+                "NULL AS content"
+            };
+
             // Fetch ALL chunks for this scoped set for exact vector + BM25 scoring.
             let query_with_i8 = format!(
-                "SELECT c.id, c.embedding, {}, c.content
+                "SELECT c.id, c.embedding, {}, {}
                      FROM chunks c
                      LEFT JOIN sources s ON c.source_id = s.id
                      WHERE {}",
                 "c.embedding_i8",
+                content_projection,
                 exact_conditions.join(" AND ")
             );
             let query_without_i8 = format!(
-                "SELECT c.id, c.embedding, {}, c.content
+                "SELECT c.id, c.embedding, {}, {}
                      FROM chunks c
                      LEFT JOIN sources s ON c.source_id = s.id
                      WHERE {}",
                 "NULL AS embedding_i8",
+                content_projection,
                 exact_conditions.join(" AND ")
             );
 
@@ -241,7 +266,7 @@ fn compute_hybrid_rrf_scores(
                         row.get::<_, i64>(0)?,
                         row.get::<_, Vec<u8>>(1)?,
                         row.get::<_, Option<Vec<u8>>>(2)?,
-                        row.get::<_, String>(3)?,
+                        row.get::<_, Option<String>>(3)?,
                     ))
                 })
                 .map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -251,8 +276,6 @@ fn compute_hybrid_rrf_scores(
             let (query_i8, _query_i8_scale) = quantize_f32_to_i8(query_embedding);
             #[cfg(feature = "vector_quant_i8")]
             let query_i8_norm = l2_norm_i8(&query_i8);
-            let query_tokens = tokenize_for_bm25(&query_text);
-            let query_token_set: HashSet<String> = query_tokens.iter().cloned().collect();
 
             let mut scoped_doc_count = 0usize;
             let mut scoped_total_doc_length = 0usize;
@@ -266,6 +289,13 @@ fn compute_hybrid_rrf_scores(
 
             for row in chunk_iter {
                 if let Ok((id, embedding_blob, embedding_i8_blob, content)) = row {
+                    // Only count what we actually read. When `need_bm25` is
+                    // false the SELECT projects NULL for column 3 and the
+                    // counter stays at zero — which is the whole point of
+                    // the projection elision.
+                    if let Some(ref content_str) = content {
+                        record_scoped_exact_scan_content_read(content_str.len() as u64);
+                    }
                     #[cfg(not(feature = "vector_quant_i8"))]
                     let _ = &embedding_i8_blob;
                     #[cfg(feature = "vector_quant_i8")]
@@ -304,25 +334,27 @@ fn compute_hybrid_rrf_scores(
                         distance: (1.0 - sim) as f32, // lower is better
                     });
 
-                    if !query_token_set.is_empty() {
-                        let doc_tokens = tokenize_for_bm25(&content);
-                        let doc_length = doc_tokens.len();
-                        if doc_length > 0 {
-                            scoped_doc_count += 1;
-                            scoped_total_doc_length += doc_length;
-                            scoped_doc_lengths.insert(id, doc_length);
+                    if need_bm25 {
+                        if let Some(content_str) = content {
+                            let doc_tokens = tokenize_for_bm25(&content_str);
+                            let doc_length = doc_tokens.len();
+                            if doc_length > 0 {
+                                scoped_doc_count += 1;
+                                scoped_total_doc_length += doc_length;
+                                scoped_doc_lengths.insert(id, doc_length);
 
-                            let mut term_freqs: HashMap<String, u32> = HashMap::new();
-                            for token in doc_tokens {
-                                if query_token_set.contains(&token) {
-                                    *term_freqs.entry(token).or_insert(0) += 1;
+                                let mut term_freqs: HashMap<String, u32> = HashMap::new();
+                                for token in doc_tokens {
+                                    if query_token_set.contains(&token) {
+                                        *term_freqs.entry(token).or_insert(0) += 1;
+                                    }
                                 }
-                            }
-                            for term in term_freqs.keys() {
-                                *scoped_doc_freqs.entry(term.clone()).or_insert(0) += 1;
-                            }
-                            if !term_freqs.is_empty() {
-                                scoped_term_freqs.insert(id, term_freqs);
+                                for term in term_freqs.keys() {
+                                    *scoped_doc_freqs.entry(term.clone()).or_insert(0) += 1;
+                                }
+                                if !term_freqs.is_empty() {
+                                    scoped_term_freqs.insert(id, term_freqs);
+                                }
                             }
                         }
                     }
@@ -337,7 +369,7 @@ fn compute_hybrid_rrf_scores(
             });
             vector_results.truncate(candidate_k);
 
-            if !query_tokens.is_empty() && scoped_doc_count > 0 {
+            if need_bm25 && scoped_doc_count > 0 {
                 let avg_doc_length = scoped_total_doc_length as f64 / scoped_doc_count as f64;
                 let k1 = 1.2;
                 let b = 0.75;
@@ -525,13 +557,8 @@ pub(crate) fn search_hybrid_inner(
     config: Option<RrfConfig>,
     filter: Option<SearchFilter>,
 ) -> Result<Vec<HybridSearchResult>, RagError> {
-    let (rrf_scores, filter) = compute_hybrid_rrf_scores(
-        query_text,
-        query_embedding,
-        top_k,
-        config,
-        filter,
-    )?;
+    let (rrf_scores, filter) =
+        compute_hybrid_rrf_scores(query_text, query_embedding, top_k, config, filter)?;
 
     // 4. Batch Content Fetch
     if rrf_scores.is_empty() {
@@ -640,13 +667,8 @@ pub(crate) fn search_hybrid_meta_inner(
     config: Option<RrfConfig>,
     filter: Option<SearchFilter>,
 ) -> Result<Vec<HybridSearchMeta>, RagError> {
-    let (rrf_scores, filter) = compute_hybrid_rrf_scores(
-        query_text,
-        query_embedding,
-        top_k,
-        config,
-        filter,
-    )?;
+    let (rrf_scores, filter) =
+        compute_hybrid_rrf_scores(query_text, query_embedding, top_k, config, filter)?;
 
     if rrf_scores.is_empty() {
         return Ok(vec![]);
@@ -764,6 +786,7 @@ mod tests {
     use crate::api::bm25_search::{bm25_add_document, bm25_clear_index};
     use crate::api::db_pool::{close_db_pool, get_connection, init_db_pool};
     use crate::api::hnsw_index::{build_hnsw_index, clear_hnsw_index};
+    use crate::api::query_metrics::{query_content_read_stats, reset_query_content_read_stats};
     use crate::api::simple_rag::init_db;
     use crate::api::source_rag::init_source_db;
     use rusqlite::params;
@@ -977,6 +1000,120 @@ mod tests {
         .unwrap();
 
         assert!(results.is_empty());
+
+        close_db_pool();
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn test_scoped_exact_scan_skips_content_when_bm25_disabled() {
+        let db_path = std::env::temp_dir().join("test_hybrid_scoped_exact_scan_skips_content.db");
+        let _ = std::fs::remove_file(&db_path);
+
+        init_db_pool(db_path.to_str().unwrap().to_string(), 1).unwrap();
+        init_source_db().unwrap();
+        clear_hnsw_index();
+        bm25_clear_index();
+
+        {
+            let conn = get_connection().unwrap();
+            conn.execute(
+                "INSERT INTO sources (id, content, content_hash, metadata, name, status) VALUES (1, 's1', 'h_s1', NULL, 'source-1', 'completed')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO chunks (id, source_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding)
+                 VALUES (?1, 1, 0, ?2, 0, 1024, 'general', ?3)",
+                params![
+                    101_i64,
+                    "apple ".repeat(64),
+                    embedding_to_blob(&[1.0_f32, 0.0_f32]),
+                ],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO chunks (id, source_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding)
+                 VALUES (?1, 1, 1, ?2, 1024, 2048, 'general', ?3)",
+                params![
+                    102_i64,
+                    "banana ".repeat(64),
+                    embedding_to_blob(&[0.0_f32, 1.0_f32]),
+                ],
+            )
+            .unwrap();
+        }
+
+        // BM25 disabled: scoped scan should NOT pull chunk bodies, so the
+        // counter must stay at zero even though both rows match the scope.
+        reset_query_content_read_stats();
+        let zero_results = search_hybrid(
+            "apple".to_string(),
+            vec![1.0, 0.0],
+            2,
+            Some(RrfConfig {
+                k: 60,
+                vector_weight: 1.0,
+                bm25_weight: 0.0,
+            }),
+            Some(SearchFilter {
+                source_ids: Some(vec![1]),
+                metadata_like: None,
+                collection_id: None,
+            }),
+        )
+        .unwrap();
+        let zero_stats = query_content_read_stats();
+        assert_eq!(
+            zero_stats.scoped_exact_scan_rows, 0,
+            "bm25_weight=0 must elide the content projection (rows counter must stay 0)"
+        );
+        assert_eq!(
+            zero_stats.scoped_exact_scan_content_bytes, 0,
+            "bm25_weight=0 must elide the content projection (bytes counter must stay 0)"
+        );
+        assert_eq!(zero_results.len(), 2);
+        let zero_top_id = zero_results
+            .iter()
+            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
+            .map(|r| r.doc_id)
+            .unwrap();
+
+        // BM25 enabled: scoped scan must pull bodies, so the counter has to
+        // record at least the combined chunk content length.
+        reset_query_content_read_stats();
+        let bm25_results = search_hybrid(
+            "apple".to_string(),
+            vec![1.0, 0.0],
+            2,
+            Some(RrfConfig {
+                k: 60,
+                vector_weight: 0.5,
+                bm25_weight: 0.5,
+            }),
+            Some(SearchFilter {
+                source_ids: Some(vec![1]),
+                metadata_like: None,
+                collection_id: None,
+            }),
+        )
+        .unwrap();
+        let bm25_stats = query_content_read_stats();
+        assert_eq!(bm25_stats.scoped_exact_scan_rows, 2);
+        assert!(
+            bm25_stats.scoped_exact_scan_content_bytes
+                >= ("apple ".len() * 64) as u64 + ("banana ".len() * 64) as u64,
+            "bm25_weight>0 must read both chunk bodies (got {} bytes)",
+            bm25_stats.scoped_exact_scan_content_bytes
+        );
+
+        // Vector-only ranking must still agree on the "apple" chunk being
+        // top-ranked even when content was elided.
+        assert_eq!(
+            zero_top_id, 101,
+            "elided projection must not change ranking"
+        );
+        assert!(bm25_results.iter().any(|r| r.doc_id == 101));
 
         close_db_pool();
         let _ = std::fs::remove_file(db_path);
