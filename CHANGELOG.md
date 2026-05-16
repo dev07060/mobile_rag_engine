@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.18.3
+* **Documentation**:
+  - Removed the oversized README memory benchmark note from the top of the pub.dev page.
+  - Aligned guide and example snippets with the current `MobileRag` facade and file-path ingest APIs.
+  - Fixed stale example model download URLs and clarified the supported platform/documentation release guidance.
+
 ## 0.18.2
 * **Ingest fast path**:
   - Updated example/evaluation runners to use `addDocumentFromFile(...)` so PDF and asset-backed ingestion exercise the Rust-side file fast path instead of the removed byte-ingest compatibility call.
