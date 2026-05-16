@@ -5984,6 +5984,8 @@ impl SseDecode for crate::api::query_metrics::QueryContentReadStats {
         let mut var_assemblyContentBytes = <u64>::sse_decode(deserializer);
         let mut var_unclassifiedRows = <u64>::sse_decode(deserializer);
         let mut var_unclassifiedContentBytes = <u64>::sse_decode(deserializer);
+        let mut var_scopedExactScanRows = <u64>::sse_decode(deserializer);
+        let mut var_scopedExactScanContentBytes = <u64>::sse_decode(deserializer);
         return crate::api::query_metrics::QueryContentReadStats {
             hybrid_result_rows: var_hybridResultRows,
             hybrid_result_content_bytes: var_hybridResultContentBytes,
@@ -5995,6 +5997,8 @@ impl SseDecode for crate::api::query_metrics::QueryContentReadStats {
             assembly_content_bytes: var_assemblyContentBytes,
             unclassified_rows: var_unclassifiedRows,
             unclassified_content_bytes: var_unclassifiedContentBytes,
+            scoped_exact_scan_rows: var_scopedExactScanRows,
+            scoped_exact_scan_content_bytes: var_scopedExactScanContentBytes,
         };
     }
 }
@@ -7124,6 +7128,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::query_metrics::QueryContentRe
             self.assembly_content_bytes.into_into_dart().into_dart(),
             self.unclassified_rows.into_into_dart().into_dart(),
             self.unclassified_content_bytes.into_into_dart().into_dart(),
+            self.scoped_exact_scan_rows.into_into_dart().into_dart(),
+            self.scoped_exact_scan_content_bytes
+                .into_into_dart()
+                .into_dart(),
         ]
         .into_dart()
     }
@@ -8136,6 +8144,8 @@ impl SseEncode for crate::api::query_metrics::QueryContentReadStats {
         <u64>::sse_encode(self.assembly_content_bytes, serializer);
         <u64>::sse_encode(self.unclassified_rows, serializer);
         <u64>::sse_encode(self.unclassified_content_bytes, serializer);
+        <u64>::sse_encode(self.scoped_exact_scan_rows, serializer);
+        <u64>::sse_encode(self.scoped_exact_scan_content_bytes, serializer);
     }
 }
 

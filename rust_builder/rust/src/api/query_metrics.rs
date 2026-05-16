@@ -78,6 +78,7 @@ static FULL_HYDRATE_CONTENT: AtomicCounter = AtomicCounter::new();
 static PREVIEW_CONTENT: AtomicCounter = AtomicCounter::new();
 static ASSEMBLY_CONTENT: AtomicCounter = AtomicCounter::new();
 static UNCLASSIFIED_CONTENT: AtomicCounter = AtomicCounter::new();
+static SCOPED_EXACT_SCAN_CONTENT: AtomicCounter = AtomicCounter::new();
 
 /// Record content read by `hybrid_search` while materializing legacy
 /// `HybridSearchResult.content`.
@@ -95,6 +96,17 @@ pub(crate) fn record_hydrated_content_read(content_bytes: u64) {
     });
 }
 
+/// Record content read by the hybrid-search scoped exact-scan path (the
+/// `source_ids` / `metadata_like` branch that walks the entire scoped chunk
+/// set to compute scoped BM25). Counted per row regardless of whether the
+/// chunk ends up in the final top-K; this is the "backend scan cost"
+/// counter and is intentionally orthogonal to the materialization counters
+/// above (a scoped chunk that survives RRF will also show up in
+/// `hybrid_result_*` or `full_hydrate_*` when its body is later returned).
+pub(crate) fn record_scoped_exact_scan_content_read(content_bytes: u64) {
+    SCOPED_EXACT_SCAN_CONTENT.record(content_bytes);
+}
+
 #[derive(Debug, Clone)]
 pub struct QueryContentReadStats {
     pub hybrid_result_rows: u64,
@@ -107,6 +119,8 @@ pub struct QueryContentReadStats {
     pub assembly_content_bytes: u64,
     pub unclassified_rows: u64,
     pub unclassified_content_bytes: u64,
+    pub scoped_exact_scan_rows: u64,
+    pub scoped_exact_scan_content_bytes: u64,
 }
 
 impl QueryContentReadStats {
@@ -121,10 +135,14 @@ impl QueryContentReadStats {
             + self.unclassified_content_bytes
     }
 
+    /// Materialized result reads only — does NOT include the scoped exact-scan
+    /// backend counter, which measures rows scanned during search rather than
+    /// rows surfaced as results.
     pub fn rows_total(&self) -> u64 {
         self.hybrid_result_rows + self.hydration_rows_total()
     }
 
+    /// Materialized result bytes only — see [`Self::rows_total`].
     pub fn content_bytes_total(&self) -> u64 {
         self.hybrid_result_content_bytes + self.hydration_content_bytes_total()
     }
@@ -137,6 +155,7 @@ pub fn query_content_read_stats() -> QueryContentReadStats {
     let (preview_rows, preview_bytes) = PREVIEW_CONTENT.snapshot();
     let (assembly_rows, assembly_bytes) = ASSEMBLY_CONTENT.snapshot();
     let (unclassified_rows, unclassified_bytes) = UNCLASSIFIED_CONTENT.snapshot();
+    let (scoped_rows, scoped_bytes) = SCOPED_EXACT_SCAN_CONTENT.snapshot();
     QueryContentReadStats {
         hybrid_result_rows: hybrid_rows,
         hybrid_result_content_bytes: hybrid_bytes,
@@ -148,6 +167,8 @@ pub fn query_content_read_stats() -> QueryContentReadStats {
         assembly_content_bytes: assembly_bytes,
         unclassified_rows,
         unclassified_content_bytes: unclassified_bytes,
+        scoped_exact_scan_rows: scoped_rows,
+        scoped_exact_scan_content_bytes: scoped_bytes,
     }
 }
 
@@ -158,6 +179,7 @@ pub fn reset_query_content_read_stats() {
     PREVIEW_CONTENT.reset();
     ASSEMBLY_CONTENT.reset();
     UNCLASSIFIED_CONTENT.reset();
+    SCOPED_EXACT_SCAN_CONTENT.reset();
 }
 
 #[frb(sync)]

@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Hybrid Scoped Exact-Scan — Content Projection Elision</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --fg: #1a1a1a;
+    --muted: #555;
+    --line: #d0d0d0;
+    --accent: #1f6feb;
+    --good: #1a7f37;
+    --bad: #c43a3a;
+    --code-bg: #f4f4f4;
+  }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.55 -apple-system, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  main {
+    max-width: 880px;
+    margin: 2.5rem auto 4rem;
+    padding: 0 1.25rem;
+  }
+  h1 { font-size: 1.7rem; margin: 0 0 .5rem; }
+  h2 {
+    font-size: 1.2rem;
+    margin: 2rem 0 .6rem;
+    padding-bottom: .25rem;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 { font-size: 1rem; margin: 1.5rem 0 .4rem; }
+  .meta {
+    color: var(--muted);
+    font-size: .85rem;
+    margin-bottom: 1.25rem;
+  }
+  .meta code { background: none; padding: 0; }
+  .summary {
+    border-left: 3px solid var(--accent);
+    background: #fff;
+    padding: .85rem 1rem;
+    margin: 1rem 0 1.5rem;
+  }
+  .summary p { margin: .25rem 0; }
+  code, pre {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: .85em;
+  }
+  code { background: var(--code-bg); padding: .1em .35em; border-radius: 3px; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: .75rem .9rem;
+    overflow-x: auto;
+    line-height: 1.45;
+  }
+  pre code { background: none; padding: 0; }
+  table {
+    border-collapse: collapse;
+    margin: .5rem 0 1rem;
+    width: 100%;
+    font-size: .9rem;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: .35rem .6rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: #f0f0f0; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .good { color: var(--good); font-weight: 600; }
+  .bad  { color: var(--bad);  font-weight: 600; }
+  .pill {
+    display: inline-block;
+    padding: .05rem .45rem;
+    border-radius: 9px;
+    background: #eef;
+    color: #225;
+    font-size: .8em;
+  }
+  ul { padding-left: 1.4rem; }
+  li { margin-bottom: .25rem; }
+  .legend {
+    color: var(--muted);
+    font-size: .85rem;
+    margin-top: -.5rem;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Hybrid Scoped Exact-Scan — Content Projection Elision</h1>
+<div class="meta">
+  P0 query-path optimization &nbsp;·&nbsp;
+  Branch: <code>enhancement/scoped-exact-scan-elision</code>
+  (rebased onto <code>origin/main</code> @ <code>abf6b7e</code>, which includes
+  PR #49 handle-content-cache) &nbsp;·&nbsp;
+  Owner: bhoh@polarpulse.ai &nbsp;·&nbsp;
+  Date: 2026-05-17
+</div>
+
+<div class="summary">
+  <p><strong>What changed.</strong> The scoped exact-scan branch of <code>hybrid_search</code>
+  (the path triggered by <code>source_ids</code> / <code>metadata_like</code> filters) used to
+  pull <code>c.content</code> for every scoped chunk unconditionally. We now elide that column
+  from the <code>SELECT</code> when the BM25 leg cannot contribute to the final RRF score.</p>
+  <p><strong>Net effect.</strong> When callers pass <code>bm25_weight = 0</code> (or the query
+  produces no BM25 tokens), the scoped exact-scan reads <strong class="good">zero</strong> chunk
+  bytes regardless of scope size. With <code>bm25_weight &gt; 0</code> the behavior is unchanged.</p>
+  <p><strong>Why P0.</strong> The previous behavior scaled linearly with the scoped set —
+  500 chunks × ~256 B ≈ 125 KB of SQLite content read per query, even when the bytes were
+  never tokenized. That growth is independent of <code>top_k</code>, so it dominates large
+  scoped filters.</p>
+</div>
+
+<h2>Background</h2>
+
+<p>The scoped exact-scan branch is the fallback hybrid search runs when a query carries
+<code>source_ids</code> or <code>metadata_like</code> filters. Instead of querying global vector /
+BM25 indexes and post-filtering, it walks every chunk under the scope and re-scores both
+legs in-process. This trades index latency for recall on small scoped subsets.</p>
+
+<p>The legacy <code>SELECT</code> read four columns per row:
+<code>c.id</code>, <code>c.embedding</code>, <code>c.embedding_i8</code>, <code>c.content</code>.
+Only the first three are needed for vector scoring; <code>c.content</code> exists solely so the
+per-row BM25 collector can tokenize the chunk body.</p>
+
+<p>The BM25 leg only contributes to the final RRF score when both:</p>
+<ul>
+  <li><code>config.bm25_weight &gt; 0.0</code> — otherwise it is multiplied by zero, and</li>
+  <li><code>tokenize_for_bm25(query_text)</code> returns at least one term — otherwise no chunk
+  can match.</li>
+</ul>
+
+<p>Whenever one of those is false, every byte read from <code>c.content</code> is pure I/O waste.</p>
+
+<h2>Instrumentation (landed first)</h2>
+
+<p>Before changing behavior we landed a counter in <code>query_metrics</code> so the cost was
+measurable end-to-end:</p>
+
+<pre><code>// rust_builder/rust/src/api/query_metrics.rs
+static SCOPED_EXACT_SCAN_CONTENT: AtomicCounter = AtomicCounter::new();
+
+pub(crate) fn record_scoped_exact_scan_content_read(content_bytes: u64) {
+    SCOPED_EXACT_SCAN_CONTENT.record(content_bytes);
+}
+
+pub struct QueryContentReadStats {
+    // … existing fields …
+    pub scoped_exact_scan_rows: u64,
+    pub scoped_exact_scan_content_bytes: u64,
+}</code></pre>
+
+<p>The counter is intentionally <em>not</em> included in <code>rows_total()</code> /
+<code>content_bytes_total()</code> — those describe materialized result reads, while this one
+measures <em>backend scan</em> reads. A scoped chunk that survives RRF is read once during the
+scan and (if needed) once again during hydration; conflating them would double-count.</p>
+
+<h2>Change</h2>
+
+<h3>SELECT projection becomes conditional</h3>
+
+<pre><code>// rust_builder/rust/src/api/hybrid_search.rs (scoped branch)
+let query_tokens = tokenize_for_bm25(&query_text);
+let query_token_set: HashSet&lt;String&gt; = query_tokens.iter().cloned().collect();
+// `!= 0.0` (not `&gt; 0.0`) — preserves prior behavior for any non-zero weight,
+// including negative values that callers might pass.
+let need_bm25 = config.bm25_weight != 0.0 &amp;&amp; !query_token_set.is_empty();
+let content_projection = if need_bm25 { "c.content" } else { "NULL AS content" };
+
+let query_with_i8 = format!(
+    "SELECT c.id, c.embedding, {}, {}
+         FROM chunks c
+         LEFT JOIN sources s ON c.source_id = s.id
+         WHERE {}",
+    "c.embedding_i8",
+    content_projection,
+    exact_conditions.join(" AND ")
+);</code></pre>
+
+<p>Notes:</p>
+<ul>
+  <li>The token set is computed once, before the SQL prepare, and the same predicate
+  guards both the projection and the post-scan BM25 scoring block.</li>
+  <li>The fallback prepare (the <code>NULL AS embedding_i8</code> path used on schemas without
+  the i8 column) goes through the same projection.</li>
+  <li>The gate uses <code>!= 0.0</code> rather than <code>&gt; 0.0</code> so any non-zero
+  weight — including negative weights some callers use as a penalty — keeps the prior
+  behavior of reading content and computing BM25. We only elide when the BM25
+  contribution to RRF is provably zero.</li>
+</ul>
+
+<h3>Row reader treats content as nullable</h3>
+
+<pre><code>let chunk_iter = stmt.query_map([], |row| {
+    Ok((
+        row.get::&lt;_, i64&gt;(0)?,
+        row.get::&lt;_, Vec&lt;u8&gt;&gt;(1)?,
+        row.get::&lt;_, Option&lt;Vec&lt;u8&gt;&gt;&gt;(2)?,
+        row.get::&lt;_, Option&lt;String&gt;&gt;(3)?,   // was: String
+    ))
+})?;
+
+for row in chunk_iter {
+    if let Ok((id, embedding_blob, embedding_i8_blob, content)) = row {
+        if let Some(ref content_str) = content {
+            record_scoped_exact_scan_content_read(content_str.len() as u64);
+        }
+        // … vector scoring (unchanged) …
+
+        if need_bm25 {
+            if let Some(content_str) = content {
+                // … existing BM25 token / df / tf collection …
+            }
+        }
+    }
+}</code></pre>
+
+<p>The counter only fires when content was actually pulled. The post-scan scoring block also
+flips its guard from <code>!query_tokens.is_empty()</code> to <code>need_bm25</code>, so the two
+gates stay in lockstep.</p>
+
+<h2>Measured impact</h2>
+
+<p>Captured by <code>BenchmarkService.benchmarkScopedExactScan</code>. Each variant runs
+<code>searchMetaHybrid</code> against a single scoped source seeded with N × 256 B chunks,
+with a small distractor source so the scope filter has something to exclude.</p>
+
+<h3>Scoped exact-scan content read (per query)</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Scope size</th><th>bm25_weight</th>
+      <th class="num">Before — rows</th><th class="num">Before — bytes</th>
+      <th class="num">After — rows</th><th class="num">After — bytes</th>
+      <th class="num">Reduction</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>50 chunks</td><td>0.0</td>
+      <td class="num">50</td><td class="num">12.5 KB</td>
+      <td class="num good">0</td><td class="num good">0 KB</td>
+      <td class="num good">100%</td>
+    </tr>
+    <tr>
+      <td>50 chunks</td><td>0.5</td>
+      <td class="num">50</td><td class="num">12.5 KB</td>
+      <td class="num">50</td><td class="num">12.5 KB</td>
+      <td class="num">0% (intended)</td>
+    </tr>
+    <tr>
+      <td>500 chunks</td><td>0.0</td>
+      <td class="num">500</td><td class="num">125 KB</td>
+      <td class="num good">0</td><td class="num good">0 KB</td>
+      <td class="num good">100%</td>
+    </tr>
+    <tr>
+      <td>500 chunks</td><td>0.5</td>
+      <td class="num">500</td><td class="num">125 KB</td>
+      <td class="num">500</td><td class="num">125 KB</td>
+      <td class="num">0% (intended)</td>
+    </tr>
+  </tbody>
+</table>
+<p class="legend">Bytes are SQLite <code>c.content</code> reads observed via the
+<code>scoped_exact_scan_*</code> counter. Source: <code>test/native/scoped_exact_scan_bench_test.dart</code>,
+release-profile Rust build on macOS / arm64.</p>
+
+<h3>Adjacent baseline (post-PR #49 handle-content-cache)</h3>
+
+<p>Re-running <code>query_payload_bench_test</code> on the rebased base confirms the
+<code>SearchHandle</code> path benefits from PR #49's per-handle content cache: all three
+hydration variants now read the chunk body exactly once during assembly and reuse it,
+which is the surface this change builds on. Numbers are stable across runs.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Variant</th>
+      <th class="num">native rows</th>
+      <th class="num">native bytes</th>
+      <th>phase split</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>legacy searchHybrid</code></td>
+      <td class="num">4</td><td class="num">0.3 KB</td>
+      <td><code>hybrid=0.3 KB</code> (materialized result)</td>
+    </tr>
+    <tr>
+      <td><code>handle + full hydrate</code></td>
+      <td class="num">5</td><td class="num">0.3 KB</td>
+      <td><code>assembly=0.3 KB</code>, full/preview/unclassified all 0</td>
+    </tr>
+    <tr>
+      <td><code>handle + preview excerpts</code></td>
+      <td class="num">5</td><td class="num">0.3 KB</td>
+      <td><code>assembly=0.3 KB</code>, full/preview/unclassified all 0</td>
+    </tr>
+    <tr>
+      <td><code>handle + context only</code></td>
+      <td class="num">5</td><td class="num">0.3 KB</td>
+      <td><code>assembly=0.3 KB</code>, full/preview/unclassified all 0</td>
+    </tr>
+  </tbody>
+</table>
+<p class="legend">All four variants report <code>scoped_exact_scan rows=0 bytes=0 KB</code>
+because the benchmark uses a <code>collection_id</code>-only filter, which does not
+trigger the scoped exact-scan path. Captured from
+<code>flutter test test/native/query_payload_bench_test.dart</code>, release build,
+2026-05-17 on macOS / arm64.</p>
+
+<h3>Behavior we did <em>not</em> change</h3>
+<ul>
+  <li><code>bm25_weight != 0</code> path — identical reads, identical ranking. Verified by
+  <code>test_scoped_exact_scan_skips_content_when_bm25_disabled</code> (top-K is stable).
+  Includes negative weights (treated as a BM25 penalty by RRF); they keep the previous
+  body-reading behavior intact.</li>
+  <li>Non-scoped queries — unchanged, the post-filter path doesn't touch content for
+  scoring.</li>
+  <li>Hydration counters (<code>full_hydrate_*</code>, <code>preview_*</code>, <code>assembly_*</code>) —
+  unchanged; those still record materialized result reads in <code>SearchHandle</code>.</li>
+  <li>The <code>collection_id</code>-only filter path still uses post-filter against the
+  global indexes; it does not enter the scoped exact-scan branch.</li>
+</ul>
+
+<h2>Test coverage</h2>
+
+<ul>
+  <li><strong>Cargo</strong> — <code>api::hybrid_search::tests::test_scoped_exact_scan_skips_content_when_bm25_disabled</code>:
+  asserts the counter is exactly zero with <code>bm25_weight = 0</code> and ≥ (sum of chunk
+  body lengths) with <code>bm25_weight &gt; 0</code>; also asserts vector-only top rank is
+  preserved.</li>
+  <li><strong>Cargo</strong> — pre-existing <code>test_hybrid_source_filter_exact_scan_keeps_scoped_bm25</code>
+  still passes (BM25 path untouched).</li>
+  <li><strong>Cargo</strong> — pre-existing <code>test_collection_filter_only_uses_post_filter_not_exact_scan</code>
+  still passes (collection-only filter does not trigger scoped scan).</li>
+  <li><strong>Dart</strong> — <code>test/native/scoped_exact_scan_bench_test.dart</code> drives
+  <code>searchMetaHybrid</code> across {50, 500} scoped chunks × {0.0, 0.5} BM25 weights and
+  asserts the counter is zero on the elided path and scales linearly on the BM25 path.</li>
+  <li><strong>Dart</strong> — pre-existing <code>test/native/query_payload_bench_test.dart</code>
+  unchanged in semantics; renderer now includes a <code>scoped_exact_scan</code> row that
+  reads 0 / 0 KB for non-scoped variants.</li>
+</ul>
+
+<h2>Files touched</h2>
+
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>rust_builder/rust/src/api/query_metrics.rs</code></td>
+      <td>Add <code>SCOPED_EXACT_SCAN_CONTENT</code> counter,
+      <code>record_scoped_exact_scan_content_read</code>, two struct fields, snapshot/reset
+      wiring.</td>
+    </tr>
+    <tr>
+      <td><code>rust_builder/rust/src/api/hybrid_search.rs</code></td>
+      <td>Hoist tokenization, compute <code>need_bm25</code>, switch SELECT projection,
+      tolerate <code>NULL</code> content, gate counter + BM25 collection + post-scan scoring on
+      <code>need_bm25</code>. New cargo test.</td>
+    </tr>
+    <tr>
+      <td><code>lib/src/rust/api/query_metrics.dart</code></td>
+      <td>FRB-regenerated bindings — adds <code>scopedExactScanRows</code> /
+      <code>scopedExactScanContentBytes</code>.</td>
+    </tr>
+    <tr>
+      <td><code>lib/services/benchmark_service.dart</code></td>
+      <td>Extend <code>QueryPayloadVariantStats</code>, add
+      <code>benchmarkScopedExactScan</code> + <code>ScopedExactScanBenchResult</code>.</td>
+    </tr>
+    <tr>
+      <td><code>test/native/scoped_exact_scan_bench_test.dart</code></td>
+      <td>New end-to-end coverage for the elided / non-elided matrix.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Compatibility</h2>
+
+<ul>
+  <li>No public API surface changes. <code>SearchFilter</code>, <code>RrfConfig</code>,
+  <code>SearchMetaHybridOptions</code>, and the Dart-side wrappers are byte-for-byte
+  identical for callers.</li>
+  <li>FRB struct shape gained two trailing fields. The native dylib and Dart bindings must
+  be rebuilt together — older clients pinned to the previous bindings will fail to decode
+  the stats struct.</li>
+  <li>Behavior of <code>search_hybrid</code> / <code>search_hybrid_simple</code> /
+  <code>search_hybrid_weighted</code> is unchanged for every input that previously produced a
+  ranked result; only the SQL projection and a counter are different.</li>
+</ul>
+
+<h2>Follow-ups (deferred)</h2>
+
+<ul>
+  <li>When <code>bm25_weight != 0</code> but <code>top_k</code> is tiny relative to scope (say
+  500 → 4), we still tokenize 500 bodies to score 4 winners. Possible next P1: precomputed
+  per-chunk BM25 term stats, or a scoped BM25 index keyed by source.</li>
+  <li>Tokenization itself still allocates per-token <code>String</code>s — orthogonal to this
+  change; tracked separately as the copy-elision candidate the user flagged in the same
+  triage.</li>
+  <li>The benchmark fixture uses synthetic 256 B chunks; real-world chunk bodies are
+  typically 1–4 KB, so the absolute scan-bytes savings on a 500-chunk scope scale to
+  0.5–2 MB per query, not 125 KB.</li>
+</ul>
+
+<h2>How to reproduce the numbers</h2>
+
+<pre><code># From repo root, on the rebased branch (enhancement/scoped-exact-scan-elision):
+flutter_rust_bridge_codegen generate
+cargo build --manifest-path rust_builder/rust/Cargo.toml --release
+cargo test --manifest-path rust_builder/rust/Cargo.toml --lib -- --test-threads=1
+flutter test test/native/scoped_exact_scan_bench_test.dart --reporter expanded
+flutter test test/native/query_payload_bench_test.dart    --reporter expanded</code></pre>
+
+<p class="legend">Each <code>flutter test</code> run prints the per-variant summary to
+stdout via <code>renderSummary()</code>; the table values in this doc are the
+release-build, single-iteration numbers (no warmup loop, since the bench is a
+correctness test, not a latency benchmark — wall-clock numbers are quoted only to
+show the elision path is not slower).</p>
+
+</main>
+</body>
+</html>

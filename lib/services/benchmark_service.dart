@@ -255,6 +255,63 @@ class BenchmarkService {
     );
   }
 
+  static QueryPayloadVariantStats _variantStatsFromNative({
+    required String label,
+    required double elapsedMs,
+    required int hitCount,
+    int metaBytes = 0,
+    int contextBytes = 0,
+    int fullChunkBytes = 0,
+    int previewBytes = 0,
+    query_metrics.QueryContentReadStats? nativeReadStats,
+  }) {
+    return QueryPayloadVariantStats(
+      label: label,
+      elapsedMs: elapsedMs,
+      hitCount: hitCount,
+      metaBytes: metaBytes,
+      contextBytes: contextBytes,
+      fullChunkBytes: fullChunkBytes,
+      previewBytes: previewBytes,
+      nativeHybridResultRows: _bigIntToInt(
+        nativeReadStats?.hybridResultRows ?? BigInt.zero,
+      ),
+      nativeHybridResultContentBytes: _bigIntToInt(
+        nativeReadStats?.hybridResultContentBytes ?? BigInt.zero,
+      ),
+      nativeFullHydrateRows: _bigIntToInt(
+        nativeReadStats?.fullHydrateRows ?? BigInt.zero,
+      ),
+      nativeFullHydrateContentBytes: _bigIntToInt(
+        nativeReadStats?.fullHydrateContentBytes ?? BigInt.zero,
+      ),
+      nativePreviewRows: _bigIntToInt(
+        nativeReadStats?.previewRows ?? BigInt.zero,
+      ),
+      nativePreviewContentBytes: _bigIntToInt(
+        nativeReadStats?.previewContentBytes ?? BigInt.zero,
+      ),
+      nativeAssemblyRows: _bigIntToInt(
+        nativeReadStats?.assemblyRows ?? BigInt.zero,
+      ),
+      nativeAssemblyContentBytes: _bigIntToInt(
+        nativeReadStats?.assemblyContentBytes ?? BigInt.zero,
+      ),
+      nativeUnclassifiedRows: _bigIntToInt(
+        nativeReadStats?.unclassifiedRows ?? BigInt.zero,
+      ),
+      nativeUnclassifiedContentBytes: _bigIntToInt(
+        nativeReadStats?.unclassifiedContentBytes ?? BigInt.zero,
+      ),
+      nativeScopedExactScanRows: _bigIntToInt(
+        nativeReadStats?.scopedExactScanRows ?? BigInt.zero,
+      ),
+      nativeScopedExactScanContentBytes: _bigIntToInt(
+        nativeReadStats?.scopedExactScanContentBytes ?? BigInt.zero,
+      ),
+    );
+  }
+
   /// Measure current query/search payload shape without changing runtime
   /// behavior.
   ///
@@ -393,7 +450,7 @@ class BenchmarkService {
       int previewBytes = 0,
       query_metrics.QueryContentReadStats? nativeReadStats,
     }) {
-      return QueryPayloadVariantStats(
+      return _variantStatsFromNative(
         label: label,
         elapsedMs: elapsedMs,
         hitCount: hitCount,
@@ -401,36 +458,7 @@ class BenchmarkService {
         contextBytes: contextBytes,
         fullChunkBytes: fullChunkBytes,
         previewBytes: previewBytes,
-        nativeHybridResultRows: _bigIntToInt(
-          nativeReadStats?.hybridResultRows ?? BigInt.zero,
-        ),
-        nativeHybridResultContentBytes: _bigIntToInt(
-          nativeReadStats?.hybridResultContentBytes ?? BigInt.zero,
-        ),
-        nativeFullHydrateRows: _bigIntToInt(
-          nativeReadStats?.fullHydrateRows ?? BigInt.zero,
-        ),
-        nativeFullHydrateContentBytes: _bigIntToInt(
-          nativeReadStats?.fullHydrateContentBytes ?? BigInt.zero,
-        ),
-        nativePreviewRows: _bigIntToInt(
-          nativeReadStats?.previewRows ?? BigInt.zero,
-        ),
-        nativePreviewContentBytes: _bigIntToInt(
-          nativeReadStats?.previewContentBytes ?? BigInt.zero,
-        ),
-        nativeAssemblyRows: _bigIntToInt(
-          nativeReadStats?.assemblyRows ?? BigInt.zero,
-        ),
-        nativeAssemblyContentBytes: _bigIntToInt(
-          nativeReadStats?.assemblyContentBytes ?? BigInt.zero,
-        ),
-        nativeUnclassifiedRows: _bigIntToInt(
-          nativeReadStats?.unclassifiedRows ?? BigInt.zero,
-        ),
-        nativeUnclassifiedContentBytes: _bigIntToInt(
-          nativeReadStats?.unclassifiedContentBytes ?? BigInt.zero,
-        ),
+        nativeReadStats: nativeReadStats,
       );
     }
 
@@ -570,6 +598,198 @@ class BenchmarkService {
         handleContextOnly: await runHandleVariant(
           _QueryPayloadHydration.contextOnly,
         ),
+      );
+    } finally {
+      query_metrics.resetQueryContentReadStats();
+      await closeDbPool();
+      if (await benchFile.exists()) {
+        await benchFile.delete();
+      }
+      if (await tokenizerFile.exists()) {
+        await tokenizerFile.delete();
+      }
+      if (restoreDbPath != null) {
+        await initDbPool(dbPath: restoreDbPath, maxSize: 4);
+      }
+    }
+  }
+
+  /// Measure the scoped exact-scan branch of `searchMetaHybrid`.
+  ///
+  /// Seeds one scoped source with [scopedChunkCount] chunks (each ~256 ASCII
+  /// bytes) plus a distractor source so the post-filter path has work to do,
+  /// then runs `searchMetaHybrid` with `sourceIds=[scopedSourceId]` across the
+  /// supplied [bm25Weights]. Each variant captures `query_metrics`
+  /// `scoped_exact_scan_*` counters before disposing the handle, so the caller
+  /// can compare scan bytes against the BM25 toggle and scope size.
+  ///
+  /// Intentionally meta-only — no hydration, no assemble — so the recorded
+  /// scoped-scan bytes are not blurred with `full_hydrate_*` materialization.
+  static Future<ScopedExactScanBenchResult> benchmarkScopedExactScan({
+    int scopedChunkCount = 50,
+    int distractorChunkCount = 10,
+    int topK = 4,
+    int chunkContentChars = 256,
+    List<double> bm25Weights = const [0.0, 0.5],
+    String? restoreDbPath,
+    String? dbPathOverride,
+  }) async {
+    const collectionId = 'bench-scoped-exact-scan';
+    const queryText = 'install checksum smoke';
+    final queryEmbedding = Float32List.fromList([1.0, 0.0, 0.0, 0.0]);
+
+    final benchDbPath =
+        dbPathOverride ??
+        "${(await getApplicationDocumentsDirectory()).path}/scoped_exact_scan_bench.sqlite";
+    final benchFile = File(benchDbPath);
+    if (await benchFile.exists()) {
+      await benchFile.delete();
+    }
+    final tokenizerFile = File('$benchDbPath.tokenizer.json');
+    if (await tokenizerFile.exists()) {
+      await tokenizerFile.delete();
+    }
+
+    await initDbPool(dbPath: benchDbPath, maxSize: 4);
+    await initDb();
+    await source_rag.initSourceDb();
+    await tokenizerFile.writeAsString(
+      '{"version":"1.0","truncation":null,"padding":null,'
+      '"added_tokens":[],"normalizer":null,'
+      '"pre_tokenizer":{"type":"Whitespace"},"post_processor":null,'
+      '"decoder":null,"model":{"type":"WordLevel",'
+      '"vocab":{"[UNK]":0,"install":1,"checksum":2,"smoke":3,"setup":4},'
+      '"unk_token":"[UNK]"}}',
+      flush: true,
+    );
+    await initTokenizer(tokenizerPath: tokenizerFile.path);
+
+    String makeChunkContent(int seed) {
+      const words = [
+        'install',
+        'checksum',
+        'smoke',
+        'setup',
+        'verify',
+        'archive',
+        'manifest',
+        'release',
+        'config',
+        'package',
+      ];
+      final buffer = StringBuffer();
+      var i = seed;
+      while (buffer.length < chunkContentChars) {
+        if (buffer.isNotEmpty) buffer.write(' ');
+        buffer.write(words[i % words.length]);
+        i++;
+      }
+      return buffer.toString().substring(0, chunkContentChars);
+    }
+
+    Future<int> seedSource({
+      required String name,
+      required int chunkCount,
+      required int seedBase,
+    }) async {
+      final source = await source_rag.addSourceInCollection(
+        collectionId: collectionId,
+        content: 'bench source $name',
+        metadata: '{"source":"$name"}',
+        name: name,
+      );
+      await source_rag.updateSourceStatus(
+        sourceId: source.sourceId,
+        status: 'completed',
+      );
+      var cursor = 0;
+      final chunkData = <source_rag.ChunkData>[];
+      for (var i = 0; i < chunkCount; i++) {
+        final content = makeChunkContent(seedBase + i);
+        chunkData.add(
+          source_rag.ChunkData(
+            content: content,
+            chunkIndex: i,
+            startPos: cursor,
+            endPos: cursor + content.length,
+            chunkType: 'general',
+            embedding: Float32List.fromList([
+              1.0 - (i % 16) * 0.01,
+              (i % 16) * 0.01,
+              0.0,
+              0.0,
+            ]),
+          ),
+        );
+        cursor += content.length + 1;
+      }
+      await source_rag.addChunks(sourceId: source.sourceId, chunks: chunkData);
+      return source.sourceId;
+    }
+
+    try {
+      final scopedSourceId = await seedSource(
+        name: 'scoped',
+        chunkCount: scopedChunkCount,
+        seedBase: 0,
+      );
+      await seedSource(
+        name: 'distractor',
+        chunkCount: distractorChunkCount,
+        seedBase: 7,
+      );
+      await source_rag.rebuildChunkHnswIndexForCollection(
+        collectionId: collectionId,
+      );
+      await source_rag.rebuildChunkBm25IndexForCollection(
+        collectionId: collectionId,
+      );
+
+      final variants = <QueryPayloadVariantStats>[];
+      for (final bm25Weight in bm25Weights) {
+        source_rag.SearchHandle? handle;
+        query_metrics.resetQueryContentReadStats();
+        final sw = Stopwatch()..start();
+        try {
+          handle = await source_rag.searchMetaHybrid(
+            collectionId: collectionId,
+            queryText: queryText,
+            queryEmbedding: queryEmbedding,
+            options: source_rag.SearchMetaHybridOptions(
+              topK: topK,
+              vectorWeight: 1.0 - bm25Weight,
+              bm25Weight: bm25Weight,
+              sourceIds: _toInt64List([scopedSourceId]),
+              adjacentChunks: 0,
+            ),
+          );
+          final hits = await handle.hitMeta();
+          sw.stop();
+          final nativeReadStats = query_metrics.takeQueryContentReadStats();
+
+          variants.add(
+            _variantStatsFromNative(
+              label:
+                  'scoped exact scan (chunks=$scopedChunkCount, bm25=${bm25Weight.toStringAsFixed(2)})',
+              elapsedMs: sw.elapsedMicroseconds / 1000.0,
+              hitCount: hits.length,
+              nativeReadStats: nativeReadStats,
+            ),
+          );
+        } finally {
+          if (handle != null) {
+            await handle.dispose();
+          }
+        }
+      }
+
+      return ScopedExactScanBenchResult(
+        scopedChunkCount: scopedChunkCount,
+        distractorChunkCount: distractorChunkCount,
+        chunkContentBytes: chunkContentChars,
+        topK: topK,
+        bm25Weights: List.unmodifiable(bm25Weights),
+        variants: List.unmodifiable(variants),
       );
     } finally {
       query_metrics.resetQueryContentReadStats();
@@ -1581,6 +1801,52 @@ class IngestLatencyBenchResult {
 
 enum _QueryPayloadHydration { full, preview, contextOnly }
 
+/// Result of [BenchmarkService.benchmarkScopedExactScan].
+///
+/// Captures the scoped exact-scan branch of `searchMetaHybrid`: how many
+/// chunks the backend walks (and how many bytes it reads from `c.content`)
+/// when `source_ids` is set, across the supplied `bm25Weights`. The intent
+/// is to expose whether the SELECT's unconditional `c.content` projection
+/// dominates the scoped path even when BM25 is effectively disabled.
+class ScopedExactScanBenchResult {
+  /// Number of chunks under the scoped `source_ids` filter.
+  final int scopedChunkCount;
+
+  /// Number of chunks on a distractor source kept outside the filter — exists
+  /// purely so the scoped filter has something to exclude.
+  final int distractorChunkCount;
+
+  /// Approximate UTF-8 byte length of each chunk body.
+  final int chunkContentBytes;
+
+  /// `topK` requested per variant.
+  final int topK;
+
+  /// BM25 weights iterated, one entry per [variants].
+  final List<double> bm25Weights;
+
+  /// Captured stats per BM25 weight (aligned with [bm25Weights]).
+  final List<QueryPayloadVariantStats> variants;
+
+  const ScopedExactScanBenchResult({
+    required this.scopedChunkCount,
+    required this.distractorChunkCount,
+    required this.chunkContentBytes,
+    required this.topK,
+    required this.bm25Weights,
+    required this.variants,
+  });
+
+  String renderSummary() {
+    return [
+      'Scoped exact-scan baseline (scoped_chunks=$scopedChunkCount, '
+          'distractor=$distractorChunkCount, '
+          'chunk_body≈${chunkContentBytes}B, topK=$topK):',
+      for (final v in variants) v.renderSummary(),
+    ].join('\n');
+  }
+}
+
 /// Result of [BenchmarkService.benchmarkQueryPayload].
 ///
 /// This is a query-path baseline: it counts UTF-8 bytes of strings surfaced to
@@ -1656,6 +1922,13 @@ class QueryPayloadVariantStats {
   final int nativeUnclassifiedRows;
   final int nativeUnclassifiedContentBytes;
 
+  /// Native rows/bytes the hybrid-search scoped exact-scan path read while
+  /// walking the full scoped chunk set (source_ids / metadata_like branch).
+  /// Disjoint from the materialization counters above — counts backend scan
+  /// work, not result hydration.
+  final int nativeScopedExactScanRows;
+  final int nativeScopedExactScanContentBytes;
+
   const QueryPayloadVariantStats({
     required this.label,
     required this.elapsedMs,
@@ -1674,6 +1947,8 @@ class QueryPayloadVariantStats {
     required this.nativeAssemblyContentBytes,
     required this.nativeUnclassifiedRows,
     required this.nativeUnclassifiedContentBytes,
+    required this.nativeScopedExactScanRows,
+    required this.nativeScopedExactScanContentBytes,
   });
 
   int get totalStringBytes =>
@@ -1708,6 +1983,8 @@ class QueryPayloadVariantStats {
           'full=${fmt(nativeFullHydrateContentBytes)} '
           'preview=${fmt(nativePreviewContentBytes)} '
           'unclassified=${fmt(nativeUnclassifiedContentBytes)}',
+      '    scoped_exact_scan rows=$nativeScopedExactScanRows '
+          'bytes=${fmt(nativeScopedExactScanContentBytes)}',
     ].join('\n');
   }
 }

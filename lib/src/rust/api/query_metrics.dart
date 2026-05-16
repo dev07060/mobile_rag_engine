@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `enter`, `record_hybrid_result_content_read`, `record_hydrated_content_read`
+// These functions are ignored because they are not marked as `pub`: `enter`, `record_hybrid_result_content_read`, `record_hydrated_content_read`, `record_scoped_exact_scan_content_read`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `QueryContentReadGuard`, `QueryContentReadPhase`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `drop`, `eq`, `fmt`, `fmt`
 
@@ -30,6 +30,8 @@ class QueryContentReadStats {
   final BigInt assemblyContentBytes;
   final BigInt unclassifiedRows;
   final BigInt unclassifiedContentBytes;
+  final BigInt scopedExactScanRows;
+  final BigInt scopedExactScanContentBytes;
 
   const QueryContentReadStats({
     required this.hybridResultRows,
@@ -42,8 +44,11 @@ class QueryContentReadStats {
     required this.assemblyContentBytes,
     required this.unclassifiedRows,
     required this.unclassifiedContentBytes,
+    required this.scopedExactScanRows,
+    required this.scopedExactScanContentBytes,
   });
 
+  /// Materialized result bytes only — see [`Self::rows_total`].
   Future<BigInt> contentBytesTotal() => RustLib.instance.api
       .crateApiQueryMetricsQueryContentReadStatsContentBytesTotal(that: this);
 
@@ -55,6 +60,9 @@ class QueryContentReadStats {
   Future<BigInt> hydrationRowsTotal() => RustLib.instance.api
       .crateApiQueryMetricsQueryContentReadStatsHydrationRowsTotal(that: this);
 
+  /// Materialized result reads only — does NOT include the scoped exact-scan
+  /// backend counter, which measures rows scanned during search rather than
+  /// rows surfaced as results.
   Future<BigInt> rowsTotal() => RustLib.instance.api
       .crateApiQueryMetricsQueryContentReadStatsRowsTotal(that: this);
 
@@ -69,7 +77,9 @@ class QueryContentReadStats {
       assemblyRows.hashCode ^
       assemblyContentBytes.hashCode ^
       unclassifiedRows.hashCode ^
-      unclassifiedContentBytes.hashCode;
+      unclassifiedContentBytes.hashCode ^
+      scopedExactScanRows.hashCode ^
+      scopedExactScanContentBytes.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -85,5 +95,7 @@ class QueryContentReadStats {
           assemblyRows == other.assemblyRows &&
           assemblyContentBytes == other.assemblyContentBytes &&
           unclassifiedRows == other.unclassifiedRows &&
-          unclassifiedContentBytes == other.unclassifiedContentBytes;
+          unclassifiedContentBytes == other.unclassifiedContentBytes &&
+          scopedExactScanRows == other.scopedExactScanRows &&
+          scopedExactScanContentBytes == other.scopedExactScanContentBytes;
 }
