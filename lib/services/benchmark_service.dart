@@ -633,7 +633,8 @@ class BenchmarkService {
   /// then runs `searchMetaHybrid` with `sourceIds=[scopedSourceId]` across the
   /// supplied [bm25Weights]. Each variant captures `query_metrics`
   /// `scoped_exact_scan_*` counters before disposing the handle, so the caller
-  /// can compare scan bytes against the BM25 toggle and scope size.
+  /// can verify that scoped BM25 ranks are served from the active term index
+  /// without query-time chunk-body reads or tokenization.
   ///
   /// Intentionally meta-only — no hydration, no assemble — so the recorded
   /// scoped-scan bytes are not blurred with `full_hydrate_*` materialization.
@@ -1815,11 +1816,9 @@ enum _QueryPayloadHydration { full, preview, contextOnly }
 
 /// Result of [BenchmarkService.benchmarkScopedExactScan].
 ///
-/// Captures the scoped exact-scan branch of `searchMetaHybrid`: how many
-/// chunks the backend walks (and how many bytes it reads from `c.content`)
-/// when `source_ids` is set, across the supplied `bm25Weights`. The intent
-/// is to expose whether the SELECT's unconditional `c.content` projection
-/// dominates the scoped path even when BM25 is effectively disabled.
+/// Captures the scoped exact-scan branch of `searchMetaHybrid`: whether
+/// `source_ids` queries read or tokenize chunk bodies while preserving BM25
+/// ranks from the active term index across the supplied `bm25Weights`.
 class ScopedExactScanBenchResult {
   /// Number of chunks under the scoped `source_ids` filter.
   final int scopedChunkCount;
@@ -1851,7 +1850,7 @@ class ScopedExactScanBenchResult {
 
   String renderSummary() {
     return [
-      'Scoped exact-scan baseline (scoped_chunks=$scopedChunkCount, '
+      'Scoped exact-scan indexed-BM25 check (scoped_chunks=$scopedChunkCount, '
           'distractor=$distractorChunkCount, '
           'chunk_body≈${chunkContentBytes}B, topK=$topK):',
       for (final v in variants) v.renderSummary(),

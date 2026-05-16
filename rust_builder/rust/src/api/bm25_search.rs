@@ -18,7 +18,7 @@
 
 use log::{debug, info};
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 
 static INVERTED_INDEX: Lazy<RwLock<InvertedIndex>> =
@@ -141,6 +141,76 @@ impl InvertedIndex {
         results
     }
 
+    pub fn search_scoped_tokens(
+        &self,
+        query_tokens: &[String],
+        scoped_doc_ids: &[i64],
+        top_k: usize,
+    ) -> Vec<(i64, f64)> {
+        if self.doc_count == 0 || query_tokens.is_empty() || scoped_doc_ids.is_empty() {
+            return vec![];
+        }
+
+        let mut scoped_ids = HashSet::with_capacity(scoped_doc_ids.len());
+        let mut scoped_doc_count = 0usize;
+        let mut scoped_total_tokens = 0usize;
+        for doc_id in scoped_doc_ids {
+            if !scoped_ids.insert(*doc_id) {
+                continue;
+            }
+            if let Some(meta) = self.doc_meta.get(doc_id) {
+                scoped_doc_count += 1;
+                scoped_total_tokens += meta.length;
+            }
+        }
+
+        if scoped_doc_count == 0 {
+            return vec![];
+        }
+
+        let avg_doc_length = scoped_total_tokens as f64 / scoped_doc_count as f64;
+        let k1 = 1.2;
+        let b = 0.75;
+        let mut scores: HashMap<i64, f64> = HashMap::new();
+
+        for token in query_tokens {
+            let Some(postings) = self.postings.get(token) else {
+                continue;
+            };
+
+            let scoped_df = postings
+                .iter()
+                .filter(|(doc_id, _)| {
+                    scoped_ids.contains(doc_id) && self.doc_meta.contains_key(doc_id)
+                })
+                .count();
+            if scoped_df == 0 {
+                continue;
+            }
+
+            let n = scoped_df as f64;
+            let idf = ((scoped_doc_count as f64 - n + 0.5) / (n + 0.5) + 1.0).ln();
+
+            for &(doc_id, tf) in postings {
+                if !scoped_ids.contains(&doc_id) {
+                    continue;
+                }
+                if let Some(meta) = self.doc_meta.get(&doc_id) {
+                    let tf_f = tf as f64;
+                    let doc_len = meta.length as f64;
+                    let tf_component = (tf_f * (k1 + 1.0))
+                        / (tf_f + k1 * (1.0 - b + b * (doc_len / avg_doc_length.max(1.0))));
+                    *scores.entry(doc_id).or_insert(0.0) += idf * tf_component;
+                }
+            }
+        }
+
+        let mut results: Vec<(i64, f64)> = scores.into_iter().collect();
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        results.truncate(top_k);
+        results
+    }
+
     pub fn clear(&mut self) {
         self.postings.clear();
         self.doc_meta.clear();
@@ -244,6 +314,24 @@ pub fn bm25_search(query: String, top_k: u32) -> Vec<Bm25SearchResult> {
         .collect()
 }
 
+pub(crate) fn bm25_search_scoped_tokens(
+    query_tokens: &[String],
+    scoped_doc_ids: &[i64],
+    top_k: usize,
+) -> Vec<Bm25SearchResult> {
+    let index = INVERTED_INDEX.read().unwrap();
+    let results = index.search_scoped_tokens(query_tokens, scoped_doc_ids, top_k);
+    debug!(
+        "[bm25] Scoped search over {} ids returned {} results",
+        scoped_doc_ids.len(),
+        results.len()
+    );
+    results
+        .into_iter()
+        .map(|(doc_id, score)| Bm25SearchResult { doc_id, score })
+        .collect()
+}
+
 /// Clear BM25 index.
 pub fn bm25_clear_index() {
     let mut index = INVERTED_INDEX.write().unwrap();
@@ -322,6 +410,24 @@ mod tests {
         let results = index.search("삼성전자 주가", 10);
         assert!(!results.is_empty());
         assert_eq!(results[0].0, 1); // 삼성전자 document should be first
+    }
+
+    #[test]
+    fn test_bm25_scoped_search_filters_and_uses_scope_stats() {
+        let mut index = InvertedIndex::new();
+        index.add_document(1, "apple apple checksum");
+        index.add_document(2, "banana checksum");
+        index.add_document(3, "apple checksum");
+
+        let query_tokens = tokenize_for_bm25("apple");
+        let scoped = index.search_scoped_tokens(&query_tokens, &[1, 2], 10);
+
+        assert_eq!(scoped.len(), 1);
+        assert_eq!(scoped[0].0, 1);
+
+        let all = index.search_scoped_tokens(&query_tokens, &[1, 2, 3], 10);
+        assert_eq!(all.len(), 2);
+        assert!(all.iter().any(|(doc_id, _)| *doc_id == 3));
     }
 
     #[test]

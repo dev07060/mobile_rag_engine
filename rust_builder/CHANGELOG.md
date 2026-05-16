@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+* **Scoped BM25 search**:
+  - Added scoped BM25 ranking over the existing in-memory inverted index, restricted by the scoped chunk ids collected during exact vector scan.
+  - Removed query-time chunk-body reads/tokenization from the source/metadata scoped exact-scan path when BM25 is enabled.
+
 ## 0.18.1
 * **Ingest session**:
   - Added extracted body byte/character lengths to `PreparedIngestion` so Dart file-ingest callers can display body-size metadata without materializing the full body.

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+* **Retrieval hot path**:
+  - Scoped source/metadata hybrid searches now preserve BM25 ranks through the active collection BM25 term index instead of reading and tokenizing every scoped chunk body at query time.
+  - Updated scoped exact-scan benchmarks to assert zero query-time body reads and zero body tokenization for both vector-only and BM25-on scoped paths.
+
 ## 0.18.3
 * **Documentation**:
   - Removed the oversized README memory benchmark note from the top of the pub.dev page.

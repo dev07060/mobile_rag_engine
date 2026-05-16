@@ -98,10 +98,10 @@
 
 <h1>Hybrid Scoped Exact-Scan — Content Projection Elision</h1>
 <div class="meta">
-  P0 query-path optimization &nbsp;·&nbsp;
-  Branch: <code>enhancement/scoped-exact-scan-elision</code>
-  (rebased onto <code>origin/main</code> @ <code>abf6b7e</code>, which includes
-  PR #49 handle-content-cache) &nbsp;·&nbsp;
+  Scoped query-path optimization &nbsp;·&nbsp;
+  Branch: <code>codex/scoped-bm25-term-stats</code>
+  (based on <code>main</code> @ <code>d736b30</code>, which includes
+  PR #51 scoped BM25 instrumentation) &nbsp;·&nbsp;
   Owner: bhoh@polarpulse.ai &nbsp;·&nbsp;
   Date: 2026-05-17
 </div>
@@ -109,15 +109,16 @@
 <div class="summary">
   <p><strong>What changed.</strong> The scoped exact-scan branch of <code>hybrid_search</code>
   (the path triggered by <code>source_ids</code> / <code>metadata_like</code> filters) used to
-  pull <code>c.content</code> for every scoped chunk unconditionally. We now elide that column
-  from the <code>SELECT</code> when the BM25 leg cannot contribute to the final RRF score.</p>
-  <p><strong>Net effect.</strong> When callers pass <code>bm25_weight = 0</code> (or the query
-  produces no BM25 tokens), the scoped exact-scan reads <strong class="good">zero</strong> chunk
-  bytes regardless of scope size. With <code>bm25_weight &gt; 0</code> the behavior is unchanged.</p>
-  <p><strong>Why P0.</strong> The previous behavior scaled linearly with the scoped set —
+  pull <code>c.content</code> for every scoped chunk when BM25 was active. We now keep vector
+  scoring exact by walking scoped embeddings, but retrieve BM25 ranks from the active
+  collection BM25 term index restricted to those scoped chunk ids.</p>
+  <p><strong>Net effect.</strong> Both <code>bm25_weight = 0</code> and
+  <code>bm25_weight &gt; 0</code> scoped queries read <strong class="good">zero</strong>
+  chunk-body bytes and perform <strong class="good">zero</strong> per-chunk tokenization at
+  query time, while preserving BM25 ranks when the collection BM25 index is active.</p>
+  <p><strong>Why this mattered.</strong> The previous behavior scaled linearly with the scoped set —
   500 chunks × ~256 B ≈ 125 KB of SQLite content read per query, even when the bytes were
-  never tokenized. That growth is independent of <code>top_k</code>, so it dominates large
-  scoped filters.</p>
+  only needed to reconstruct term frequencies that already exist in the BM25 index.</p>
 </div>
 
 <h2>Background</h2>
@@ -125,12 +126,14 @@
 <p>The scoped exact-scan branch is the fallback hybrid search runs when a query carries
 <code>source_ids</code> or <code>metadata_like</code> filters. Instead of querying global vector /
 BM25 indexes and post-filtering, it walks every chunk under the scope and re-scores both
-legs in-process. This trades index latency for recall on small scoped subsets.</p>
+legs in-process. The current implementation keeps the vector exact scan, then asks the
+active BM25 index to compute a scoped BM25 rank over the scanned chunk ids.</p>
 
 <p>The legacy <code>SELECT</code> read four columns per row:
 <code>c.id</code>, <code>c.embedding</code>, <code>c.embedding_i8</code>, <code>c.content</code>.
-Only the first three are needed for vector scoring; <code>c.content</code> exists solely so the
-per-row BM25 collector can tokenize the chunk body.</p>
+Only the first three are needed for vector scoring; <code>c.content</code> existed solely so the
+per-row BM25 collector could tokenize the chunk body. That collector has been replaced by
+indexed scoped BM25 lookup.</p>
 
 <p>The BM25 leg only contributes to the final RRF score when both:</p>
 <ul>
@@ -139,24 +142,18 @@ per-row BM25 collector can tokenize the chunk body.</p>
   can match.</li>
 </ul>
 
-<p>Whenever one of those is false, every byte read from <code>c.content</code> is pure I/O waste.</p>
+<p>Whenever one of those is false, every byte read from <code>c.content</code> is pure I/O waste.
+When BM25 is active, the same term frequencies and document lengths are already available in
+the collection BM25 index after rebuild, so re-reading bodies at query time is also avoidable.</p>
 
-<h2>Instrumentation (landed first)</h2>
+<h2>Instrumentation</h2>
 
-<p>Before changing behavior we landed two counter families in <code>query_metrics</code> so
-the I/O cost <em>and</em> the CPU cost are both measurable end-to-end:</p>
+<p>The scoped body-read and tokenization counters remain in <code>query_metrics</code> as
+regression guards. They should stay at zero for scoped queries that use indexed BM25:</p>
 
 <pre><code>// rust_builder/rust/src/api/query_metrics.rs
 static SCOPED_EXACT_SCAN_CONTENT:      AtomicCounter             = AtomicCounter::new();
 static SCOPED_EXACT_SCAN_TOKENIZATION: AtomicTokenizationCounter = AtomicTokenizationCounter::new();
-
-pub(crate) fn record_scoped_exact_scan_content_read(content_bytes: u64) { … }
-
-pub(crate) fn record_scoped_exact_scan_tokenization(
-    content_bytes: u64,
-    tokens: u64,
-    elapsed_nanos: u64,
-) { … }
 
 pub struct QueryContentReadStats {
     // … existing fields …
@@ -170,78 +167,64 @@ pub struct QueryContentReadStats {
 
 <p>The counters are intentionally <em>not</em> included in <code>rows_total()</code> /
 <code>content_bytes_total()</code> — those describe materialized result reads, while these
-measure <em>backend scan</em> work. A scoped chunk that survives RRF is read once during the
-scan and (if needed) once again during hydration; conflating them would double-count.</p>
-
-<p>The tokenization counter is a separate atomic family because it answers a different
-question than the I/O counter. After this P0 lands, <code>scoped_exact_scan_content_bytes</code>
-becomes zero on the elided path, but the bm25-on path still pays the tokenization cost
-proportional to scope size, not <code>top_k</code> — that signal is what surfaces the next
-P1 candidate.</p>
+measure backend scoped-scan body work. Under indexed BM25, that backend body work should
+be absent; hydration and assembly counters still record materialized result reads later.</p>
 
 <h2>Change</h2>
 
-<h3>SELECT projection becomes conditional</h3>
+<h3>SELECT projection drops content</h3>
 
 <pre><code>// rust_builder/rust/src/api/hybrid_search.rs (scoped branch)
 let query_tokens = tokenize_for_bm25(&query_text);
-let query_token_set: HashSet&lt;String&gt; = query_tokens.iter().cloned().collect();
 // `!= 0.0` (not `&gt; 0.0`) — preserves prior behavior for any non-zero weight,
 // including negative values that callers might pass.
-let need_bm25 = config.bm25_weight != 0.0 &amp;&amp; !query_token_set.is_empty();
-let content_projection = if need_bm25 { "c.content" } else { "NULL AS content" };
+let need_bm25 = config.bm25_weight != 0.0 &amp;&amp; !query_tokens.is_empty();
 
 let query_with_i8 = format!(
-    "SELECT c.id, c.embedding, {}, {}
+    "SELECT c.id, c.embedding, {}
          FROM chunks c
          LEFT JOIN sources s ON c.source_id = s.id
          WHERE {}",
     "c.embedding_i8",
-    content_projection,
     exact_conditions.join(" AND ")
 );</code></pre>
 
 <p>Notes:</p>
 <ul>
-  <li>The token set is computed once, before the SQL prepare, and the same predicate
-  guards both the projection and the post-scan BM25 scoring block.</li>
+  <li>The exact scan still walks every scoped embedding to preserve vector recall under
+  <code>source_ids</code> / <code>metadata_like</code>.</li>
   <li>The fallback prepare (the <code>NULL AS embedding_i8</code> path used on schemas without
-  the i8 column) goes through the same projection.</li>
+  the i8 column) also omits <code>c.content</code>.</li>
   <li>The gate uses <code>!= 0.0</code> rather than <code>&gt; 0.0</code> so any non-zero
-  weight — including negative weights some callers use as a penalty — keeps the prior
-  behavior of reading content and computing BM25. We only elide when the BM25
-  contribution to RRF is provably zero.</li>
+  weight — including negative weights some callers use as a penalty — still requests BM25
+  ranks from the term index.</li>
 </ul>
 
-<h3>Row reader treats content as nullable</h3>
+<h3>BM25 scoring uses scoped postings</h3>
 
 <pre><code>let chunk_iter = stmt.query_map([], |row| {
     Ok((
         row.get::&lt;_, i64&gt;(0)?,
         row.get::&lt;_, Vec&lt;u8&gt;&gt;(1)?,
         row.get::&lt;_, Option&lt;Vec&lt;u8&gt;&gt;&gt;(2)?,
-        row.get::&lt;_, Option&lt;String&gt;&gt;(3)?,   // was: String
     ))
 })?;
 
+let mut scoped_doc_ids = Vec::new();
 for row in chunk_iter {
-    if let Ok((id, embedding_blob, embedding_i8_blob, content)) = row {
-        if let Some(ref content_str) = content {
-            record_scoped_exact_scan_content_read(content_str.len() as u64);
-        }
+    if let Ok((id, embedding_blob, embedding_i8_blob)) = row {
         // … vector scoring (unchanged) …
-
-        if need_bm25 {
-            if let Some(content_str) = content {
-                // … existing BM25 token / df / tf collection …
-            }
-        }
+        scoped_doc_ids.push(id);
     }
+}
+
+if need_bm25 {
+    bm25_results = bm25_search_scoped_tokens(&amp;query_tokens, &amp;scoped_doc_ids, candidate_k);
 }</code></pre>
 
-<p>The counter only fires when content was actually pulled. The post-scan scoring block also
-flips its guard from <code>!query_tokens.is_empty()</code> to <code>need_bm25</code>, so the two
-gates stay in lockstep.</p>
+<p><code>bm25_search_scoped_tokens</code> reuses the active in-memory BM25 inverted index,
+computes document frequency and average document length over the supplied scoped ids, and
+returns BM25 candidates without touching chunk bodies.</p>
 
 <h2>Measured impact</h2>
 
@@ -269,8 +252,8 @@ with a small distractor source so the scope filter has something to exclude.</p>
     <tr>
       <td>50 chunks</td><td>0.5</td>
       <td class="num">50</td><td class="num">12.5 KB</td>
-      <td class="num">50</td><td class="num">12.5 KB</td>
-      <td class="num">0% (intended)</td>
+      <td class="num good">0</td><td class="num good">0 KB</td>
+      <td class="num good">100%</td>
     </tr>
     <tr>
       <td>500 chunks</td><td>0.0</td>
@@ -281,8 +264,8 @@ with a small distractor source so the scope filter has something to exclude.</p>
     <tr>
       <td>500 chunks</td><td>0.5</td>
       <td class="num">500</td><td class="num">125 KB</td>
-      <td class="num">500</td><td class="num">125 KB</td>
-      <td class="num">0% (intended)</td>
+      <td class="num good">0</td><td class="num good">0 KB</td>
+      <td class="num good">100%</td>
     </tr>
   </tbody>
 </table>
@@ -290,7 +273,7 @@ with a small distractor source so the scope filter has something to exclude.</p>
 <code>scoped_exact_scan_*</code> counter. Source: <code>test/native/scoped_exact_scan_bench_test.dart</code>,
 release-profile Rust build on macOS / arm64.</p>
 
-<h3>Scoped exact-scan tokenization (per query, after P0)</h3>
+<h3>Scoped exact-scan tokenization (per query, after indexed BM25)</h3>
 <table>
   <thead>
     <tr>
@@ -307,13 +290,13 @@ release-profile Rust build on macOS / arm64.</p>
       <td>50 chunks</td><td>0.0</td>
       <td class="num good">0</td><td class="num good">0 KB</td>
       <td class="num good">0</td><td class="num good">0.000 ms</td>
-      <td class="num">6.82 ms*</td>
+      <td class="num">8.26 ms*</td>
     </tr>
     <tr>
       <td>50 chunks</td><td>0.5</td>
-      <td class="num">50</td><td class="num">12.5 KB</td>
-      <td class="num">1,705</td><td class="num">0.181 ms</td>
-      <td class="num">0.69 ms</td>
+      <td class="num good">0</td><td class="num good">0 KB</td>
+      <td class="num good">0</td><td class="num good">0.000 ms</td>
+      <td class="num">0.62 ms</td>
     </tr>
     <tr>
       <td>500 chunks</td><td>0.0</td>
@@ -323,30 +306,25 @@ release-profile Rust build on macOS / arm64.</p>
     </tr>
     <tr>
       <td>500 chunks</td><td>0.5</td>
-      <td class="num">500</td><td class="num">125 KB</td>
-      <td class="num">17,050</td><td class="num">1.588 ms</td>
-      <td class="num">2.73 ms</td>
+      <td class="num good">0</td><td class="num good">0 KB</td>
+      <td class="num good">0</td><td class="num good">0.000 ms</td>
+      <td class="num">0.66 ms</td>
     </tr>
   </tbody>
 </table>
-<p class="legend">*The 6.82 ms first sample includes DB pool initialization / pragma setup
+<p class="legend">*The first 50-chunk sample includes DB pool initialization / pragma setup
 for the temp file — not directly comparable; the 50-chunk path is much faster on the second
-and subsequent benchmark variants. Tokenization wall-time is the sum of per-chunk
-<code>tokenize_for_bm25</code> durations measured by <code>Instant::now()</code> deltas inside
-the scan loop. Tokens are post-normalization (lowercase + alphanum filter).</p>
+and subsequent benchmark variants. Tokenization counters now describe query-time body
+tokenization only; index-build tokenization is paid during BM25 rebuild, not during scoped
+search.</p>
 
 <p>Two signals worth flagging:</p>
 <ul>
-  <li><strong>I/O is gone</strong> on the elided path: scope 500 drops from 125 KB to 0
-  bytes of SQLite content reads, and wall-clock from 2.73 ms to 0.76 ms — <strong>~3.6×
-  faster</strong> on the same fixture for the most common scoped query shape
-  (vector-only re-ranking under <code>source_ids</code>).</li>
-  <li><strong>Tokenization scales with scope, not top-K.</strong> 50→500 scope grows
-  tokens 1,705→17,050 (10×) and tokenize time 0.181→1.588 ms (~8.8×), confirming the
-  P1 candidate flagged in the follow-ups section: when <code>bm25_weight != 0</code>
-  and <code>top_k</code> is tiny, we still tokenize every body in the scope. A
-  scoped BM25 index keyed by source — or even a precomputed per-chunk term-stats
-  blob — would cut this to <code>O(top_k)</code> instead of <code>O(scope)</code>.</li>
+  <li><strong>I/O is gone</strong> on the indexed BM25 path: scope 500 drops from 125 KB
+  of SQLite content reads to 0 bytes even with <code>bm25_weight = 0.5</code>.</li>
+  <li><strong>Tokenization moved out of query time.</strong> The scoped query now pays the
+  existing BM25 rebuild/indexing cost once, then reuses postings and document lengths for
+  source-scoped ranking.</li>
 </ul>
 
 <h3>Adjacent baseline (post-PR #49 handle-content-cache)</h3>
@@ -396,10 +374,9 @@ trigger the scoped exact-scan path. Captured from
 
 <h3>Behavior we did <em>not</em> change</h3>
 <ul>
-  <li><code>bm25_weight != 0</code> path — identical reads, identical ranking. Verified by
-  <code>test_scoped_exact_scan_skips_content_when_bm25_disabled</code> (top-K is stable).
-  Includes negative weights (treated as a BM25 penalty by RRF); they keep the previous
-  body-reading behavior intact.</li>
+  <li><code>bm25_weight != 0</code> ranking semantics — BM25 still contributes through RRF,
+  but term frequencies and document lengths now come from the active BM25 index instead of
+  per-query body tokenization.</li>
   <li>Non-scoped queries — unchanged, the post-filter path doesn't touch content for
   scoring.</li>
   <li>Hydration counters (<code>full_hydrate_*</code>, <code>preview_*</code>, <code>assembly_*</code>) —
@@ -412,20 +389,20 @@ trigger the scoped exact-scan path. Captured from
 
 <ul>
   <li><strong>Cargo</strong> — <code>api::hybrid_search::tests::test_scoped_exact_scan_skips_content_when_bm25_disabled</code>:
-  asserts the counter is exactly zero with <code>bm25_weight = 0</code> and ≥ (sum of chunk
-  body lengths) with <code>bm25_weight &gt; 0</code>; also asserts vector-only top rank is
-  preserved.</li>
+  asserts content and tokenization counters are zero with both <code>bm25_weight = 0</code>
+  and <code>bm25_weight &gt; 0</code>; also asserts vector-only top rank and indexed BM25 rank
+  are preserved.</li>
   <li><strong>Cargo</strong> — pre-existing <code>test_hybrid_source_filter_exact_scan_keeps_scoped_bm25</code>
-  still passes (BM25 path untouched).</li>
+  now also asserts source-filtered BM25 ranks are present without scoped body reads.</li>
+  <li><strong>Cargo</strong> — <code>api::bm25_search::tests::test_bm25_scoped_search_filters_and_uses_scope_stats</code>:
+  covers the in-memory scoped BM25 search helper directly.</li>
   <li><strong>Cargo</strong> — pre-existing <code>test_collection_filter_only_uses_post_filter_not_exact_scan</code>
   still passes (collection-only filter does not trigger scoped scan).</li>
   <li><strong>Dart</strong> — <code>test/native/scoped_exact_scan_bench_test.dart</code> drives
   <code>searchMetaHybrid</code> across {50, 500} scoped chunks × {0.0, 0.5} BM25 weights and
   asserts all six scoped counters (<code>rows</code>, <code>content_bytes</code>,
   <code>tokenized_rows</code>, <code>tokenized_content_bytes</code>, <code>tokens</code>,
-  <code>tokenization_nanos</code>) are zero on the elided path, scale exactly 10× in
-  <code>tokenized_rows</code> across the 10× scope expansion, and emit non-zero
-  <code>tokens</code> / <code>tokenize_nanos</code> on the bm25-on path.</li>
+  <code>tokenization_nanos</code>) are zero on both vector-only and BM25-on scoped paths.</li>
   <li><strong>Dart</strong> — pre-existing <code>test/native/query_payload_bench_test.dart</code>
   unchanged in semantics; renderer now includes a <code>scoped_exact_scan</code> row that
   reads 0 / 0 KB for non-scoped variants.</li>
@@ -437,20 +414,20 @@ trigger the scoped exact-scan path. Captured from
   <thead><tr><th>File</th><th>Change</th></tr></thead>
   <tbody>
     <tr>
+      <td><code>rust_builder/rust/src/api/bm25_search.rs</code></td>
+      <td>Add <code>search_scoped_tokens</code> over the existing in-memory BM25 inverted
+      index so query terms can be scored against a supplied scoped chunk-id set.</td>
+    </tr>
+    <tr>
       <td><code>rust_builder/rust/src/api/query_metrics.rs</code></td>
-      <td>Add <code>SCOPED_EXACT_SCAN_CONTENT</code> counter +
-      <code>AtomicTokenizationCounter</code> with the per-tokenize-call atomic family,
-      <code>record_scoped_exact_scan_content_read</code> /
-      <code>record_scoped_exact_scan_tokenization</code>, six new struct fields, full
-      snapshot/reset wiring.</td>
+      <td>Keep scoped body-read/tokenization counters as zero-regression signals while
+      materialized-result counters remain unchanged.</td>
     </tr>
     <tr>
       <td><code>rust_builder/rust/src/api/hybrid_search.rs</code></td>
-      <td>Hoist tokenization, compute <code>need_bm25</code>, switch SELECT projection,
-      tolerate <code>NULL</code> content, gate counter + BM25 collection + post-scan scoring on
-      <code>need_bm25</code>. Wrap <code>tokenize_for_bm25</code> in an
-      <code>Instant::now()</code> delta and feed the tokenization counter
-      (content bytes / token count / nanos). New cargo test.</td>
+      <td>Remove <code>c.content</code> from the scoped exact-scan SELECT, collect scoped
+      chunk ids during vector scoring, and route BM25 ranking through
+      <code>bm25_search_scoped_tokens</code>.</td>
     </tr>
     <tr>
       <td><code>lib/src/rust/api/query_metrics.dart</code></td>
@@ -464,7 +441,7 @@ trigger the scoped exact-scan path. Captured from
     </tr>
     <tr>
       <td><code>test/native/scoped_exact_scan_bench_test.dart</code></td>
-      <td>New end-to-end coverage for the elided / non-elided matrix.</td>
+      <td>End-to-end coverage for vector-only and indexed-BM25 scoped variants.</td>
     </tr>
   </tbody>
 </table>
@@ -475,46 +452,32 @@ trigger the scoped exact-scan path. Captured from
   <li>No public API surface changes. <code>SearchFilter</code>, <code>RrfConfig</code>,
   <code>SearchMetaHybridOptions</code>, and the Dart-side wrappers are byte-for-byte
   identical for callers.</li>
-  <li>FRB struct shape gained trailing query-metric fields. P0 added scoped exact-scan
-  read rows/bytes; P1 adds tokenized rows/bytes, token count, and tokenization time. The
-  native dylib and Dart bindings must be rebuilt together — older clients pinned to the
-  previous bindings will fail to decode the stats struct.</li>
+  <li>No FRB surface change in this P1 implementation; only Rust internals, benchmark
+  expectations, and documentation changed.</li>
   <li>Behavior of <code>search_hybrid</code> / <code>search_hybrid_simple</code> /
-  <code>search_hybrid_weighted</code> is unchanged for every input that previously produced a
-  ranked result; only the SQL projection and a counter are different.</li>
+  <code>search_hybrid_weighted</code> still depends on active HNSW/BM25 indexes for indexed
+  ranking. Public Dart service entrypoints activate the target collection before search.</li>
 </ul>
 
-<h2>Follow-ups (P1 candidates, now quantified)</h2>
+<h2>Follow-ups</h2>
 
 <ul>
-  <li><strong>P1: scoped BM25 indexing.</strong> The tokenization counter now puts a
-  number on the previously-hand-wavy "we tokenize 500 bodies to score 4 winners" claim
-  — at 256 B / chunk we see <strong>17,050 tokens / 1.588 ms</strong> per query on the
-  500-chunk scope, roughly <strong>58% of the bm25-on wall-clock budget</strong>
-  (1.588 / 2.73 ms) and growing linearly with scope size. Two viable directions:
-    <ul>
-      <li>Precomputed per-chunk BM25 term stats stored alongside the chunk row, so
-      the scan reads <em>stats</em> not <em>bodies</em>.</li>
-      <li>A scoped BM25 inverted index keyed by <code>source_id</code> (or
-      <code>collection_id</code>) so the scan only touches documents that contain
-      query terms — turning <code>O(scope)</code> into <code>O(top_k)</code>.</li>
-    </ul>
-  </li>
-  <li><strong>Per-token <code>String</code> allocation.</strong> Orthogonal to this
-  change; still tracked as the copy-elision candidate from the same triage. The
-  <code>scoped_exact_scan_tokens</code> counter now provides the lower-bound
-  allocation count to compare against any allocation-free alternative.</li>
+  <li><strong>Postings observability.</strong> Body-read/tokenization counters are now zero
+  on the scoped query path. The next useful metric is BM25 postings scanned per query term
+  so we can decide whether a source-keyed postings map is worth the memory.</li>
+  <li><strong>Index freshness contract.</strong> Public <code>SourceRagService</code> entrypoints
+  already call <code>activateCollectionForHybridSearch</code> before search. Direct low-level
+  calls should keep that contract documented, because scoped BM25 now depends on the active
+  collection BM25 index for ranks.</li>
   <li><strong>Benchmark realism.</strong> The fixture uses synthetic 256 B chunks; real
-  chunk bodies are typically 1–4 KB. Absolute scan-bytes savings on a 500-chunk scope
-  scale to 0.5–2 MB per query (not 125 KB), and tokenize-time scales with body length
-  — so the production ROI on a vector-only scoped query is materially larger than the
-  synthetic numbers above.</li>
+  chunk bodies are typically 1–4 KB. Absolute query-time body-read savings on a 500-chunk
+  scope scale to 0.5–2 MB per query, and tokenization is now paid during index rebuild
+  rather than during each scoped query.</li>
 </ul>
 
 <h2>How to reproduce the numbers</h2>
 
-<pre><code># From repo root, on the rebased branch (enhancement/scoped-exact-scan-elision):
-flutter_rust_bridge_codegen generate
+<pre><code># From repo root, on the scoped BM25 branch:
 cargo build --manifest-path rust_builder/rust/Cargo.toml --release
 cargo test --manifest-path rust_builder/rust/Cargo.toml --lib -- --test-threads=1
 flutter test test/native/scoped_exact_scan_bench_test.dart --reporter expanded
