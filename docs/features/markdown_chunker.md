@@ -63,12 +63,12 @@ If you need extra table context for later chunks, treat it as a retrieval/render
 ## Usage
 
 ### Automatic (Recommended)
-When you use `RagEngine` to add a document, the chunker is automatically applied if you provide the correct file path extension (`.md`).
+When you add a Markdown file through `MobileRag`, the chunker is automatically applied if the file path extension is `.md` or `.markdown`.
 
 ```dart
-await MobileRag.instance.addDocument(
-  filePath: '/path/to/guide.md',
-  // The engine automatically detects .md and uses the markdown chunker
+await MobileRag.instance.addDocumentFromFile(
+  '/path/to/guide.md',
+  name: 'guide.md',
 );
 ```
 
@@ -106,7 +106,7 @@ for (final chunk in chunks) {
 - Raw markdown chunk `content` is preserved as extracted text. Header path is **not** automatically prepended to stored content.
 - `headerPath` is carried separately and injected into embedding/context rendering paths.
 - Split table chunks preserve row boundaries, but later chunks do **not** receive a synthetic repeated header row.
-- `tokenBudget` applies to the assembled `context.text`, not the full prompt wrapper that `formatForPrompt()` adds later.
+- `tokenBudget` applies to the assembled `context.text`, not the full prompt wrapper that `formatPrompt()` adds later.
 
 ## Comparisons
 <p align="center">

@@ -60,7 +60,7 @@ Supported ONNX required inputs:
 Not supported yet:
 - Models requiring extra mandatory inputs such as `position_ids`
 
-Officially validated ONNX artifacts (0.14.x):
+Validated ONNX artifacts:
 - `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx`
 - `https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx`
 
@@ -77,7 +77,7 @@ optimum-cli export onnx --model sentence-transformers/YOUR_MODEL --task feature-
 - BGE-m3: 1024 dimensions
 - MiniLM: 384 dimensions
 
-From `0.14.x` hardening patches, runtime now fails fast on dimension mismatch with a clear error (`expected/got`).
+Current releases fail fast on dimension mismatch with a clear error (`expected/got`). This behavior was introduced in the `0.14.x` hardening patches.
 After model replacement, run either:
 - clear/rebuild flow
 - `regenerateAllEmbeddings()`
@@ -90,13 +90,13 @@ After model replacement, run either:
 
 1. **Use batch processing**:
    ```dart
-   await EmbeddingService.embedBatch(texts, onProgress: ...);
+   await EmbeddingService.embedBatch(
+     texts,
+     onProgress: (done, total) => print('$done / $total'),
+   );
    ```
 
-2. **Run in isolate** (prevents UI freezing):
-   ```dart
-   await compute(embedInBackground, texts);
-   ```
+2. **Keep embedding off the UI thread**: `MobileRag.initialize(...)` configures the embedding worker isolate for normal app flows.
 
 3. **Use INT8 quantized models** - 2-4x faster
 
@@ -109,9 +109,11 @@ await MobileRag.instance.rebuildIndex();
 
 ### Q: Memory usage is high
 
-- **Limit document count**: 10K+ may cause degradation
-- **Use INT8 models**: 50% memory savings
-- **Rebuild index periodically**: Call `MobileRag.instance.rebuildIndex()`
+- **Prefer file-path ingest for large local files**: Use `addDocumentFromFile(path)` for PDF, DOCX, Markdown, and text files when you have a stable path.
+- **Use UTF-8 ingest when bytes are already loaded**: Use `addDocumentUtf8(bytes)` for text/Markdown bytes instead of converting them to a Dart `String` first.
+- **Limit document count**: 10K+ may cause degradation.
+- **Use INT8 models**: Smaller models reduce memory pressure.
+- **Rebuild index periodically**: Call `MobileRag.instance.rebuildIndex()` when you need deterministic index freshness.
 
 ### Q: Which dispose API should I use?
 

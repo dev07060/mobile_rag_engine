@@ -37,23 +37,17 @@ await MobileRag.instance.rebuildIndex();
 
 ## PDF & DOCX Support
 
-Can automatically extract text from PDF and DOCX files.
+Can automatically extract text from PDF and DOCX files. When you have a stable local path, prefer `addDocumentFromFile` so the native side can read and chunk the file directly.
 
 ```dart
 import 'dart:io';
 
-// Read file bytes
 final file = File('path/to/document.pdf');
-final bytes = await file.readAsBytes();
 
-// extract text (using built-in parser)
-final text = await DocumentParser.parse(bytes.toList());
-
-// Then add to RAG
-await MobileRag.instance.addDocument(
-  text, 
+await MobileRag.instance.addDocumentFromFile(
+  file.path,
   metadata: '{"source": "document.pdf"}',
-  filePath: 'document.pdf', // hints chunking strategy
+  name: 'document.pdf',
 );
 ```
 
@@ -61,10 +55,10 @@ await MobileRag.instance.addDocument(
 
 ```dart
 // Remove a source by ID
-await MobileRag.instance.engine.removeSource(sourceId);
+await MobileRag.instance.removeSource(sourceId);
 
 // Check stats
-final stats = await MobileRag.instance.engine.getStats();
+final stats = await MobileRag.instance.getStats();
 print('Total sources: ${stats.sourceCount}');
 ```
 

@@ -68,7 +68,9 @@ test('SearchScreen displays results correctly', () async {
   // 1. Arrange
   final mockContext = AssembledContext(
     text: "Flutter is a UI toolkit.", 
-    tokens: 5,
+    estimatedTokens: 5,
+    includedChunks: [],
+    remainingBudget: 1000,
   );
   
   // Mock the search method
@@ -90,11 +92,15 @@ test('SearchScreen displays results correctly', () async {
 
   // 2. Act
   // Calling the singleton now routes to your mock
-  final result = await MobileRag.instance.search('What is Flutter?');
+  final result = await MobileRag.instance.search(
+    'What is Flutter?',
+    tokenBudget: 1000,
+  );
 
   // 3. Assert
   expect(result.context.text, equals("Flutter is a UI toolkit."));
-  verify(() => mockRag.search(any())).called(1);
+  verify(() => mockRag.search(any(), tokenBudget: any(named: 'tokenBudget')))
+      .called(1);
 });
 ```
 

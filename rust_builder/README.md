@@ -44,6 +44,8 @@ No additional requirements - binaries are downloaded automatically.
 | Linux | x86_64 | 🚧 Coming soon |
 | Windows | x86_64 | 🚧 Coming soon |
 
+The published package is intended for iOS, Android, and macOS consumers today. Linux and Windows source configs may exist in the repository while support is being prepared, but they are not part of the supported prebuilt-binary surface yet.
+
 ## License
 
 MIT
