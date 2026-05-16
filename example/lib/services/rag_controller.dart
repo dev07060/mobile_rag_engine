@@ -1,7 +1,17 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+
+class _PickedImportResult {
+  final SourceAddResult addResult;
+  final int? textLength;
+
+  const _PickedImportResult({required this.addResult, this.textLength});
+}
 
 class RagController extends ChangeNotifier {
   String status = "Ready";
@@ -234,59 +244,11 @@ class RagController extends ChangeNotifier {
         return;
       }
 
-      status = "Reading file: ${file.name}";
-      notifyListeners();
-
-      String extractedText;
-      final ext = filePath.split('.').last.toLowerCase();
-
-      if (ext == 'md' || ext == 'markdown') {
-        extractedText = await File(filePath).readAsString();
-        status = "Markdown loaded! (${extractedText.length} chars)";
-        notifyListeners();
-      } else {
-        final bytes = await File(filePath).readAsBytes();
-        status = "Extracting text from ${file.name}...";
-        notifyListeners();
-        extractedText = await DocumentParser.parse(bytes.toList());
-      }
-
-      if (extractedText.isEmpty) {
-        _updateState("⚠️ No text extracted from file", newIsLoading: false);
+      final importResult = await _importPickedDocument(file, filePath);
+      if (importResult == null) {
         return;
       }
-
-      status =
-          "Text extracted! (${extractedText.length} chars)\nProcessing chunks...";
-      notifyListeners();
-
-      final addResult = _isDefaultCollection
-          ? await MobileRag.instance.addDocument(
-              extractedText,
-              metadata: '{"filename": "${file.name}"}',
-              name: file.name,
-              filePath: filePath,
-              onProgress: (done, total) {
-                if (done % 10 == 0 || done == total) {
-                  debugPrint('Embedding progress: $done/$total');
-                }
-                status = "Embedding chunks: $done/$total";
-                notifyListeners();
-              },
-            )
-          : await _activeCollection.addDocument(
-              extractedText,
-              metadata: '{"filename": "${file.name}"}',
-              name: "[$activeCollectionId] ${file.name}",
-              filePath: filePath,
-              onProgress: (done, total) {
-                if (done % 10 == 0 || done == total) {
-                  debugPrint('Embedding progress: $done/$total');
-                }
-                status = "Embedding chunks: $done/$total";
-                notifyListeners();
-              },
-            );
+      final addResult = importResult.addResult;
 
       if (addResult.isDuplicate) {
         if (addResult.chunkCount > 0) {
@@ -319,7 +281,7 @@ class RagController extends ChangeNotifier {
         _updateState(
           "✅ Document imported!\n"
           "📄 File: ${file.name}\n"
-          "📝 Text: ${extractedText.length} chars\n"
+          "${_formatImportedTextSummary(importResult)}\n"
           "📦 ${addResult.message}",
           newIsLoading: false,
         );
@@ -327,6 +289,173 @@ class RagController extends ChangeNotifier {
     } catch (e, st) {
       _updateState("❌ Import error: $e\n$st", newIsLoading: false);
     }
+  }
+
+  String _extensionFor(PlatformFile file, String filePath) {
+    final candidate = file.name.isNotEmpty ? file.name : filePath;
+    final dot = candidate.lastIndexOf('.');
+    if (dot < 0 || dot == candidate.length - 1) return '';
+    return candidate.substring(dot + 1).toLowerCase();
+  }
+
+  bool _isUtf8TextExtension(String extension) =>
+      extension == 'txt' || extension == 'md' || extension == 'markdown';
+
+  ChunkingStrategy? _strategyForExtension(String extension) {
+    if (extension == 'md' || extension == 'markdown') {
+      return ChunkingStrategy.markdown;
+    }
+    return null;
+  }
+
+  String _sourceNameForFile(String fileName) =>
+      _isDefaultCollection ? fileName : "[$activeCollectionId] $fileName";
+
+  String _formatImportedTextSummary(_PickedImportResult result) {
+    final textLength = result.addResult.bodyCharLength ?? result.textLength;
+    if (textLength != null) {
+      return "📝 Text: $textLength chars";
+    }
+    return "📝 Text: processed with low-memory file path";
+  }
+
+  void _onImportProgress(int done, int total) {
+    if (done % 10 == 0 || done == total) {
+      debugPrint('Embedding progress: $done/$total');
+    }
+    status = "Embedding chunks: $done/$total";
+    notifyListeners();
+  }
+
+  Future<SourceAddResult> _addFromFilePath({
+    required String filePath,
+    required String fileName,
+    required String metadata,
+    required ChunkingStrategy? strategy,
+  }) {
+    final name = _sourceNameForFile(fileName);
+    return _isDefaultCollection
+        ? MobileRag.instance.addDocumentFromFile(
+            filePath,
+            metadata: metadata,
+            name: name,
+            strategy: strategy,
+            onProgress: _onImportProgress,
+          )
+        : _activeCollection.addDocumentFromFile(
+            filePath,
+            metadata: metadata,
+            name: name,
+            strategy: strategy,
+            onProgress: _onImportProgress,
+          );
+  }
+
+  Future<SourceAddResult> _addUtf8Bytes({
+    required Uint8List bytes,
+    required String fileName,
+    required String metadata,
+    required ChunkingStrategy? strategy,
+  }) {
+    final name = _sourceNameForFile(fileName);
+    return _isDefaultCollection
+        ? MobileRag.instance.addDocumentUtf8(
+            bytes,
+            metadata: metadata,
+            name: name,
+            strategy: strategy,
+            onProgress: _onImportProgress,
+          )
+        : _activeCollection.addDocumentUtf8(
+            bytes,
+            metadata: metadata,
+            name: name,
+            strategy: strategy,
+            onProgress: _onImportProgress,
+          );
+  }
+
+  Future<SourceAddResult> _addExtractedText({
+    required String text,
+    required String filePath,
+    required String fileName,
+    required String metadata,
+  }) {
+    final name = _sourceNameForFile(fileName);
+    return _isDefaultCollection
+        ? MobileRag.instance.addDocument(
+            text,
+            metadata: metadata,
+            name: name,
+            filePath: filePath,
+            onProgress: _onImportProgress,
+          )
+        : _activeCollection.addDocument(
+            text,
+            metadata: metadata,
+            name: name,
+            filePath: filePath,
+            onProgress: _onImportProgress,
+          );
+  }
+
+  Future<_PickedImportResult?> _importPickedDocument(
+    PlatformFile file,
+    String filePath,
+  ) async {
+    final metadata = jsonEncode({'filename': file.name});
+    final extension = _extensionFor(file, filePath);
+    final strategy = _strategyForExtension(extension);
+
+    status = "Importing ${file.name} with file path fast path...";
+    notifyListeners();
+
+    try {
+      final addResult = await _addFromFilePath(
+        filePath: filePath,
+        fileName: file.name,
+        metadata: metadata,
+        strategy: strategy,
+      );
+      return _PickedImportResult(addResult: addResult);
+    } on RagError catch (e) {
+      debugPrint('File path ingest failed, falling back: $e');
+    }
+
+    final bytes = file.bytes ?? await File(filePath).readAsBytes();
+    if (_isUtf8TextExtension(extension)) {
+      status = "Falling back to UTF-8 ingest for ${file.name}...";
+      notifyListeners();
+      final addResult = await _addUtf8Bytes(
+        bytes: bytes,
+        fileName: file.name,
+        metadata: metadata,
+        strategy: strategy,
+      );
+      return _PickedImportResult(addResult: addResult);
+    }
+
+    status = "Extracting text from ${file.name}...";
+    notifyListeners();
+    final extractedText = await DocumentParser.parse(bytes);
+    if (extractedText.isEmpty) {
+      _updateState("⚠️ No text extracted from file", newIsLoading: false);
+      return null;
+    }
+
+    status =
+        "Text extracted! (${extractedText.length} chars)\nProcessing chunks...";
+    notifyListeners();
+    final addResult = await _addExtractedText(
+      text: extractedText,
+      filePath: filePath,
+      fileName: file.name,
+      metadata: metadata,
+    );
+    return _PickedImportResult(
+      addResult: addResult,
+      textLength: extractedText.length,
+    );
   }
 
   Future<void> searchDocuments() async {

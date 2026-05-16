@@ -171,6 +171,8 @@ class PreparedIngestion {
   final PlatformInt64 sourceId;
   final PreparedSourceState state;
   final int totalChunks;
+  final int bodyByteLength;
+  final int bodyCharLength;
   final String message;
   final IngestSession? session;
 
@@ -178,6 +180,8 @@ class PreparedIngestion {
     required this.sourceId,
     required this.state,
     required this.totalChunks,
+    required this.bodyByteLength,
+    required this.bodyCharLength,
     required this.message,
     this.session,
   });
@@ -187,6 +191,8 @@ class PreparedIngestion {
       sourceId.hashCode ^
       state.hashCode ^
       totalChunks.hashCode ^
+      bodyByteLength.hashCode ^
+      bodyCharLength.hashCode ^
       message.hashCode ^
       session.hashCode;
 
@@ -198,6 +204,8 @@ class PreparedIngestion {
           sourceId == other.sourceId &&
           state == other.state &&
           totalChunks == other.totalChunks &&
+          bodyByteLength == other.bodyByteLength &&
+          bodyCharLength == other.bodyCharLength &&
           message == other.message &&
           session == other.session;
 }

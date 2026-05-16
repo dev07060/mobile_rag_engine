@@ -5607,16 +5607,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PreparedIngestion dco_decode_prepared_ingestion(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return PreparedIngestion(
       sourceId: dco_decode_i_64(arr[0]),
       state: dco_decode_prepared_source_state(arr[1]),
       totalChunks: dco_decode_i_32(arr[2]),
-      message: dco_decode_String(arr[3]),
+      bodyByteLength: dco_decode_i_32(arr[3]),
+      bodyCharLength: dco_decode_i_32(arr[4]),
+      message: dco_decode_String(arr[5]),
       session:
           dco_decode_opt_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-            arr[4],
+            arr[6],
           ),
     );
   }
@@ -6873,6 +6875,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_sourceId = sse_decode_i_64(deserializer);
     var var_state = sse_decode_prepared_source_state(deserializer);
     var var_totalChunks = sse_decode_i_32(deserializer);
+    var var_bodyByteLength = sse_decode_i_32(deserializer);
+    var var_bodyCharLength = sse_decode_i_32(deserializer);
     var var_message = sse_decode_String(deserializer);
     var var_session =
         sse_decode_opt_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
@@ -6882,6 +6886,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       sourceId: var_sourceId,
       state: var_state,
       totalChunks: var_totalChunks,
+      bodyByteLength: var_bodyByteLength,
+      bodyCharLength: var_bodyCharLength,
       message: var_message,
       session: var_session,
     );
@@ -8115,6 +8121,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.sourceId, serializer);
     sse_encode_prepared_source_state(self.state, serializer);
     sse_encode_i_32(self.totalChunks, serializer);
+    sse_encode_i_32(self.bodyByteLength, serializer);
+    sse_encode_i_32(self.bodyCharLength, serializer);
     sse_encode_String(self.message, serializer);
     sse_encode_opt_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
       self.session,

@@ -171,6 +171,23 @@ class MySearchScreen extends StatelessWidget {
       name: 'notes.md',
     );
 
+    // File picker fallback: prefer the Rust-side file path fast path, but
+    // fall back when the selected document is not exposed as a stable local path.
+    try {
+      await MobileRag.instance.addDocumentFromFile(path, name: fileName);
+    } on RagError {
+      final bytes = await File(path).readAsBytes();
+      final lower = fileName.toLowerCase();
+      if (lower.endsWith('.txt') ||
+          lower.endsWith('.md') ||
+          lower.endsWith('.markdown')) {
+        await MobileRag.instance.addDocumentUtf8(bytes, name: fileName);
+      } else {
+        final text = await DocumentParser.parse(bytes);
+        await MobileRag.instance.addDocument(text, name: fileName);
+      }
+    }
+
     // Indexing is automatic! (Debounced 500ms)
     // Optional: await MobileRag.instance.rebuildIndex(); // Call if you want it done NOW
   
