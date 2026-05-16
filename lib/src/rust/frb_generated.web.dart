@@ -17,6 +17,7 @@ import 'api/incremental_index.dart';
 import 'api/ingest_metrics.dart';
 import 'api/ingest_session.dart';
 import 'api/logger.dart';
+import 'api/query_metrics.dart';
 import 'api/semantic_chunker.dart';
 import 'api/simple.dart';
 import 'api/simple_rag.dart';
@@ -144,6 +145,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   IngestTrafficStats dco_decode_box_autoadd_ingest_traffic_stats(dynamic raw);
+
+  @protected
+  QueryContentReadStats dco_decode_box_autoadd_query_content_read_stats(
+    dynamic raw,
+  );
 
   @protected
   (int, int, int) dco_decode_box_autoadd_record_u_32_u_32_u_32(dynamic raw);
@@ -348,6 +354,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PreparedSourceState dco_decode_prepared_source_state(dynamic raw);
 
   @protected
+  QueryContentReadStats dco_decode_query_content_read_stats(dynamic raw);
+
+  @protected
   RagError dco_decode_rag_error(dynamic raw);
 
   @protected
@@ -515,6 +524,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   IngestTrafficStats sse_decode_box_autoadd_ingest_traffic_stats(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QueryContentReadStats sse_decode_box_autoadd_query_content_read_stats(
     SseDeserializer deserializer,
   );
 
@@ -775,6 +789,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QueryContentReadStats sse_decode_query_content_read_stats(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RagError sse_decode_rag_error(SseDeserializer deserializer);
 
   @protected
@@ -977,6 +996,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ingest_traffic_stats(
     IngestTrafficStats self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_query_content_read_stats(
+    QueryContentReadStats self,
     SseSerializer serializer,
   );
 
@@ -1320,6 +1345,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_prepared_source_state(
     PreparedSourceState self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_query_content_read_stats(
+    QueryContentReadStats self,
     SseSerializer serializer,
   );
 

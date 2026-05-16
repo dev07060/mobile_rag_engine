@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `decide_duplicate_decision`, `decode_structured_chunk_type`, `encode_structured_chunk_type`, `ensure_active`, `prepare_source_ingestion_inner`, `render_context_text`
+// These functions are ignored because they are not marked as `pub`: `decide_duplicate_decision`, `decode_structured_chunk_type`, `encode_structured_chunk_type`, `ensure_active`, `prepare_source_ingestion_inner`, `render_context_text`, `saturating_i32`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DuplicateDecision`, `SessionState`, `StagedChunk`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
@@ -171,7 +171,15 @@ class PreparedIngestion {
   final PlatformInt64 sourceId;
   final PreparedSourceState state;
   final int totalChunks;
+
+  /// UTF-8 byte length of the decoded text body after parsing / decoding.
+  ///
+  /// For `from_file`, this may be non-zero even though
+  /// `SESSION_PREPARE_CONTENT_IN` remains zero: the former describes the
+  /// extracted text body, while the latter counts text bytes that crossed FFI.
   final int bodyByteLength;
+
+  /// Text length using Dart `String.length` semantics (UTF-16 code units).
   final int bodyCharLength;
   final String message;
   final IngestSession? session;

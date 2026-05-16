@@ -1,12 +1,19 @@
 // lib/services/benchmark_service.dart
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    as frb;
 import 'package:mobile_rag_engine/services/embedding_service.dart';
 import 'package:mobile_rag_engine/src/rust/api/tokenizer.dart';
 import 'package:mobile_rag_engine/src/rust/api/simple_rag.dart';
 import 'package:mobile_rag_engine/src/rust/api/db_pool.dart';
 import 'package:mobile_rag_engine/src/rust/api/hybrid_search.dart';
-import 'package:mobile_rag_engine/src/rust/api/ingest_metrics.dart' as ingest_metrics;
-import 'package:mobile_rag_engine/src/rust/api/ingest_session.dart' as ingest_session;
-import 'package:mobile_rag_engine/src/rust/api/semantic_chunker.dart' as semantic_chunker;
+import 'package:mobile_rag_engine/src/rust/api/ingest_metrics.dart'
+    as ingest_metrics;
+import 'package:mobile_rag_engine/src/rust/api/ingest_session.dart'
+    as ingest_session;
+import 'package:mobile_rag_engine/src/rust/api/query_metrics.dart'
+    as query_metrics;
+import 'package:mobile_rag_engine/src/rust/api/semantic_chunker.dart'
+    as semantic_chunker;
 import 'package:mobile_rag_engine/src/rust/api/source_rag.dart' as source_rag;
 import 'package:path_provider/path_provider.dart';
 import 'dart:async';
@@ -136,6 +143,19 @@ class BenchmarkService {
     return sw.elapsedMicroseconds / 1000.0;
   }
 
+  static int _utf8ByteLength(String? value) =>
+      value == null ? 0 : utf8.encode(value).length;
+
+  static int _bigIntToInt(BigInt value) => value.toInt();
+
+  static frb.Int64List _toInt64List(List<int> values) {
+    final result = frb.Int64List(values.length);
+    for (var i = 0; i < values.length; i++) {
+      result[i] = values[i];
+    }
+    return result;
+  }
+
   /// Run multiple iterations and measure avg/min/max
   static Future<BenchmarkResult> benchmark(
     String name,
@@ -233,6 +253,337 @@ class BenchmarkService {
       iterations: iterations,
       category: BenchmarkCategory.rust,
     );
+  }
+
+  /// Measure current query/search payload shape without changing runtime
+  /// behavior.
+  ///
+  /// The benchmark seeds a deterministic collection with precomputed stub
+  /// embeddings, then compares:
+  /// - legacy `searchHybrid` full-result payload,
+  /// - `SearchHandle` + full hydration,
+  /// - `SearchHandle` + preview excerpts,
+  /// - `SearchHandle` + context-only assembly.
+  ///
+  /// This intentionally measures string bytes surfaced to Dart, not internal
+  /// Rust allocations. It is the pre-optimization baseline for moving the query
+  /// path toward body-less retrieval.
+  ///
+  /// The result also includes native lower-bound counters for content rows read
+  /// by legacy hybrid materialization and shared SearchHandle hydration.
+  static Future<QueryPayloadBenchResult> benchmarkQueryPayload({
+    int topK = 4,
+    int adjacentChunks = 1,
+    int previewMaxBytes = 24,
+    int tokenBudget = 4000,
+    String? restoreDbPath,
+    String? dbPathOverride,
+  }) async {
+    const collectionId = 'bench-query-payload';
+    const queryText = 'install checksum smoke';
+    final queryEmbedding = Float32List.fromList([1.0, 0.0, 0.0, 0.0]);
+    final benchDbPath =
+        dbPathOverride ??
+        "${(await getApplicationDocumentsDirectory()).path}/query_payload_bench.sqlite";
+    final benchFile = File(benchDbPath);
+    if (await benchFile.exists()) {
+      await benchFile.delete();
+    }
+    final tokenizerFile = File('$benchDbPath.tokenizer.json');
+    if (await tokenizerFile.exists()) {
+      await tokenizerFile.delete();
+    }
+
+    await initDbPool(dbPath: benchDbPath, maxSize: 4);
+    await initDb();
+    await source_rag.initSourceDb();
+    await tokenizerFile.writeAsString(
+      '{"version":"1.0","truncation":null,"padding":null,'
+      '"added_tokens":[],"normalizer":null,'
+      '"pre_tokenizer":{"type":"Whitespace"},"post_processor":null,'
+      '"decoder":null,"model":{"type":"WordLevel",'
+      '"vocab":{"[UNK]":0,"install":1,"checksum":2,"smoke":3},'
+      '"unk_token":"[UNK]"}}',
+      flush: true,
+    );
+    await initTokenizer(tokenizerPath: tokenizerFile.path);
+
+    Future<void> seedSource({
+      required String name,
+      required String? metadata,
+      required List<String> chunks,
+      required List<Float32List> embeddings,
+    }) async {
+      final source = await source_rag.addSourceInCollection(
+        collectionId: collectionId,
+        content: chunks.join('\n'),
+        metadata: metadata,
+        name: name,
+      );
+      await source_rag.updateSourceStatus(
+        sourceId: source.sourceId,
+        status: 'completed',
+      );
+
+      var cursor = 0;
+      final chunkData = <source_rag.ChunkData>[];
+      for (var i = 0; i < chunks.length; i++) {
+        final content = chunks[i];
+        chunkData.add(
+          source_rag.ChunkData(
+            content: content,
+            chunkIndex: i,
+            startPos: cursor,
+            endPos: cursor + content.length,
+            chunkType: i == 0 && name == 'guide'
+                ? 'text|Guide > Setup'
+                : 'general',
+            embedding: embeddings[i],
+          ),
+        );
+        cursor += content.length + 1;
+      }
+
+      await source_rag.addChunks(sourceId: source.sourceId, chunks: chunkData);
+    }
+
+    await seedSource(
+      name: 'guide',
+      metadata: '{"source":"guide"}',
+      chunks: [
+        'Install the package from the signed release archive before running the app.',
+        'Verify the checksum and compare it with the release manifest.',
+        'Configure the local model path after the package is installed.',
+      ],
+      embeddings: [
+        Float32List.fromList([1.0, 0.0, 0.0, 0.0]),
+        Float32List.fromList([0.95, 0.05, 0.0, 0.0]),
+        Float32List.fromList([0.75, 0.15, 0.0, 0.0]),
+      ],
+    );
+    await seedSource(
+      name: 'smoke',
+      metadata: '{"source":"smoke"}',
+      chunks: [
+        'Run the smoke test after installation and inspect the first query.',
+        'Record the startup timing and search payload size for regression checks.',
+        'Archive the debug log only when the test reports a failure.',
+      ],
+      embeddings: [
+        Float32List.fromList([0.82, 0.18, 0.0, 0.0]),
+        Float32List.fromList([0.68, 0.32, 0.0, 0.0]),
+        Float32List.fromList([0.2, 0.8, 0.0, 0.0]),
+      ],
+    );
+
+    await source_rag.rebuildChunkHnswIndexForCollection(
+      collectionId: collectionId,
+    );
+    await source_rag.rebuildChunkBm25IndexForCollection(
+      collectionId: collectionId,
+    );
+
+    QueryPayloadVariantStats variantStats({
+      required String label,
+      required double elapsedMs,
+      required int hitCount,
+      int metaBytes = 0,
+      int contextBytes = 0,
+      int fullChunkBytes = 0,
+      int previewBytes = 0,
+      query_metrics.QueryContentReadStats? nativeReadStats,
+    }) {
+      return QueryPayloadVariantStats(
+        label: label,
+        elapsedMs: elapsedMs,
+        hitCount: hitCount,
+        metaBytes: metaBytes,
+        contextBytes: contextBytes,
+        fullChunkBytes: fullChunkBytes,
+        previewBytes: previewBytes,
+        nativeHybridResultRows: _bigIntToInt(
+          nativeReadStats?.hybridResultRows ?? BigInt.zero,
+        ),
+        nativeHybridResultContentBytes: _bigIntToInt(
+          nativeReadStats?.hybridResultContentBytes ?? BigInt.zero,
+        ),
+        nativeFullHydrateRows: _bigIntToInt(
+          nativeReadStats?.fullHydrateRows ?? BigInt.zero,
+        ),
+        nativeFullHydrateContentBytes: _bigIntToInt(
+          nativeReadStats?.fullHydrateContentBytes ?? BigInt.zero,
+        ),
+        nativePreviewRows: _bigIntToInt(
+          nativeReadStats?.previewRows ?? BigInt.zero,
+        ),
+        nativePreviewContentBytes: _bigIntToInt(
+          nativeReadStats?.previewContentBytes ?? BigInt.zero,
+        ),
+        nativeAssemblyRows: _bigIntToInt(
+          nativeReadStats?.assemblyRows ?? BigInt.zero,
+        ),
+        nativeAssemblyContentBytes: _bigIntToInt(
+          nativeReadStats?.assemblyContentBytes ?? BigInt.zero,
+        ),
+        nativeUnclassifiedRows: _bigIntToInt(
+          nativeReadStats?.unclassifiedRows ?? BigInt.zero,
+        ),
+        nativeUnclassifiedContentBytes: _bigIntToInt(
+          nativeReadStats?.unclassifiedContentBytes ?? BigInt.zero,
+        ),
+      );
+    }
+
+    Future<QueryPayloadVariantStats> runLegacy() async {
+      query_metrics.resetQueryContentReadStats();
+      final sw = Stopwatch()..start();
+      final results = await searchHybrid(
+        queryText: queryText,
+        queryEmbedding: queryEmbedding,
+        topK: topK,
+        config: const RrfConfig(k: 60, vectorWeight: 1.0, bm25Weight: 0.0),
+        filter: const SearchFilter(collectionId: collectionId),
+      );
+      sw.stop();
+      final nativeReadStats = query_metrics.takeQueryContentReadStats();
+
+      final fullChunkBytes = results.fold<int>(
+        0,
+        (sum, result) =>
+            sum +
+            _utf8ByteLength(result.content) +
+            _utf8ByteLength(result.metadata),
+      );
+
+      return variantStats(
+        label: 'legacy searchHybrid',
+        elapsedMs: sw.elapsedMicroseconds / 1000.0,
+        hitCount: results.length,
+        fullChunkBytes: fullChunkBytes,
+        nativeReadStats: nativeReadStats,
+      );
+    }
+
+    Future<QueryPayloadVariantStats> runHandleVariant(
+      _QueryPayloadHydration hydration,
+    ) async {
+      source_rag.SearchHandle? handle;
+      query_metrics.resetQueryContentReadStats();
+      final sw = Stopwatch()..start();
+      try {
+        handle = await source_rag.searchMetaHybrid(
+          collectionId: collectionId,
+          queryText: queryText,
+          queryEmbedding: queryEmbedding,
+          options: source_rag.SearchMetaHybridOptions(
+            topK: topK,
+            vectorWeight: 1.0,
+            bm25Weight: 0.0,
+            adjacentChunks: adjacentChunks,
+          ),
+        );
+        final hits = await handle.hitMeta();
+        final metaBytes = hits.fold<int>(
+          0,
+          (sum, hit) =>
+              sum +
+              _utf8ByteLength(hit.rawType) +
+              _utf8ByteLength(hit.headerPathPreview),
+        );
+
+        final assembled = await handle.assembleContext(
+          options: source_rag.AssembleContextOptions(
+            tokenBudget: tokenBudget,
+            strategy: source_rag.ContextAssemblyStrategy.relevanceFirst,
+            separator: '\n\n---\n\n',
+            singleSourceMode: false,
+          ),
+        );
+        final contextBytes = _utf8ByteLength(assembled.text);
+        final hitIds = _toInt64List(
+          hits.map((hit) => hit.chunkId.toInt()).toList(growable: false),
+        );
+
+        var fullChunkBytes = 0;
+        var previewBytes = 0;
+        switch (hydration) {
+          case _QueryPayloadHydration.full:
+            final chunks = await handle.hydrateChunks(chunkIds: hitIds);
+            fullChunkBytes = chunks.fold<int>(
+              0,
+              (sum, chunk) =>
+                  sum +
+                  _utf8ByteLength(chunk.content) +
+                  _utf8ByteLength(chunk.chunkType) +
+                  _utf8ByteLength(chunk.metadata),
+            );
+            break;
+          case _QueryPayloadHydration.preview:
+            final excerpts = await handle.getChunkExcerpts(
+              chunkIds: hitIds,
+              maxBytes: previewMaxBytes,
+            );
+            previewBytes = excerpts.fold<int>(
+              0,
+              (sum, excerpt) =>
+                  sum +
+                  _utf8ByteLength(excerpt.rawType) +
+                  _utf8ByteLength(excerpt.headerPathPreview) +
+                  _utf8ByteLength(excerpt.excerpt),
+            );
+            break;
+          case _QueryPayloadHydration.contextOnly:
+            break;
+        }
+        sw.stop();
+        final nativeReadStats = query_metrics.takeQueryContentReadStats();
+
+        return variantStats(
+          label: switch (hydration) {
+            _QueryPayloadHydration.full => 'handle + full hydrate',
+            _QueryPayloadHydration.preview => 'handle + preview excerpts',
+            _QueryPayloadHydration.contextOnly => 'handle + context only',
+          },
+          elapsedMs: sw.elapsedMicroseconds / 1000.0,
+          hitCount: hits.length,
+          metaBytes: metaBytes,
+          contextBytes: contextBytes,
+          fullChunkBytes: fullChunkBytes,
+          previewBytes: previewBytes,
+          nativeReadStats: nativeReadStats,
+        );
+      } finally {
+        if (handle != null) {
+          await handle.dispose();
+        }
+      }
+    }
+
+    try {
+      return QueryPayloadBenchResult(
+        topK: topK,
+        adjacentChunks: adjacentChunks,
+        previewMaxBytes: previewMaxBytes,
+        legacySearchHybrid: await runLegacy(),
+        handleFull: await runHandleVariant(_QueryPayloadHydration.full),
+        handlePreview: await runHandleVariant(_QueryPayloadHydration.preview),
+        handleContextOnly: await runHandleVariant(
+          _QueryPayloadHydration.contextOnly,
+        ),
+      );
+    } finally {
+      query_metrics.resetQueryContentReadStats();
+      await closeDbPool();
+      if (await benchFile.exists()) {
+        await benchFile.delete();
+      }
+      if (await tokenizerFile.exists()) {
+        await tokenizerFile.delete();
+      }
+      if (restoreDbPath != null) {
+        await initDbPool(dbPath: restoreDbPath, maxSize: 4);
+      }
+    }
   }
 
   /// Run full benchmark suite
@@ -404,7 +755,8 @@ class BenchmarkService {
     // byte count. If we ever switch to multilingual content, use utf8.encode.
     final docUtf8Bytes = content.length;
 
-    final benchDbPath = dbPathOverride ??
+    final benchDbPath =
+        dbPathOverride ??
         "${(await getApplicationDocumentsDirectory()).path}/ingest_ffi_bench.sqlite";
     final benchFile = File(benchDbPath);
     if (await benchFile.exists()) {
@@ -525,8 +877,7 @@ class BenchmarkService {
   ///
   /// The body bytes never round-trip back through Dart on the file variant,
   /// so `session_prepare_content_in_bytes` should be 0 for it.
-  static Future<IngestFfiEntrypointBenchResult>
-      benchmarkIngestFfiEntrypoints({
+  static Future<IngestFfiEntrypointBenchResult> benchmarkIngestFfiEntrypoints({
     int targetBytes = 1 * 1024 * 1024,
     int embeddingDim = 384,
     int maxChunkChars = 1500,
@@ -539,7 +890,8 @@ class BenchmarkService {
     // ASCII-only doc: String length == UTF-8 byte count.
     final docUtf8Bytes = content.length;
 
-    final benchDbPath = dbPathOverride ??
+    final benchDbPath =
+        dbPathOverride ??
         "${(await getApplicationDocumentsDirectory()).path}/ingest_ffi_entrypoints_bench.sqlite";
     final benchFile = File(benchDbPath);
     if (await benchFile.exists()) {
@@ -687,7 +1039,8 @@ class BenchmarkService {
     final content = _generateBenchDoc(targetBytes);
     final docUtf8Bytes = content.length;
 
-    final benchDbPath = dbPathOverride ??
+    final benchDbPath =
+        dbPathOverride ??
         "${(await getApplicationDocumentsDirectory()).path}/ingest_heap_bench.sqlite";
     final benchFile = File(benchDbPath);
     if (await benchFile.exists()) {
@@ -849,7 +1202,8 @@ class BenchmarkService {
     final content = _generateBenchDoc(targetBytes);
     final docUtf8Bytes = content.length;
 
-    final benchDbPath = dbPathOverride ??
+    final benchDbPath =
+        dbPathOverride ??
         "${(await getApplicationDocumentsDirectory()).path}/ingest_latency_bench.sqlite";
     final benchFile = File(benchDbPath);
     if (await benchFile.exists()) {
@@ -1221,6 +1575,139 @@ class IngestLatencyBenchResult {
       row('prepareSourceIngestion(String):  ', stringPath),
       row('prepareSourceIngestionFromUtf8:  ', utf8Path),
       row('prepareSourceIngestionFromFile:  ', filePath),
+    ].join('\n');
+  }
+}
+
+enum _QueryPayloadHydration { full, preview, contextOnly }
+
+/// Result of [BenchmarkService.benchmarkQueryPayload].
+///
+/// This is a query-path baseline: it counts UTF-8 bytes of strings surfaced to
+/// Dart by each search shape, plus native lower-bound content rows/bytes read
+/// by the current query path. It does not try to account for allocator copies
+/// or FFI serialization overhead.
+class QueryPayloadBenchResult {
+  final int topK;
+  final int adjacentChunks;
+  final int previewMaxBytes;
+  final QueryPayloadVariantStats legacySearchHybrid;
+  final QueryPayloadVariantStats handleFull;
+  final QueryPayloadVariantStats handlePreview;
+  final QueryPayloadVariantStats handleContextOnly;
+
+  const QueryPayloadBenchResult({
+    required this.topK,
+    required this.adjacentChunks,
+    required this.previewMaxBytes,
+    required this.legacySearchHybrid,
+    required this.handleFull,
+    required this.handlePreview,
+    required this.handleContextOnly,
+  });
+
+  String renderSummary() {
+    return [
+      'Query payload baseline (topK=$topK, adjacent=$adjacentChunks, previewMaxBytes=$previewMaxBytes):',
+      legacySearchHybrid.renderSummary(),
+      handleFull.renderSummary(),
+      handlePreview.renderSummary(),
+      handleContextOnly.renderSummary(),
+    ].join('\n');
+  }
+}
+
+class QueryPayloadVariantStats {
+  final String label;
+  final double elapsedMs;
+  final int hitCount;
+
+  /// Metadata-style strings surfaced to Dart, such as chunk type, header
+  /// preview, or source metadata.
+  final int metaBytes;
+
+  /// Assembled LLM context text surfaced to Dart.
+  final int contextBytes;
+
+  /// Full chunk body strings surfaced to Dart.
+  final int fullChunkBytes;
+
+  /// Preview/excerpt strings surfaced to Dart instead of full chunk bodies.
+  final int previewBytes;
+
+  /// Native content rows/bytes read while materializing legacy
+  /// `HybridSearchResult.content`.
+  final int nativeHybridResultRows;
+  final int nativeHybridResultContentBytes;
+
+  /// Native content rows/bytes read by `SearchHandle.hydrateChunks`.
+  final int nativeFullHydrateRows;
+  final int nativeFullHydrateContentBytes;
+
+  /// Native content rows/bytes read by `SearchHandle.getChunkExcerpts`.
+  final int nativePreviewRows;
+  final int nativePreviewContentBytes;
+
+  /// Native content rows/bytes read while assembling context.
+  final int nativeAssemblyRows;
+  final int nativeAssemblyContentBytes;
+
+  /// Native hydration reads that escaped phase classification.
+  final int nativeUnclassifiedRows;
+  final int nativeUnclassifiedContentBytes;
+
+  const QueryPayloadVariantStats({
+    required this.label,
+    required this.elapsedMs,
+    required this.hitCount,
+    required this.metaBytes,
+    required this.contextBytes,
+    required this.fullChunkBytes,
+    required this.previewBytes,
+    required this.nativeHybridResultRows,
+    required this.nativeHybridResultContentBytes,
+    required this.nativeFullHydrateRows,
+    required this.nativeFullHydrateContentBytes,
+    required this.nativePreviewRows,
+    required this.nativePreviewContentBytes,
+    required this.nativeAssemblyRows,
+    required this.nativeAssemblyContentBytes,
+    required this.nativeUnclassifiedRows,
+    required this.nativeUnclassifiedContentBytes,
+  });
+
+  int get totalStringBytes =>
+      metaBytes + contextBytes + fullChunkBytes + previewBytes;
+
+  int get bodyLikeBytes => contextBytes + fullChunkBytes + previewBytes;
+
+  int get nativeRowsRead =>
+      nativeHybridResultRows +
+      nativeFullHydrateRows +
+      nativePreviewRows +
+      nativeAssemblyRows +
+      nativeUnclassifiedRows;
+
+  int get nativeContentBytesRead =>
+      nativeHybridResultContentBytes +
+      nativeFullHydrateContentBytes +
+      nativePreviewContentBytes +
+      nativeAssemblyContentBytes +
+      nativeUnclassifiedContentBytes;
+
+  String renderSummary() {
+    String fmt(int bytes) => '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return [
+      '  $label: hits=$hitCount elapsed=${elapsedMs.toStringAsFixed(2)}ms '
+          'total=${fmt(totalStringBytes)} body_like=${fmt(bodyLikeBytes)}',
+      '    meta=${fmt(metaBytes)} context=${fmt(contextBytes)} '
+          'full_chunks=${fmt(fullChunkBytes)} preview=${fmt(previewBytes)}',
+      '    native_read rows=$nativeRowsRead bytes=${fmt(nativeContentBytesRead)} '
+          'hybrid=${fmt(nativeHybridResultContentBytes)} '
+          'assembly=${fmt(nativeAssemblyContentBytes)} '
+          'full=${fmt(nativeFullHydrateContentBytes)} '
+          'preview=${fmt(nativePreviewContentBytes)} '
+          'unclassified=${fmt(nativeUnclassifiedContentBytes)}',
     ].join('\n');
   }
 }
