@@ -5,10 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.18.4
 * **Retrieval hot path**:
   - Scoped source/metadata hybrid searches now preserve BM25 ranks through the active collection BM25 term index instead of reading and tokenizing every scoped chunk body at query time.
   - Updated scoped exact-scan benchmarks to assert zero query-time body reads and zero body tokenization for both vector-only and BM25-on scoped paths.
+* **Compatibility**:
+  - Bumped dependency constraint to `rag_engine_flutter: ^0.18.2` so consumers receive the matching native scoped BM25 search implementation.
 
 ## 0.18.3
 * **Documentation**:
