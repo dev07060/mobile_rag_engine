@@ -439,6 +439,501 @@ mod tests {
         let _ = std::fs::remove_file(md_path);
     }
 
+    fn classify_chars(s: &str) -> (usize, usize, usize, usize, usize) {
+        let chars: Vec<char> = s.chars().collect();
+        let total = chars.len();
+        let ascii_letter = chars.iter().filter(|c| c.is_ascii_alphabetic()).count();
+        let hangul = chars
+            .iter()
+            .filter(|c| matches!(**c as u32, 0xAC00..=0xD7AF))
+            .count();
+        let digit = chars.iter().filter(|c| c.is_ascii_digit()).count();
+        let space = chars.iter().filter(|c| c.is_whitespace()).count();
+        (total, ascii_letter, hangul, digit, space)
+    }
+
+    fn dump_extracted(label: &str, fixture_rel: &str) {
+        // Resolve example/assets/sample_data relative to crate root (rust_builder/rust)
+        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path = manifest
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join(fixture_rel);
+        let bytes = std::fs::read(&path).expect("read pdf fixture");
+        let pages = pdf_extract::extract_text_from_mem_by_pages(&bytes).expect("raw pages");
+        let joined = extract_text_from_pdf(bytes).expect("extract_text_from_pdf");
+
+        println!("======== {} ({}) ========", label, fixture_rel);
+        let (t, a, h, d, w) = classify_chars(&joined);
+        println!(
+            "joined chars: total={} ascii_letter={} hangul={} digit={} whitespace={}",
+            t, a, h, d, w
+        );
+        println!("page count: {}", pages.len());
+        println!(
+            "newlines in joined output: {}  paragraph breaks: {}",
+            joined.matches('\n').count(),
+            joined.matches("\n\n").count()
+        );
+
+        // Survived "weird" characters (post-extraction)
+        let mut weird = std::collections::BTreeMap::<char, usize>::new();
+        for ch in joined.chars() {
+            let cp = ch as u32;
+            let is_weird = (ch.is_control() && ch != '\n')
+                || is_private_use_code_point(cp)
+                || is_noncharacter_code_point(cp)
+                || matches!(
+                    ch,
+                    '\u{200B}'
+                        | '\u{200C}'
+                        | '\u{200D}'
+                        | '\u{2060}'
+                        | '\u{FEFF}'
+                        | '\u{FFFC}'
+                        | '\u{FFFD}'
+                );
+            if is_weird {
+                *weird.entry(ch).or_insert(0) += 1;
+            }
+        }
+        if weird.is_empty() {
+            println!("weird-chars survived: none");
+        } else {
+            println!("weird-chars survived ({} distinct):", weird.len());
+            for (ch, count) in weird.iter().take(20) {
+                println!("  U+{:04X} x{}", *ch as u32, count);
+            }
+        }
+
+        // Orphan single Hangul flanked by spaces — symptom of incomplete CJK linebreak collapse
+        let collected: Vec<char> = joined.chars().collect();
+        let mut orphan = 0usize;
+        let mut orphan_examples = Vec::new();
+        for i in 1..collected.len().saturating_sub(1) {
+            if collected[i - 1] == ' '
+                && collected[i + 1] == ' '
+                && matches!(collected[i] as u32, 0xAC00..=0xD7AF)
+            {
+                orphan += 1;
+                if orphan_examples.len() < 6 {
+                    let lo = i.saturating_sub(10);
+                    let hi = (i + 11).min(collected.len());
+                    orphan_examples.push(collected[lo..hi].iter().collect::<String>());
+                }
+            }
+        }
+        println!(
+            "orphan-Hangul (space + 1 syllable + space) count: {}",
+            orphan
+        );
+        for ex in &orphan_examples {
+            println!("  ctx: ...{}...", ex);
+        }
+
+        // Detect runs of digit clusters or weird substrings
+        let digit_clusters = joined
+            .split_whitespace()
+            .filter(|w| w.len() >= 3 && w.chars().all(|c| c.is_ascii_digit()))
+            .count();
+        println!("standalone numeric tokens (>=3 digits): {}", digit_clusters);
+
+        let head: String = joined.chars().take(500).collect();
+        let n = joined.chars().count();
+        let skip = n.saturating_sub(500);
+        let tail: String = joined.chars().skip(skip).collect();
+        println!("--- HEAD 500 ---\n{}\n--- TAIL 500 ---\n{}", head, tail);
+
+        if pages.len() >= 3 {
+            let mid = pages.len() / 2;
+            let raw_mid: String = pages[mid].chars().take(400).collect();
+            println!(
+                "--- RAW page[{}] (pre-normalize) head 400 ---\n{:?}",
+                mid, raw_mid
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "analysis dump — run with --ignored --nocapture"]
+    fn dump_sample_eng_pdf() {
+        dump_extracted("ENG", "example/assets/sample_data/sample_eng.pdf");
+    }
+
+    #[test]
+    #[ignore = "analysis dump — run with --ignored --nocapture"]
+    fn dump_sample_kor_pdf() {
+        dump_extracted("KOR", "example/assets/sample_data/sample_kor.pdf");
+    }
+
+    fn long_hangul_run(joined: &str) -> Vec<usize> {
+        // Run lengths of consecutive Hangul syllables uninterrupted by whitespace.
+        // Long runs (e.g. >=12) typically indicate eaten space at section/heading
+        // boundaries (Korean is word-spaced; natural Korean tokens rarely exceed
+        // ~6-8 syllables without a space).
+        let mut runs = Vec::new();
+        let mut cur: usize = 0;
+        for ch in joined.chars() {
+            let is_hangul = matches!(ch as u32, 0xAC00..=0xD7AF);
+            if is_hangul {
+                cur += 1;
+            } else if !ch.is_whitespace() {
+                // Non-hangul, non-whitespace breaks the run but we still count
+                cur = 0;
+            } else {
+                if cur > 0 {
+                    runs.push(cur);
+                }
+                cur = 0;
+            }
+        }
+        if cur > 0 {
+            runs.push(cur);
+        }
+        runs
+    }
+
+    fn script_glue_count(joined: &str) -> usize {
+        // Count Hangul<->{ASCII letter|digit} transitions without intervening space.
+        // These are virtually always layout/heading glue artifacts.
+        let mut count = 0usize;
+        let chars: Vec<char> = joined.chars().collect();
+        for w in chars.windows(2) {
+            let a_h = matches!(w[0] as u32, 0xAC00..=0xD7AF);
+            let b_h = matches!(w[1] as u32, 0xAC00..=0xD7AF);
+            let a_other = w[0].is_ascii_alphanumeric();
+            let b_other = w[1].is_ascii_alphanumeric();
+            if (a_h && b_other) || (a_other && b_h) {
+                count += 1;
+            }
+        }
+        count
+    }
+
+    struct ExtractSummary {
+        label: String,
+        page_count: usize,
+        chars: usize,
+        hangul: usize,
+        ascii: usize,
+        digit: usize,
+        newlines: usize,
+        paragraph_breaks: usize,
+        weird_kinds: usize,
+        weird_total: usize,
+        orphan_hangul: usize,
+        long_hangul_runs_ge12: usize,
+        max_hangul_run: usize,
+        script_glue: usize,
+        numeric_tokens_ge3: usize,
+        extract_ms: u128,
+        ok: bool,
+        err: Option<String>,
+    }
+
+    fn summarize_one(label: &str, fixture_rel: &str) -> ExtractSummary {
+        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path = manifest
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join(fixture_rel);
+        let bytes = match std::fs::read(&path) {
+            Ok(b) => b,
+            Err(e) => {
+                return ExtractSummary {
+                    label: label.to_string(),
+                    page_count: 0,
+                    chars: 0,
+                    hangul: 0,
+                    ascii: 0,
+                    digit: 0,
+                    newlines: 0,
+                    paragraph_breaks: 0,
+                    weird_kinds: 0,
+                    weird_total: 0,
+                    orphan_hangul: 0,
+                    long_hangul_runs_ge12: 0,
+                    max_hangul_run: 0,
+                    script_glue: 0,
+                    numeric_tokens_ge3: 0,
+                    extract_ms: 0,
+                    ok: false,
+                    err: Some(format!("read error: {}", e)),
+                };
+            }
+        };
+
+        let page_count = pdf_extract::extract_text_from_mem_by_pages(&bytes)
+            .map(|p| p.len())
+            .unwrap_or(0);
+
+        let t0 = std::time::Instant::now();
+        let joined_res = extract_text_from_pdf(bytes);
+        let extract_ms = t0.elapsed().as_millis();
+
+        let joined = match joined_res {
+            Ok(s) => s,
+            Err(e) => {
+                return ExtractSummary {
+                    label: label.to_string(),
+                    page_count,
+                    chars: 0,
+                    hangul: 0,
+                    ascii: 0,
+                    digit: 0,
+                    newlines: 0,
+                    paragraph_breaks: 0,
+                    weird_kinds: 0,
+                    weird_total: 0,
+                    orphan_hangul: 0,
+                    long_hangul_runs_ge12: 0,
+                    max_hangul_run: 0,
+                    script_glue: 0,
+                    numeric_tokens_ge3: 0,
+                    extract_ms,
+                    ok: false,
+                    err: Some(format!("{}", e)),
+                };
+            }
+        };
+
+        let (t_total, a, h, d, _w) = classify_chars(&joined);
+        let newlines = joined.matches('\n').count();
+        let paragraph_breaks = joined.matches("\n\n").count();
+
+        let mut weird = std::collections::BTreeMap::<char, usize>::new();
+        for ch in joined.chars() {
+            let cp = ch as u32;
+            let is_weird = (ch.is_control() && ch != '\n')
+                || is_private_use_code_point(cp)
+                || is_noncharacter_code_point(cp)
+                || matches!(
+                    ch,
+                    '\u{200B}'
+                        | '\u{200C}'
+                        | '\u{200D}'
+                        | '\u{2060}'
+                        | '\u{FEFF}'
+                        | '\u{FFFC}'
+                        | '\u{FFFD}'
+                );
+            if is_weird {
+                *weird.entry(ch).or_insert(0) += 1;
+            }
+        }
+        let weird_kinds = weird.len();
+        let weird_total: usize = weird.values().sum();
+
+        let collected: Vec<char> = joined.chars().collect();
+        let mut orphan = 0usize;
+        for i in 1..collected.len().saturating_sub(1) {
+            if collected[i - 1] == ' '
+                && collected[i + 1] == ' '
+                && matches!(collected[i] as u32, 0xAC00..=0xD7AF)
+            {
+                orphan += 1;
+            }
+        }
+
+        let runs = long_hangul_run(&joined);
+        let long_runs = runs.iter().filter(|r| **r >= 12).count();
+        let max_run = runs.iter().copied().max().unwrap_or(0);
+        let glue = script_glue_count(&joined);
+
+        let digit_clusters = joined
+            .split_whitespace()
+            .filter(|w| w.len() >= 3 && w.chars().all(|c| c.is_ascii_digit()))
+            .count();
+
+        ExtractSummary {
+            label: label.to_string(),
+            page_count,
+            chars: t_total,
+            hangul: h,
+            ascii: a,
+            digit: d,
+            newlines,
+            paragraph_breaks,
+            weird_kinds,
+            weird_total,
+            orphan_hangul: orphan,
+            long_hangul_runs_ge12: long_runs,
+            max_hangul_run: max_run,
+            script_glue: glue,
+            numeric_tokens_ge3: digit_clusters,
+            extract_ms,
+            ok: true,
+            err: None,
+        }
+    }
+
+    fn print_top_long_runs(label: &str, fixture_rel: &str, k: usize) {
+        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path = manifest
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join(fixture_rel);
+        let bytes = std::fs::read(&path).unwrap();
+        let joined = match extract_text_from_pdf(bytes) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+
+        // Find top-k longest Hangul runs and their textual context.
+        // Walk through joined text marking each run with start char index.
+        let chars: Vec<char> = joined.chars().collect();
+        let mut runs: Vec<(usize, usize)> = Vec::new();
+        let mut i = 0;
+        while i < chars.len() {
+            if matches!(chars[i] as u32, 0xAC00..=0xD7AF) {
+                let start = i;
+                while i < chars.len() && matches!(chars[i] as u32, 0xAC00..=0xD7AF) {
+                    i += 1;
+                }
+                runs.push((start, i - start));
+            } else {
+                i += 1;
+            }
+        }
+        runs.sort_by(|a, b| b.1.cmp(&a.1));
+        runs.truncate(k);
+
+        println!("--- top {} Hangul runs in {} ---", k, label);
+        for (start, len) in runs {
+            let lo = start.saturating_sub(12);
+            let hi = (start + len + 12).min(chars.len());
+            let ctx: String = chars[lo..hi].iter().collect();
+            println!("  len={:3}  …{}…", len, ctx);
+        }
+    }
+
+    #[test]
+    #[ignore = "analysis dump — run with --ignored --nocapture"]
+    fn dump_all_pdf_fixtures() {
+        let fixtures: &[(&str, &str)] = &[
+            ("sample_eng", "example/assets/sample_data/sample_eng.pdf"),
+            ("sample_kor", "example/assets/sample_data/sample_kor.pdf"),
+            ("kor_ins_20120401", "example/assets/sample_data/20120401_10101_1.pdf"),
+            ("kor_ins_20200101", "example/assets/sample_data/20200101_10108_1.pdf"),
+            ("kor_drone_2021", "example/assets/sample_data/2021-국방드론.pdf"),
+            ("kor_misc_202302", "example/assets/sample_data/202302091039136320.pdf"),
+            ("kor_dod_china_2025", "example/assets/sample_data/2025 미국방부 년례 보고서 - 중국 군사력 보고서.pdf"),
+            ("kor_accel_2026", "example/assets/sample_data/2026년 글로벌 액셀러레이팅 지원사업 창업기업 모집 공고.pdf"),
+            ("arxiv_2005_11401", "example/assets/sample_data/2005.11401v4.pdf"),
+            ("arxiv_2205_14135", "example/assets/sample_data/2205.14135v2.pdf"),
+            ("arxiv_2509_01092", "example/assets/sample_data/2509.01092v2.pdf"),
+            ("arxiv_2603_18196", "example/assets/sample_data/2603.18196v1.pdf"),
+        ];
+
+        let mut summaries: Vec<ExtractSummary> = Vec::new();
+        for (label, path) in fixtures {
+            summaries.push(summarize_one(label, path));
+        }
+
+        println!("===== PDF EXTRACTION SUMMARY (12 fixtures) =====");
+        println!(
+            "{:<20} {:>4} {:>5} {:>8} {:>7} {:>7} {:>5} {:>4} {:>5} {:>5} {:>6} {:>6} {:>6} {:>5} {:>5}",
+            "label",
+            "p",
+            "ms",
+            "chars",
+            "hangul",
+            "ascii",
+            "digit",
+            "nl",
+            "para",
+            "wkind",
+            "wtot",
+            "orph",
+            "glue",
+            "lrun",
+            "mrun",
+        );
+        for s in &summaries {
+            if !s.ok {
+                println!(
+                    "{:<20}  ERR: {}",
+                    s.label,
+                    s.err.clone().unwrap_or_default()
+                );
+                continue;
+            }
+            println!(
+                "{:<20} {:>4} {:>5} {:>8} {:>7} {:>7} {:>5} {:>4} {:>5} {:>5} {:>6} {:>6} {:>6} {:>5} {:>5}",
+                s.label,
+                s.page_count,
+                s.extract_ms,
+                s.chars,
+                s.hangul,
+                s.ascii,
+                s.digit,
+                s.newlines,
+                s.paragraph_breaks,
+                s.weird_kinds,
+                s.weird_total,
+                s.orphan_hangul,
+                s.script_glue,
+                s.long_hangul_runs_ge12,
+                s.max_hangul_run,
+            );
+        }
+        println!("legend:");
+        println!("  p=pages  ms=extract_ms  nl=newlines  para=blank-line paragraph breaks");
+        println!("  wkind/wtot=weird-char distinct kinds / total occurrences");
+        println!("  orph=single Hangul flanked by spaces (CJK linebreak symptom)");
+        println!("  glue=Hangul<->ASCII alnum boundary count w/o space (heading-glue symptom)");
+        println!("  lrun=runs of >=12 consecutive Hangul (eaten space symptom)  mrun=max run len");
+    }
+
+    #[test]
+    #[ignore = "analysis dump — run with --ignored --nocapture"]
+    fn dump_glue_examples() {
+        // For the 3 most Korean-heavy fixtures, print the longest Hangul runs.
+        let picks: &[(&str, &str)] = &[
+            ("sample_kor", "example/assets/sample_data/sample_kor.pdf"),
+            ("kor_dod_china_2025", "example/assets/sample_data/2025 미국방부 년례 보고서 - 중국 군사력 보고서.pdf"),
+            ("kor_drone_2021", "example/assets/sample_data/2021-국방드론.pdf"),
+            ("kor_accel_2026", "example/assets/sample_data/2026년 글로벌 액셀러레이팅 지원사업 창업기업 모집 공고.pdf"),
+            ("kor_ins_20120401", "example/assets/sample_data/20120401_10101_1.pdf"),
+        ];
+        for (label, path) in picks {
+            print_top_long_runs(label, path, 5);
+        }
+    }
+
+    #[test]
+    #[ignore = "demonstrates Korean paragraph-glue bug"]
+    fn demo_korean_paragraph_glue_bug() {
+        // Two paragraphs separated by blank line, each Korean word-spaced.
+        // Expected (human-correct): "보고서 문제 정의: ..." with a space (or newline).
+        // Actual: paragraphs glue with no separator -> "보고서문제 정의:".
+        let pages = vec!["...심층 시장 조사 보고서\n\n문제 정의: ...".to_string()];
+        let result = join_pages(pages);
+        println!("KOR paragraph join: {:?}", result);
+        // Demonstrates the bug: the boundary between paragraphs disappears.
+        assert!(
+            result.contains("보고서문제"),
+            "boundary should disappear under current rule"
+        );
+    }
+
+    #[test]
+    #[ignore = "analysis dump — run with --ignored --nocapture"]
+    fn dump_dense_cjk_linebreak_artifact() {
+        // Stress the dense CJK linebreak case directly to confirm the test memorializes
+        // a known bug (single non-iterative regex pass leaves space-broken syllables).
+        let pages = vec!["해\n지\n환\n급\n금".to_string()];
+        let result = join_pages(pages);
+        println!("dense CJK linebreak result: {:?}", result);
+        assert!(!result.contains('\n'));
+    }
+
     #[test]
     #[ignore = "stress benchmark"]
     fn bench_join_pages_stress_corpus() {
