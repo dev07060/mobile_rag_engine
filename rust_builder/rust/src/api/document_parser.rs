@@ -392,25 +392,123 @@ fn is_extraction_effectively_empty(text: &str) -> bool {
     text.chars().filter(|c| !c.is_whitespace()).count() < MIN_EXTRACTED_NON_WHITESPACE
 }
 
+/// Extract one page of text via pdf_extract's PlainTextOutput. Returns the
+/// page string on success, or `Err(panic|extract-error)` on failure so the
+/// caller can decide how to react. Each page extraction is its own
+/// `catch_unwind` so a panic in one page (malformed content stream, unusual
+/// font tables) does not abort the whole document.
+fn extract_single_page(
+    doc: &pdf_extract::Document,
+    page_num: u32,
+) -> std::result::Result<String, String> {
+    let raw = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut buffer = String::new();
+        let outcome = {
+            let mut output = pdf_extract::PlainTextOutput::new(&mut buffer);
+            pdf_extract::output_doc_page(doc, &mut output, page_num)
+        };
+        outcome.map(|_| buffer)
+    }));
+
+    match raw {
+        Ok(Ok(text)) => Ok(text),
+        Ok(Err(err)) => Err(format!("output_doc_page error: {:?}", err)),
+        Err(panic) => {
+            let msg = if let Some(s) = panic.downcast_ref::<&str>() {
+                (*s).to_string()
+            } else if let Some(s) = panic.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "non-string panic payload".to_string()
+            };
+            Err(format!("panic: {}", msg))
+        }
+    }
+}
+
 /// Extract text content from a PDF file (bytes)
-/// Uses page-by-page extraction for safe page number removal and hyphenation handling.
+///
+/// Walks the document one page at a time so a single malformed/unsupported
+/// page can be skipped without aborting the whole document. Failed pages
+/// are replaced with an empty string and a warning so the rest of the PDF
+/// still flows downstream; the skip count is included in the error message
+/// if the overall extraction ends up below
+/// [MIN_EXTRACTED_NON_WHITESPACE] characters.
 ///
 /// Returns `Err` when the joined output falls below
-/// `MIN_EXTRACTED_NON_WHITESPACE` characters. pdf_extract reports
-/// scanned/image-only PDFs as a vector of empty strings (no error), so without
-/// this guard a 0-chunk source would be silently indexed and the user would
-/// see an "ingested but unsearchable" mystery. Surfacing as `Err` lets the
-/// caller decide on OCR fallback or a "scanned PDF not supported" message.
+/// [MIN_EXTRACTED_NON_WHITESPACE] characters. pdf_extract reports
+/// scanned/image-only PDFs as a vector of empty strings (no error), so
+/// without this guard a 0-chunk source would be silently indexed and the
+/// user would see an "ingested but unsearchable" mystery.
 pub fn extract_text_from_pdf(file_bytes: Vec<u8>) -> Result<String> {
-    let pages = pdf_extract::extract_text_from_mem_by_pages(&file_bytes)
-        .map_err(|e| anyhow!("PDF extraction failed: {:?}", e))?;
+    // Loading + decryption can fail wholesale — those errors are still
+    // fatal: there are no pages to fall back to.
+    let doc = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        pdf_extract::Document::load_mem(&file_bytes)
+    }))
+    .map_err(|_| anyhow!("PDF load panicked"))?
+    .map_err(|e| anyhow!("PDF extraction failed: {:?}", e))?;
+
+    if doc.is_encrypted() {
+        // Match upstream behavior: a missing password makes content
+        // extraction silently produce empty pages. Surface this as Err.
+        return Err(anyhow!(
+            "PDF is encrypted; password-based decryption is not supported"
+        ));
+    }
+
+    // get_pages() returns a BTreeMap<u32, ObjectId> with the canonical set
+    // of page numbers reachable from the page tree, in order. Iterating
+    // those keys is the safe page enumeration — it avoids both off-by-one
+    // and unbounded-iteration footguns that a naive `1..` loop would have
+    // on malformed page trees.
+    let page_numbers: Vec<u32> = doc.get_pages().keys().copied().collect();
+    let page_count = page_numbers.len();
+    let mut pages: Vec<String> = Vec::with_capacity(page_count);
+    let mut failed_pages: Vec<u32> = Vec::new();
+
+    for page_num in page_numbers {
+        match extract_single_page(&doc, page_num) {
+            Ok(text) => pages.push(text),
+            Err(reason) => {
+                // Mirror the upstream "empty page on failure" shape so
+                // join_pages can keep its page-boundary semantics intact;
+                // record the page number for the caller-visible summary.
+                log::warn!(
+                    "PDF page {} extraction failed, skipping: {}",
+                    page_num, reason,
+                );
+                pages.push(String::new());
+                failed_pages.push(page_num);
+            }
+        }
+    }
+
     let joined = join_pages(pages);
     if is_extraction_effectively_empty(&joined) {
+        if !failed_pages.is_empty() {
+            return Err(anyhow!(
+                "PDF text extraction returned fewer than {} non-whitespace characters; \
+                 {} of {} page(s) failed to extract (pages: {:?})",
+                MIN_EXTRACTED_NON_WHITESPACE,
+                failed_pages.len(),
+                page_count,
+                failed_pages,
+            ));
+        }
         return Err(anyhow!(
             "PDF text extraction returned fewer than {} non-whitespace characters; PDF may be scanned/image-only",
             MIN_EXTRACTED_NON_WHITESPACE,
         ));
     }
+
+    if !failed_pages.is_empty() {
+        log::warn!(
+            "PDF extraction recovered after skipping {} failed page(s): {:?}",
+            failed_pages.len(), failed_pages,
+        );
+    }
+
     Ok(joined)
 }
 
@@ -488,6 +586,84 @@ fn is_cjk(c: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn load_fixture(rel: &str) -> Vec<u8> {
+        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path = manifest
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join(rel);
+        std::fs::read(&path).expect("read fixture")
+    }
+
+    #[test]
+    fn test_extract_text_from_pdf_happy_path_with_real_fixture() {
+        // End-to-end smoke test through the page-by-page loop on a real PDF.
+        // Confirms doc load + single-page output + join_pages wiring all work
+        // and that we still produce non-trivial English text from sample_eng.
+        let bytes = load_fixture("example/assets/sample_data/sample_eng.pdf");
+        let out = extract_text_from_pdf(bytes).expect("sample_eng extract");
+        // Use a stable phrase from the document header (IFRS 17 standard).
+        assert!(out.contains("Insurance Contracts"), "head: {}", &out[..200.min(out.len())]);
+        // Paragraph breaks from PR A must still be preserved on this path.
+        assert!(out.contains("\n\n"));
+    }
+
+    #[test]
+    fn test_extract_text_from_pdf_rejects_non_pdf_bytes() {
+        // Document::load_mem fails -> outer load error path (no page-level
+        // fallback to fall back to).
+        let result = extract_text_from_pdf(b"this is not a PDF, just text".to_vec());
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("PDF extraction failed") || msg.contains("PDF load panicked"),
+            "got: {}",
+            msg,
+        );
+    }
+
+    #[test]
+    fn test_extract_text_from_pdf_empty_doc_returns_error() {
+        // Header alone — Document::load_mem rejects this so we hit the
+        // load-error path, not the "below MIN" path. Either way: structured
+        // Err, no panic, no silent success.
+        let result = extract_text_from_pdf(b"%PDF-1.4\n".to_vec());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_extract_single_page_returns_err_for_out_of_range_page() {
+        // The per-page wrapper must surface "page does not exist" as a
+        // structured Err so the outer loop can record + skip rather than
+        // panic. We feed a real PDF and ask for a page number well past
+        // the actual page count.
+        let bytes = load_fixture("example/assets/sample_data/sample_eng.pdf");
+        let doc = pdf_extract::Document::load_mem(&bytes).unwrap();
+        let actual_pages = doc.get_pages().len() as u32;
+        let result = extract_single_page(&doc, actual_pages + 100);
+        assert!(result.is_err(), "got: {:?}", result);
+    }
+
+    #[test]
+    #[ignore = "depends on an untracked scanned-PDF fixture; PR A's \
+                test_is_extraction_effectively_empty_threshold covers the same \
+                guard at unit level"]
+    fn test_extract_text_from_pdf_scanned_pdf_still_returns_min_error() {
+        // PR A behavior preserved through PR C: a scanned/image-only PDF
+        // (no extractable text on any page) lands on the "below MIN" Err.
+        let bytes = load_fixture("example/assets/sample_data/202302091039136320.pdf");
+        let result = extract_text_from_pdf(bytes);
+        assert!(result.is_err(), "expected scanned-PDF Err, got Ok");
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("fewer than") && msg.contains("non-whitespace"),
+            "got: {}",
+            msg,
+        );
+    }
 
     #[test]
     fn test_dedup_collapses_korean_doubles_when_dense() {
