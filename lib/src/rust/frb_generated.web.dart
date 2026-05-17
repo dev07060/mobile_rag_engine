@@ -17,6 +17,7 @@ import 'api/incremental_index.dart';
 import 'api/ingest_metrics.dart';
 import 'api/ingest_session.dart';
 import 'api/logger.dart';
+import 'api/migration_meta.dart';
 import 'api/query_metrics.dart';
 import 'api/semantic_chunker.dart';
 import 'api/simple.dart';
@@ -308,6 +309,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<StructuredChunk> dco_decode_list_structured_chunk(dynamic raw);
+
+  @protected
+  MigrationAxes dco_decode_migration_axes(dynamic raw);
 
   @protected
   IngestSession?
@@ -735,6 +739,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<StructuredChunk> sse_decode_list_structured_chunk(
     SseDeserializer deserializer,
   );
+
+  @protected
+  MigrationAxes sse_decode_migration_axes(SseDeserializer deserializer);
 
   @protected
   IngestSession?
@@ -1280,6 +1287,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     List<StructuredChunk> self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_migration_axes(MigrationAxes self, SseSerializer serializer);
 
   @protected
   void

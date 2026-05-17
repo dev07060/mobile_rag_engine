@@ -1,0 +1,1016 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mobile RAG Engine On-Device Data Migration Plan</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --panel: #ffffff;
+    --panel-2: #f0f3f7;
+    --fg: #16181d;
+    --muted: #5e6673;
+    --line: #d7dde6;
+    --accent: #2563eb;
+    --accent-2: #0f766e;
+    --warn: #b45309;
+    --bad: #b91c1c;
+    --good: #15803d;
+    --code-bg: #eef1f5;
+    --shadow: 0 1px 2px rgba(15, 23, 42, .05);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  main {
+    width: min(1120px, calc(100% - 32px));
+    margin: 32px auto 56px;
+  }
+
+  header { margin-bottom: 24px; }
+
+  h1 {
+    margin: 0 0 8px;
+    font-size: clamp(28px, 4vw, 42px);
+    line-height: 1.15;
+  }
+
+  h2 {
+    margin: 34px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    font-size: 22px;
+  }
+
+  h3 { margin: 0 0 8px; font-size: 17px; }
+  p  { margin: 0 0 10px; }
+  a  { color: var(--accent); }
+
+  code {
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--code-bg);
+    font: .9em "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  pre {
+    margin: 10px 0 0;
+    padding: 12px 14px;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--code-bg);
+    font: 13px/1.45 "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 2px 9px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel);
+    color: var(--muted);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr);
+    gap: 18px;
+    align-items: stretch;
+  }
+
+  .panel {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+  }
+  .panel.pad { padding: 18px; }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .metric {
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+  .metric strong {
+    display: block;
+    font-size: 22px;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+  }
+  .metric span {
+    display: block;
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .good { color: var(--good); }
+  .warn { color: var(--warn); }
+  .bad  { color: var(--bad); }
+  .accent { color: var(--accent); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .card {
+    min-height: 100%;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+  }
+
+  .card .tagline {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .priority {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    margin-bottom: 10px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .p0 { background: #fee2e2; color: #991b1b; }
+  .p1 { background: #fef3c7; color: #92400e; }
+  .p2 { background: #dcfce7; color: #166534; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 0;
+    background: var(--panel);
+    font-size: 14px;
+  }
+
+  th, td {
+    padding: 10px;
+    border: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--panel-2);
+    color: #303846;
+    font-weight: 700;
+  }
+
+  td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  ul { margin: 8px 0 0; padding-left: 18px; }
+  li { margin: 4px 0; }
+
+  .rail {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .controls {
+    position: sticky;
+    top: 16px;
+    align-self: start;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+
+  label {
+    display: block;
+    margin: 14px 0 7px;
+    font-weight: 700;
+  }
+
+  select,
+  textarea {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--fg);
+    font: inherit;
+  }
+  select { padding: 8px 10px; }
+
+  textarea {
+    min-height: 360px;
+    padding: 12px;
+    font: 13px/1.5 "SF Mono", Menlo, Consolas, monospace;
+    resize: vertical;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    height: 8px;
+    border-radius: 999px;
+    appearance: none;
+    background: linear-gradient(90deg, var(--accent) var(--fill, 50%), #dbe2ec var(--fill, 50%));
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    width: 18px; height: 18px;
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    appearance: none;
+    background: #fff;
+    box-shadow: var(--shadow);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px;
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: var(--shadow);
+  }
+
+  .control-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .callout {
+    padding: 14px 16px;
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    background: #eff6ff;
+  }
+  .callout.warn {
+    border-left-color: var(--warn);
+    background: #fffbeb;
+  }
+  .callout.bad {
+    border-left-color: var(--bad);
+    background: #fef2f2;
+  }
+
+  .timeline { display: grid; gap: 10px; }
+
+  .step {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+  .step .phase { color: var(--accent); font-weight: 800; }
+
+  .small { color: var(--muted); font-size: 13px; }
+
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .btn {
+    padding: 7px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--fg);
+    font: inherit;
+    cursor: pointer;
+  }
+  .btn:hover { background: var(--panel-2); }
+  .btn.primary {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn.primary:hover { background: #1e51d4; }
+
+  @media (max-width: 860px) {
+    main { width: min(100% - 20px, 1120px); }
+    .hero, .grid, .rail, .summary {
+      grid-template-columns: 1fr;
+    }
+    .controls { position: static; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Mobile RAG Engine 온디바이스 데이터 마이그레이션 계획</h1>
+    <div class="meta">
+      <span class="pill">대상 패키지: <code>mobile_rag_engine 0.18.4</code></span>
+      <span class="pill">동반 패키지: <code>rag_engine_flutter 0.18.2</code></span>
+      <span class="pill">문서 기준: 2026-05-17 KST</span>
+      <span class="pill">범위: 사용자 디바이스에 영속화되는 4개 데이터 표면</span>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="panel pad">
+      <h2 style="margin-top:0">결론</h2>
+      <p>
+        현재 <code>CREATE TABLE IF NOT EXISTS</code>와 <code>hnsw_rs</code> 크레이트의 파일 포맷에
+        암묵적으로 의존하고 있다. 신규 인스톨과 업그레이드 인스톨이 구분되지 않고,
+        임베딩 모델을 바꿔도 stale 임베딩과 새 임베딩이 silently 섞일 수 있다.
+      </p>
+      <p>
+        해결 방향은 <strong>SQL 스키마 · HNSW 파일 · BM25 stats · 임베딩 fingerprint</strong>를
+        독립 axis로 버저닝하고, 단일 매니저가 <code>Apply / Rebuild / Invalidate</code> 세 가지
+        결정을 내리도록 만드는 것이다. 자동 폐기 금지는 1.0의 신뢰 라인이다.
+      </p>
+    </div>
+
+    <div class="summary">
+      <div class="metric">
+        <strong class="bad">없음</strong>
+        <span>현재 <code>PRAGMA user_version</code> 또는 메타테이블</span>
+      </div>
+      <div class="metric">
+        <strong class="bad">in-memory</strong>
+        <span>임베딩 dimension 베이스라인 영속화 상태</span>
+      </div>
+      <div class="metric">
+        <strong class="warn">P0</strong>
+        <span>4-axis fingerprint + embedding gate 우선순위</span>
+      </div>
+      <div class="metric">
+        <strong class="accent">fixture</strong>
+        <span>past-version DB로 부팅 회귀 테스트가 production gate</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>현재 상태 진단</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>데이터 표면</th>
+          <th>현재 처리</th>
+          <th>위험</th>
+          <th>코드 위치</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>SQLite 스키마</td>
+          <td><code>CREATE TABLE IF NOT EXISTS</code>만 사용. <code>PRAGMA user_version</code> 설정/체크 없음</td>
+          <td>컬럼 추가는 가능하지만 컬럼 변경/삭제 불가. 신규 인스톨과 업그레이드 인스톨 구분 불가</td>
+          <td><code>rust_builder/rust/src/api/db_pool.rs:62</code>, <code>source_rag.rs:256-404</code></td>
+        </tr>
+        <tr>
+          <td>HNSW 인덱스 파일</td>
+          <td><code>hnsw_rs</code> crate 파일 포맷에 100% 위임. 로드 실패 시 워닝 + “Rebuild required” 로그</td>
+          <td>crate 메이저 업그레이드 시 사용자 디바이스 인덱스 묵시적 폐기. 사용자 알림 채널 없음</td>
+          <td><code>rust_builder/rust/src/api/hnsw_index.rs:200-211</code></td>
+        </tr>
+        <tr>
+          <td>BM25 term-stats</td>
+          <td>collection 전환 시 in-memory rebuild. 영속 메타 없음</td>
+          <td>토크나이저/알고리즘 교체 시 stale stats를 그대로 사용 가능</td>
+          <td><code>rust_builder/rust/src/api/bm25_search.rs</code></td>
+        </tr>
+        <tr>
+          <td>임베딩 dimension</td>
+          <td>in-memory 베이스라인만 기억. DB에 영속된 dim/model 메타 없음</td>
+          <td>모델 교체 시 첫 임베딩이 새 베이스라인 → 기존 임베딩과 silently 섞임</td>
+          <td><code>lib/src/internal/embedding_dimension_state.dart</code></td>
+        </tr>
+        <tr>
+          <td>호환성 흔적</td>
+          <td><em>"legacy rows if any remains"</em> 주석</td>
+          <td>즉흥적 호환성 처리는 시작됐지만 시스템이 없음</td>
+          <td><code>rust_builder/rust/src/api/source_rag.rs:670</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>설계 핵심: 4-axis fingerprint + 단일 매니저</h2>
+    <p>
+      <strong>하나의 거대한 <code>db_version</code>으로 묶지 않는다.</strong>
+      SQL 스키마, HNSW 파일, BM25 stats, 임베딩 모델 fingerprint는 변화 주기와 회복 전략이 모두 다르다.
+      <code>migration_meta</code> 테이블 하나에 4개 axis를 따로 저장한다.
+    </p>
+<pre>migration_meta:
+  key                      | value
+  -------------------------+---------------------------------
+  sql_schema_version       | 5
+  hnsw_format_version      | 2
+  bm25_stats_version       | 1
+  embedding_fingerprint    | "all-MiniLM-L6-v2|384|qint8_arm64"
+  last_engine_version      | "0.18.4"</pre>
+
+    <p style="margin-top:14px">엔진 부팅 시 매니저가 4개 axis에 대해 다음 세 결정 중 하나를 내린다.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>결정</th>
+          <th>의미</th>
+          <th>적용 표면</th>
+          <th>사용자 영향</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="priority p2" style="margin:0">Apply</span></td>
+          <td>forward migration 실행 (예: <code>ALTER TABLE ADD COLUMN</code>)</td>
+          <td>SQL 스키마의 비파괴 변경</td>
+          <td>투명 — 부팅 latency만 약간 증가</td>
+        </tr>
+        <tr>
+          <td><span class="priority p1" style="margin:0">Rebuild</span></td>
+          <td>SQLite 데이터는 보존하고 derived index만 재생성</td>
+          <td>HNSW 포맷 변경, BM25 알고리즘 변경</td>
+          <td>cold start 1회 길어짐. 검색 결과는 동일</td>
+        </tr>
+        <tr>
+          <td><span class="priority p0" style="margin:0">Invalidate</span></td>
+          <td>데이터 폐기 + 사용자 명시 액션 요구</td>
+          <td>임베딩 fingerprint 불일치 (사용자가 모델 교체)</td>
+          <td>검색/ingest 잠금 + <code>reembedAll()</code> 또는 <code>clearAndRestart()</code> 호출 필요</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="callout warn" style="margin-top:14px">
+      <p><strong>핵심 원칙:</strong> <code>Invalidate</code>는 자동 실행 금지. 사용자 데이터를 자동으로 폐기하지 않는 것이 1.0의 신뢰 라인이다.
+      <code>RagError.embeddingFingerprintMismatch</code>를 throw하고 사용자가 명시적 액션을 호출할 때까지 검색/ingest API를 잠근다.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>우선순위별 작업 카드</h2>
+    <div class="grid">
+
+      <div class="card">
+        <span class="priority p0">P0</span>
+        <h3>1. <code>migration_meta</code> 테이블 + 4-axis 버전 backbone</h3>
+        <p class="tagline">모든 후속 작업이 의존하는 최소 backbone. 기존 인스톨은 “v0”으로 간주하고 첫 부팅에 backfill.</p>
+        <ul>
+          <li>SQL: <code>migration_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)</code></li>
+          <li>Rust: <code>MigrationManager::read_axes()</code> / <code>write_axis()</code></li>
+          <li>Dart: <code>MobileRag.instance.migrationState</code> 읽기 전용 surface</li>
+          <li>관측 가능성: 부팅 시 4개 axis 값을 structured log로 emit</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <span class="priority p0">P0</span>
+        <h3>2. 임베딩 fingerprint 검증 게이트</h3>
+        <p class="tagline">가장 위험한 케이스 — 사용자가 모델 교체. 자동 폐기 금지, 명시적 confirm 필요.</p>
+        <ul>
+          <li>부팅 시 stored vs current fingerprint 비교</li>
+          <li>불일치 → <code>RagError.embeddingFingerprintMismatch(stored, current)</code> throw, search/ingest 잠금</li>
+          <li>사용자 액션: <code>reembedAll(progress:)</code> 또는 <code>clearAndRestart()</code></li>
+          <li>두 경로 모두 resumable — 중간 종료해도 다음 부팅에 이어서</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <span class="priority p1">P1</span>
+        <h3>3. Forward-only SQL 마이그레이션 시스템</h3>
+        <p class="tagline">기존 <code>CREATE TABLE IF NOT EXISTS</code>들을 <code>v0001_init.sql</code>로 응고하고, 이후 변경은 번호 부여.</p>
+        <ul>
+          <li>마이그레이션 스크립트를 Rust 바이너리에 임베드</li>
+          <li>각 스크립트는 idempotent + 트랜잭션 안에서 axis 업데이트까지</li>
+          <li>downgrade 미지원 (모바일에 다운그레이드 경로가 사실상 없음)</li>
+          <li>기존 인스톨의 <em>v0 ≡ v1</em> 매핑 정확도가 핵심 위험 지점</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <span class="priority p1">P1</span>
+        <h3>4. HNSW 파일 envelope + 자동 rebuild</h3>
+        <p class="tagline">crate 포맷에 위임하지 말고 자체 envelope을 둔다. SQLite 임베딩 BLOB만 살아있으면 결정적 복원 가능.</p>
+        <ul>
+          <li>4-byte magic + <code>hnsw_format_version</code> + crate version 문자열 + payload</li>
+          <li>envelope 불일치 → 파일 폐기 + <code>rebuild_from_sql()</code> 트리거</li>
+          <li>사용자 시점에서는 “첫 검색이 느림” 수준의 영향</li>
+          <li>한 번 envelope이 들어가면 이후 변경이 비싸짐 — 초기 디자인이 핵심</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <span class="priority p2">P2</span>
+        <h3>5. BM25 stats versioning</h3>
+        <p class="tagline">알고리즘이 바뀔 일이 드물어 가장 마지막. 그러나 토크나이저 정책 변경 시 게이트로 필요.</p>
+        <ul>
+          <li><code>bm25_stats_version</code> axis bump만으로 in-memory rebuild 강제</li>
+          <li>collection별 cache 폐기 정책 명확화</li>
+          <li>현재는 알고리즘 변경 자체가 적어 priority 낮음</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <span class="priority p2">P2</span>
+        <h3>6. Fixture 기반 회귀 테스트 (production gate)</h3>
+        <p class="tagline">“과거 버전 DB 파일로 현재 코드 부팅 시 정상 동작”을 CI에 박는다. 이게 진짜 안전망.</p>
+        <ul>
+          <li><code>test/native/fixtures/v0_18_4/</code> 같은 디렉터리에 SQLite + HNSW + BM25 스냅샷</li>
+          <li>릴리즈 시점마다 fixture 추가</li>
+          <li>CI 잡: fixture로 엔진 부팅 → migration 적용 → 표본 검색 일치 검증</li>
+          <li>fixture 자산 크기 증가는 비용. 보존 범위는 사용자가 슬라이더로 조절</li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>권장 진행 순서</h2>
+    <div class="timeline">
+      <div class="step">
+        <div class="phase">Phase 1</div>
+        <div>
+          <strong>P0-1 · <code>migration_meta</code> backbone</strong>
+          <p class="small">테이블 신설, axis 읽기/쓰기 API, 기존 인스톨 v0 backfill, structured log emit. public API 변경 없음.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="phase">Phase 2</div>
+        <div>
+          <strong>P0-2 · 임베딩 fingerprint 게이트</strong>
+          <p class="small">검증 + <code>RagError.embeddingFingerprintMismatch</code> + 명시 confirm API. <code>quality_test_service</code>의 reembedding 흐름을 facade로 승격.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="phase">Phase 3</div>
+        <div>
+          <strong>P1-3 · SQL 마이그레이션 시스템</strong>
+          <p class="small">기존 <code>CREATE TABLE IF NOT EXISTS</code> 응고. 이 시점에 <code>v0001_init.sql</code>이 source of truth가 된다.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="phase">Phase 4</div>
+        <div>
+          <strong>P1-4 · HNSW envelope + auto-rebuild</strong>
+          <p class="small">envelope 디자인 픽스, rebuild orchestration, dirty index 감지 후 background warmup 흐름.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="phase">Phase 5</div>
+        <div>
+          <strong>P2-5 · BM25 stats versioning</strong>
+          <p class="small">알고리즘/토크나이저 정책 변경 시점에만 의미. 인프라만 미리 깔아둔다.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="phase">Phase 6</div>
+        <div>
+          <strong>P2-6 · Fixture 회귀 테스트 시스템</strong>
+          <p class="small">production gate. 1번부터 5번까지의 작업이 회귀하지 않음을 영구 검증.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>의사결정 기준</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>질문</th>
+          <th>판단 기준</th>
+          <th>설계 영향</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>마이그레이션을 자동으로 적용할 것인가?</td>
+          <td>비파괴 (<code>Apply</code>, <code>Rebuild</code>)는 자동. 파괴 (<code>Invalidate</code>)는 사용자 명시.</td>
+          <td>API 레벨에서 게이트 여부가 갈림. <code>autoVsManual</code> 슬라이더로 조절 가능.</td>
+        </tr>
+        <tr>
+          <td>cold-start latency를 어디까지 허용?</td>
+          <td>HNSW rebuild는 corpus 크기 비례. UI에서 progress 노출 여부와 묶임.</td>
+          <td>warm-up 정책, deferIndexWarmup 기본값, lazy rebuild 트리거 시점.</td>
+        </tr>
+        <tr>
+          <td>downgrade를 지원할 것인가?</td>
+          <td>모바일 패키지에서 다운그레이드 경로가 사실상 없음 → No.</td>
+          <td>스크립트는 forward-only. axis 값이 “현재 코드가 모르는 더 큰 숫자”면 부팅 거부.</td>
+        </tr>
+        <tr>
+          <td>fixture를 몇 버전까지 보존?</td>
+          <td>릴리즈 cadence와 자산 크기의 함수. <code>fixtureBackVersions</code> 슬라이더로 조절.</td>
+          <td>0이면 fixture 회귀 미도입, 6이면 최근 6 minor 보존. CI 시간/자산 비용 증가.</td>
+        </tr>
+        <tr>
+          <td>사용자 UI 노출 정도</td>
+          <td>silent log → debug warning → host app 콜백 → blocking dialog.</td>
+          <td><code>userVisibility</code> 슬라이더로 조절. 패키지는 채널만 노출, UI는 host app 책임.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>조절 가능한 단계별 구현 프롬프트</h2>
+    <div class="rail">
+      <aside class="controls">
+        <label for="task">단계 선택</label>
+        <select id="task">
+          <option value="metaTable">P0-1. migration_meta backbone</option>
+          <option value="embeddingFingerprint">P0-2. 임베딩 fingerprint 게이트</option>
+          <option value="sqlMigrations">P1-3. SQL 마이그레이션 시스템</option>
+          <option value="hnswEnvelope">P1-4. HNSW envelope + rebuild</option>
+          <option value="bm25Stats">P2-5. BM25 stats versioning</option>
+          <option value="fixtureRegression">P2-6. Fixture 회귀 테스트</option>
+        </select>
+
+        <label for="adoptionDepth">도입 깊이 <span id="adoptionDepthValue"></span></label>
+        <input id="adoptionDepth" type="range" min="1" max="5" value="3" />
+        <div class="control-row"><span>최소 backbone</span><span>완전 차단·CI까지</span></div>
+
+        <label for="autoVsManual">자동 적용 비율 <span id="autoVsManualValue"></span></label>
+        <input id="autoVsManual" type="range" min="1" max="5" value="3" />
+        <div class="control-row"><span>전부 명시 confirm</span><span>비파괴는 자동</span></div>
+
+        <label for="rebuildTolerance">cold-start rebuild 허용 <span id="rebuildToleranceValue"></span></label>
+        <input id="rebuildTolerance" type="range" min="1" max="5" value="3" />
+        <div class="control-row"><span>즉시 검색 보장</span><span>분 단위 허용</span></div>
+
+        <label for="userVisibility">사용자 UI 노출 <span id="userVisibilityValue"></span></label>
+        <input id="userVisibility" type="range" min="1" max="5" value="2" />
+        <div class="control-row"><span>silent log</span><span>blocking dialog</span></div>
+
+        <label for="fixtureBackVersions">fixture 보존 버전 수 <span id="fixtureBackVersionsValue"></span></label>
+        <input id="fixtureBackVersions" type="range" min="0" max="6" value="2" />
+        <div class="control-row"><span>0</span><span>6 minor</span></div>
+
+        <div class="toolbar">
+          <button class="btn primary" id="copyBtn">프롬프트 복사</button>
+          <button class="btn" id="resetBtn">기본값</button>
+        </div>
+      </aside>
+
+      <div class="panel pad">
+        <h3>자동 생성 프롬프트</h3>
+        <p class="small">
+          현재 선택한 단계와 슬라이더 값을 반영한 프롬프트다.
+          다음 구현 턴에 그대로 붙여 넣어 작업을 의뢰할 수 있다.
+        </p>
+        <textarea id="prompt" readonly></textarea>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Gate 정의</h2>
+    <div class="callout">
+      <p><strong>마이그레이션 PR의 기본 gate:</strong>
+      (1) <code>migration_meta</code> 변경이면 새 인스톨 + 기존 인스톨(v0 backfill) 두 경로 모두 부팅 테스트.
+      (2) <code>embedding_fingerprint</code> 게이트가 영향받는 변경이면 mismatch 시 검색/ingest가 잠기는지 native test로 고정.
+      (3) HNSW envelope 변경이면 envelope mismatch 시 자동 rebuild → 검색 결과 동일성 검증.
+      (4) 모든 axis 변경은 PR description에 <em>before/after 4-axis 값</em>을 표로 첨부.</p>
+    </div>
+    <div class="callout warn" style="margin-top:12px">
+      <p><strong>주의:</strong> <code>Invalidate</code> 결정이 새로 추가되는 PR은
+      반드시 사용자 시점의 시나리오 문서를 동반한다. 자동 폐기는 1.0 약속을 깬다.</p>
+    </div>
+    <div class="callout bad" style="margin-top:12px">
+      <p><strong>레드라인:</strong> 사용자 디바이스의 임베딩 BLOB을 명시적 confirm 없이 삭제하는 경로가 코드에 한 곳이라도 있으면 PR을 머지하지 않는다.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+  const tasks = {
+    metaTable: {
+      title: "P0-1. migration_meta backbone",
+      priority: "P0",
+      files: [
+        "rust_builder/rust/src/api/source_rag.rs",
+        "rust_builder/rust/src/api/db_pool.rs",
+        "lib/services/rag_engine.dart",
+        "lib/mobile_rag.dart",
+        "test/native/migration_meta_test.dart (신규)"
+      ],
+      goal: "migration_meta 테이블을 신설하고 sql_schema_version / hnsw_format_version / bm25_stats_version / embedding_fingerprint 4개 axis의 read/write API를 Rust와 Dart 양쪽에 노출한다. 기존 인스톨은 v0으로 간주하고 첫 부팅에 backfill한다.",
+      checks: [
+        "신규 인스톨: 4개 axis가 현재 엔진 버전 기준 값으로 기록되는지 검증",
+        "기존 인스톨(migration_meta 없음): v0으로 backfill되고 다음 부팅에 정상 read",
+        "axis 값이 현재 코드가 모르는 더 큰 숫자일 때 부팅이 명확한 에러로 거부",
+        "axis 읽기/쓰기는 단일 트랜잭션 안에서 atomic"
+      ],
+      considerations: [
+        "public API 표면 변경 최소화 — read-only surface만 우선",
+        "structured log emit으로 production 디버깅 가능성 확보",
+        "downgrade는 명시적으로 미지원으로 문서화"
+      ]
+    },
+    embeddingFingerprint: {
+      title: "P0-2. 임베딩 fingerprint 검증 게이트",
+      priority: "P0",
+      files: [
+        "lib/src/internal/embedding_dimension_state.dart",
+        "lib/services/embedding_service.dart",
+        "lib/services/source_rag_service.dart",
+        "lib/services/quality_test_service.dart",
+        "lib/mobile_rag.dart",
+        "lib/src/rust/api/error.dart",
+        "test/native/embedding_fingerprint_gate_test.dart (신규)"
+      ],
+      goal: "부팅 시 stored embedding_fingerprint와 current fingerprint(model name | dim | quant)를 비교한다. 불일치 시 RagError.embeddingFingerprintMismatch를 throw하고 search/ingest API를 잠근다. 사용자는 reembedAll(progress:) 또는 clearAndRestart() 둘 중 하나를 명시적으로 호출해야 진행 가능. 두 경로 모두 resumable.",
+      checks: [
+        "모델 교체 시나리오: 새 모델로 부팅 → 잠금 상태 → reembedAll() 완주 → 검색 정상화",
+        "중단 시나리오: reembedAll() 진행 중 앱 종료 → 다음 부팅에 이어서 진행",
+        "clearAndRestart() 호출 시 임베딩 BLOB 폐기가 명시적 confirm 없이는 절대 발생하지 않음",
+        "잠금 상태에서 호출된 search/addDocument가 명확한 에러로 거부"
+      ],
+      considerations: [
+        "quality_test_service의 기존 reembedding 흐름을 facade로 승격해 재사용",
+        "임베딩 BLOB은 stored fingerprint가 명시적 confirm으로 교체될 때까지 보존",
+        "progress 콜백은 chunk 단위 — UI에서 진행률 표시 가능"
+      ]
+    },
+    sqlMigrations: {
+      title: "P1-3. Forward-only SQL 마이그레이션 시스템",
+      priority: "P1",
+      files: [
+        "rust_builder/rust/src/api/migrations/ (신규 모듈)",
+        "rust_builder/rust/src/api/migrations/v0001_init.sql (신규)",
+        "rust_builder/rust/src/api/source_rag.rs",
+        "test/native/sql_migration_test.dart (신규)"
+      ],
+      goal: "기존 CREATE TABLE IF NOT EXISTS들을 v0001_init.sql로 응고하고, 마이그레이션 스크립트 러너를 도입한다. 각 스크립트는 idempotent하며, 트랜잭션 안에서 sql_schema_version axis 업데이트까지 함께 수행한다. downgrade는 미지원.",
+      checks: [
+        "v0 backfill 경로: 기존 인스톨이 v0001_init과 동치인 상태로 인식되는지 검증",
+        "신규 인스톨: v0001 → vN까지 순차 적용 후 sql_schema_version=N",
+        "중단 복구: 스크립트 중간 종료 후 재부팅 시 idempotent 적용",
+        "downgrade 시도: 모르는 큰 schema_version에서 부팅 거부 + 명확한 에러"
+      ],
+      considerations: [
+        "기존 인스톨의 v0 ≡ v1 매핑은 한 번만 가능 — 정확도가 시스템의 가장 큰 위험 지점",
+        "스크립트는 Rust 바이너리에 임베드 (build.rs에서 include_str! 또는 디렉토리 임베드)",
+        "axis 업데이트와 DDL은 반드시 동일 트랜잭션"
+      ]
+    },
+    hnswEnvelope: {
+      title: "P1-4. HNSW 파일 envelope + 자동 rebuild",
+      priority: "P1",
+      files: [
+        "rust_builder/rust/src/api/hnsw_index.rs",
+        "rust_builder/rust/src/api/incremental_index.rs",
+        "rust_builder/rust/src/api/source_rag.rs",
+        "test/native/hnsw_envelope_test.dart (신규)"
+      ],
+      goal: "HNSW 파일에 자체 envelope(4-byte magic + hnsw_format_version + crate version 문자열 + payload)를 둔다. 로드 시 envelope mismatch면 파일을 폐기하고 SQLite의 임베딩 BLOB에서 rebuild_from_sql()을 트리거한다. 사용자 시점에서는 첫 검색만 느려진다.",
+      checks: [
+        "envelope match: 정상 로드, axis는 그대로",
+        "envelope mismatch: 파일 폐기 + rebuild → 검색 결과는 envelope 도입 이전과 동치",
+        "rebuild 중 검색 호출: deferIndexWarmup/warmupFuture 의미와 충돌하지 않음",
+        "envelope 자체의 forward-compat: future version의 envelope을 읽었을 때의 동작 정의"
+      ],
+      considerations: [
+        "한 번 envelope이 들어가면 envelope schema 변경은 더 비싸진다 — 초기 디자인이 핵심",
+        "magic 값은 ASCII로 두면 디버깅이 쉬움 (예: 'MRGE')",
+        "rebuild는 background isolate에서 수행, 진행 상황은 query_metrics와 별도 채널로 emit"
+      ]
+    },
+    bm25Stats: {
+      title: "P2-5. BM25 stats versioning",
+      priority: "P2",
+      files: [
+        "rust_builder/rust/src/api/bm25_search.rs",
+        "rust_builder/rust/src/api/source_rag.rs",
+        "test/native/bm25_stats_version_test.dart (신규)"
+      ],
+      goal: "bm25_stats_version axis를 도입한다. 알고리즘/토크나이저 정책이 바뀔 때 axis bump만으로 in-memory rebuild를 강제하고, collection별 cache를 폐기한다. 평시에는 어떤 효과도 없다.",
+      checks: [
+        "axis 일치: 동작 변화 없음",
+        "axis 불일치: 부팅 시 BM25 cache 폐기 후 rebuild",
+        "collection 전환과 axis bump가 겹쳤을 때의 동작 정의",
+        "axis bump가 일어나도 SQLite 임베딩 BLOB는 절대 손대지 않음"
+      ],
+      considerations: [
+        "현재는 알고리즘 변경 자체가 적어 우선순위 낮음 — 인프라만 미리 깔아두는 성격",
+        "cache 폐기 정책은 LRU 또는 strict-on-bump 중 선택",
+        "axis bump 자체의 PR review가 신중해야 — 모든 사용자에게 rebuild 비용 부과"
+      ]
+    },
+    fixtureRegression: {
+      title: "P2-6. Fixture 기반 회귀 테스트 시스템",
+      priority: "P2",
+      files: [
+        "test/native/fixtures/ (신규 디렉터리)",
+        "test/native/fixtures/v0_18_4/ (DB + HNSW + BM25 스냅샷)",
+        "test/native/fixture_regression_test.dart (신규)",
+        "scripts/test_ci.sh",
+        ".github/workflows/ci.yml"
+      ],
+      goal: "과거 minor release 시점의 SQLite + HNSW + BM25 파일 묶음을 fixture로 보존하고, CI가 매 PR마다 fixture로 엔진을 부팅해 migration이 정상 적용되고 표본 검색 결과가 일치함을 검증한다. 이게 production gate.",
+      checks: [
+        "각 fixture별로 부팅 성공, 4-axis가 expected 값으로 마이그레이션 완료",
+        "표본 쿼리 N개에 대한 search 결과가 fixture에 동봉된 expected와 일치",
+        "fixture 자산 크기가 CI 시간 예산을 넘지 않음",
+        "fixture 추가/갱신이 릴리즈 체크리스트에 포함"
+      ],
+      considerations: [
+        "fixture 자산은 LFS 또는 별도 storage가 필요할 수 있음 (수 MB/버전)",
+        "보존 범위는 fixtureBackVersions 슬라이더로 조절 — 비용/안전망 트레이드오프",
+        "fixture가 0개면 회귀 안전망이 사실상 사라짐"
+      ]
+    }
+  };
+
+  const controls = {
+    task: document.getElementById("task"),
+    adoptionDepth: document.getElementById("adoptionDepth"),
+    autoVsManual: document.getElementById("autoVsManual"),
+    rebuildTolerance: document.getElementById("rebuildTolerance"),
+    userVisibility: document.getElementById("userVisibility"),
+    fixtureBackVersions: document.getElementById("fixtureBackVersions")
+  };
+
+  const labels = {
+    adoptionDepth: document.getElementById("adoptionDepthValue"),
+    autoVsManual: document.getElementById("autoVsManualValue"),
+    rebuildTolerance: document.getElementById("rebuildToleranceValue"),
+    userVisibility: document.getElementById("userVisibilityValue"),
+    fixtureBackVersions: document.getElementById("fixtureBackVersionsValue")
+  };
+
+  const promptEl = document.getElementById("prompt");
+  const copyBtn = document.getElementById("copyBtn");
+  const resetBtn = document.getElementById("resetBtn");
+
+  const DEFAULTS = {
+    adoptionDepth: 3,
+    autoVsManual: 3,
+    rebuildTolerance: 3,
+    userVisibility: 2,
+    fixtureBackVersions: 2
+  };
+
+  function updateRangeFill(input) {
+    const min = Number(input.min);
+    const max = Number(input.max);
+    const value = Number(input.value);
+    const pct = ((value - min) / (max - min)) * 100;
+    input.style.setProperty("--fill", `${pct}%`);
+  }
+
+  function describeAdoption(v) {
+    if (v <= 1) return "최소 backbone만 도입. read-only surface와 log emit에 한정하고 사용자 흐름은 건드리지 마라.";
+    if (v <= 2) return "backbone + 검증 게이트까지. 잠금/에러는 도입하지만 마이그레이션 자체는 생략 가능.";
+    if (v >= 5) return "마이그레이션 실행 + 사용자 흐름 차단 + CI fixture 회귀까지 모두 도입한다.";
+    if (v >= 4) return "마이그레이션 실행과 사용자 흐름 차단을 모두 도입하되, fixture 회귀는 다음 단계로 미뤄도 좋다.";
+    return "검증 게이트 + 핵심 마이그레이션 실행까지 도입. fixture 회귀는 별도 PR로 분리.";
+  }
+
+  function describeAuto(v) {
+    if (v <= 1) return "모든 변경을 명시적 사용자 confirm으로 게이팅한다. 자동 진행 경로를 코드에 두지 마라.";
+    if (v <= 2) return "Apply만 자동, Rebuild조차 confirm 받는다. 매우 보수적.";
+    if (v >= 5) return "비파괴 변경은 모두 자동 — Apply와 Rebuild는 사용자 알림 없이 진행. Invalidate만 잠금.";
+    if (v >= 4) return "Apply는 자동, Rebuild는 자동 + 알림. Invalidate만 명시 confirm.";
+    return "Apply는 자동, Rebuild는 자동 + 호스트 앱 콜백, Invalidate는 명시 confirm.";
+  }
+
+  function describeRebuild(v) {
+    if (v <= 1) return "cold-start rebuild를 허용하지 않는다. 모든 rebuild는 background에서 점진적으로 수행.";
+    if (v <= 2) return "수 초 이내의 cold-start rebuild만 허용. 그 이상은 background로 위임.";
+    if (v >= 5) return "분 단위 cold-start rebuild를 명시적으로 허용. 진행률 채널을 호스트 앱에 노출.";
+    if (v >= 4) return "수십 초 단위 rebuild 허용. 사용자에게 진행 표시 권장.";
+    return "수 초~수십 초 단위 rebuild 허용. 진행은 structured log로 emit.";
+  }
+
+  function describeVisibility(v) {
+    if (v <= 1) return "structured log에만 노출. 호스트 앱이 별도 채널로 read.";
+    if (v <= 2) return "log + 호스트 앱 콜백 hook 제공. UI는 호스트 책임.";
+    if (v >= 5) return "패키지 차원에서 blocking dialog까지 제공한다. (권장하지 않음 — 호스트 앱 UX와 충돌)";
+    if (v >= 4) return "log + 콜백 + 표준 progress stream을 제공해 호스트 앱이 UI 구성 가능.";
+    return "log + 콜백 + progress stream. UI 구현은 host app 책임.";
+  }
+
+  function describeFixture(v) {
+    if (v <= 0) return "fixture 회귀 미도입. 회귀 안전망이 사라지므로 권장하지 않는다.";
+    if (v <= 1) return "직전 minor 1개만 fixture 보존. 자산 크기 최소화.";
+    if (v >= 5) return `최근 ${v} minor 보존. CI 시간/자산 비용 증가에 주의.`;
+    return `최근 ${v} minor 보존. 릴리즈 체크리스트에 fixture 추가/갱신을 포함시켜라.`;
+  }
+
+  function renderPrompt() {
+    const selected = tasks[controls.task.value];
+    const adoptionDepth = Number(controls.adoptionDepth.value);
+    const autoVsManual = Number(controls.autoVsManual.value);
+    const rebuildTolerance = Number(controls.rebuildTolerance.value);
+    const userVisibility = Number(controls.userVisibility.value);
+    const fixtureBackVersions = Number(controls.fixtureBackVersions.value);
+
+    labels.adoptionDepth.textContent = `(${adoptionDepth}/5)`;
+    labels.autoVsManual.textContent = `(${autoVsManual}/5)`;
+    labels.rebuildTolerance.textContent = `(${rebuildTolerance}/5)`;
+    labels.userVisibility.textContent = `(${userVisibility}/5)`;
+    labels.fixtureBackVersions.textContent = `(${fixtureBackVersions})`;
+
+    Object.values(controls)
+      .filter((el) => el.type === "range")
+      .forEach(updateRangeFill);
+
+    const lines = [
+      `목표: ${selected.title} (${selected.priority})을 구현한다.`,
+      "",
+      selected.goal,
+      "",
+      "조정값:",
+      `- 도입 깊이: ${adoptionDepth}/5. ${describeAdoption(adoptionDepth)}`,
+      `- 자동 적용 비율: ${autoVsManual}/5. ${describeAuto(autoVsManual)}`,
+      `- cold-start rebuild 허용: ${rebuildTolerance}/5. ${describeRebuild(rebuildTolerance)}`,
+      `- 사용자 UI 노출: ${userVisibility}/5. ${describeVisibility(userVisibility)}`,
+      `- fixture 보존 버전 수: ${fixtureBackVersions}. ${describeFixture(fixtureBackVersions)}`,
+      "",
+      "관련 파일:",
+      ...selected.files.map((f) => `- ${f}`),
+      "",
+      "필수 검증 항목:",
+      ...selected.checks.map((c) => `- ${c}`),
+      "",
+      "설계 고려사항:",
+      ...selected.considerations.map((c) => `- ${c}`),
+      "",
+      "공통 원칙:",
+      "- 사용자 디바이스의 임베딩 BLOB을 명시적 confirm 없이 삭제하는 경로는 절대 만들지 마라.",
+      "- 4-axis 값 변경 시 before/after 표를 PR description에 포함하라.",
+      "- downgrade는 미지원 — 모르는 더 큰 axis 값을 만나면 부팅을 명확한 에러로 거부하라.",
+      "- public API 표면 변경이 있으면 lib/mobile_rag.dart의 facade까지 일관되게 노출하라.",
+      "",
+      "결과 보고에는 다음을 포함하라:",
+      "- 변경된 axis와 before/after 값",
+      "- 신규/수정된 마이그레이션 경로의 결정 (Apply / Rebuild / Invalidate)",
+      "- 추가된 native/unit 테스트와 다루지 못한 시나리오",
+      "- 후속 진행 방향 추천"
+    ];
+
+    promptEl.value = lines.join("\n");
+  }
+
+  Object.values(controls).forEach((el) => {
+    el.addEventListener("input", renderPrompt);
+    el.addEventListener("change", renderPrompt);
+  });
+
+  copyBtn.addEventListener("click", async () => {
+    promptEl.select();
+    try {
+      await navigator.clipboard.writeText(promptEl.value);
+      const original = copyBtn.textContent;
+      copyBtn.textContent = "복사 완료";
+      setTimeout(() => { copyBtn.textContent = original; }, 1200);
+    } catch (_) {
+      document.execCommand("copy");
+    }
+    window.getSelection().removeAllRanges();
+  });
+
+  resetBtn.addEventListener("click", () => {
+    for (const [key, value] of Object.entries(DEFAULTS)) {
+      controls[key].value = value;
+    }
+    renderPrompt();
+  });
+
+  renderPrompt();
+</script>
+</body>
+</html>

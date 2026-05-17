@@ -32,6 +32,8 @@ dev_dependencies:
   freezed: ^3.2.4
   build_runner: ^2.4.8
   mocktail: ^1.0.4
+  # Used only by native migration_meta tests to tamper with sqlite state.
+  sqlite3: ^2.4.0
 
 flutter:
   uses-material-design: true

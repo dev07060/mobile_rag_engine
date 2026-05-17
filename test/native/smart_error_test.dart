@@ -38,6 +38,9 @@ void main() {
           concurrentMutation: (msg) =>
               fail('Unexpected ConcurrentMutation: $msg'),
           internalError: (msg) => fail('Unexpected InternalError: $msg'),
+          unsupportedMigrationVersion: (axis, stored, supported) => fail(
+            'Unexpected UnsupportedMigrationVersion($axis, $stored, $supported)',
+          ),
           unknown: (msg) => fail('Unexpected Unknown error: $msg'),
         );
       }

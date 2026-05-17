@@ -37,6 +37,8 @@ extension RagErrorMessage on RagError {
         staleSearchHandle: (msg) => msg,
         concurrentMutation: (msg) => msg,
         internalError: (msg) => msg,
+        unsupportedMigrationVersion: (axis, stored, supported) =>
+            "Unsupported migration axis '$axis': stored=$stored, supported=$supported",
         unknown: (msg) => msg,
       );
 }
@@ -806,6 +808,10 @@ class SourceRagService {
           internalError: (msg) => debugPrint(
             '[SmartError] Internal error rebuilding indexes: $msg',
           ),
+          unsupportedMigrationVersion: (axis, stored, supported) => debugPrint(
+            '[SmartError] Unsupported migration axis $axis '
+            '(stored=$stored, supported=$supported) while rebuilding indexes',
+          ),
           unknown: (_) {},
         );
         rethrow;
@@ -968,6 +974,10 @@ class SourceRagService {
         ),
         internalError: (msg) =>
             debugPrint('[SmartError] searchMeta internal error: $msg'),
+        unsupportedMigrationVersion: (axis, stored, supported) => debugPrint(
+          '[SmartError] searchMeta blocked by unsupported migration axis '
+          '$axis (stored=$stored, supported=$supported)',
+        ),
         unknown: (msg) => debugPrint('[SmartError] searchMeta unknown: $msg'),
       );
       rethrow;
@@ -1093,6 +1103,10 @@ class SourceRagService {
             debugPrint('[SmartError] Search concurrent mutation: $msg'),
         internalError: (msg) =>
             debugPrint('[SmartError] Search engine failure: $msg'),
+        unsupportedMigrationVersion: (axis, stored, supported) => debugPrint(
+          '[SmartError] Search blocked by unsupported migration axis '
+          '$axis (stored=$stored, supported=$supported)',
+        ),
         unknown: (msg) => debugPrint('[SmartError] Unknown search error: $msg'),
       );
       rethrow;
@@ -1463,6 +1477,10 @@ class SourceRagService {
             log('[SmartError] Hybrid search concurrent mutation: $msg'),
         internalError: (msg) =>
             log('[SmartError] Hybrid search engine error: $msg'),
+        unsupportedMigrationVersion: (axis, stored, supported) => log(
+          '[SmartError] Hybrid search blocked by unsupported migration axis '
+          '$axis (stored=$stored, supported=$supported)',
+        ),
         unknown: (msg) => log('[SmartError] Hybrid search unknown error: $msg'),
       );
       rethrow;
@@ -1521,6 +1539,7 @@ class SourceRagService {
           staleSearchHandle: (_) => true,
           concurrentMutation: (_) => true,
           internalError: (_) => false,
+          unsupportedMigrationVersion: (_, __, ___) => false,
           unknown: (_) => false,
         );
         if (!isRetryable || attempt == 1) {

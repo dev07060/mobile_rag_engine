@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `enter`, `new`, `record_hybrid_result_content_read`, `record_hydrated_content_read`, `record_scoped_exact_scan_content_read`, `record_scoped_exact_scan_tokenization`, `record`, `reset`, `snapshot`
+// These functions are ignored because they are not marked as `pub`: `enter`, `new`, `record_hybrid_result_content_read`, `record_hydrated_content_read`, `reset`, `snapshot`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AtomicTokenizationCounter`, `QueryContentReadGuard`, `QueryContentReadPhase`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `drop`, `eq`, `fmt`, `fmt`
 

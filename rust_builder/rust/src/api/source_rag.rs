@@ -27,6 +27,7 @@ use crate::api::hnsw_index::{
     search_hnsw,
 };
 use crate::api::hybrid_search::{search_hybrid_meta_inner, RrfConfig, SearchFilter};
+use crate::api::migration_meta::{detect_existing_install, initialize_migration_meta};
 use crate::api::query_metrics::{
     record_hydrated_content_read, QueryContentReadGuard, QueryContentReadPhase,
 };
@@ -250,6 +251,16 @@ fn is_active_bm25_collection(collection_id: &str) -> bool {
 /// Initialize database with sources and chunks tables.
 pub fn init_source_db() -> Result<(), RagError> {
     info!("[init_source_db] Initializing database tables");
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    // Detect upgrade-from-pre-axis installs BEFORE any `CREATE TABLE` runs,
+    // otherwise the new install vs upgrade distinction is lost. We then ask
+    // the migration_meta module to bootstrap or refresh the four axes and
+    // reject boot if the persisted schema is newer than this build knows.
+    let existing_install = detect_existing_install(&conn)?;
+    drop(conn); // initialize_migration_meta opens its own transaction.
+    let _axes = initialize_migration_meta(existing_install)?;
+
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
     conn.execute(

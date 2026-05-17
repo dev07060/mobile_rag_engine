@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1940785977;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1936558543;
 
 // Section: executor
 
@@ -3911,6 +3911,38 @@ fn wire__crate__api__query_metrics__query_content_read_stats_rows_total_impl(
         },
     )
 }
+fn wire__crate__api__migration_meta__read_migration_axes_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "read_migration_axes",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::error::RagError>((move || {
+                    let output_ok = crate::api::migration_meta::read_migration_axes()?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__simple_rag__rebuild_bm25_index_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -5802,6 +5834,24 @@ impl SseDecode for Vec<crate::api::semantic_chunker::StructuredChunk> {
     }
 }
 
+impl SseDecode for crate::api::migration_meta::MigrationAxes {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_sqlSchemaVersion = <i64>::sse_decode(deserializer);
+        let mut var_hnswFormatVersion = <i64>::sse_decode(deserializer);
+        let mut var_bm25StatsVersion = <i64>::sse_decode(deserializer);
+        let mut var_embeddingFingerprint = <String>::sse_decode(deserializer);
+        let mut var_lastEngineVersion = <String>::sse_decode(deserializer);
+        return crate::api::migration_meta::MigrationAxes {
+            sql_schema_version: var_sqlSchemaVersion,
+            hnsw_format_version: var_hnswFormatVersion,
+            bm25_stats_version: var_bm25StatsVersion,
+            embedding_fingerprint: var_embeddingFingerprint,
+            last_engine_version: var_lastEngineVersion,
+        };
+    }
+}
+
 impl SseDecode for Option<RustAutoOpaqueMoi<IngestSession>> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -6045,6 +6095,14 @@ impl SseDecode for crate::api::error::RagError {
                 return crate::api::error::RagError::InternalError(var_field0);
             }
             7 => {
+                let mut var_field0 = <String>::sse_decode(deserializer);
+                let mut var_field1 = <i64>::sse_decode(deserializer);
+                let mut var_field2 = <i64>::sse_decode(deserializer);
+                return crate::api::error::RagError::UnsupportedMigrationVersion(
+                    var_field0, var_field1, var_field2,
+                );
+            }
+            8 => {
                 let mut var_field0 = <String>::sse_decode(deserializer);
                 return crate::api::error::RagError::Unknown(var_field0);
             }
@@ -6394,31 +6452,32 @@ fn pde_ffi_dispatcher_primary_impl(
 102 => wire__crate__api__query_metrics__query_content_read_stats_hydration_content_bytes_total_impl(port, ptr, rust_vec_len, data_len),
 103 => wire__crate__api__query_metrics__query_content_read_stats_hydration_rows_total_impl(port, ptr, rust_vec_len, data_len),
 104 => wire__crate__api__query_metrics__query_content_read_stats_rows_total_impl(port, ptr, rust_vec_len, data_len),
-105 => wire__crate__api__simple_rag__rebuild_bm25_index_impl(port, ptr, rust_vec_len, data_len),
-106 => wire__crate__api__source_rag__rebuild_chunk_bm25_index_impl(port, ptr, rust_vec_len, data_len),
-107 => wire__crate__api__source_rag__rebuild_chunk_bm25_index_for_collection_impl(port, ptr, rust_vec_len, data_len),
-108 => wire__crate__api__source_rag__rebuild_chunk_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
-109 => wire__crate__api__source_rag__rebuild_chunk_hnsw_index_for_collection_impl(port, ptr, rust_vec_len, data_len),
-110 => wire__crate__api__simple_rag__rebuild_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
-113 => wire__crate__api__hybrid_search__rrf_config_default_impl(port, ptr, rust_vec_len, data_len),
-114 => wire__crate__api__source_rag__save_collection_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
-115 => wire__crate__api__hnsw_index__save_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
-116 => wire__crate__api__source_rag__search_chunks_impl(port, ptr, rust_vec_len, data_len),
-117 => wire__crate__api__source_rag__search_chunks_in_collection_impl(port, ptr, rust_vec_len, data_len),
-118 => wire__crate__api__hnsw_index__search_hnsw_impl(port, ptr, rust_vec_len, data_len),
-119 => wire__crate__api__hnsw_index__search_hnsw_slice_impl(port, ptr, rust_vec_len, data_len),
-120 => wire__crate__api__hybrid_search__search_hybrid_impl(port, ptr, rust_vec_len, data_len),
-121 => wire__crate__api__hybrid_search__search_hybrid_simple_impl(port, ptr, rust_vec_len, data_len),
-122 => wire__crate__api__hybrid_search__search_hybrid_weighted_impl(port, ptr, rust_vec_len, data_len),
-123 => wire__crate__api__source_rag__search_meta_hybrid_impl(port, ptr, rust_vec_len, data_len),
-124 => wire__crate__api__simple_rag__search_similar_impl(port, ptr, rust_vec_len, data_len),
-127 => wire__crate__api__compression_utils__sentence_hash_impl(port, ptr, rust_vec_len, data_len),
-128 => wire__crate__api__compression_utils__should_compress_impl(port, ptr, rust_vec_len, data_len),
-129 => wire__crate__api__compression_utils__split_sentences_impl(port, ptr, rust_vec_len, data_len),
-132 => wire__crate__api__source_rag__update_chunk_embedding_impl(port, ptr, rust_vec_len, data_len),
-133 => wire__crate__api__source_rag__update_source_status_impl(port, ptr, rust_vec_len, data_len),
-134 => wire__crate__api__user_intent__user_intent_get_query_impl(port, ptr, rust_vec_len, data_len),
-135 => wire__crate__api__user_intent__user_intent_intent_type_impl(port, ptr, rust_vec_len, data_len),
+105 => wire__crate__api__migration_meta__read_migration_axes_impl(port, ptr, rust_vec_len, data_len),
+106 => wire__crate__api__simple_rag__rebuild_bm25_index_impl(port, ptr, rust_vec_len, data_len),
+107 => wire__crate__api__source_rag__rebuild_chunk_bm25_index_impl(port, ptr, rust_vec_len, data_len),
+108 => wire__crate__api__source_rag__rebuild_chunk_bm25_index_for_collection_impl(port, ptr, rust_vec_len, data_len),
+109 => wire__crate__api__source_rag__rebuild_chunk_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
+110 => wire__crate__api__source_rag__rebuild_chunk_hnsw_index_for_collection_impl(port, ptr, rust_vec_len, data_len),
+111 => wire__crate__api__simple_rag__rebuild_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
+114 => wire__crate__api__hybrid_search__rrf_config_default_impl(port, ptr, rust_vec_len, data_len),
+115 => wire__crate__api__source_rag__save_collection_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
+116 => wire__crate__api__hnsw_index__save_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
+117 => wire__crate__api__source_rag__search_chunks_impl(port, ptr, rust_vec_len, data_len),
+118 => wire__crate__api__source_rag__search_chunks_in_collection_impl(port, ptr, rust_vec_len, data_len),
+119 => wire__crate__api__hnsw_index__search_hnsw_impl(port, ptr, rust_vec_len, data_len),
+120 => wire__crate__api__hnsw_index__search_hnsw_slice_impl(port, ptr, rust_vec_len, data_len),
+121 => wire__crate__api__hybrid_search__search_hybrid_impl(port, ptr, rust_vec_len, data_len),
+122 => wire__crate__api__hybrid_search__search_hybrid_simple_impl(port, ptr, rust_vec_len, data_len),
+123 => wire__crate__api__hybrid_search__search_hybrid_weighted_impl(port, ptr, rust_vec_len, data_len),
+124 => wire__crate__api__source_rag__search_meta_hybrid_impl(port, ptr, rust_vec_len, data_len),
+125 => wire__crate__api__simple_rag__search_similar_impl(port, ptr, rust_vec_len, data_len),
+128 => wire__crate__api__compression_utils__sentence_hash_impl(port, ptr, rust_vec_len, data_len),
+129 => wire__crate__api__compression_utils__should_compress_impl(port, ptr, rust_vec_len, data_len),
+130 => wire__crate__api__compression_utils__split_sentences_impl(port, ptr, rust_vec_len, data_len),
+133 => wire__crate__api__source_rag__update_chunk_embedding_impl(port, ptr, rust_vec_len, data_len),
+134 => wire__crate__api__source_rag__update_source_status_impl(port, ptr, rust_vec_len, data_len),
+135 => wire__crate__api__user_intent__user_intent_get_query_impl(port, ptr, rust_vec_len, data_len),
+136 => wire__crate__api__user_intent__user_intent_intent_type_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -6454,28 +6513,28 @@ fn pde_ffi_dispatcher_sync_impl(
             rust_vec_len,
             data_len,
         ),
-        111 => wire__crate__api__ingest_metrics__reset_ingest_traffic_stats_impl(
+        112 => wire__crate__api__ingest_metrics__reset_ingest_traffic_stats_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        112 => wire__crate__api__query_metrics__reset_query_content_read_stats_impl(
+        113 => wire__crate__api__query_metrics__reset_query_content_read_stats_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        125 => wire__crate__api__semantic_chunker__semantic_chunk_impl(ptr, rust_vec_len, data_len),
-        126 => wire__crate__api__semantic_chunker__semantic_chunk_with_overlap_impl(
+        126 => wire__crate__api__semantic_chunker__semantic_chunk_impl(ptr, rust_vec_len, data_len),
+        127 => wire__crate__api__semantic_chunker__semantic_chunk_with_overlap_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        130 => wire__crate__api__query_metrics__take_query_content_read_stats_impl(
+        131 => wire__crate__api__query_metrics__take_query_content_read_stats_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        131 => wire__crate__api__tokenizer__tokenize_impl(ptr, rust_vec_len, data_len),
+        132 => wire__crate__api__tokenizer__tokenize_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -7049,6 +7108,30 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ingest_metrics::IngestTraffic
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::migration_meta::MigrationAxes {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.sql_schema_version.into_into_dart().into_dart(),
+            self.hnsw_format_version.into_into_dart().into_dart(),
+            self.bm25_stats_version.into_into_dart().into_dart(),
+            self.embedding_fingerprint.into_into_dart().into_dart(),
+            self.last_engine_version.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::migration_meta::MigrationAxes
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::migration_meta::MigrationAxes>
+    for crate::api::migration_meta::MigrationAxes
+{
+    fn into_into_dart(self) -> crate::api::migration_meta::MigrationAxes {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::user_intent::ParsedIntent {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -7190,8 +7273,15 @@ impl flutter_rust_bridge::IntoDart for crate::api::error::RagError {
             crate::api::error::RagError::InternalError(field0) => {
                 [6.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
+            crate::api::error::RagError::UnsupportedMigrationVersion(field0, field1, field2) => [
+                7.into_dart(),
+                field0.into_into_dart().into_dart(),
+                field1.into_into_dart().into_dart(),
+                field2.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
             crate::api::error::RagError::Unknown(field0) => {
-                [7.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+                [8.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
             _ => {
                 unimplemented!("");
@@ -8008,6 +8098,17 @@ impl SseEncode for Vec<crate::api::semantic_chunker::StructuredChunk> {
     }
 }
 
+impl SseEncode for crate::api::migration_meta::MigrationAxes {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.sql_schema_version, serializer);
+        <i64>::sse_encode(self.hnsw_format_version, serializer);
+        <i64>::sse_encode(self.bm25_stats_version, serializer);
+        <String>::sse_encode(self.embedding_fingerprint, serializer);
+        <String>::sse_encode(self.last_engine_version, serializer);
+    }
+}
+
 impl SseEncode for Option<RustAutoOpaqueMoi<IngestSession>> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -8203,8 +8304,14 @@ impl SseEncode for crate::api::error::RagError {
                 <i32>::sse_encode(6, serializer);
                 <String>::sse_encode(field0, serializer);
             }
-            crate::api::error::RagError::Unknown(field0) => {
+            crate::api::error::RagError::UnsupportedMigrationVersion(field0, field1, field2) => {
                 <i32>::sse_encode(7, serializer);
+                <String>::sse_encode(field0, serializer);
+                <i64>::sse_encode(field1, serializer);
+                <i64>::sse_encode(field2, serializer);
+            }
+            crate::api::error::RagError::Unknown(field0) => {
+                <i32>::sse_encode(8, serializer);
                 <String>::sse_encode(field0, serializer);
             }
             _ => {
