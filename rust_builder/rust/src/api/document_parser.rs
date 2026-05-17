@@ -1036,6 +1036,72 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "analysis dump — run with --ignored --nocapture"]
+    fn dump_chunk_distribution_after_extraction() {
+        // Surface how paragraph-aware extraction reshapes the downstream
+        // chunker's output: count, mean/min/max char size, and how many
+        // chunks contain CJK (Hangul) content. Useful diff between
+        // pre-PR-A baseline (all text in one paragraph -> uniformly
+        // max_chars-sized chunks) and post-PR-A behavior (smaller, more
+        // semantic chunks).
+        use crate::api::semantic_chunker::semantic_chunk;
+        let fixtures: &[(&str, &str)] = &[
+            ("sample_eng", "example/assets/sample_data/sample_eng.pdf"),
+            ("sample_kor", "example/assets/sample_data/sample_kor.pdf"),
+            (
+                "kor_ins_20200101",
+                "example/assets/sample_data/20200101_10108_1.pdf",
+            ),
+            ("kor_drone_2021", "example/assets/sample_data/2021-국방드론.pdf"),
+        ];
+
+        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        const MAX_CHARS: i32 = 800;
+
+        println!("===== CHUNK DISTRIBUTION @ max_chars={} =====", MAX_CHARS);
+        println!(
+            "{:<22} {:>6} {:>7} {:>7} {:>5} {:>5} {:>7}",
+            "label", "text", "chunks", "mean", "min", "max", "cjk_ch"
+        );
+        for (label, fixture_rel) in fixtures {
+            let path = manifest.parent().unwrap().parent().unwrap().join(fixture_rel);
+            let bytes = match std::fs::read(&path) {
+                Ok(b) => b,
+                Err(e) => {
+                    println!("{:<22} READ ERR: {}", label, e);
+                    continue;
+                }
+            };
+            let text = match extract_text_from_pdf(bytes) {
+                Ok(s) => s,
+                Err(e) => {
+                    println!("{:<22} EXTRACT ERR: {}", label, e);
+                    continue;
+                }
+            };
+            let chunks = semantic_chunk(text.clone(), MAX_CHARS);
+            let sizes: Vec<usize> = chunks.iter().map(|c| c.content.chars().count()).collect();
+            let total_chars = text.chars().count();
+            let n = sizes.len();
+            let mean = if n == 0 { 0 } else { sizes.iter().sum::<usize>() / n };
+            let min = sizes.iter().copied().min().unwrap_or(0);
+            let max = sizes.iter().copied().max().unwrap_or(0);
+            let cjk_chunks = chunks
+                .iter()
+                .filter(|c| {
+                    c.content
+                        .chars()
+                        .any(|ch| matches!(ch as u32, 0xAC00..=0xD7AF))
+                })
+                .count();
+            println!(
+                "{:<22} {:>6} {:>7} {:>7} {:>5} {:>5} {:>7}",
+                label, total_chars, n, mean, min, max, cjk_chunks
+            );
+        }
+    }
+
+    #[test]
     #[ignore = "stress benchmark"]
     fn bench_join_pages_stress_corpus() {
         let pages = (0..500)
