@@ -6,6 +6,19 @@
 use anyhow::{anyhow, Result};
 use regex::Regex;
 
+/// Upper bound on the iterated CJK<->CJK single-newline fold passes.
+/// Each pass strictly reduces the count of CJK-bracketed line breaks, so
+/// fixed-point is reached in O(N) iterations for a paragraph of N chars;
+/// the cap is a defensive ceiling, not a tuning parameter.
+const CJK_FOLD_MAX_ITER: usize = 32;
+
+/// Minimum non-whitespace character count that `extract_text_from_pdf`
+/// considers "successful" extraction. PDFs below this threshold (typically
+/// scanned/image-only documents that pdf_extract reads as empty pages) are
+/// surfaced as `Err` so the caller can decide on OCR fallback rather than
+/// silently indexing 0-chunk sources.
+const MIN_EXTRACTED_NON_WHITESPACE: usize = 16;
+
 fn is_private_use_code_point(code_point: u32) -> bool {
     (0xE000..=0xF8FF).contains(&code_point)
         || (0xF0000..=0xFFFFD).contains(&code_point)
@@ -176,30 +189,90 @@ fn join_pages(pages: Vec<String>) -> String {
     // Only join when: word- + newline + lowercase continuation
     // Preserves real compound words like "user-facing", "data-binding"
     // Also handles soft hyphens etc.
+    //
+    // Applied before paragraph splitting so PDF column-wrap artifacts where
+    // a hyphenated word spans what looks like a blank line still merge.
     let inline_hyphen_re =
         Regex::new(r"(\w+)[-\u{00AD}\u{2010}\u{2011}]\s*[\r\n]+\s*([a-z]\w*)").unwrap();
     let normalized_result = normalize_extracted_text(&result);
-    let cjk_newline_re = Regex::new(
-        r"([\p{Han}\p{Hangul}\p{Hiragana}\p{Katakana}])[\r\n]+([\p{Han}\p{Hangul}\p{Hiragana}\p{Katakana}])",
+    let dehyphenated = inline_hyphen_re
+        .replace_all(&normalized_result, "$1$2")
+        .into_owned();
+
+    // Split on paragraph breaks (one or more consecutive blank lines).
+    // Preserving these as `\n\n` in the output is what lets the downstream
+    // chunker (semantic_chunker::split_paragraph_ranges) find semantic
+    // break points instead of treating every PDF as a single paragraph.
+    let paragraph_break_re = Regex::new(r"\n[ \t]*(?:\n[ \t]*)+").unwrap();
+
+    // CJK<->CJK across a SINGLE line break only — paragraph breaks must
+    // never be eaten by this rule (the previous `[\r\n]+` form silently
+    // glued adjacent Korean paragraphs together).
+    let cjk_inline_newline_re = Regex::new(
+        r"([\p{Han}\p{Hangul}\p{Hiragana}\p{Katakana}])[\r\n]([\p{Han}\p{Hangul}\p{Hiragana}\p{Katakana}])",
     )
     .unwrap();
-    let cjk_joined = cjk_newline_re.replace_all(&normalized_result, "$1$2");
-    let dehyphenated = inline_hyphen_re.replace_all(&cjk_joined, "$1$2");
 
-    // Normalize whitespace
-    let whitespace_re = Regex::new(r"\s+").unwrap();
-    whitespace_re
-        .replace_all(&dehyphenated, " ")
-        .trim()
-        .to_string()
+    // Within a paragraph, collapse remaining whitespace runs (line breaks,
+    // multiple spaces) to a single space. \n\n was already stripped by the
+    // paragraph split above, so this only touches intra-paragraph layout.
+    let intra_paragraph_ws_re = Regex::new(r"[ \t\r\n]+").unwrap();
+
+    let mut paragraphs: Vec<String> = Vec::new();
+    for raw_paragraph in paragraph_break_re.split(&dehyphenated) {
+        if raw_paragraph.trim().is_empty() {
+            continue;
+        }
+
+        // Iterate CJK<->CJK single-newline fold to a fixed point. A single
+        // non-iterated regex pass only consumes alternating pairs and
+        // leaves stranded syllables that the whitespace collapse later
+        // turns into orphan tokens (e.g. "해\n지\n환\n급\n금" → "해지 환급 금").
+        let mut cjk_joined: String = raw_paragraph.to_string();
+        for _ in 0..CJK_FOLD_MAX_ITER {
+            let next = cjk_inline_newline_re.replace_all(&cjk_joined, "$1$2");
+            if next.as_ref() == cjk_joined.as_str() {
+                break;
+            }
+            cjk_joined = next.into_owned();
+        }
+
+        let cleaned = intra_paragraph_ws_re
+            .replace_all(&cjk_joined, " ")
+            .trim()
+            .to_string();
+        if !cleaned.is_empty() {
+            paragraphs.push(cleaned);
+        }
+    }
+
+    paragraphs.join("\n\n")
+}
+
+fn is_extraction_effectively_empty(text: &str) -> bool {
+    text.chars().filter(|c| !c.is_whitespace()).count() < MIN_EXTRACTED_NON_WHITESPACE
 }
 
 /// Extract text content from a PDF file (bytes)
-/// Uses page-by-page extraction for safe page number removal and hyphenation handling
+/// Uses page-by-page extraction for safe page number removal and hyphenation handling.
+///
+/// Returns `Err` when the joined output falls below
+/// `MIN_EXTRACTED_NON_WHITESPACE` characters. pdf_extract reports
+/// scanned/image-only PDFs as a vector of empty strings (no error), so without
+/// this guard a 0-chunk source would be silently indexed and the user would
+/// see an "ingested but unsearchable" mystery. Surfacing as `Err` lets the
+/// caller decide on OCR fallback or a "scanned PDF not supported" message.
 pub fn extract_text_from_pdf(file_bytes: Vec<u8>) -> Result<String> {
     let pages = pdf_extract::extract_text_from_mem_by_pages(&file_bytes)
         .map_err(|e| anyhow!("PDF extraction failed: {:?}", e))?;
-    Ok(join_pages(pages))
+    let joined = join_pages(pages);
+    if is_extraction_effectively_empty(&joined) {
+        return Err(anyhow!(
+            "PDF text extraction returned fewer than {} non-whitespace characters; PDF may be scanned/image-only",
+            MIN_EXTRACTED_NON_WHITESPACE,
+        ));
+    }
+    Ok(joined)
 }
 
 /// Extract text content from a DOCX file (bytes)
@@ -383,10 +456,54 @@ mod tests {
 
     #[test]
     fn test_join_pages_normalizes_dense_cjk_linebreak_sequence() {
+        // Dense single-syllable column wrapping was previously left
+        // partially joined ("해지 환급 금") because a single regex pass
+        // only consumed alternating CJK<->newline<->CJK pairs. The
+        // iterated fold now reaches a fixed point and produces one
+        // contiguous run.
         let pages = vec!["해\n지\n환\n급\n금".to_string()];
         let result = join_pages(pages);
-        assert_eq!(result, "해지 환급 금");
+        assert_eq!(result, "해지환급금");
         assert!(!result.contains('\n'));
+    }
+
+    #[test]
+    fn test_join_pages_preserves_paragraph_break_between_sentences() {
+        let pages = vec!["First paragraph here.\n\nSecond paragraph here.".to_string()];
+        let result = join_pages(pages);
+        assert_eq!(result, "First paragraph here.\n\nSecond paragraph here.");
+    }
+
+    #[test]
+    fn test_join_pages_preserves_korean_paragraph_break() {
+        // The CJK-newline rule previously matched [\r\n]+ and silently
+        // glued adjacent Korean paragraphs together ("보고서문제 정의").
+        // The fix narrows the rule to single \n and splits on paragraph
+        // breaks first, so the downstream chunker can find this boundary.
+        let pages = vec!["심층 시장 조사 보고서\n\n문제 정의: 무엇을 풀려는가".to_string()];
+        let result = join_pages(pages);
+        assert!(!result.contains("보고서문제"));
+        assert_eq!(result, "심층 시장 조사 보고서\n\n문제 정의: 무엇을 풀려는가");
+    }
+
+    #[test]
+    fn test_join_pages_collapses_blank_line_run_to_single_paragraph_break() {
+        let pages = vec!["A.\n\n\n\nB.".to_string()];
+        let result = join_pages(pages);
+        assert_eq!(result, "A.\n\nB.");
+    }
+
+    #[test]
+    fn test_is_extraction_effectively_empty_threshold() {
+        assert!(is_extraction_effectively_empty(""));
+        assert!(is_extraction_effectively_empty("   \n\n\t  "));
+        // 15 non-whitespace chars → below threshold
+        assert!(is_extraction_effectively_empty(&"a".repeat(15)));
+        // 16 non-whitespace chars → at threshold, not empty
+        assert!(!is_extraction_effectively_empty(&"a".repeat(16)));
+        assert!(!is_extraction_effectively_empty(
+            "This is a normal sentence with enough content."
+        ));
     }
 
     #[test]
@@ -908,26 +1025,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "demonstrates Korean paragraph-glue bug"]
-    fn demo_korean_paragraph_glue_bug() {
-        // Two paragraphs separated by blank line, each Korean word-spaced.
-        // Expected (human-correct): "보고서 문제 정의: ..." with a space (or newline).
-        // Actual: paragraphs glue with no separator -> "보고서문제 정의:".
-        let pages = vec!["...심층 시장 조사 보고서\n\n문제 정의: ...".to_string()];
-        let result = join_pages(pages);
-        println!("KOR paragraph join: {:?}", result);
-        // Demonstrates the bug: the boundary between paragraphs disappears.
-        assert!(
-            result.contains("보고서문제"),
-            "boundary should disappear under current rule"
-        );
-    }
-
-    #[test]
     #[ignore = "analysis dump — run with --ignored --nocapture"]
     fn dump_dense_cjk_linebreak_artifact() {
-        // Stress the dense CJK linebreak case directly to confirm the test memorializes
-        // a known bug (single non-iterative regex pass leaves space-broken syllables).
+        // Companion dump for test_join_pages_normalizes_dense_cjk_linebreak_sequence
+        // — useful for visual inspection when tweaking the CJK fold parameters.
         let pages = vec!["해\n지\n환\n급\n금".to_string()];
         let result = join_pages(pages);
         println!("dense CJK linebreak result: {:?}", result);
