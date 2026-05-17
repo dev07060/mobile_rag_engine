@@ -43,6 +43,7 @@ import '../src/rust/api/source_rag.dart'
         ChunkExcerptResult,
         AssembledContextV2;
 import '../src/rust/api/db_pool.dart';
+import '../src/rust/api/migration_meta.dart' show MigrationAxes, readMigrationAxes;
 import '../src/internal/defaults.dart';
 import '../src/internal/validation.dart';
 import 'embedding_service.dart';
@@ -355,6 +356,15 @@ class RagEngine {
     }
     return path;
   }
+
+  /// Read-only snapshot of the four on-device data migration axes.
+  ///
+  /// Reflects the `migration_meta` row written by `init_source_db`:
+  /// `sql_schema_version`, `hnsw_format_version`, `bm25_stats_version`,
+  /// `embedding_fingerprint`, plus the last engine version recorded at boot.
+  /// Phase P0-2 will populate `embedding_fingerprint`; later phases gate
+  /// behavior on the integer axes.
+  Future<MigrationAxes> get migrationState => readMigrationAxes();
 
   /// Whether all retrieval indexes are ready for full-quality search.
   bool get isIndexReady => _ragService.isIndexReady;

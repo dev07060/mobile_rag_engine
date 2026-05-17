@@ -31,6 +31,8 @@ import 'package:mobile_rag_engine/services/rag_engine.dart';
 import 'package:mobile_rag_engine/services/context_builder.dart';
 import 'package:mobile_rag_engine/services/source_rag_service.dart';
 // Explicitly import SourceEntry so it can be used in types
+import 'package:mobile_rag_engine/src/rust/api/migration_meta.dart'
+    show MigrationAxes;
 import 'package:mobile_rag_engine/src/rust/api/source_rag.dart'
     show
         ChunkSearchResult,
@@ -42,6 +44,8 @@ import 'package:mobile_rag_engine/src/rust/api/source_rag.dart'
 import 'package:mobile_rag_engine/src/rust/api/hybrid_search.dart' as hybrid;
 
 // Export types for consumers
+export 'package:mobile_rag_engine/src/rust/api/migration_meta.dart'
+    show MigrationAxes;
 export 'package:mobile_rag_engine/src/rust/api/source_rag.dart'
     show
         ChunkSearchResult,
@@ -186,6 +190,12 @@ class MobileRag {
 
   /// Whether all retrieval indexes are ready for full-quality search.
   bool get isIndexReady => _engine!.isIndexReady;
+
+  /// Read-only snapshot of the four on-device data migration axes
+  /// (`sql_schema_version`, `hnsw_format_version`, `bm25_stats_version`,
+  /// `embedding_fingerprint`) plus the last engine version recorded at boot.
+  /// Backed by the `migration_meta` row provisioned during `initialize()`.
+  Future<MigrationAxes> get migrationState => _engine!.migrationState;
 
   /// Completes when BM25/HNSW warmup has finished.
   Future<void> get warmupFuture => _engine!.warmupFuture;

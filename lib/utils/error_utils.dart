@@ -17,6 +17,8 @@ extension RagErrorUi on RagError {
       concurrentMutation: (_) =>
           'The underlying collection changed during search. Please try again.',
       internalError: (_) => 'A temporary internal error occurred.',
+      unsupportedMigrationVersion: (axis, stored, supported) =>
+          'On-device data was written by a newer version of the app ($axis=$stored, this build supports $supported). Please update the app to continue.',
       unknown: (_) => 'An unknown error occurred.',
     );
   }
@@ -31,6 +33,8 @@ extension RagErrorUi on RagError {
       staleSearchHandle: (msg) => msg,
       concurrentMutation: (msg) => msg,
       internalError: (msg) => msg,
+      unsupportedMigrationVersion: (axis, stored, supported) =>
+          'UnsupportedMigrationVersion(axis=$axis, stored=$stored, supported=$supported)',
       unknown: (msg) => msg,
     );
   }

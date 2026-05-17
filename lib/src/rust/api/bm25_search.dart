@@ -6,10 +6,10 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `is_cjk_or_hangul`, `keep_bm25_token`, `tokenize_for_bm25`
+// These functions are ignored because they are not marked as `pub`: `bm25_search_scoped_tokens`, `is_cjk_or_hangul`, `keep_bm25_token`, `tokenize_for_bm25`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocMeta`, `InvertedIndex`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `fmt`
-// These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `add_document`, `clear`, `is_empty`, `len`, `new`, `remove_document`, `search`
+// These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `add_document`, `clear`, `is_empty`, `len`, `new`, `remove_document`, `search_scoped_tokens`, `search`
 
 /// Add document to BM25 index.
 Future<void> bm25AddDocument({

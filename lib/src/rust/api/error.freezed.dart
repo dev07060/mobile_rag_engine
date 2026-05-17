@@ -86,7 +86,7 @@ extension RagErrorPatterns on RagError {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( RagError_DatabaseError value)?  databaseError,TResult Function( RagError_IoError value)?  ioError,TResult Function( RagError_ModelLoadError value)?  modelLoadError,TResult Function( RagError_InvalidInput value)?  invalidInput,TResult Function( RagError_StaleSearchHandle value)?  staleSearchHandle,TResult Function( RagError_ConcurrentMutation value)?  concurrentMutation,TResult Function( RagError_InternalError value)?  internalError,TResult Function( RagError_Unknown value)?  unknown,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( RagError_DatabaseError value)?  databaseError,TResult Function( RagError_IoError value)?  ioError,TResult Function( RagError_ModelLoadError value)?  modelLoadError,TResult Function( RagError_InvalidInput value)?  invalidInput,TResult Function( RagError_StaleSearchHandle value)?  staleSearchHandle,TResult Function( RagError_ConcurrentMutation value)?  concurrentMutation,TResult Function( RagError_InternalError value)?  internalError,TResult Function( RagError_UnsupportedMigrationVersion value)?  unsupportedMigrationVersion,TResult Function( RagError_Unknown value)?  unknown,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case RagError_DatabaseError() when databaseError != null:
@@ -96,7 +96,8 @@ return modelLoadError(_that);case RagError_InvalidInput() when invalidInput != n
 return invalidInput(_that);case RagError_StaleSearchHandle() when staleSearchHandle != null:
 return staleSearchHandle(_that);case RagError_ConcurrentMutation() when concurrentMutation != null:
 return concurrentMutation(_that);case RagError_InternalError() when internalError != null:
-return internalError(_that);case RagError_Unknown() when unknown != null:
+return internalError(_that);case RagError_UnsupportedMigrationVersion() when unsupportedMigrationVersion != null:
+return unsupportedMigrationVersion(_that);case RagError_Unknown() when unknown != null:
 return unknown(_that);case _:
   return orElse();
 
@@ -115,7 +116,7 @@ return unknown(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( RagError_DatabaseError value)  databaseError,required TResult Function( RagError_IoError value)  ioError,required TResult Function( RagError_ModelLoadError value)  modelLoadError,required TResult Function( RagError_InvalidInput value)  invalidInput,required TResult Function( RagError_StaleSearchHandle value)  staleSearchHandle,required TResult Function( RagError_ConcurrentMutation value)  concurrentMutation,required TResult Function( RagError_InternalError value)  internalError,required TResult Function( RagError_Unknown value)  unknown,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( RagError_DatabaseError value)  databaseError,required TResult Function( RagError_IoError value)  ioError,required TResult Function( RagError_ModelLoadError value)  modelLoadError,required TResult Function( RagError_InvalidInput value)  invalidInput,required TResult Function( RagError_StaleSearchHandle value)  staleSearchHandle,required TResult Function( RagError_ConcurrentMutation value)  concurrentMutation,required TResult Function( RagError_InternalError value)  internalError,required TResult Function( RagError_UnsupportedMigrationVersion value)  unsupportedMigrationVersion,required TResult Function( RagError_Unknown value)  unknown,}){
 final _that = this;
 switch (_that) {
 case RagError_DatabaseError():
@@ -125,7 +126,8 @@ return modelLoadError(_that);case RagError_InvalidInput():
 return invalidInput(_that);case RagError_StaleSearchHandle():
 return staleSearchHandle(_that);case RagError_ConcurrentMutation():
 return concurrentMutation(_that);case RagError_InternalError():
-return internalError(_that);case RagError_Unknown():
+return internalError(_that);case RagError_UnsupportedMigrationVersion():
+return unsupportedMigrationVersion(_that);case RagError_Unknown():
 return unknown(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
@@ -140,7 +142,7 @@ return unknown(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( RagError_DatabaseError value)?  databaseError,TResult? Function( RagError_IoError value)?  ioError,TResult? Function( RagError_ModelLoadError value)?  modelLoadError,TResult? Function( RagError_InvalidInput value)?  invalidInput,TResult? Function( RagError_StaleSearchHandle value)?  staleSearchHandle,TResult? Function( RagError_ConcurrentMutation value)?  concurrentMutation,TResult? Function( RagError_InternalError value)?  internalError,TResult? Function( RagError_Unknown value)?  unknown,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( RagError_DatabaseError value)?  databaseError,TResult? Function( RagError_IoError value)?  ioError,TResult? Function( RagError_ModelLoadError value)?  modelLoadError,TResult? Function( RagError_InvalidInput value)?  invalidInput,TResult? Function( RagError_StaleSearchHandle value)?  staleSearchHandle,TResult? Function( RagError_ConcurrentMutation value)?  concurrentMutation,TResult? Function( RagError_InternalError value)?  internalError,TResult? Function( RagError_UnsupportedMigrationVersion value)?  unsupportedMigrationVersion,TResult? Function( RagError_Unknown value)?  unknown,}){
 final _that = this;
 switch (_that) {
 case RagError_DatabaseError() when databaseError != null:
@@ -150,7 +152,8 @@ return modelLoadError(_that);case RagError_InvalidInput() when invalidInput != n
 return invalidInput(_that);case RagError_StaleSearchHandle() when staleSearchHandle != null:
 return staleSearchHandle(_that);case RagError_ConcurrentMutation() when concurrentMutation != null:
 return concurrentMutation(_that);case RagError_InternalError() when internalError != null:
-return internalError(_that);case RagError_Unknown() when unknown != null:
+return internalError(_that);case RagError_UnsupportedMigrationVersion() when unsupportedMigrationVersion != null:
+return unsupportedMigrationVersion(_that);case RagError_Unknown() when unknown != null:
 return unknown(_that);case _:
   return null;
 
@@ -168,7 +171,7 @@ return unknown(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String field0)?  databaseError,TResult Function( String field0)?  ioError,TResult Function( String field0)?  modelLoadError,TResult Function( String field0)?  invalidInput,TResult Function( String field0)?  staleSearchHandle,TResult Function( String field0)?  concurrentMutation,TResult Function( String field0)?  internalError,TResult Function( String field0)?  unknown,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String field0)?  databaseError,TResult Function( String field0)?  ioError,TResult Function( String field0)?  modelLoadError,TResult Function( String field0)?  invalidInput,TResult Function( String field0)?  staleSearchHandle,TResult Function( String field0)?  concurrentMutation,TResult Function( String field0)?  internalError,TResult Function( String field0,  PlatformInt64 field1,  PlatformInt64 field2)?  unsupportedMigrationVersion,TResult Function( String field0)?  unknown,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case RagError_DatabaseError() when databaseError != null:
 return databaseError(_that.field0);case RagError_IoError() when ioError != null:
@@ -177,7 +180,8 @@ return modelLoadError(_that.field0);case RagError_InvalidInput() when invalidInp
 return invalidInput(_that.field0);case RagError_StaleSearchHandle() when staleSearchHandle != null:
 return staleSearchHandle(_that.field0);case RagError_ConcurrentMutation() when concurrentMutation != null:
 return concurrentMutation(_that.field0);case RagError_InternalError() when internalError != null:
-return internalError(_that.field0);case RagError_Unknown() when unknown != null:
+return internalError(_that.field0);case RagError_UnsupportedMigrationVersion() when unsupportedMigrationVersion != null:
+return unsupportedMigrationVersion(_that.field0,_that.field1,_that.field2);case RagError_Unknown() when unknown != null:
 return unknown(_that.field0);case _:
   return orElse();
 
@@ -196,7 +200,7 @@ return unknown(_that.field0);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String field0)  databaseError,required TResult Function( String field0)  ioError,required TResult Function( String field0)  modelLoadError,required TResult Function( String field0)  invalidInput,required TResult Function( String field0)  staleSearchHandle,required TResult Function( String field0)  concurrentMutation,required TResult Function( String field0)  internalError,required TResult Function( String field0)  unknown,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String field0)  databaseError,required TResult Function( String field0)  ioError,required TResult Function( String field0)  modelLoadError,required TResult Function( String field0)  invalidInput,required TResult Function( String field0)  staleSearchHandle,required TResult Function( String field0)  concurrentMutation,required TResult Function( String field0)  internalError,required TResult Function( String field0,  PlatformInt64 field1,  PlatformInt64 field2)  unsupportedMigrationVersion,required TResult Function( String field0)  unknown,}) {final _that = this;
 switch (_that) {
 case RagError_DatabaseError():
 return databaseError(_that.field0);case RagError_IoError():
@@ -205,7 +209,8 @@ return modelLoadError(_that.field0);case RagError_InvalidInput():
 return invalidInput(_that.field0);case RagError_StaleSearchHandle():
 return staleSearchHandle(_that.field0);case RagError_ConcurrentMutation():
 return concurrentMutation(_that.field0);case RagError_InternalError():
-return internalError(_that.field0);case RagError_Unknown():
+return internalError(_that.field0);case RagError_UnsupportedMigrationVersion():
+return unsupportedMigrationVersion(_that.field0,_that.field1,_that.field2);case RagError_Unknown():
 return unknown(_that.field0);}
 }
 /// A variant of `when` that fallback to returning `null`
@@ -220,7 +225,7 @@ return unknown(_that.field0);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String field0)?  databaseError,TResult? Function( String field0)?  ioError,TResult? Function( String field0)?  modelLoadError,TResult? Function( String field0)?  invalidInput,TResult? Function( String field0)?  staleSearchHandle,TResult? Function( String field0)?  concurrentMutation,TResult? Function( String field0)?  internalError,TResult? Function( String field0)?  unknown,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String field0)?  databaseError,TResult? Function( String field0)?  ioError,TResult? Function( String field0)?  modelLoadError,TResult? Function( String field0)?  invalidInput,TResult? Function( String field0)?  staleSearchHandle,TResult? Function( String field0)?  concurrentMutation,TResult? Function( String field0)?  internalError,TResult? Function( String field0,  PlatformInt64 field1,  PlatformInt64 field2)?  unsupportedMigrationVersion,TResult? Function( String field0)?  unknown,}) {final _that = this;
 switch (_that) {
 case RagError_DatabaseError() when databaseError != null:
 return databaseError(_that.field0);case RagError_IoError() when ioError != null:
@@ -229,7 +234,8 @@ return modelLoadError(_that.field0);case RagError_InvalidInput() when invalidInp
 return invalidInput(_that.field0);case RagError_StaleSearchHandle() when staleSearchHandle != null:
 return staleSearchHandle(_that.field0);case RagError_ConcurrentMutation() when concurrentMutation != null:
 return concurrentMutation(_that.field0);case RagError_InternalError() when internalError != null:
-return internalError(_that.field0);case RagError_Unknown() when unknown != null:
+return internalError(_that.field0);case RagError_UnsupportedMigrationVersion() when unsupportedMigrationVersion != null:
+return unsupportedMigrationVersion(_that.field0,_that.field1,_that.field2);case RagError_Unknown() when unknown != null:
 return unknown(_that.field0);case _:
   return null;
 
@@ -694,6 +700,76 @@ class _$RagError_InternalErrorCopyWithImpl<$Res>
   return _then(RagError_InternalError(
 null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
 as String,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class RagError_UnsupportedMigrationVersion extends RagError {
+  const RagError_UnsupportedMigrationVersion(this.field0, this.field1, this.field2): super._();
+  
+
+@override final  String field0;
+ final  PlatformInt64 field1;
+ final  PlatformInt64 field2;
+
+/// Create a copy of RagError
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$RagError_UnsupportedMigrationVersionCopyWith<RagError_UnsupportedMigrationVersion> get copyWith => _$RagError_UnsupportedMigrationVersionCopyWithImpl<RagError_UnsupportedMigrationVersion>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is RagError_UnsupportedMigrationVersion&&(identical(other.field0, field0) || other.field0 == field0)&&(identical(other.field1, field1) || other.field1 == field1)&&(identical(other.field2, field2) || other.field2 == field2));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,field0,field1,field2);
+
+@override
+String toString() {
+  return 'RagError.unsupportedMigrationVersion(field0: $field0, field1: $field1, field2: $field2)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $RagError_UnsupportedMigrationVersionCopyWith<$Res> implements $RagErrorCopyWith<$Res> {
+  factory $RagError_UnsupportedMigrationVersionCopyWith(RagError_UnsupportedMigrationVersion value, $Res Function(RagError_UnsupportedMigrationVersion) _then) = _$RagError_UnsupportedMigrationVersionCopyWithImpl;
+@override @useResult
+$Res call({
+ String field0, PlatformInt64 field1, PlatformInt64 field2
+});
+
+
+
+
+}
+/// @nodoc
+class _$RagError_UnsupportedMigrationVersionCopyWithImpl<$Res>
+    implements $RagError_UnsupportedMigrationVersionCopyWith<$Res> {
+  _$RagError_UnsupportedMigrationVersionCopyWithImpl(this._self, this._then);
+
+  final RagError_UnsupportedMigrationVersion _self;
+  final $Res Function(RagError_UnsupportedMigrationVersion) _then;
+
+/// Create a copy of RagError
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? field0 = null,Object? field1 = null,Object? field2 = null,}) {
+  return _then(RagError_UnsupportedMigrationVersion(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as String,null == field1 ? _self.field1 : field1 // ignore: cast_nullable_to_non_nullable
+as PlatformInt64,null == field2 ? _self.field2 : field2 // ignore: cast_nullable_to_non_nullable
+as PlatformInt64,
   ));
 }
 

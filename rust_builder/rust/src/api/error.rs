@@ -33,6 +33,12 @@ pub enum RagError {
     #[error("Internal error: {0}")]
     InternalError(String),
 
+    /// A persisted `migration_meta` axis is newer than this build can read.
+    /// Field order: (axis_key, stored_version, supported_version).
+    /// Downgrade is unsupported; the user must upgrade the engine binary.
+    #[error("Unsupported migration axis '{0}': stored version {1} is newer than build's supported version {2}. Downgrade is not supported.")]
+    UnsupportedMigrationVersion(String, i64, i64),
+
     /// Unknown error.
     #[error("Unknown error: {0}")]
     Unknown(String),

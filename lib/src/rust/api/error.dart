@@ -38,6 +38,15 @@ sealed class RagError with _$RagError implements FrbException {
   /// Internal system error (HNSW, Logic, etc.).
   const factory RagError.internalError(String field0) = RagError_InternalError;
 
+  /// A persisted `migration_meta` axis is newer than this build can read.
+  /// Field order: (axis_key, stored_version, supported_version).
+  /// Downgrade is unsupported; the user must upgrade the engine binary.
+  const factory RagError.unsupportedMigrationVersion(
+    String field0,
+    PlatformInt64 field1,
+    PlatformInt64 field2,
+  ) = RagError_UnsupportedMigrationVersion;
+
   /// Unknown error.
   const factory RagError.unknown(String field0) = RagError_Unknown;
 }
