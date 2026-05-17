@@ -19,6 +19,40 @@ const CJK_FOLD_MAX_ITER: usize = 32;
 /// silently indexing 0-chunk sources.
 const MIN_EXTRACTED_NON_WHITESPACE: usize = 16;
 
+/// Largest adjacent-duplicate unit length (in chars) considered when
+/// dedup'ing double-rendered text. Caps the inner loop cost; doubles longer
+/// than this are uncommon and would still be partially collapsed via the
+/// greedy walk.
+const DEDUP_MAX_UNIT_CHARS: usize = 32;
+
+/// Smallest adjacent-duplicate unit length the heuristic will collapse.
+/// Set to 3 to avoid corrupting natural English text: an L=2 walker would
+/// match the `in` inside `training` (chars 3..5 == chars 5..7) and rewrite
+/// it to `traing`. Empirically every L=2 hit in the arxiv corpus was a
+/// false positive (`in`, `er`, `ot`, `20`, `00`, `66`). Cost: the short
+/// double-strike artifacts `독일독일`, `미국미국` (L=2) are no longer
+/// collapsed; they survive but are no worse than they were pre-PR-B.
+const DEDUP_MIN_UNIT_CHARS: usize = 3;
+
+/// A page is rewritten by `dedup_adjacent_repeats` when EITHER its
+/// adjacent-duplicate density (chars that would be removed / total chars)
+/// reaches this fraction, OR the match count meets
+/// [DEDUP_MIN_MATCHES_TRIGGER]. The density rule catches the common
+/// "every-glyph double-rendered" page; the match-count rule catches the
+/// long page where the artifact is dense locally but diluted by clean
+/// content in tables/labels.
+const DEDUP_DENSITY_TRIGGER: f64 = 0.05;
+
+/// Secondary trigger: a page with this many independent adjacent-duplicate
+/// matches is dedup'd even when density falls below
+/// [DEDUP_DENSITY_TRIGGER]. The cutoff is calibrated against the 12-fixture
+/// corpus: clean Korean pages top out at ~5 matches/page (background noise
+/// from short coincidental repeats), while pages showing the
+/// double-rendering artifact have 8+ matches even when the page is
+/// otherwise full of clean tabular text — see the `dump_dedup_density_per_page`
+/// diagnostic for the empirical gap.
+const DEDUP_MIN_MATCHES_TRIGGER: usize = 8;
+
 fn is_private_use_code_point(code_point: u32) -> bool {
     (0xE000..=0xF8FF).contains(&code_point)
         || (0xF0000..=0xFFFFD).contains(&code_point)
@@ -108,6 +142,106 @@ fn remove_trailing_page_number(page_text: &str) -> String {
     }
 }
 
+/// Locate adjacent character-level duplicates within a single page.
+///
+/// Walks left to right and, at each position, finds the longest unit length
+/// L (2..=DEDUP_MAX_UNIT_CHARS) such that `text[i..i+L] == text[i+L..i+2L]`
+/// AND no character in the matched span is whitespace. Returns an ordered
+/// list of `(start_char_index, unit_len)` matches plus the total duplicate
+/// character count (one copy per match).
+///
+/// The no-whitespace constraint is the key false-positive guard: natural
+/// Korean repetitions ("네 네", "또 또 다른") and English ones ("the the",
+/// list bullets) all carry an intervening space, while the PDF
+/// double-stroke artifact ("해당시해당시", "②②", "독일독일") does not.
+fn find_adjacent_repeats(text: &str) -> (Vec<(usize, usize)>, usize) {
+    let chars: Vec<char> = text.chars().collect();
+    let n = chars.len();
+    let mut matches = Vec::new();
+    let mut removed = 0usize;
+
+    if n < 4 {
+        return (matches, 0);
+    }
+
+    let mut i = 0usize;
+    while i < n {
+        let max_l = ((n - i) / 2).min(DEDUP_MAX_UNIT_CHARS);
+        let mut best_l = 0usize;
+
+        // Prefer the longest valid unit so e.g. "법인등기사항전부증명서법인등기사항전부증명서"
+        // collapses as one 12-char match rather than several short ones.
+        for l in (DEDUP_MIN_UNIT_CHARS..=max_l).rev() {
+            let end2 = i + 2 * l;
+            let span = &chars[i..end2];
+            if span.iter().any(|c| c.is_whitespace()) {
+                continue;
+            }
+            if span[..l] == span[l..] {
+                best_l = l;
+                break;
+            }
+        }
+
+        if best_l > 0 {
+            matches.push((i, best_l));
+            removed += best_l;
+            i += 2 * best_l;
+        } else {
+            i += 1;
+        }
+    }
+
+    (matches, removed)
+}
+
+/// Remove double-rendered text within a page, but only when the duplicate
+/// density is high enough to indicate a PDF-level rendering defect rather
+/// than a few accidental short repeats.
+///
+/// See [DEDUP_DENSITY_TRIGGER] for the gate value; see
+/// [find_adjacent_repeats] for the matching algorithm.
+fn dedup_adjacent_repeats(text: &str) -> String {
+    let (matches, removed) = find_adjacent_repeats(text);
+    if matches.is_empty() {
+        return text.to_string();
+    }
+
+    let total_chars = text.chars().count();
+    if total_chars == 0 {
+        return text.to_string();
+    }
+    let density = removed as f64 / total_chars as f64;
+    let density_fires = density >= DEDUP_DENSITY_TRIGGER;
+    let count_fires = matches.len() >= DEDUP_MIN_MATCHES_TRIGGER;
+    if !density_fires && !count_fires {
+        return text.to_string();
+    }
+
+    // Rebuild the page in a single left-to-right pass, dropping the second
+    // copy of each match. `matches` is in ascending order of start position
+    // and non-overlapping (the walker advances past each consumed pair).
+    let chars: Vec<char> = text.chars().collect();
+    let mut out: String = String::with_capacity(text.len());
+    let mut cursor = 0usize;
+    for (start, len) in matches {
+        // Append everything before the match unchanged.
+        for ch in &chars[cursor..start] {
+            out.push(*ch);
+        }
+        // Keep exactly one copy.
+        for ch in &chars[start..start + len] {
+            out.push(*ch);
+        }
+        // Skip the duplicate copy.
+        cursor = start + 2 * len;
+    }
+    for ch in &chars[cursor..] {
+        out.push(*ch);
+    }
+    out
+}
+
 /// Join hyphenated word at page boundary
 /// If page ends with "word-" and next page starts with "continuation",
 /// join them as "wordcontinuation"
@@ -116,11 +250,16 @@ fn join_pages(pages: Vec<String>) -> String {
         return String::new();
     }
 
-    // First, clean all pages by removing trailing page numbers
+    // First, clean all pages by removing trailing page numbers and any
+    // PDF double-stroke duplicates. Dedup runs per-page so the density
+    // gate compares against a single page's content, not the whole doc —
+    // a corrupt single page in a clean book still gets fixed without
+    // dragging the doc-level density below the trigger.
     let cleaned_pages: Vec<String> = pages
         .iter()
         .map(|page| normalize_extracted_text(page))
         .map(|page| remove_trailing_page_number(&page))
+        .map(|page| dedup_adjacent_repeats(&page))
         .collect();
 
     // Include standard hyphen (-), soft hyphen (\u{00AD}), hyphen (\u{2010}), non-breaking hyphen (\u{2011})
@@ -349,6 +488,162 @@ fn is_cjk(c: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_dedup_collapses_korean_doubles_when_dense() {
+        // L>=3 doubles ("한국청년...", "해당시해당시") collapse on a dense
+        // page. L=2 doubles ("독일독일", "미국미국") survive by design —
+        // see DEDUP_MIN_UNIT_CHARS for why L=2 is excluded.
+        let page = "해당시해당시 한국청년한국청년기업가정신재단기업가정신재단 독일독일";
+        let out = dedup_adjacent_repeats(page);
+        assert_eq!(out, "해당시 한국청년기업가정신재단 독일독일");
+    }
+
+    #[test]
+    fn test_dedup_collapses_long_compound_double() {
+        // Single occurrence in an otherwise short page still triggers because
+        // the 26 removed chars out of ~26+~30 = ~46% density exceeds 5%.
+        let page = "법인등기사항전부증명서법인등기사항전부증명서 구 법인등기부등본";
+        let out = dedup_adjacent_repeats(page);
+        assert_eq!(out, "법인등기사항전부증명서 구 법인등기부등본");
+    }
+
+    #[test]
+    fn test_dedup_leaves_short_l2_doubles_alone() {
+        // L=2 units like "②②", "독일독일" survive by design — the L>=3
+        // minimum guards against English false positives (training→traing).
+        let page = "독일독일 ②② 미국미국";
+        assert_eq!(dedup_adjacent_repeats(page), page);
+    }
+
+    #[test]
+    fn test_dedup_does_not_corrupt_english_training_word() {
+        // Regression guard for the L=2 walker bug: "training" contains
+        // chars[3..5]=="in"==chars[5..7], which an L>=2 walker on a fired
+        // page would rewrite to "traing". Build a page that easily fires
+        // the count gate (12 L=3 doubles) and verify "training" is intact.
+        let mut page = String::new();
+        for _ in 0..12 {
+            page.push_str("해당시해당시 ");
+        }
+        page.push_str("Before pretraining, run the training loop on training data");
+        let out = dedup_adjacent_repeats(&page);
+        assert!(out.contains("pretraining"));
+        assert!(out.contains("training loop"));
+        assert!(out.contains("training data"));
+        assert!(!out.contains("traing"), "training must not be corrupted: {}", out);
+    }
+
+    #[test]
+    fn test_dedup_leaves_natural_repetition_with_space() {
+        // Real Korean text where the same word legitimately repeats with
+        // an intervening space must not be touched.
+        let page = "네 네 잘 알겠습니다. 또 또 다른 의견이 있나요?";
+        assert_eq!(dedup_adjacent_repeats(page), page);
+    }
+
+    #[test]
+    fn test_dedup_leaves_legit_compound_nouns() {
+        // Legal-statute / proper-noun compounds (long Hangul runs without
+        // an inner duplicate) must pass through unchanged.
+        let page = "어린이놀이시설안전관리법 제2조 두산모빌리티이노베이션 주요 성능";
+        assert_eq!(dedup_adjacent_repeats(page), page);
+    }
+
+    #[test]
+    fn test_dedup_below_both_triggers_is_a_noop() {
+        // One short accidental double in an otherwise long clean page —
+        // density well below 5% AND matches well below the 8-match secondary
+        // trigger. Must NOT rewrite.
+        let lorem = "보험 계약은 약관에 따라 체결됩니다. 보험금 지급은 청구일로부터 \
+                     영업일 기준 3일 이내에 처리되며, 지급 사유와 지급 방식은 ";
+        let mut page = String::new();
+        for _ in 0..6 {
+            page.push_str(lorem);
+        }
+        page.push_str("독일독일");
+        assert_eq!(dedup_adjacent_repeats(&page), page);
+    }
+
+    #[test]
+    fn test_dedup_fires_on_high_match_count_low_density() {
+        // Mimics the kor_accel_2026 borderline case: a long page with many
+        // L>=3 doubles but lots of clean tabular text in between. Density
+        // alone (~3-4%) wouldn't trigger; the 8+ match count must.
+        let clean_filler = " 계약일자 발행기관 검토자 승인자 시행일자 비고 첨부 참고 별첨 자료 ";
+        let mut page = String::new();
+        for _ in 0..15 {
+            page.push_str(clean_filler);
+        }
+        // Insert 10 L>=3 doubles scattered through the page.
+        for word in [
+            "국토부", "외교부", "법무부", "통일부", "행안부", "산업부", "환경부",
+            "고용부", "복지부", "여가부",
+        ] {
+            page.push(' ');
+            page.push_str(word);
+            page.push_str(word);
+        }
+        let out = dedup_adjacent_repeats(&page);
+        for word in [
+            "국토부", "외교부", "법무부", "통일부", "행안부", "산업부", "환경부",
+            "고용부", "복지부", "여가부",
+        ] {
+            let doubled = format!("{word}{word}");
+            assert!(!out.contains(&doubled), "doubled token {} should be collapsed", doubled);
+            assert!(out.contains(word), "single copy of {} should remain", word);
+        }
+    }
+
+    #[test]
+    fn test_dedup_does_not_cross_whitespace() {
+        // Whitespace separator breaks the no-whitespace constraint. With
+        // L>=3 only the longer Korean compound double collapses; the
+        // space-separated and L=2 ones are left intact.
+        let page = "독일 독일 미국미국 한국청년한국청년 일본일본 영국영국";
+        let out = dedup_adjacent_repeats(page);
+        assert_eq!(out, "독일 독일 미국미국 한국청년 일본일본 영국영국");
+    }
+
+    #[test]
+    fn test_dedup_picks_longest_match_first() {
+        // Greedy-longest avoids collapsing only a prefix.
+        // "ABCDEABCDE" must collapse as one L=5 match (matches >= 3 only,
+        // density 50%), not pick a shorter sub-match.
+        let page = "ABCDEABCDE ABCDEABCDE ABCDEABCDE";
+        let out = dedup_adjacent_repeats(page);
+        assert_eq!(out, "ABCDE ABCDE ABCDE");
+    }
+
+    #[test]
+    fn test_dedup_handles_unicode_boundaries_safely() {
+        // Units measured in chars, not bytes — multi-byte chars must not
+        // be split. L=5 matches qualify under the L>=3 rule.
+        let page = "ABC가나ABC가나 XYZ다라XYZ다라";
+        let out = dedup_adjacent_repeats(page);
+        assert_eq!(out, "ABC가나 XYZ다라");
+    }
+
+    #[test]
+    fn test_dedup_short_input_is_noop() {
+        assert_eq!(dedup_adjacent_repeats(""), "");
+        assert_eq!(dedup_adjacent_repeats("가"), "가");
+        assert_eq!(dedup_adjacent_repeats("가나"), "가나");
+        // Six chars are required to fit even the smallest (L=3) match.
+        assert_eq!(dedup_adjacent_repeats("가나다라마"), "가나다라마");
+    }
+
+    #[test]
+    fn test_dedup_runs_in_join_pages_pipeline() {
+        // End-to-end: dedup is applied during join_pages, after page-number
+        // removal and before cross-page hyphenation/CJK fold. L=3+ double
+        // collapses; L=2 ("독일독일") survives by design.
+        let pages = vec![
+            "독일독일 한국청년한국청년기업가정신재단기업가정신재단".to_string(),
+        ];
+        let joined = join_pages(pages);
+        assert_eq!(joined, "독일독일 한국청년기업가정신재단");
+    }
 
     #[test]
     fn test_remove_trailing_page_number() {
@@ -1006,6 +1301,89 @@ mod tests {
         println!("  orph=single Hangul flanked by spaces (CJK linebreak symptom)");
         println!("  glue=Hangul<->ASCII alnum boundary count w/o space (heading-glue symptom)");
         println!("  lrun=runs of >=12 consecutive Hangul (eaten space symptom)  mrun=max run len");
+    }
+
+    #[test]
+    #[ignore = "analysis dump — run with --ignored --nocapture"]
+    fn dump_dedup_match_samples_arxiv() {
+        // Show exactly what the dedup heuristic would collapse on the arxiv
+        // PDFs so we can judge whether the recent count-gate is catching
+        // real PDF artifacts or false-positive equation noise.
+        let picks: &[(&str, &str)] = &[
+            ("arxiv_2005_11401", "example/assets/sample_data/2005.11401v4.pdf"),
+            ("arxiv_2205_14135", "example/assets/sample_data/2205.14135v2.pdf"),
+            ("arxiv_2509_01092", "example/assets/sample_data/2509.01092v2.pdf"),
+            ("arxiv_2603_18196", "example/assets/sample_data/2603.18196v1.pdf"),
+        ];
+        for (label, rel) in picks {
+            let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            let path = manifest.parent().unwrap().parent().unwrap().join(rel);
+            let bytes = std::fs::read(&path).unwrap();
+            let pages = pdf_extract::extract_text_from_mem_by_pages(&bytes).unwrap();
+
+            println!("\n=== arxiv dedup-match samples: {} ===", label);
+            for (idx, raw_page) in pages.iter().enumerate() {
+                let page = normalize_extracted_text(raw_page);
+                let page = remove_trailing_page_number(&page);
+                let total = page.chars().count();
+                if total == 0 { continue; }
+                let (matches, removed) = find_adjacent_repeats(&page);
+                let density = removed as f64 / total as f64;
+                let density_fires = density >= DEDUP_DENSITY_TRIGGER;
+                let count_fires = matches.len() >= DEDUP_MIN_MATCHES_TRIGGER;
+                if !density_fires && !count_fires { continue; }
+                println!(
+                    "  page[{:3}] chars={:>5} matches={:>3} dup={:>3} density={:.3} {}",
+                    idx, total, matches.len(), removed, density,
+                    if density_fires { "DENSITY" } else { "COUNT-ONLY" }
+                );
+                let chars: Vec<char> = page.chars().collect();
+                for (start, len) in matches.iter().take(8) {
+                    let lo = start.saturating_sub(8);
+                    let hi = (start + 2*len + 8).min(chars.len());
+                    let ctx: String = chars[lo..hi].iter().collect();
+                    let unit: String = chars[*start..*start + *len].iter().collect();
+                    println!("    L={:2}  unit={:?}  ctx=…{}…", len, unit, ctx);
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "analysis dump — run with --ignored --nocapture"]
+    fn dump_dedup_density_per_page() {
+        // Diagnose which pages of doubled-text PDFs sit below the density
+        // trigger so we can judge whether DEDUP_DENSITY_TRIGGER is set
+        // correctly (vs needing to be lowered / per-page tuned).
+        let picks: &[(&str, &str)] = &[
+            ("kor_accel_2026", "example/assets/sample_data/2026년 글로벌 액셀러레이팅 지원사업 창업기업 모집 공고.pdf"),
+            ("kor_ins_20200101", "example/assets/sample_data/20200101_10108_1.pdf"),
+            ("kor_drone_2021_clean_sample", "example/assets/sample_data/2021-국방드론.pdf"),
+            ("kor_ins_20120401", "example/assets/sample_data/20120401_10101_1.pdf"),
+            ("sample_kor", "example/assets/sample_data/sample_kor.pdf"),
+        ];
+        for (label, rel) in picks {
+            let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            let path = manifest.parent().unwrap().parent().unwrap().join(rel);
+            let bytes = std::fs::read(&path).unwrap();
+            let pages = pdf_extract::extract_text_from_mem_by_pages(&bytes).unwrap();
+
+            println!("\n=== density per page: {} (trigger >= {:.2}) ===", label, DEDUP_DENSITY_TRIGGER);
+            for (idx, raw_page) in pages.iter().enumerate() {
+                let page = normalize_extracted_text(raw_page);
+                let page = remove_trailing_page_number(&page);
+                let total = page.chars().count();
+                if total == 0 { continue; }
+                let (matches, removed) = find_adjacent_repeats(&page);
+                let density = removed as f64 / total as f64;
+                let fired = density >= DEDUP_DENSITY_TRIGGER;
+                let marker = if fired { "FIRED" } else { "skip " };
+                println!(
+                    "  page[{:3}] chars={:>5} dup_chars={:>4} density={:.3} matches={:>3} {}",
+                    idx, total, removed, density, matches.len(), marker
+                );
+            }
+        }
     }
 
     #[test]
