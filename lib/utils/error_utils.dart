@@ -19,6 +19,8 @@ extension RagErrorUi on RagError {
       internalError: (_) => 'A temporary internal error occurred.',
       unsupportedMigrationVersion: (axis, stored, supported) =>
           'On-device data was written by a newer version of the app ($axis=$stored, this build supports $supported). Please update the app to continue.',
+      embeddingFingerprintMismatch: (stored, current, remaining) =>
+          'The embedding model changed since this device last indexed your data. Tap "Re-embed" to keep your saved documents or "Reset" to start fresh.',
       unknown: (_) => 'An unknown error occurred.',
     );
   }
@@ -35,6 +37,8 @@ extension RagErrorUi on RagError {
       internalError: (msg) => msg,
       unsupportedMigrationVersion: (axis, stored, supported) =>
           'UnsupportedMigrationVersion(axis=$axis, stored=$stored, supported=$supported)',
+      embeddingFingerprintMismatch: (stored, current, remaining) =>
+          'EmbeddingFingerprintMismatch(stored=$stored, current=$current, remaining=$remaining)',
       unknown: (msg) => msg,
     );
   }

@@ -44,6 +44,8 @@ import 'package:mobile_rag_engine/src/rust/api/source_rag.dart'
 import 'package:mobile_rag_engine/src/rust/api/hybrid_search.dart' as hybrid;
 
 // Export types for consumers
+export 'package:mobile_rag_engine/src/internal/embedding_fingerprint.dart'
+    show ClearAndRestartConfirmation, RagEmbeddingFingerprintLock, RagReembedProgress;
 export 'package:mobile_rag_engine/src/rust/api/migration_meta.dart'
     show MigrationAxes;
 export 'package:mobile_rag_engine/src/rust/api/source_rag.dart'
@@ -191,11 +193,65 @@ class MobileRag {
   /// Whether all retrieval indexes are ready for full-quality search.
   bool get isIndexReady => _engine!.isIndexReady;
 
-  /// Read-only snapshot of the four on-device data migration axes
+  /// Read-only snapshot of every on-device data migration axis
   /// (`sql_schema_version`, `hnsw_format_version`, `bm25_stats_version`,
-  /// `embedding_fingerprint`) plus the last engine version recorded at boot.
-  /// Backed by the `migration_meta` row provisioned during `initialize()`.
+  /// `embedding_fingerprint`, `embedding_fingerprint_pending`) plus the last
+  /// engine version recorded at boot. Backed by the `migration_meta` row
+  /// provisioned during `initialize()`.
   Future<MigrationAxes> get migrationState => _engine!.migrationState;
+
+  /// Fingerprint computed from the currently loaded embedding model
+  /// (`{modelBasename}|{dim}|{quant}`). Stable across reboots as long as the
+  /// host app keeps loading the same model file.
+  String get currentEmbeddingFingerprint =>
+      _engine!.currentEmbeddingFingerprint;
+
+  /// Non-null when boot detected an embedding fingerprint mismatch — i.e.
+  /// the stored on-device embeddings were produced by a different model than
+  /// the one currently loaded. While set, all search and ingest entry points
+  /// throw `RagError.embeddingFingerprintMismatch`. Resolve by calling either
+  /// [reembedAll] (preserves data) or [clearAndRestart] (discards embeddings
+  /// after explicit confirmation).
+  RagEmbeddingFingerprintLock? get embeddingFingerprintLock =>
+      _engine!.embeddingFingerprintLock;
+
+  /// Whether boot detected an embedding fingerprint mismatch.
+  bool get isEmbeddingFingerprintLocked =>
+      _engine!.isEmbeddingFingerprintLocked;
+
+  /// Re-embed every stored chunk with the currently loaded model and clear
+  /// the [embeddingFingerprintLock]. Resumable across app restarts — progress
+  /// is persisted per chunk on the Rust side, so an interrupted run picks up
+  /// where it left off on the next call.
+  ///
+  /// [onProgress] is invoked once per chunk with the cumulative
+  /// (done, total) snapshot for the current run.
+  ///
+  /// Throws [StateError] when no mismatch is active.
+  Future<void> reembedAll({
+    void Function(RagReembedProgress progress)? onProgress,
+    int batchSize = 32,
+  }) =>
+      _engine!.reembedAll(onProgress: onProgress, batchSize: batchSize);
+
+  /// Discard every on-device embedding (chunks table) and rotate the
+  /// fingerprint baseline to the currently loaded model.
+  ///
+  /// `confirm` is required and only accepts
+  /// [ClearAndRestartConfirmation.iUnderstandThisDeletesAllOnDeviceEmbeddings]
+  /// — the parameter exists solely to keep the destructive choice visible at
+  /// every call site. The `sources` table is preserved so the original
+  /// documents can be re-ingested through `addDocument`.
+  ///
+  /// Throws [StateError] when no mismatch is active.
+  Future<void> clearAndRestart({
+    required ClearAndRestartConfirmation confirm,
+  }) =>
+      _engine!.clearAndRestart(confirm: confirm);
+
+  /// Up-to-date count of chunks still tagged with a non-current fingerprint.
+  /// Safe to call while [reembedAll] is running.
+  Future<int> reembedRemaining() => _engine!.reembedRemaining();
 
   /// Completes when BM25/HNSW warmup has finished.
   Future<void> get warmupFuture => _engine!.warmupFuture;

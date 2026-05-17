@@ -47,6 +47,16 @@ sealed class RagError with _$RagError implements FrbException {
     PlatformInt64 field2,
   ) = RagError_UnsupportedMigrationVersion;
 
+  /// The currently loaded embedding model produced a fingerprint that does
+  /// not match the one persisted on disk. Search and ingest must remain
+  /// locked until the host app explicitly drives either reembed-all or
+  /// clear-and-restart. Field order: (stored, current, remaining_chunks).
+  const factory RagError.embeddingFingerprintMismatch(
+    String field0,
+    String field1,
+    PlatformInt64 field2,
+  ) = RagError_EmbeddingFingerprintMismatch;
+
   /// Unknown error.
   const factory RagError.unknown(String field0) = RagError_Unknown;
 }

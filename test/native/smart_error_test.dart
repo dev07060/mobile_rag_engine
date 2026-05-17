@@ -41,6 +41,9 @@ void main() {
           unsupportedMigrationVersion: (axis, stored, supported) => fail(
             'Unexpected UnsupportedMigrationVersion($axis, $stored, $supported)',
           ),
+          embeddingFingerprintMismatch: (stored, current, remaining) => fail(
+            'Unexpected EmbeddingFingerprintMismatch($stored, $current, $remaining)',
+          ),
           unknown: (msg) => fail('Unexpected Unknown error: $msg'),
         );
       }
