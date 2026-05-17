@@ -43,9 +43,31 @@ import '../src/rust/api/source_rag.dart'
         ChunkExcerptResult,
         AssembledContextV2;
 import '../src/rust/api/db_pool.dart';
-import '../src/rust/api/migration_meta.dart' show MigrationAxes, readMigrationAxes;
+import '../src/rust/api/error.dart';
+import '../src/rust/api/migration_meta.dart' as migration_meta
+    show
+        EmbeddingFingerprintGate_Mismatch,
+        EmbeddingFingerprintGate_Ok,
+        EmbeddingFingerprintGate_RequiresInitialBaseline,
+        MigrationAxes,
+        acknowledgeAndClearEmbeddings,
+        beginEmbeddingReembed,
+        countChunksNeedingReembed,
+        detectEmbeddingFingerprintGate,
+        finalizeEmbeddingReembed,
+        readMigrationAxes,
+        writeEmbeddingFingerprint;
+import '../src/rust/api/source_rag.dart' as rust_rag
+    show listChunksNeedingReembed, updateChunkReembedded;
 import '../src/internal/defaults.dart';
+import '../src/internal/embedding_fingerprint.dart';
 import '../src/internal/validation.dart';
+
+export '../src/internal/embedding_fingerprint.dart'
+    show
+        ClearAndRestartConfirmation,
+        RagEmbeddingFingerprintLock,
+        RagReembedProgress;
 import 'embedding_service.dart';
 import 'rag_config.dart';
 import 'source_rag_service.dart';
@@ -86,18 +108,53 @@ class RagEngine {
   final int vocabSize;
   final bool _deferIndexWarmup;
 
+  /// Fingerprint of the currently loaded embedding model.
+  /// Captured during [initialize] via a one-shot probe embed.
+  final String currentEmbeddingFingerprint;
+
+  /// Non-null when boot detected an embedding fingerprint mismatch.
+  /// All search and ingest entry points must throw
+  /// `RagError.embeddingFingerprintMismatch` until the host app resolves it
+  /// via [reembedAll] or [clearAndRestart].
+  RagEmbeddingFingerprintLock? _fingerprintLock;
+
   RagEngine._({
     required SourceRagService ragService,
     required this.dbPath,
     required this.vocabSize,
+    required this.currentEmbeddingFingerprint,
+    required RagEmbeddingFingerprintLock? initialLock,
     required bool deferIndexWarmup,
   })  : _ragService = ragService,
         _deferIndexWarmup = deferIndexWarmup,
+        _fingerprintLock = initialLock,
         _collectionServices = {
           SourceRagService.defaultCollectionId: ragService
         },
         _initializedCollections = {SourceRagService.defaultCollectionId},
         _collectionInitInFlight = {};
+
+  /// Snapshot of the active embedding fingerprint lock (null when unlocked).
+  ///
+  /// Search and ingest entry points throw
+  /// `RagError.embeddingFingerprintMismatch` while this is non-null. Use
+  /// [reembedAll] to recover without losing data or [clearAndRestart] to
+  /// discard embeddings after explicit confirmation.
+  RagEmbeddingFingerprintLock? get embeddingFingerprintLock => _fingerprintLock;
+
+  /// Whether boot detected an embedding fingerprint mismatch.
+  bool get isEmbeddingFingerprintLocked => _fingerprintLock != null;
+
+  void _ensureEmbeddingFingerprintUnlocked() {
+    final lock = _fingerprintLock;
+    if (lock != null) {
+      throw RagError.embeddingFingerprintMismatch(
+        lock.stored,
+        lock.current,
+        lock.remainingChunks,
+      );
+    }
+  }
 
   String _normalizeCollectionId(String? collectionId) {
     final trimmed = collectionId?.trim();
@@ -325,13 +382,70 @@ class RagEngine {
     );
     await ragService.init(deferIndexWarmup: config.deferIndexWarmup);
 
+    // 6. Resolve the embedding fingerprint gate. The probe is a single
+    //    one-shot embed used purely to read the model's output dimension;
+    //    the result is discarded. Must happen AFTER migration_meta exists
+    //    (created by ragService.init via init_source_db).
+    onProgress?.call('Validating embedding fingerprint...');
+    final probe = await EmbeddingService.embed(_kFingerprintProbeText);
+    final currentFingerprint = computeEmbeddingFingerprint(
+      modelBasename: embeddingModelBasename(modelPath),
+      dim: probe.length,
+      quant: kDefaultEmbeddingQuant,
+    );
+    final initialLock = await _resolveFingerprintGate(currentFingerprint);
+    if (initialLock != null) {
+      debugPrint(
+        '[RagEngine] Embedding fingerprint mismatch detected: '
+        'stored="${initialLock.stored}", current="$currentFingerprint", '
+        'remaining=${initialLock.remainingChunks}, '
+        'resume=${initialLock.resumeInProgress}. '
+        'Search/ingest will be locked until reembedAll() or clearAndRestart().',
+      );
+    }
+
     onProgress?.call('Ready!');
     return RagEngine._(
       ragService: ragService,
       dbPath: dbPath,
       vocabSize: vocabSize,
+      currentEmbeddingFingerprint: currentFingerprint,
+      initialLock: initialLock,
       deferIndexWarmup: config.deferIndexWarmup,
     );
+  }
+
+  /// One-shot probe text used solely to read the model's output dimension.
+  /// The embedding is thrown away; only `length` matters.
+  static const String _kFingerprintProbeText = '__mobile_rag_engine_probe__';
+
+  static Future<RagEmbeddingFingerprintLock?> _resolveFingerprintGate(
+    String currentFingerprint,
+  ) async {
+    final gate = await migration_meta.detectEmbeddingFingerprintGate(
+      currentFingerprint: currentFingerprint,
+    );
+    switch (gate) {
+      case migration_meta.EmbeddingFingerprintGate_RequiresInitialBaseline():
+        await migration_meta.writeEmbeddingFingerprint(
+          fingerprint: currentFingerprint,
+        );
+        return null;
+      case migration_meta.EmbeddingFingerprintGate_Ok():
+        return null;
+      case migration_meta.EmbeddingFingerprintGate_Mismatch(
+          stored: final stored,
+          current: final current,
+          remainingChunks: final remaining,
+          resumeInProgress: final resume,
+        ):
+        return RagEmbeddingFingerprintLock(
+          stored: stored,
+          current: current,
+          remainingChunks: remaining,
+          resumeInProgress: resume,
+        );
+    }
   }
 
   /// Copy asset file to filesystem if it doesn't exist.
@@ -357,14 +471,16 @@ class RagEngine {
     return path;
   }
 
-  /// Read-only snapshot of the four on-device data migration axes.
+  /// Read-only snapshot of all on-device data migration axes.
   ///
   /// Reflects the `migration_meta` row written by `init_source_db`:
   /// `sql_schema_version`, `hnsw_format_version`, `bm25_stats_version`,
-  /// `embedding_fingerprint`, plus the last engine version recorded at boot.
-  /// Phase P0-2 will populate `embedding_fingerprint`; later phases gate
-  /// behavior on the integer axes.
-  Future<MigrationAxes> get migrationState => readMigrationAxes();
+  /// `embedding_fingerprint`, `embedding_fingerprint_pending`, plus the last
+  /// engine version recorded at boot. Later phases gate behavior on the
+  /// integer axes; the fingerprint axes feed the P0-2 mismatch gate exposed
+  /// via [embeddingFingerprintLock].
+  Future<migration_meta.MigrationAxes> get migrationState =>
+      migration_meta.readMigrationAxes();
 
   /// Whether all retrieval indexes are ready for full-quality search.
   bool get isIndexReady => _ragService.isIndexReady;
@@ -409,6 +525,7 @@ class RagEngine {
     void Function(int done, int total)? onProgress,
     String? collectionId,
   }) async {
+    _ensureEmbeddingFingerprintUnlocked();
     final normalized = _normalizeCollectionId(collectionId);
     final service = await _serviceForCollection(normalized);
 
@@ -443,6 +560,7 @@ class RagEngine {
     void Function(int done, int total)? onProgress,
     String? collectionId,
   }) async {
+    _ensureEmbeddingFingerprintUnlocked();
     final normalized = _normalizeCollectionId(collectionId);
     final service = await _serviceForCollection(normalized);
 
@@ -475,6 +593,7 @@ class RagEngine {
     void Function(int done, int total)? onProgress,
     String? collectionId,
   }) async {
+    _ensureEmbeddingFingerprintUnlocked();
     final normalized = _normalizeCollectionId(collectionId);
     final service = await _serviceForCollection(normalized);
 
@@ -515,6 +634,7 @@ class RagEngine {
     List<int>? sourceIds,
     String? collectionId,
   }) async {
+    _ensureEmbeddingFingerprintUnlocked();
     final service = await _serviceForCollection(collectionId);
     await _flushIndex(
       collectionId: collectionId,
@@ -540,6 +660,7 @@ class RagEngine {
     int adjacentChunks = 0,
     String? collectionId,
   }) async {
+    _ensureEmbeddingFingerprintUnlocked();
     final service = await _serviceForCollection(collectionId);
     await _flushIndex(collectionId: collectionId);
     return service.searchMeta(
@@ -627,6 +748,7 @@ class RagEngine {
     List<int>? sourceIds,
     String? collectionId,
   }) async {
+    _ensureEmbeddingFingerprintUnlocked();
     final service = await _serviceForCollection(collectionId);
     await _flushIndex(
       collectionId: collectionId,
@@ -662,6 +784,7 @@ class RagEngine {
     int previewMaxBytes = 512,
     String? collectionId,
   }) async {
+    _ensureEmbeddingFingerprintUnlocked();
     final service = await _serviceForCollection(collectionId);
     await _flushIndex(
       collectionId: collectionId,
@@ -687,6 +810,7 @@ class RagEngine {
   /// performance. The index enables fast approximate nearest neighbor search.
   /// [force] - If true, rebuilds even if no changes were detected (default: false).
   Future<void> rebuildIndex({bool force = false, String? collectionId}) async {
+    _ensureEmbeddingFingerprintUnlocked();
     final normalized = _normalizeCollectionId(collectionId);
     final service = await _serviceForCollection(normalized);
 
@@ -777,6 +901,124 @@ class RagEngine {
   /// Format search results as an LLM prompt.
   String formatPrompt(String query, RagSearchResult result) =>
       _ragService.formatPrompt(query, result);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Embedding fingerprint recovery (P0-2)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Resolve an [embeddingFingerprintLock] by re-embedding every chunk with
+  /// the currently loaded model.
+  ///
+  /// The flow is **resumable**: progress is persisted per chunk on the Rust
+  /// side, so killing the app mid-stream and restarting will let a subsequent
+  /// `reembedAll()` pick up where this one left off without re-doing finished
+  /// chunks. `onProgress` is invoked once per chunk with the cumulative
+  /// (done, total) snapshot for the current run.
+  ///
+  /// On success the lock is cleared and the HNSW index is rebuilt with the
+  /// new embeddings. Throws [StateError] if no mismatch is active.
+  ///
+  /// Cold-start latency budget for this call is "background, minutes-scale"
+  /// — host apps SHOULD surface progress UI.
+  Future<void> reembedAll({
+    void Function(RagReembedProgress progress)? onProgress,
+    int batchSize = 32,
+  }) async {
+    final lock = _fingerprintLock;
+    if (lock == null) {
+      throw StateError(
+        'reembedAll() called but no embedding fingerprint mismatch is active.',
+      );
+    }
+    if (batchSize <= 0) {
+      throw ArgumentError.value(batchSize, 'batchSize', 'must be positive');
+    }
+    final target = currentEmbeddingFingerprint;
+    final initialRemaining = await migration_meta.beginEmbeddingReembed(
+      targetFingerprint: target,
+    );
+    final total = initialRemaining;
+    var done = 0;
+    onProgress?.call(RagReembedProgress(done: done, total: total));
+
+    while (true) {
+      final batch = await rust_rag.listChunksNeedingReembed(
+        targetFingerprint: target,
+        limit: batchSize,
+      );
+      if (batch.isEmpty) break;
+      for (final chunk in batch) {
+        final embedding = await EmbeddingService.embed(chunk.content);
+        await rust_rag.updateChunkReembedded(
+          chunkId: chunk.chunkId,
+          embedding: embedding,
+          targetFingerprint: target,
+        );
+        done += 1;
+        onProgress?.call(RagReembedProgress(done: done, total: total));
+        // Yield so the embed loop never starves the event queue (e.g. so
+        // host-app UI updates can land between chunks).
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+
+    await migration_meta.finalizeEmbeddingReembed(targetFingerprint: target);
+    _fingerprintLock = null;
+    debugPrint(
+      '[RagEngine] reembedAll: completed $done/$total chunks; '
+      'fingerprint now "$target". Rebuilding HNSW index...',
+    );
+    // The chunk embeddings just got rotated; force a rebuild so vector search
+    // is consistent with the new fingerprint before we hand control back.
+    await _ragService.rebuildIndex(force: true);
+  }
+
+  /// Resolve an [embeddingFingerprintLock] by discarding every on-device
+  /// embedding (chunks table) and rotating the fingerprint baseline.
+  ///
+  /// `confirm` MUST be
+  /// [ClearAndRestartConfirmation.iUnderstandThisDeletesAllOnDeviceEmbeddings];
+  /// the parameter exists solely to make the destructive choice visible at
+  /// every call site. The `sources` table is preserved so the host app can
+  /// re-ingest the original documents through the normal `addDocument` flow.
+  ///
+  /// Throws [StateError] if no mismatch is active.
+  Future<void> clearAndRestart({
+    required ClearAndRestartConfirmation confirm,
+  }) async {
+    // Reference the parameter so static analysis confirms the caller passed
+    // an explicit value (typing out the sentinel name is the consent).
+    identical(
+      confirm,
+      ClearAndRestartConfirmation.iUnderstandThisDeletesAllOnDeviceEmbeddings,
+    );
+    if (_fingerprintLock == null) {
+      throw StateError(
+        'clearAndRestart() called but no embedding fingerprint mismatch is active.',
+      );
+    }
+    final target = currentEmbeddingFingerprint;
+    final deleted = await migration_meta.acknowledgeAndClearEmbeddings(
+      confirmation: kEmbeddingClearConfirmationToken,
+      newFingerprint: target,
+    );
+    _fingerprintLock = null;
+    debugPrint(
+      '[RagEngine] clearAndRestart: deleted $deleted chunks; '
+      'fingerprint reset to "$target". Rebuilding empty HNSW index...',
+    );
+    await _ragService.rebuildIndex(force: true);
+  }
+
+  /// Up-to-date count of chunks still tagged with a non-current fingerprint.
+  ///
+  /// Safe to call while reembed is running — uses a read-only SELECT.
+  Future<int> reembedRemaining() async {
+    final count = await migration_meta.countChunksNeedingReembed(
+      targetFingerprint: currentEmbeddingFingerprint,
+    );
+    return count;
+  }
 
   /// Regenerate embeddings for all existing chunks.
   ///

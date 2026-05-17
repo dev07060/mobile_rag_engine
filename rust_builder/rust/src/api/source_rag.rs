@@ -372,6 +372,18 @@ pub fn init_source_db() -> Result<(), RagError> {
             .map_err(|e| RagError::DatabaseError(e.to_string()))?;
     }
 
+    let has_chunk_embedding_fingerprint: bool = conn
+        .prepare("SELECT embedding_fingerprint FROM chunks LIMIT 1")
+        .is_ok();
+    if !has_chunk_embedding_fingerprint {
+        info!("[init_source_db] Migrating: adding embedding_fingerprint to chunks");
+        conn.execute(
+            "ALTER TABLE chunks ADD COLUMN embedding_fingerprint TEXT",
+            [],
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    }
+
     #[cfg(feature = "vector_quant_i8")]
     {
         let mut stmt = conn.prepare(
@@ -2606,6 +2618,95 @@ pub fn update_chunk_embedding(chunk_id: i64, embedding: Vec<f32>) -> Result<(), 
         params![embedding_bytes, chunk_id],
     )
     .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    if let Some(cid) = collection_id {
+        mark_collection_dirty(&conn, &cid)?;
+    }
+    Ok(())
+}
+
+/// Stream the next batch of chunks that still carry a non-matching fingerprint.
+///
+/// Used by the reembed flow to walk the corpus incrementally without holding
+/// the entire chunk set in Dart memory. The batch is ordered by `id` so a
+/// caller that crashes between batches can resume deterministically.
+pub fn list_chunks_needing_reembed(
+    target_fingerprint: String,
+    limit: i64,
+) -> Result<Vec<ChunkForReembedding>, RagError> {
+    if target_fingerprint.is_empty() {
+        return Err(RagError::InvalidInput(
+            "target_fingerprint must be non-empty".to_string(),
+        ));
+    }
+    if limit <= 0 {
+        return Err(RagError::InvalidInput(
+            "limit must be greater than zero".to_string(),
+        ));
+    }
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, content FROM chunks
+             WHERE COALESCE(embedding_fingerprint, '') <> ?1
+             ORDER BY id
+             LIMIT ?2",
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let chunks: Vec<ChunkForReembedding> = stmt
+        .query_map(params![target_fingerprint, limit], |row| {
+            Ok(ChunkForReembedding {
+                chunk_id: row.get(0)?,
+                content: row.get(1)?,
+            })
+        })
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(chunks)
+}
+
+/// Atomically replace a chunk's embedding and tag it with `target_fingerprint`.
+///
+/// Single-statement UPDATE so a crash mid-write cannot leave a chunk with the
+/// new embedding bytes but the old fingerprint marker (or vice versa). Marks
+/// the chunk's collection as dirty so the next HNSW rebuild picks up the new
+/// vector.
+pub fn update_chunk_reembedded(
+    chunk_id: i64,
+    embedding: Vec<f32>,
+    target_fingerprint: String,
+) -> Result<(), RagError> {
+    if target_fingerprint.is_empty() {
+        return Err(RagError::InvalidInput(
+            "target_fingerprint must be non-empty".to_string(),
+        ));
+    }
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let collection_id: Option<String> = conn
+        .query_row(
+            "SELECT collection_id FROM chunks WHERE id = ?1",
+            params![chunk_id],
+            |row| row.get(0),
+        )
+        .ok();
+    let mut embedding_bytes: Vec<u8> = Vec::with_capacity(embedding.len() * 4);
+    for f in &embedding {
+        embedding_bytes.extend_from_slice(&f.to_ne_bytes());
+    }
+    let updated = conn
+        .execute(
+            "UPDATE chunks
+             SET embedding = ?1,
+                 embedding_fingerprint = ?2
+             WHERE id = ?3",
+            params![embedding_bytes, target_fingerprint, chunk_id],
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    if updated == 0 {
+        return Err(RagError::DatabaseError(format!(
+            "no chunk with id={chunk_id} (reembed update was a no-op)"
+        )));
+    }
     if let Some(cid) = collection_id {
         mark_collection_dirty(&conn, &cid)?;
     }

@@ -51,19 +51,25 @@ pub const KEY_SQL_SCHEMA_VERSION: &str = "sql_schema_version";
 pub const KEY_HNSW_FORMAT_VERSION: &str = "hnsw_format_version";
 pub const KEY_BM25_STATS_VERSION: &str = "bm25_stats_version";
 pub const KEY_EMBEDDING_FINGERPRINT: &str = "embedding_fingerprint";
+/// Set to the *target* fingerprint while a reembed is in flight; empty
+/// otherwise. Lets boot detect a resumable reembed after an interrupted run.
+pub const KEY_EMBEDDING_FINGERPRINT_PENDING: &str = "embedding_fingerprint_pending";
 pub const KEY_LAST_ENGINE_VERSION: &str = "last_engine_version";
 
 /// Sentinel value persisted before Phase P0-2 registers a real fingerprint.
-const EMPTY_FINGERPRINT: &str = "";
+pub const EMPTY_FINGERPRINT: &str = "";
 
-/// Read-only snapshot of the four versioning axes plus the last engine version.
+/// Read-only snapshot of all migration axes plus the last engine version.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MigrationAxes {
     pub sql_schema_version: i64,
     pub hnsw_format_version: i64,
     pub bm25_stats_version: i64,
-    /// Empty string means "not yet registered" (P0-2 will populate).
+    /// Empty string means "not yet registered" — the boot probe will populate
+    /// it on the first model load via [`write_embedding_fingerprint`].
     pub embedding_fingerprint: String,
+    /// Non-empty while a reembed-to-`<value>` is in flight; empty otherwise.
+    pub embedding_fingerprint_pending: String,
     pub last_engine_version: String,
 }
 
@@ -135,12 +141,31 @@ fn read_axis_string(conn: &Connection, key: &str) -> Result<String, RagError> {
     .map_err(|e| RagError::DatabaseError(format!("migration_meta read '{key}': {e}")))
 }
 
+fn read_axis_string_or_empty(conn: &Connection, key: &str) -> Result<String, RagError> {
+    use rusqlite::OptionalExtension;
+    let value: Option<String> = conn
+        .query_row(
+            "SELECT value FROM migration_meta WHERE key = ?1",
+            params![key],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| RagError::DatabaseError(format!("migration_meta read '{key}': {e}")))?;
+    Ok(value.unwrap_or_default())
+}
+
 pub(crate) fn read_axes_with(conn: &Connection) -> Result<MigrationAxes, RagError> {
     Ok(MigrationAxes {
         sql_schema_version: read_axis_int(conn, KEY_SQL_SCHEMA_VERSION)?,
         hnsw_format_version: read_axis_int(conn, KEY_HNSW_FORMAT_VERSION)?,
         bm25_stats_version: read_axis_int(conn, KEY_BM25_STATS_VERSION)?,
         embedding_fingerprint: read_axis_string(conn, KEY_EMBEDDING_FINGERPRINT)?,
+        // Pending axis may be missing on installs that booted under P0-1; treat
+        // a missing row as "no reembed pending" rather than a hard error.
+        embedding_fingerprint_pending: read_axis_string_or_empty(
+            conn,
+            KEY_EMBEDDING_FINGERPRINT_PENDING,
+        )?,
         last_engine_version: read_axis_string(conn, KEY_LAST_ENGINE_VERSION)?,
     })
 }
@@ -154,6 +179,24 @@ pub fn read_migration_axes() -> Result<MigrationAxes, RagError> {
     read_axes_with(&conn)
 }
 
+/// Insert `(key, value)` only when the key is absent. Existing rows are left
+/// untouched — axes are sticky once written.
+fn insert_axis_if_absent(
+    conn: &Connection,
+    key: &str,
+    value: &str,
+) -> Result<bool, RagError> {
+    let changed = conn
+        .execute(
+            "INSERT INTO migration_meta(key, value)
+             VALUES (?1, ?2)
+             ON CONFLICT(key) DO NOTHING",
+            params![key, value],
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    Ok(changed > 0)
+}
+
 fn bootstrap_axes(conn: &Connection, existing_install: bool) -> Result<bool, RagError> {
     let already_present: i64 = conn
         .query_row(
@@ -164,8 +207,10 @@ fn bootstrap_axes(conn: &Connection, existing_install: bool) -> Result<bool, Rag
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
     if already_present > 0 {
-        // Axes are sticky once written; only refresh the engine-version trace.
+        // Axes are sticky once written; only refresh the engine-version trace
+        // and backfill any axis keys introduced after this install's first boot.
         upsert_axis(conn, KEY_LAST_ENGINE_VERSION, CURRENT_ENGINE_VERSION)?;
+        insert_axis_if_absent(conn, KEY_EMBEDDING_FINGERPRINT_PENDING, EMPTY_FINGERPRINT)?;
         return Ok(false);
     }
 
@@ -180,14 +225,21 @@ fn bootstrap_axes(conn: &Connection, existing_install: bool) -> Result<bool, Rag
     };
 
     info!(
-        "[migration_meta] bootstrap: existing_install={}, sql={}, hnsw={}, bm25={}, fingerprint='{}', engine='{}'",
-        existing_install, sql_v, hnsw_v, bm25_v, EMPTY_FINGERPRINT, CURRENT_ENGINE_VERSION
+        "[migration_meta] bootstrap: existing_install={}, sql={}, hnsw={}, bm25={}, fingerprint='{}', pending='{}', engine='{}'",
+        existing_install,
+        sql_v,
+        hnsw_v,
+        bm25_v,
+        EMPTY_FINGERPRINT,
+        EMPTY_FINGERPRINT,
+        CURRENT_ENGINE_VERSION
     );
 
     upsert_axis(conn, KEY_SQL_SCHEMA_VERSION, &sql_v.to_string())?;
     upsert_axis(conn, KEY_HNSW_FORMAT_VERSION, &hnsw_v.to_string())?;
     upsert_axis(conn, KEY_BM25_STATS_VERSION, &bm25_v.to_string())?;
     upsert_axis(conn, KEY_EMBEDDING_FINGERPRINT, EMPTY_FINGERPRINT)?;
+    upsert_axis(conn, KEY_EMBEDDING_FINGERPRINT_PENDING, EMPTY_FINGERPRINT)?;
     upsert_axis(conn, KEY_LAST_ENGINE_VERSION, CURRENT_ENGINE_VERSION)?;
     Ok(true)
 }
@@ -219,6 +271,253 @@ fn assert_no_unknown_future_axes(axes: &MigrationAxes) -> Result<(), RagError> {
         CURRENT_BM25_STATS_VERSION,
     )?;
     Ok(())
+}
+
+/// Describes whether the on-device embedding store is compatible with the
+/// currently loaded model. Returned by [`detect_embedding_fingerprint_gate`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EmbeddingFingerprintGate {
+    /// No fingerprint persisted yet; caller should write the current one
+    /// before serving any requests. First-ever boot.
+    RequiresInitialBaseline,
+    /// Stored fingerprint matches `current_fingerprint`; safe to proceed.
+    Ok,
+    /// Stored fingerprint differs from `current_fingerprint`; reads and
+    /// writes MUST be locked until either reembed completes or the user
+    /// explicitly confirms a clear-and-restart.
+    Mismatch {
+        stored: String,
+        current: String,
+        /// Number of chunk rows still tagged with a non-current fingerprint.
+        /// Useful for surfacing a "resume from N%" UI without an extra
+        /// round-trip to count chunks.
+        remaining_chunks: i64,
+        /// True when `embedding_fingerprint_pending` already equals
+        /// `current_fingerprint` — i.e. a reembed was previously started and
+        /// can simply continue without a fresh user confirmation.
+        resume_in_progress: bool,
+    },
+}
+
+/// Inspect `migration_meta` against the currently loaded model fingerprint.
+///
+/// This call only **reads** state — it never mutates `embedding_fingerprint`
+/// nor deletes embeddings. The caller is responsible for routing the gate
+/// state to the user (Apply, Rebuild, Invalidate decisions per the data
+/// migration plan).
+pub fn detect_embedding_fingerprint_gate(
+    current_fingerprint: String,
+) -> Result<EmbeddingFingerprintGate, RagError> {
+    if current_fingerprint.is_empty() {
+        return Err(RagError::InvalidInput(
+            "current_fingerprint must be non-empty".to_string(),
+        ));
+    }
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let stored = read_axis_string(&conn, KEY_EMBEDDING_FINGERPRINT)?;
+    let pending = read_axis_string_or_empty(&conn, KEY_EMBEDDING_FINGERPRINT_PENDING)?;
+
+    if stored.is_empty() {
+        return Ok(EmbeddingFingerprintGate::RequiresInitialBaseline);
+    }
+    if stored == current_fingerprint {
+        return Ok(EmbeddingFingerprintGate::Ok);
+    }
+
+    let remaining = count_chunks_with_non_matching_fingerprint(&conn, &current_fingerprint)?;
+    let resume_in_progress = !pending.is_empty() && pending == current_fingerprint;
+    Ok(EmbeddingFingerprintGate::Mismatch {
+        stored,
+        current: current_fingerprint,
+        remaining_chunks: remaining,
+        resume_in_progress,
+    })
+}
+
+fn count_chunks_with_non_matching_fingerprint(
+    conn: &Connection,
+    target: &str,
+) -> Result<i64, RagError> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM chunks
+         WHERE COALESCE(embedding_fingerprint, '') <> ?1",
+        params![target],
+        |row| row.get(0),
+    )
+    .map_err(|e| RagError::DatabaseError(e.to_string()))
+}
+
+/// Record the engine's current model fingerprint as the persisted baseline.
+///
+/// Only callable when no baseline is present yet — i.e. when the previous
+/// [`detect_embedding_fingerprint_gate`] returned
+/// [`EmbeddingFingerprintGate::RequiresInitialBaseline`]. After this call,
+/// every existing chunk is tagged as belonging to `fingerprint` so future
+/// mismatches can compute `remaining_chunks` accurately.
+///
+/// Refuses to overwrite a non-empty baseline. Use the reembed/clear flows
+/// to rotate an existing fingerprint instead.
+pub fn write_embedding_fingerprint(fingerprint: String) -> Result<(), RagError> {
+    if fingerprint.is_empty() {
+        return Err(RagError::InvalidInput(
+            "fingerprint must be non-empty".to_string(),
+        ));
+    }
+    let mut conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let stored = read_axis_string(&tx, KEY_EMBEDDING_FINGERPRINT)?;
+    if !stored.is_empty() && stored != fingerprint {
+        return Err(RagError::InvalidInput(format!(
+            "embedding_fingerprint already set to '{stored}'; use the reembed \
+             or clear-and-restart flows to rotate it (refusing to overwrite)"
+        )));
+    }
+    upsert_axis(&tx, KEY_EMBEDDING_FINGERPRINT, &fingerprint)?;
+    // Backfill chunks so future mismatch detection counts accurately.
+    tx.execute(
+        "UPDATE chunks
+         SET embedding_fingerprint = ?1
+         WHERE COALESCE(embedding_fingerprint, '') = ''",
+        params![fingerprint],
+    )
+    .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    tx.commit()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    info!(
+        "[migration_meta] embedding_fingerprint baseline set to '{}'",
+        fingerprint
+    );
+    Ok(())
+}
+
+/// Begin a reembed-to-`target_fingerprint` flow.
+///
+/// Writes `embedding_fingerprint_pending = target_fingerprint` (sticky across
+/// reboots, so the flow is resumable) and returns the number of chunks that
+/// still need re-embedding. Idempotent — calling it again with the same
+/// target is safe.
+pub fn begin_embedding_reembed(target_fingerprint: String) -> Result<i64, RagError> {
+    if target_fingerprint.is_empty() {
+        return Err(RagError::InvalidInput(
+            "target_fingerprint must be non-empty".to_string(),
+        ));
+    }
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let pending = read_axis_string_or_empty(&conn, KEY_EMBEDDING_FINGERPRINT_PENDING)?;
+    if !pending.is_empty() && pending != target_fingerprint {
+        return Err(RagError::InvalidInput(format!(
+            "reembed already pending towards '{pending}'; cannot retarget to \
+             '{target_fingerprint}'"
+        )));
+    }
+    upsert_axis(&conn, KEY_EMBEDDING_FINGERPRINT_PENDING, &target_fingerprint)?;
+    let remaining = count_chunks_with_non_matching_fingerprint(&conn, &target_fingerprint)?;
+    info!(
+        "[migration_meta] reembed started: target='{}', remaining_chunks={}",
+        target_fingerprint, remaining
+    );
+    Ok(remaining)
+}
+
+/// Count chunks still tagged with anything other than `target_fingerprint`.
+///
+/// Reads only — safe to call during progress polling.
+pub fn count_chunks_needing_reembed(target_fingerprint: String) -> Result<i64, RagError> {
+    if target_fingerprint.is_empty() {
+        return Err(RagError::InvalidInput(
+            "target_fingerprint must be non-empty".to_string(),
+        ));
+    }
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    count_chunks_with_non_matching_fingerprint(&conn, &target_fingerprint)
+}
+
+/// Commit a completed reembed atomically.
+///
+/// Refuses to commit when any chunk still carries a non-matching fingerprint,
+/// guarding against accidentally promoting `embedding_fingerprint` past a
+/// partially completed run. On success: `embedding_fingerprint = target`,
+/// `embedding_fingerprint_pending = ""`.
+pub fn finalize_embedding_reembed(target_fingerprint: String) -> Result<(), RagError> {
+    if target_fingerprint.is_empty() {
+        return Err(RagError::InvalidInput(
+            "target_fingerprint must be non-empty".to_string(),
+        ));
+    }
+    let mut conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let remaining = count_chunks_with_non_matching_fingerprint(&tx, &target_fingerprint)?;
+    if remaining > 0 {
+        return Err(RagError::InvalidInput(format!(
+            "cannot finalize reembed: {remaining} chunk(s) still carry a \
+             non-target fingerprint"
+        )));
+    }
+    upsert_axis(&tx, KEY_EMBEDDING_FINGERPRINT, &target_fingerprint)?;
+    upsert_axis(&tx, KEY_EMBEDDING_FINGERPRINT_PENDING, EMPTY_FINGERPRINT)?;
+    tx.commit()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    info!(
+        "[migration_meta] reembed finalized: stored='{}', pending=''",
+        target_fingerprint
+    );
+    Ok(())
+}
+
+/// Magic confirmation string that callers must pass to
+/// [`acknowledge_and_clear_embeddings`] to opt into destructive deletion.
+/// The Dart facade wraps this behind a typed confirmation parameter so the
+/// destructive choice is explicit at the call site.
+pub const EMBEDDING_CLEAR_CONFIRMATION: &str =
+    "I_UNDERSTAND_THIS_DELETES_ALL_ON_DEVICE_EMBEDDINGS";
+
+/// Discard every chunk row (and therefore every embedding BLOB) for sources
+/// the user has accepted as lost, then reset the fingerprint axes.
+///
+/// Refuses to do anything unless `confirmation` exactly equals
+/// [`EMBEDDING_CLEAR_CONFIRMATION`]. This is the only public path that may
+/// drop user embeddings; it must never be reachable from passive flows.
+///
+/// The `sources` rows are kept so the user can re-ingest them through the
+/// normal ingestion path; only `chunks` (which hold the embeddings) are
+/// removed.
+pub fn acknowledge_and_clear_embeddings(
+    confirmation: String,
+    new_fingerprint: String,
+) -> Result<i64, RagError> {
+    if confirmation != EMBEDDING_CLEAR_CONFIRMATION {
+        return Err(RagError::InvalidInput(
+            "refusing to clear embeddings: confirmation token missing or \
+             does not match EMBEDDING_CLEAR_CONFIRMATION"
+                .to_string(),
+        ));
+    }
+    if new_fingerprint.is_empty() {
+        return Err(RagError::InvalidInput(
+            "new_fingerprint must be non-empty when clearing embeddings"
+                .to_string(),
+        ));
+    }
+    let mut conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let deleted = tx
+        .execute("DELETE FROM chunks", [])
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    upsert_axis(&tx, KEY_EMBEDDING_FINGERPRINT, &new_fingerprint)?;
+    upsert_axis(&tx, KEY_EMBEDDING_FINGERPRINT_PENDING, EMPTY_FINGERPRINT)?;
+    tx.commit()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    info!(
+        "[migration_meta] embeddings cleared with confirmation; deleted={} chunks, new fingerprint='{}'",
+        deleted, new_fingerprint
+    );
+    Ok(deleted as i64)
 }
 
 /// Bootstrap or refresh `migration_meta` in a single transaction and return
@@ -289,6 +588,31 @@ mod tests {
             .unwrap();
     }
 
+    fn provision_chunks_table() {
+        let conn = get_connection().unwrap();
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS chunks (
+                id INTEGER PRIMARY KEY,
+                content TEXT NOT NULL,
+                embedding BLOB,
+                embedding_fingerprint TEXT
+            )",
+            [],
+        )
+        .unwrap();
+    }
+
+    fn insert_chunk(content: &str, fingerprint: Option<&str>) -> i64 {
+        let conn = get_connection().unwrap();
+        conn.execute(
+            "INSERT INTO chunks(content, embedding, embedding_fingerprint)
+             VALUES (?1, ?2, ?3)",
+            rusqlite::params![content, vec![0u8; 4], fingerprint],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
     #[test]
     fn new_install_records_current_axes() {
         let pool = fresh_pool();
@@ -297,6 +621,7 @@ mod tests {
         assert_eq!(axes.hnsw_format_version, CURRENT_HNSW_FORMAT_VERSION);
         assert_eq!(axes.bm25_stats_version, CURRENT_BM25_STATS_VERSION);
         assert_eq!(axes.embedding_fingerprint, EMPTY_FINGERPRINT);
+        assert_eq!(axes.embedding_fingerprint_pending, EMPTY_FINGERPRINT);
         assert_eq!(axes.last_engine_version, CURRENT_ENGINE_VERSION);
         drop(pool);
     }
@@ -320,9 +645,177 @@ mod tests {
         assert_eq!(axes.hnsw_format_version, 0);
         assert_eq!(axes.bm25_stats_version, 0);
         assert_eq!(axes.embedding_fingerprint, EMPTY_FINGERPRINT);
+        assert_eq!(axes.embedding_fingerprint_pending, EMPTY_FINGERPRINT);
         assert_eq!(axes.last_engine_version, CURRENT_ENGINE_VERSION);
 
         close_db_pool();
+    }
+
+    #[test]
+    fn p0_1_install_backfills_pending_axis() {
+        // Simulate a database that booted under P0-1 (no pending axis key).
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        {
+            let conn = get_connection().unwrap();
+            conn.execute(
+                "DELETE FROM migration_meta WHERE key = ?1",
+                params![KEY_EMBEDDING_FINGERPRINT_PENDING],
+            )
+            .unwrap();
+        }
+        let axes = initialize_migration_meta(true).unwrap();
+        assert_eq!(
+            axes.embedding_fingerprint_pending, EMPTY_FINGERPRINT,
+            "missing pending axis must be silently backfilled to empty"
+        );
+        drop(pool);
+    }
+
+    #[test]
+    fn gate_requires_baseline_on_empty_fingerprint() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        let gate = detect_embedding_fingerprint_gate("model|384|f32".to_string()).unwrap();
+        assert!(matches!(gate, EmbeddingFingerprintGate::RequiresInitialBaseline));
+        drop(pool);
+    }
+
+    #[test]
+    fn gate_ok_when_stored_matches_current() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("model|384|f32".to_string()).unwrap();
+        let gate = detect_embedding_fingerprint_gate("model|384|f32".to_string()).unwrap();
+        assert!(matches!(gate, EmbeddingFingerprintGate::Ok));
+        drop(pool);
+    }
+
+    #[test]
+    fn gate_mismatch_reports_remaining_chunks() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("old|384|f32".to_string()).unwrap();
+        insert_chunk("c1", Some("old|384|f32"));
+        insert_chunk("c2", Some("old|384|f32"));
+
+        let gate = detect_embedding_fingerprint_gate("new|384|f32".to_string()).unwrap();
+        match gate {
+            EmbeddingFingerprintGate::Mismatch {
+                stored,
+                current,
+                remaining_chunks,
+                resume_in_progress,
+            } => {
+                assert_eq!(stored, "old|384|f32");
+                assert_eq!(current, "new|384|f32");
+                assert_eq!(remaining_chunks, 2);
+                assert!(!resume_in_progress);
+            }
+            other => panic!("expected Mismatch, got {:?}", other),
+        }
+        drop(pool);
+    }
+
+    #[test]
+    fn reembed_lifecycle_progresses_and_finalizes() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("old".to_string()).unwrap();
+        let c1 = insert_chunk("alpha", Some("old"));
+        let c2 = insert_chunk("beta", Some("old"));
+
+        let remaining = begin_embedding_reembed("new".to_string()).unwrap();
+        assert_eq!(remaining, 2);
+
+        // Resume signal becomes visible after begin_embedding_reembed.
+        match detect_embedding_fingerprint_gate("new".to_string()).unwrap() {
+            EmbeddingFingerprintGate::Mismatch {
+                resume_in_progress, ..
+            } => assert!(resume_in_progress),
+            other => panic!("expected Mismatch, got {:?}", other),
+        }
+
+        // Tag the chunks one at a time and watch the remaining count drop.
+        {
+            let conn = get_connection().unwrap();
+            conn.execute(
+                "UPDATE chunks SET embedding_fingerprint = 'new' WHERE id = ?1",
+                params![c1],
+            )
+            .unwrap();
+        }
+        assert_eq!(count_chunks_needing_reembed("new".to_string()).unwrap(), 1);
+
+        // Finalize before completion must fail.
+        match finalize_embedding_reembed("new".to_string()) {
+            Err(RagError::InvalidInput(msg)) => {
+                assert!(msg.contains("1 chunk"), "got: {msg}")
+            }
+            other => panic!("expected InvalidInput, got {:?}", other),
+        }
+
+        {
+            let conn = get_connection().unwrap();
+            conn.execute(
+                "UPDATE chunks SET embedding_fingerprint = 'new' WHERE id = ?1",
+                params![c2],
+            )
+            .unwrap();
+        }
+        finalize_embedding_reembed("new".to_string()).unwrap();
+        let axes = read_migration_axes().unwrap();
+        assert_eq!(axes.embedding_fingerprint, "new");
+        assert_eq!(axes.embedding_fingerprint_pending, EMPTY_FINGERPRINT);
+        drop(pool);
+    }
+
+    #[test]
+    fn clear_requires_confirmation_token() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("old".to_string()).unwrap();
+        insert_chunk("alpha", Some("old"));
+
+        match acknowledge_and_clear_embeddings("NOPE".to_string(), "new".to_string()) {
+            Err(RagError::InvalidInput(msg)) => {
+                assert!(msg.contains("confirmation"), "got: {msg}")
+            }
+            other => panic!("expected InvalidInput, got {:?}", other),
+        }
+        // Chunk must still exist after a refused clear — destructive paths
+        // are gated behind the explicit confirmation token only.
+        let conn = get_connection().unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM chunks", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+        drop(pool);
+    }
+
+    #[test]
+    fn clear_with_confirmation_wipes_chunks_and_rotates_axis() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("old".to_string()).unwrap();
+        insert_chunk("alpha", Some("old"));
+        insert_chunk("beta", Some("old"));
+
+        let deleted = acknowledge_and_clear_embeddings(
+            EMBEDDING_CLEAR_CONFIRMATION.to_string(),
+            "new".to_string(),
+        )
+        .unwrap();
+        assert_eq!(deleted, 2);
+        let axes = read_migration_axes().unwrap();
+        assert_eq!(axes.embedding_fingerprint, "new");
+        assert_eq!(axes.embedding_fingerprint_pending, EMPTY_FINGERPRINT);
+        drop(pool);
     }
 
     #[test]

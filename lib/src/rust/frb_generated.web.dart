@@ -203,6 +203,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ContextAssemblyStrategy dco_decode_context_assembly_strategy(dynamic raw);
 
   @protected
+  EmbeddingFingerprintGate dco_decode_embedding_fingerprint_gate(dynamic raw);
+
+  @protected
   EmbeddingPoint dco_decode_embedding_point(dynamic raw);
 
   @protected
@@ -597,6 +600,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ContextAssemblyStrategy sse_decode_context_assembly_strategy(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  EmbeddingFingerprintGate sse_decode_embedding_fingerprint_gate(
     SseDeserializer deserializer,
   );
 
@@ -1093,6 +1101,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_context_assembly_strategy(
     ContextAssemblyStrategy self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_embedding_fingerprint_gate(
+    EmbeddingFingerprintGate self,
     SseSerializer serializer,
   );
 

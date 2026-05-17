@@ -39,6 +39,13 @@ pub enum RagError {
     #[error("Unsupported migration axis '{0}': stored version {1} is newer than build's supported version {2}. Downgrade is not supported.")]
     UnsupportedMigrationVersion(String, i64, i64),
 
+    /// The currently loaded embedding model produced a fingerprint that does
+    /// not match the one persisted on disk. Search and ingest must remain
+    /// locked until the host app explicitly drives either reembed-all or
+    /// clear-and-restart. Field order: (stored, current, remaining_chunks).
+    #[error("Embedding fingerprint mismatch: stored='{0}', current='{1}', remaining_chunks={2}. Call reembedAll() to reuse stored documents or clearAndRestart() to discard them.")]
+    EmbeddingFingerprintMismatch(String, String, i64),
+
     /// Unknown error.
     #[error("Unknown error: {0}")]
     Unknown(String),

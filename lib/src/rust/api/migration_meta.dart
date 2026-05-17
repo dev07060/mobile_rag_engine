@@ -6,9 +6,11 @@
 import '../frb_generated.dart';
 import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+part 'migration_meta.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `assert_no_unknown_future_axes`, `bootstrap_axes`, `create_migration_meta_table`, `detect_existing_install`, `initialize_migration_meta`, `read_axes_with`, `read_axis_int`, `read_axis_string`, `upsert_axis`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `eq`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `assert_no_unknown_future_axes`, `bootstrap_axes`, `count_chunks_with_non_matching_fingerprint`, `create_migration_meta_table`, `detect_existing_install`, `initialize_migration_meta`, `insert_axis_if_absent`, `read_axes_with`, `read_axis_int`, `read_axis_string_or_empty`, `read_axis_string`, `upsert_axis`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`
 
 /// Read the current 4-axis state from `migration_meta`.
 ///
@@ -17,14 +19,126 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 Future<MigrationAxes> readMigrationAxes() =>
     RustLib.instance.api.crateApiMigrationMetaReadMigrationAxes();
 
-/// Read-only snapshot of the four versioning axes plus the last engine version.
+/// Inspect `migration_meta` against the currently loaded model fingerprint.
+///
+/// This call only **reads** state — it never mutates `embedding_fingerprint`
+/// nor deletes embeddings. The caller is responsible for routing the gate
+/// state to the user (Apply, Rebuild, Invalidate decisions per the data
+/// migration plan).
+Future<EmbeddingFingerprintGate> detectEmbeddingFingerprintGate({
+  required String currentFingerprint,
+}) => RustLib.instance.api.crateApiMigrationMetaDetectEmbeddingFingerprintGate(
+  currentFingerprint: currentFingerprint,
+);
+
+/// Record the engine's current model fingerprint as the persisted baseline.
+///
+/// Only callable when no baseline is present yet — i.e. when the previous
+/// [`detect_embedding_fingerprint_gate`] returned
+/// [`EmbeddingFingerprintGate::RequiresInitialBaseline`]. After this call,
+/// every existing chunk is tagged as belonging to `fingerprint` so future
+/// mismatches can compute `remaining_chunks` accurately.
+///
+/// Refuses to overwrite a non-empty baseline. Use the reembed/clear flows
+/// to rotate an existing fingerprint instead.
+Future<void> writeEmbeddingFingerprint({required String fingerprint}) => RustLib
+    .instance
+    .api
+    .crateApiMigrationMetaWriteEmbeddingFingerprint(fingerprint: fingerprint);
+
+/// Begin a reembed-to-`target_fingerprint` flow.
+///
+/// Writes `embedding_fingerprint_pending = target_fingerprint` (sticky across
+/// reboots, so the flow is resumable) and returns the number of chunks that
+/// still need re-embedding. Idempotent — calling it again with the same
+/// target is safe.
+Future<PlatformInt64> beginEmbeddingReembed({
+  required String targetFingerprint,
+}) => RustLib.instance.api.crateApiMigrationMetaBeginEmbeddingReembed(
+  targetFingerprint: targetFingerprint,
+);
+
+/// Count chunks still tagged with anything other than `target_fingerprint`.
+///
+/// Reads only — safe to call during progress polling.
+Future<PlatformInt64> countChunksNeedingReembed({
+  required String targetFingerprint,
+}) => RustLib.instance.api.crateApiMigrationMetaCountChunksNeedingReembed(
+  targetFingerprint: targetFingerprint,
+);
+
+/// Commit a completed reembed atomically.
+///
+/// Refuses to commit when any chunk still carries a non-matching fingerprint,
+/// guarding against accidentally promoting `embedding_fingerprint` past a
+/// partially completed run. On success: `embedding_fingerprint = target`,
+/// `embedding_fingerprint_pending = ""`.
+Future<void> finalizeEmbeddingReembed({required String targetFingerprint}) =>
+    RustLib.instance.api.crateApiMigrationMetaFinalizeEmbeddingReembed(
+      targetFingerprint: targetFingerprint,
+    );
+
+/// Discard every chunk row (and therefore every embedding BLOB) for sources
+/// the user has accepted as lost, then reset the fingerprint axes.
+///
+/// Refuses to do anything unless `confirmation` exactly equals
+/// [`EMBEDDING_CLEAR_CONFIRMATION`]. This is the only public path that may
+/// drop user embeddings; it must never be reachable from passive flows.
+///
+/// The `sources` rows are kept so the user can re-ingest them through the
+/// normal ingestion path; only `chunks` (which hold the embeddings) are
+/// removed.
+Future<PlatformInt64> acknowledgeAndClearEmbeddings({
+  required String confirmation,
+  required String newFingerprint,
+}) => RustLib.instance.api.crateApiMigrationMetaAcknowledgeAndClearEmbeddings(
+  confirmation: confirmation,
+  newFingerprint: newFingerprint,
+);
+
+@freezed
+sealed class EmbeddingFingerprintGate with _$EmbeddingFingerprintGate {
+  const EmbeddingFingerprintGate._();
+
+  /// No fingerprint persisted yet; caller should write the current one
+  /// before serving any requests. First-ever boot.
+  const factory EmbeddingFingerprintGate.requiresInitialBaseline() =
+      EmbeddingFingerprintGate_RequiresInitialBaseline;
+
+  /// Stored fingerprint matches `current_fingerprint`; safe to proceed.
+  const factory EmbeddingFingerprintGate.ok() = EmbeddingFingerprintGate_Ok;
+
+  /// Stored fingerprint differs from `current_fingerprint`; reads and
+  /// writes MUST be locked until either reembed completes or the user
+  /// explicitly confirms a clear-and-restart.
+  const factory EmbeddingFingerprintGate.mismatch({
+    required String stored,
+    required String current,
+
+    /// Number of chunk rows still tagged with a non-current fingerprint.
+    /// Useful for surfacing a "resume from N%" UI without an extra
+    /// round-trip to count chunks.
+    required PlatformInt64 remainingChunks,
+
+    /// True when `embedding_fingerprint_pending` already equals
+    /// `current_fingerprint` — i.e. a reembed was previously started and
+    /// can simply continue without a fresh user confirmation.
+    required bool resumeInProgress,
+  }) = EmbeddingFingerprintGate_Mismatch;
+}
+
+/// Read-only snapshot of all migration axes plus the last engine version.
 class MigrationAxes {
   final PlatformInt64 sqlSchemaVersion;
   final PlatformInt64 hnswFormatVersion;
   final PlatformInt64 bm25StatsVersion;
 
-  /// Empty string means "not yet registered" (P0-2 will populate).
+  /// Empty string means "not yet registered" — the boot probe will populate
+  /// it on the first model load via [`write_embedding_fingerprint`].
   final String embeddingFingerprint;
+
+  /// Non-empty while a reembed-to-`<value>` is in flight; empty otherwise.
+  final String embeddingFingerprintPending;
   final String lastEngineVersion;
 
   const MigrationAxes({
@@ -32,6 +146,7 @@ class MigrationAxes {
     required this.hnswFormatVersion,
     required this.bm25StatsVersion,
     required this.embeddingFingerprint,
+    required this.embeddingFingerprintPending,
     required this.lastEngineVersion,
   });
 
@@ -41,6 +156,7 @@ class MigrationAxes {
       hnswFormatVersion.hashCode ^
       bm25StatsVersion.hashCode ^
       embeddingFingerprint.hashCode ^
+      embeddingFingerprintPending.hashCode ^
       lastEngineVersion.hashCode;
 
   @override
@@ -52,5 +168,6 @@ class MigrationAxes {
           hnswFormatVersion == other.hnswFormatVersion &&
           bm25StatsVersion == other.bm25StatsVersion &&
           embeddingFingerprint == other.embeddingFingerprint &&
+          embeddingFingerprintPending == other.embeddingFingerprintPending &&
           lastEngineVersion == other.lastEngineVersion;
 }

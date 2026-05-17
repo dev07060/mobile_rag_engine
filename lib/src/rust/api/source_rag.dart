@@ -273,6 +273,35 @@ Future<void> updateChunkEmbedding({
   embedding: embedding,
 );
 
+/// Stream the next batch of chunks that still carry a non-matching fingerprint.
+///
+/// Used by the reembed flow to walk the corpus incrementally without holding
+/// the entire chunk set in Dart memory. The batch is ordered by `id` so a
+/// caller that crashes between batches can resume deterministically.
+Future<List<ChunkForReembedding>> listChunksNeedingReembed({
+  required String targetFingerprint,
+  required PlatformInt64 limit,
+}) => RustLib.instance.api.crateApiSourceRagListChunksNeedingReembed(
+  targetFingerprint: targetFingerprint,
+  limit: limit,
+);
+
+/// Atomically replace a chunk's embedding and tag it with `target_fingerprint`.
+///
+/// Single-statement UPDATE so a crash mid-write cannot leave a chunk with the
+/// new embedding bytes but the old fingerprint marker (or vice versa). Marks
+/// the chunk's collection as dirty so the next HNSW rebuild picks up the new
+/// vector.
+Future<void> updateChunkReembedded({
+  required PlatformInt64 chunkId,
+  required List<double> embedding,
+  required String targetFingerprint,
+}) => RustLib.instance.api.crateApiSourceRagUpdateChunkReembedded(
+  chunkId: chunkId,
+  embedding: embedding,
+  targetFingerprint: targetFingerprint,
+);
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<SearchHandle>>
 abstract class SearchHandle implements RustOpaqueInterface {
   Future<AssembledContextV2> assembleContext({

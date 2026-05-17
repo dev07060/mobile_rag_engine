@@ -39,6 +39,8 @@ extension RagErrorMessage on RagError {
         internalError: (msg) => msg,
         unsupportedMigrationVersion: (axis, stored, supported) =>
             "Unsupported migration axis '$axis': stored=$stored, supported=$supported",
+        embeddingFingerprintMismatch: (stored, current, remaining) =>
+            "Embedding fingerprint mismatch: stored='$stored', current='$current', remaining=$remaining",
         unknown: (msg) => msg,
       );
 }
@@ -812,6 +814,10 @@ class SourceRagService {
             '[SmartError] Unsupported migration axis $axis '
             '(stored=$stored, supported=$supported) while rebuilding indexes',
           ),
+          embeddingFingerprintMismatch: (stored, current, remaining) => debugPrint(
+            '[SmartError] Rebuild blocked by fingerprint mismatch '
+            '(stored=$stored, current=$current, remaining=$remaining)',
+          ),
           unknown: (_) {},
         );
         rethrow;
@@ -978,6 +984,10 @@ class SourceRagService {
           '[SmartError] searchMeta blocked by unsupported migration axis '
           '$axis (stored=$stored, supported=$supported)',
         ),
+        embeddingFingerprintMismatch: (stored, current, remaining) => debugPrint(
+          '[SmartError] searchMeta blocked by fingerprint mismatch '
+          '(stored=$stored, current=$current, remaining=$remaining)',
+        ),
         unknown: (msg) => debugPrint('[SmartError] searchMeta unknown: $msg'),
       );
       rethrow;
@@ -1106,6 +1116,10 @@ class SourceRagService {
         unsupportedMigrationVersion: (axis, stored, supported) => debugPrint(
           '[SmartError] Search blocked by unsupported migration axis '
           '$axis (stored=$stored, supported=$supported)',
+        ),
+        embeddingFingerprintMismatch: (stored, current, remaining) => debugPrint(
+          '[SmartError] Search blocked by fingerprint mismatch '
+          '(stored=$stored, current=$current, remaining=$remaining)',
         ),
         unknown: (msg) => debugPrint('[SmartError] Unknown search error: $msg'),
       );
@@ -1481,6 +1495,10 @@ class SourceRagService {
           '[SmartError] Hybrid search blocked by unsupported migration axis '
           '$axis (stored=$stored, supported=$supported)',
         ),
+        embeddingFingerprintMismatch: (stored, current, remaining) => log(
+          '[SmartError] Hybrid search blocked by fingerprint mismatch '
+          '(stored=$stored, current=$current, remaining=$remaining)',
+        ),
         unknown: (msg) => log('[SmartError] Hybrid search unknown error: $msg'),
       );
       rethrow;
@@ -1540,6 +1558,7 @@ class SourceRagService {
           concurrentMutation: (_) => true,
           internalError: (_) => false,
           unsupportedMigrationVersion: (_, __, ___) => false,
+          embeddingFingerprintMismatch: (_, __, ___) => false,
           unknown: (_) => false,
         );
         if (!isRetryable || attempt == 1) {
