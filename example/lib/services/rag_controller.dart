@@ -288,6 +288,13 @@ class RagController extends ChangeNotifier {
         );
       }
     } catch (e, st) {
+      if (DocumentParser.isOcrRequiredPdfExtractionError(e)) {
+        _updateState(
+          DocumentParser.scannedPdfOcrRequiredMessage,
+          newIsLoading: false,
+        );
+        return;
+      }
       _updateState("❌ Import error: $e\n$st", newIsLoading: false);
     }
   }
@@ -420,6 +427,14 @@ class RagController extends ChangeNotifier {
       );
       return _PickedImportResult(addResult: addResult);
     } on RagError catch (e) {
+      if (extension == 'pdf' &&
+          DocumentParser.isOcrRequiredPdfExtractionError(e)) {
+        _updateState(
+          DocumentParser.scannedPdfOcrRequiredMessage,
+          newIsLoading: false,
+        );
+        return null;
+      }
       debugPrint('File path ingest failed, falling back: $e');
     }
 
@@ -438,7 +453,20 @@ class RagController extends ChangeNotifier {
 
     status = "Extracting text from ${file.name}...";
     notifyListeners();
-    final extractedText = await DocumentParser.parse(bytes);
+    late final String extractedText;
+    try {
+      extractedText = await DocumentParser.parse(bytes);
+    } catch (e) {
+      if (extension == 'pdf' &&
+          DocumentParser.isOcrRequiredPdfExtractionError(e)) {
+        _updateState(
+          DocumentParser.scannedPdfOcrRequiredMessage,
+          newIsLoading: false,
+        );
+        return null;
+      }
+      rethrow;
+    }
     if (extractedText.isEmpty) {
       _updateState("⚠️ No text extracted from file", newIsLoading: false);
       return null;
