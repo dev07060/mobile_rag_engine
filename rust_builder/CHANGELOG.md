@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.18.3
+* **PDF extraction quality**:
+  - Preserved paragraph boundaries while normalizing PDF text so downstream chunking can split on semantic breaks instead of one long flattened body.
+  - Added per-page PDF extraction with per-page fallback so a single malformed page no longer aborts the whole document.
+  - Deduplicated dense adjacent double-rendered text artifacts seen in Korean PDFs while guarding natural repetitions and English words from false-positive rewrites.
+  - Surfaced scanned/image-only or effectively empty PDF extraction as an error instead of silently indexing an unsearchable 0-chunk source.
+
 ## 0.18.2
 * **Scoped BM25 search**:
   - Added scoped BM25 ranking over the existing in-memory inverted index, restricted by the scoped chunk ids collected during exact vector scan.

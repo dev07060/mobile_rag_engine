@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.18.5
+* **PDF extraction quality**:
+  - Bumped dependency constraint to `rag_engine_flutter: ^0.18.3` so consumers receive the native PDF extraction improvements.
+  - Preserves paragraph boundaries during PDF extraction, improving downstream semantic chunking for long documents.
+  - Recovers around per-page PDF extraction failures instead of failing the entire document when one page is malformed.
+  - Cleans dense adjacent double-rendered text artifacts while keeping conservative false-positive guards for natural repetitions and English words.
+  - Surfaces scanned/image-only or effectively empty PDFs as extraction errors instead of silently indexing unsearchable 0-chunk sources.
+
 ## 0.18.4
 * **Retrieval hot path**:
   - Scoped source/metadata hybrid searches now preserve BM25 ranks through the active collection BM25 term index instead of reading and tokenizing every scoped chunk body at query time.
