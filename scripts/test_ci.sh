@@ -17,6 +17,8 @@ case "$TARGET" in
     ;;
   native)
     echo "[ci] Running native-dependent tests from test/native"
+    echo "[ci] Running Rust tracked PDF parser smoke"
+    cargo test --manifest-path rust_builder/rust/Cargo.toml test_tracked_pdf_smoke_fixtures_extract --lib
     cargo build --manifest-path rust_builder/rust/Cargo.toml --release
     flutter test test/native
     ;;
