@@ -392,6 +392,65 @@ fn is_extraction_effectively_empty(text: &str) -> bool {
     text.chars().filter(|c| !c.is_whitespace()).count() < MIN_EXTRACTED_NON_WHITESPACE
 }
 
+/// Whether a below-threshold PDF extraction should carry the
+/// `scanned/image-only` marker that the host app keys on to offer OCR.
+///
+/// Within the below-threshold branch every readable page is, by definition,
+/// effectively empty (the joined text is under the threshold). A page that
+/// pdf_extract parsed at all yet contributed almost no text is the signature of
+/// a scanned/image-only page OCR can recover. So the marker is kept whenever at
+/// least one page parsed successfully (`failed_page_count < page_count`), and
+/// also when no page failed at all (`failed_page_count == 0`: the pure-scanned
+/// case, plus the degenerate zero-page document, preserving prior behavior). It
+/// is withheld only when EVERY page failed to parse, where no readable page
+/// exists to suggest a recoverable scan and OCR will not help.
+///
+/// The decision is intentionally count-based (content-agnostic): a readable
+/// page holding a few stray characters alongside failed pages still routes to
+/// OCR. This favors recall — surfacing OCR guidance for a possibly-recoverable
+/// document — over precisely fingerprinting corruption, so a scanned PDF that
+/// also has a stray bad page is never silently dropped.
+fn should_include_scanned_marker(page_count: usize, failed_page_count: usize) -> bool {
+    failed_page_count == 0 || failed_page_count < page_count
+}
+
+/// Build the user-visible error for a PDF whose joined text fell below
+/// [MIN_EXTRACTED_NON_WHITESPACE] non-whitespace characters.
+///
+/// The message embeds the `scanned/image-only` marker the host app keys on to
+/// offer OCR for exactly the recoverable cases (see
+/// [should_include_scanned_marker]); a fully-failed extraction omits it. Kept as
+/// a pure function so the exact wording — including the marker placement the
+/// Dart classifier depends on — is unit-testable without a PDF fixture.
+fn below_threshold_error_message(page_count: usize, failed_pages: &[u32]) -> String {
+    let failed_count = failed_pages.len();
+    if !should_include_scanned_marker(page_count, failed_count) {
+        // Every page failed to extract → no readable page, no scanned-layer
+        // evidence; OCR will not help, so omit the marker.
+        return format!(
+            "PDF text extraction returned fewer than {} non-whitespace characters; \
+             {} of {} page(s) failed to extract (pages: {:?})",
+            MIN_EXTRACTED_NON_WHITESPACE, failed_count, page_count, failed_pages,
+        );
+    }
+    if failed_count == 0 {
+        // Pure scanned/image-only: every page parsed but yielded almost no text.
+        return format!(
+            "PDF text extraction returned fewer than {} non-whitespace characters; PDF may be scanned/image-only",
+            MIN_EXTRACTED_NON_WHITESPACE,
+        );
+    }
+    // Mixed: at least one page parsed (almost no text → scanned) while other
+    // pages failed. Keep the marker so OCR still fires, and report the failures
+    // for diagnostics, so a scanned PDF with a stray corrupt page is not
+    // misrouted away from OCR.
+    format!(
+        "PDF text extraction returned fewer than {} non-whitespace characters; \
+         {} of {} page(s) failed to extract (pages: {:?}); PDF may be scanned/image-only",
+        MIN_EXTRACTED_NON_WHITESPACE, failed_count, page_count, failed_pages,
+    )
+}
+
 /// Extract one page of text via pdf_extract's PlainTextOutput. Returns the
 /// page string on success, or `Err(panic|extract-error)` on failure so the
 /// caller can decide how to react. Each page extraction is its own
@@ -486,20 +545,10 @@ pub fn extract_text_from_pdf(file_bytes: Vec<u8>) -> Result<String> {
 
     let joined = join_pages(pages);
     if is_extraction_effectively_empty(&joined) {
-        if !failed_pages.is_empty() {
-            return Err(anyhow!(
-                "PDF text extraction returned fewer than {} non-whitespace characters; \
-                 {} of {} page(s) failed to extract (pages: {:?})",
-                MIN_EXTRACTED_NON_WHITESPACE,
-                failed_pages.len(),
-                page_count,
-                failed_pages,
-            ));
-        }
-        return Err(anyhow!(
-            "PDF text extraction returned fewer than {} non-whitespace characters; PDF may be scanned/image-only",
-            MIN_EXTRACTED_NON_WHITESPACE,
-        ));
+        return Err(anyhow!(below_threshold_error_message(
+            page_count,
+            &failed_pages
+        )));
     }
 
     if !failed_pages.is_empty() {
@@ -873,8 +922,14 @@ mod tests {
         let result = extract_text_from_pdf(bytes);
         assert!(result.is_err(), "expected scanned-PDF Err, got Ok");
         let msg = result.unwrap_err().to_string();
+        // Assert the full cross-layer contract the Dart classifier depends on:
+        // a scanned PDF must carry the "scanned/image-only" marker, not just the
+        // shared below-threshold prefix. Guards against the producer-side string
+        // drifting out of sync with isOcrRequiredPdfExtractionError.
         assert!(
-            msg.contains("fewer than") && msg.contains("non-whitespace"),
+            msg.contains("fewer than")
+                && msg.contains("non-whitespace")
+                && msg.contains("scanned/image-only"),
             "got: {}",
             msg,
         );
@@ -1190,6 +1245,68 @@ mod tests {
         assert!(!is_extraction_effectively_empty(
             "This is a normal sentence with enough content."
         ));
+    }
+
+    #[test]
+    fn test_should_include_scanned_marker() {
+        // Marker kept: at least one page parsed (readable but text-less → the
+        // scanned/image-only signature OCR can recover), even alongside
+        // failures. Covers Finding #1: a scanned PDF with a stray corrupt page.
+        assert!(should_include_scanned_marker(1, 0), "single-page pure scanned");
+        assert!(should_include_scanned_marker(5, 0), "multi-page pure scanned");
+        assert!(should_include_scanned_marker(5, 1), "mixed: 1 of 5 failed");
+        assert!(should_include_scanned_marker(5, 4), "mixed: 4 of 5 failed");
+        assert!(should_include_scanned_marker(2, 1), "boundary: 1 of 2 failed");
+        assert!(
+            should_include_scanned_marker(0, 0),
+            "degenerate zero-page doc preserves prior scanned behavior"
+        );
+
+        // Marker withheld only when EVERY page failed to parse: no readable
+        // page, no scanned-layer evidence, OCR cannot help.
+        assert!(!should_include_scanned_marker(1, 1), "single page failed");
+        assert!(!should_include_scanned_marker(5, 5), "every page failed");
+    }
+
+    #[test]
+    fn test_below_threshold_error_message() {
+        // The Dart classifier (isOcrRequiredPdfExtractionError) routes to OCR
+        // when the message contains BOTH "PDF text extraction returned fewer
+        // than" AND "scanned/image-only". These assertions pin the exact
+        // producer-side format so it cannot drift out of sync with that
+        // contract without failing here.
+
+        // Pure scanned: marker present, no page-failure summary.
+        let m = below_threshold_error_message(5, &[]);
+        assert!(m.contains("PDF text extraction returned fewer than"), "{m}");
+        assert!(m.contains("scanned/image-only"), "{m}");
+        assert!(!m.contains("failed to extract"), "{m}");
+
+        // Mixed (1 of 5 failed): keeps the marker AND reports the failures —
+        // exactly the string the Dart mixed-case test mirrors. Covers Finding #1.
+        let m = below_threshold_error_message(5, &[3]);
+        assert!(m.contains("PDF text extraction returned fewer than"), "{m}");
+        assert!(
+            m.contains("1 of 5 page(s) failed to extract (pages: [3])"),
+            "{m}"
+        );
+        assert!(m.contains("scanned/image-only"), "{m}");
+
+        // Mixed (3 of 5 failed): higher failure ratio still routes to OCR.
+        let m = below_threshold_error_message(5, &[0, 1, 2]);
+        assert!(
+            m.contains("3 of 5 page(s) failed to extract (pages: [0, 1, 2])"),
+            "{m}"
+        );
+        assert!(m.contains("scanned/image-only"), "{m}");
+
+        // Fully failed (every page): NO marker — OCR cannot help.
+        let m = below_threshold_error_message(3, &[0, 1, 2]);
+        assert!(
+            m.contains("3 of 3 page(s) failed to extract (pages: [0, 1, 2])"),
+            "{m}"
+        );
+        assert!(!m.contains("scanned/image-only"), "{m}");
     }
 
     #[test]

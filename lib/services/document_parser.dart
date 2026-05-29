@@ -17,13 +17,15 @@ class DocumentParser {
   /// Returns true when a PDF extraction error indicates a scanned/image-only
   /// document — the kind OCR can recover.
   ///
-  /// The Rust parser surfaces a below-threshold error for two distinct cases
-  /// that share the same `"… fewer than N non-whitespace …"` prefix:
-  ///   * scanned/image-only PDFs with no text layer — OCR helps;
-  ///   * PDFs whose pages failed to extract (corrupt/unsupported content) —
-  ///     OCR will *not* help.
-  /// Only the first should drive the OCR-required message, so this keys on the
-  /// scanned-specific marker rather than the shared prefix.
+  /// The Rust parser surfaces a below-threshold error that shares the same
+  /// `"… fewer than N non-whitespace …"` prefix across three cases. It appends
+  /// the scanned-specific marker for exactly the OCR-recoverable ones, so this
+  /// keys on that marker rather than the shared prefix:
+  ///   * scanned/image-only PDFs with no text layer — marker present, OCR helps;
+  ///   * mixed PDFs that are scanned but also have some pages that failed to
+  ///     extract — marker still present, OCR recovers the scanned pages;
+  ///   * PDFs where *every* page failed to extract (corrupt/unsupported
+  ///     content) — no marker, OCR will *not* help.
   static bool isOcrRequiredPdfExtractionError(Object error) {
     final message = error.toString();
     return message.contains('PDF text extraction returned fewer than') &&
