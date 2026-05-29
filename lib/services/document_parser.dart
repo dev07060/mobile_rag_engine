@@ -14,15 +14,20 @@ class DocumentParser {
       '이 PDF는 텍스트를 추출할 수 없습니다.\n'
       '스캔본 또는 이미지 기반 PDF일 수 있어 OCR 처리가 필요합니다.';
 
-  /// Returns true when a PDF extraction error indicates effectively empty text.
+  /// Returns true when a PDF extraction error indicates a scanned/image-only
+  /// document — the kind OCR can recover.
   ///
-  /// The Rust parser intentionally returns an error for scanned/image-only PDFs
-  /// so host apps can show an OCR-specific message instead of indexing an
-  /// unsearchable document.
+  /// The Rust parser surfaces a below-threshold error for two distinct cases
+  /// that share the same `"… fewer than N non-whitespace …"` prefix:
+  ///   * scanned/image-only PDFs with no text layer — OCR helps;
+  ///   * PDFs whose pages failed to extract (corrupt/unsupported content) —
+  ///     OCR will *not* help.
+  /// Only the first should drive the OCR-required message, so this keys on the
+  /// scanned-specific marker rather than the shared prefix.
   static bool isOcrRequiredPdfExtractionError(Object error) {
     final message = error.toString();
     return message.contains('PDF text extraction returned fewer than') &&
-        message.contains('non-whitespace');
+        message.contains('scanned/image-only');
   }
 
   /// Convert known extraction failures into user-facing copy.

@@ -288,15 +288,26 @@ class RagController extends ChangeNotifier {
         );
       }
     } catch (e, st) {
-      if (DocumentParser.isOcrRequiredPdfExtractionError(e)) {
-        _updateState(
-          DocumentParser.scannedPdfOcrRequiredMessage,
-          newIsLoading: false,
-        );
-        return;
-      }
+      if (_showOcrGuidanceIfRequired(e)) return;
       _updateState("❌ Import error: $e\n$st", newIsLoading: false);
     }
+  }
+
+  /// If [error] is a recognized OCR-required PDF failure, surface the
+  /// user-facing OCR guidance and return true so the caller can stop.
+  ///
+  /// Detection is content-based (the Rust error text), not extension-based, so
+  /// a scanned PDF is handled identically on every import path — including when
+  /// the picked file is mis-named.
+  bool _showOcrGuidanceIfRequired(Object error) {
+    if (!DocumentParser.isOcrRequiredPdfExtractionError(error)) {
+      return false;
+    }
+    _updateState(
+      DocumentParser.userMessageForExtractionError(error),
+      newIsLoading: false,
+    );
+    return true;
   }
 
   String _extensionFor(PlatformFile file, String filePath) {
@@ -427,14 +438,7 @@ class RagController extends ChangeNotifier {
       );
       return _PickedImportResult(addResult: addResult);
     } on RagError catch (e) {
-      if (extension == 'pdf' &&
-          DocumentParser.isOcrRequiredPdfExtractionError(e)) {
-        _updateState(
-          DocumentParser.scannedPdfOcrRequiredMessage,
-          newIsLoading: false,
-        );
-        return null;
-      }
+      if (_showOcrGuidanceIfRequired(e)) return null;
       debugPrint('File path ingest failed, falling back: $e');
     }
 
@@ -457,14 +461,7 @@ class RagController extends ChangeNotifier {
     try {
       extractedText = await DocumentParser.parse(bytes);
     } catch (e) {
-      if (extension == 'pdf' &&
-          DocumentParser.isOcrRequiredPdfExtractionError(e)) {
-        _updateState(
-          DocumentParser.scannedPdfOcrRequiredMessage,
-          newIsLoading: false,
-        );
-        return null;
-      }
+      if (_showOcrGuidanceIfRequired(e)) return null;
       rethrow;
     }
     if (extractedText.isEmpty) {
