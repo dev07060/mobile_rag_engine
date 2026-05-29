@@ -64,4 +64,5 @@ android_logger = "0.13"
 oslog = "0.2"
 
 [dev-dependencies]
+gag = "1.0"
 tempfile = "3.10"

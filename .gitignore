@@ -65,6 +65,9 @@ scripts/*.py
 artifacts/
 example/assets/corpus/
 example/assets/evalsets/
+example/assets/sample_data/*.pdf
+!example/assets/sample_data/sample_eng.pdf
+!example/assets/sample_data/sample_kor.pdf
 
 # Example evaluation/performance runners (local only)
 example/lib/*_runner.dart

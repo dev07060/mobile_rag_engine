@@ -586,16 +586,161 @@ fn is_cjk(c: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
+    use std::fs::OpenOptions;
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[derive(Clone, Copy)]
+    struct PdfFixture {
+        set: &'static str,
+        label: &'static str,
+        fixture_rel: &'static str,
+        optional: bool,
+    }
+
+    const TRACKED_PDF_SMOKE_FIXTURES: &[PdfFixture] = &[
+        PdfFixture {
+            set: "smoke",
+            label: "sample_eng",
+            fixture_rel: "example/assets/sample_data/sample_eng.pdf",
+            optional: false,
+        },
+        PdfFixture {
+            set: "smoke",
+            label: "sample_kor",
+            fixture_rel: "example/assets/sample_data/sample_kor.pdf",
+            optional: false,
+        },
+    ];
+
+    /// Per-fixture quality floors for the tracked PDF smoke gate.
+    ///
+    /// `MIN_EXTRACTED_NON_WHITESPACE` (16) is the floor the parser *itself*
+    /// already enforces before returning `Ok`, so asserting against it in a
+    /// test is tautological — it can never fail. These floors instead sit well
+    /// below the values actually observed on the committed fixtures (measured
+    /// via `extract_text_from_pdf`):
+    ///   sample_eng: 206,817 non-whitespace chars (246,969 total) /
+    ///               1,714 paragraph breaks;
+    ///   sample_kor: 6,270 non-whitespace chars (7,981 total) / 4,961 Hangul.
+    /// So a catastrophic regression — text collapsing to a fraction, lost
+    /// paragraph structure, lost CJK, or a key anchor phrase corrupted — fails
+    /// CI, while routine parser tuning stays comfortably inside the margin.
+    /// This gate is a *volume/structure/anchor* smoke floor; finer-grained CJK
+    /// spacing-quality metrics (orphan Hangul, script glue, long runs) are
+    /// tracked by the diagnostic dump (`dump_all_pdf_fixtures`), not gated here.
+    struct SmokeFloor {
+        label: &'static str,
+        /// Minimum non-whitespace `char` count the extraction must yield.
+        min_nonwhitespace: usize,
+        /// Minimum blank-line paragraph breaks (`\n\n`); 0 disables the check.
+        min_paragraph_breaks: usize,
+        /// Minimum Hangul syllables; 0 disables the check (non-CJK fixtures).
+        min_hangul: usize,
+        /// Substrings that must survive extraction.
+        must_contain: &'static [&'static str],
+    }
+
+    const TRACKED_PDF_SMOKE_FLOORS: &[SmokeFloor] = &[
+        SmokeFloor {
+            label: "sample_eng",
+            min_nonwhitespace: 100_000, // observed 206_817
+            min_paragraph_breaks: 400,  // observed 1_714
+            min_hangul: 0,
+            must_contain: &["Insurance Contracts"],
+        },
+        SmokeFloor {
+            label: "sample_kor",
+            min_nonwhitespace: 3_000, // observed 6_270
+            min_paragraph_breaks: 0,  // kor sample has too few blank-line breaks to gate on
+            min_hangul: 1_000,        // observed 4_961
+            // Contiguous-Hangul anchors from the doc (title + recurring body
+            // term): give the CJK fixture content teeth, not just volume — a
+            // regression that garbles Korean tokens trips these.
+            must_contain: &["맞춤형", "스마트폰"],
+        },
+    ];
+
+    const LOCAL_PDF_DIAGNOSTIC_FIXTURES: &[PdfFixture] = &[
+        PdfFixture {
+            set: "local",
+            label: "kor_ins_20120401",
+            fixture_rel: "example/assets/sample_data/20120401_10101_1.pdf",
+            optional: true,
+        },
+        PdfFixture {
+            set: "local",
+            label: "kor_ins_20200101",
+            fixture_rel: "example/assets/sample_data/20200101_10108_1.pdf",
+            optional: true,
+        },
+        PdfFixture {
+            set: "local",
+            label: "kor_drone_2021",
+            fixture_rel: "example/assets/sample_data/2021-국방드론.pdf",
+            optional: true,
+        },
+        PdfFixture {
+            set: "local",
+            label: "kor_misc_202302",
+            fixture_rel: "example/assets/sample_data/202302091039136320.pdf",
+            optional: true,
+        },
+        PdfFixture {
+            set: "local",
+            label: "kor_dod_china_2025",
+            fixture_rel: "example/assets/sample_data/2025 미국방부 년례 보고서 - 중국 군사력 보고서.pdf",
+            optional: true,
+        },
+        PdfFixture {
+            set: "local",
+            label: "kor_accel_2026",
+            fixture_rel: "example/assets/sample_data/2026년 글로벌 액셀러레이팅 지원사업 창업기업 모집 공고.pdf",
+            optional: true,
+        },
+        PdfFixture {
+            set: "local",
+            label: "arxiv_2005_11401",
+            fixture_rel: "example/assets/sample_data/2005.11401v4.pdf",
+            optional: true,
+        },
+        PdfFixture {
+            set: "local",
+            label: "arxiv_2205_14135",
+            fixture_rel: "example/assets/sample_data/2205.14135v2.pdf",
+            optional: true,
+        },
+        PdfFixture {
+            set: "local",
+            label: "arxiv_2509_01092",
+            fixture_rel: "example/assets/sample_data/2509.01092v2.pdf",
+            optional: true,
+        },
+        PdfFixture {
+            set: "local",
+            label: "arxiv_2603_18196",
+            fixture_rel: "example/assets/sample_data/2603.18196v1.pdf",
+            optional: true,
+        },
+    ];
+
+    fn repo_root() -> PathBuf {
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        manifest.parent().unwrap().parent().unwrap().to_path_buf()
+    }
+
+    fn fixture_path(rel: &str) -> PathBuf {
+        repo_root().join(rel)
+    }
 
     fn load_fixture(rel: &str) -> Vec<u8> {
-        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let path = manifest
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join(rel);
+        let path = fixture_path(rel);
         std::fs::read(&path).expect("read fixture")
+    }
+
+    fn try_load_fixture(rel: &str) -> Option<Vec<u8>> {
+        std::fs::read(fixture_path(rel)).ok()
     }
 
     #[test]
@@ -609,6 +754,72 @@ mod tests {
         assert!(out.contains("Insurance Contracts"), "head: {}", &out[..200.min(out.len())]);
         // Paragraph breaks from PR A must still be preserved on this path.
         assert!(out.contains("\n\n"));
+    }
+
+    #[test]
+    fn test_tracked_pdf_smoke_fixtures_extract() {
+        for fixture in TRACKED_PDF_SMOKE_FIXTURES {
+            // Fail closed: a tracked fixture with no quality floor would
+            // otherwise pass on extraction alone, re-introducing a toothless
+            // gate. Force every tracked fixture to declare its expectations.
+            let floor = TRACKED_PDF_SMOKE_FLOORS
+                .iter()
+                .find(|f| f.label == fixture.label)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "no TRACKED_PDF_SMOKE_FLOORS entry for tracked fixture '{}'; \
+                         add one so the smoke gate has teeth",
+                        fixture.label
+                    )
+                });
+
+            let bytes = load_fixture(fixture.fixture_rel);
+            let out = extract_text_from_pdf(bytes)
+                .unwrap_or_else(|err| panic!("{} extract failed: {}", fixture.label, err));
+
+            let nonwhitespace = out.chars().filter(|c| !c.is_whitespace()).count();
+            assert!(
+                nonwhitespace >= floor.min_nonwhitespace,
+                "{}: extracted {} non-whitespace chars, expected >= {} (extraction-quality regression?)",
+                fixture.label, nonwhitespace, floor.min_nonwhitespace,
+            );
+
+            let paragraph_breaks = out.matches("\n\n").count();
+            assert!(
+                paragraph_breaks >= floor.min_paragraph_breaks,
+                "{}: {} paragraph breaks, expected >= {} (lost paragraph structure?)",
+                fixture.label, paragraph_breaks, floor.min_paragraph_breaks,
+            );
+
+            if floor.min_hangul > 0 {
+                let (_, _, hangul, _, _) = classify_chars(&out);
+                assert!(
+                    hangul >= floor.min_hangul,
+                    "{}: {} Hangul syllables, expected >= {} (CJK extraction regression?)",
+                    fixture.label, hangul, floor.min_hangul,
+                );
+            }
+
+            for needle in floor.must_contain {
+                assert!(
+                    out.contains(needle),
+                    "{}: extracted text missing required substring {:?}",
+                    fixture.label, needle,
+                );
+            }
+        }
+
+        // Fail closed in the other direction too: an orphaned floor (e.g. one
+        // left behind after a fixture rename) must not silently go dead.
+        for floor in TRACKED_PDF_SMOKE_FLOORS {
+            assert!(
+                TRACKED_PDF_SMOKE_FIXTURES
+                    .iter()
+                    .any(|fixture| fixture.label == floor.label),
+                "orphaned TRACKED_PDF_SMOKE_FLOORS entry '{}' has no matching tracked fixture",
+                floor.label,
+            );
+        }
     }
 
     #[test]
@@ -654,7 +865,11 @@ mod tests {
     fn test_extract_text_from_pdf_scanned_pdf_still_returns_min_error() {
         // PR A behavior preserved through PR C: a scanned/image-only PDF
         // (no extractable text on any page) lands on the "below MIN" Err.
-        let bytes = load_fixture("example/assets/sample_data/202302091039136320.pdf");
+        let Some(bytes) = try_load_fixture("example/assets/sample_data/202302091039136320.pdf")
+        else {
+            eprintln!("skipping local scanned-PDF diagnostic fixture");
+            return;
+        };
         let result = extract_text_from_pdf(bytes);
         assert!(result.is_err(), "expected scanned-PDF Err, got Ok");
         let msg = result.unwrap_err().to_string();
@@ -1201,6 +1416,8 @@ mod tests {
     }
 
     struct ExtractSummary {
+        set: String,
+        status: String,
         label: String,
         page_count: usize,
         chars: usize,
@@ -1219,39 +1436,73 @@ mod tests {
         extract_ms: u128,
         ok: bool,
         err: Option<String>,
+        log_path: Option<String>,
     }
 
-    fn summarize_one(label: &str, fixture_rel: &str) -> ExtractSummary {
-        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let path = manifest
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join(fixture_rel);
+    impl ExtractSummary {
+        fn empty(fixture: &PdfFixture, status: &str, err: Option<String>) -> Self {
+            Self {
+                set: fixture.set.to_string(),
+                status: status.to_string(),
+                label: fixture.label.to_string(),
+                page_count: 0,
+                chars: 0,
+                hangul: 0,
+                ascii: 0,
+                digit: 0,
+                newlines: 0,
+                paragraph_breaks: 0,
+                weird_kinds: 0,
+                weird_total: 0,
+                orphan_hangul: 0,
+                long_hangul_runs_ge12: 0,
+                max_hangul_run: 0,
+                script_glue: 0,
+                numeric_tokens_ge3: 0,
+                extract_ms: 0,
+                ok: false,
+                err,
+                log_path: None,
+            }
+        }
+    }
+
+    fn diagnostics_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/pdf_diagnostics")
+    }
+
+    fn diagnostic_log_path(diagnostics_dir: &Path, fixture: &PdfFixture) -> PathBuf {
+        diagnostics_dir.join(format!("{}_{}.log", fixture.set, fixture.label))
+    }
+
+    fn diagnostic_log_display(log_path: &Path) -> String {
+        let file_name = log_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("unknown.log");
+        format!("rust_builder/rust/target/pdf_diagnostics/{}", file_name)
+    }
+
+    fn short_error(err: &str) -> String {
+        let compact = err.split_whitespace().collect::<Vec<_>>().join(" ");
+        const MAX_CHARS: usize = 120;
+        if compact.chars().count() <= MAX_CHARS {
+            return compact;
+        }
+        let mut shortened: String = compact.chars().take(MAX_CHARS).collect();
+        shortened.push_str("...");
+        shortened
+    }
+
+    fn summarize_one_inner(fixture: &PdfFixture, path: &Path) -> ExtractSummary {
         let bytes = match std::fs::read(&path) {
             Ok(b) => b,
             Err(e) => {
-                return ExtractSummary {
-                    label: label.to_string(),
-                    page_count: 0,
-                    chars: 0,
-                    hangul: 0,
-                    ascii: 0,
-                    digit: 0,
-                    newlines: 0,
-                    paragraph_breaks: 0,
-                    weird_kinds: 0,
-                    weird_total: 0,
-                    orphan_hangul: 0,
-                    long_hangul_runs_ge12: 0,
-                    max_hangul_run: 0,
-                    script_glue: 0,
-                    numeric_tokens_ge3: 0,
-                    extract_ms: 0,
-                    ok: false,
-                    err: Some(format!("read error: {}", e)),
-                };
+                return ExtractSummary::empty(
+                    fixture,
+                    "ERR",
+                    Some(format!("read error: {}", e)),
+                );
             }
         };
 
@@ -1267,7 +1518,9 @@ mod tests {
             Ok(s) => s,
             Err(e) => {
                 return ExtractSummary {
-                    label: label.to_string(),
+                    set: fixture.set.to_string(),
+                    status: "ERR".to_string(),
+                    label: fixture.label.to_string(),
                     page_count,
                     chars: 0,
                     hangul: 0,
@@ -1285,6 +1538,7 @@ mod tests {
                     extract_ms,
                     ok: false,
                     err: Some(format!("{}", e)),
+                    log_path: None,
                 };
             }
         };
@@ -1338,7 +1592,9 @@ mod tests {
             .count();
 
         ExtractSummary {
-            label: label.to_string(),
+            set: fixture.set.to_string(),
+            status: "OK".to_string(),
+            label: fixture.label.to_string(),
             page_count,
             chars: t_total,
             hangul: h,
@@ -1356,18 +1612,212 @@ mod tests {
             extract_ms,
             ok: true,
             err: None,
+            log_path: None,
+        }
+    }
+
+    fn summarize_one(fixture: &PdfFixture, diagnostics_dir: &Path) -> ExtractSummary {
+        let path = fixture_path(fixture.fixture_rel);
+        if !path.exists() {
+            let status = if fixture.optional { "SKIP" } else { "ERR" };
+            return ExtractSummary::empty(
+                fixture,
+                status,
+                Some(format!("missing fixture: {}", fixture.fixture_rel)),
+            );
+        }
+
+        let _ = std::fs::create_dir_all(diagnostics_dir);
+        let log_path = diagnostic_log_path(diagnostics_dir, fixture);
+        let stdout_redirect = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&log_path)
+            .ok()
+            .and_then(|file| gag::Redirect::stdout(file).ok());
+        let stderr_redirect = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .ok()
+            .and_then(|file| gag::Redirect::stderr(file).ok());
+
+        let mut summary = summarize_one_inner(fixture, &path);
+
+        drop(stderr_redirect);
+        drop(stdout_redirect);
+
+        if let Ok(meta) = std::fs::metadata(&log_path) {
+            if meta.len() > 0 {
+                summary.log_path = Some(diagnostic_log_display(&log_path));
+            } else {
+                let _ = std::fs::remove_file(&log_path);
+            }
+        }
+
+        summary
+    }
+
+    fn summary_tsv(summaries: &[ExtractSummary]) -> String {
+        let mut out = String::from(
+            "set\tstatus\tlabel\tpages\tms\tchars\thangul\tascii\tdigit\tnl\tpara\tweird_kinds\tweird_total\torph\tglue\tlong_run\tmax_run\tnum_tokens_ge3\tlog\terror\n",
+        );
+        for s in summaries {
+            out.push_str(&format!(
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                s.set,
+                s.status,
+                s.label,
+                s.page_count,
+                s.extract_ms,
+                s.chars,
+                s.hangul,
+                s.ascii,
+                s.digit,
+                s.newlines,
+                s.paragraph_breaks,
+                s.weird_kinds,
+                s.weird_total,
+                s.orphan_hangul,
+                s.script_glue,
+                s.long_hangul_runs_ge12,
+                s.max_hangul_run,
+                s.numeric_tokens_ge3,
+                s.log_path.as_deref().unwrap_or("-"),
+                s.err.as_deref().map(short_error).unwrap_or_default(),
+            ));
+        }
+        out
+    }
+
+    fn write_summary_files(
+        summaries: &[ExtractSummary],
+        diagnostics_dir: &Path,
+    ) -> std::io::Result<(PathBuf, PathBuf)> {
+        std::fs::create_dir_all(diagnostics_dir)?;
+        let body = summary_tsv(summaries);
+        let latest = diagnostics_dir.join("latest_summary.tsv");
+        std::fs::write(&latest, &body)?;
+
+        let epoch = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let timestamped = diagnostics_dir.join(format!("summary_{}.tsv", epoch));
+        std::fs::write(&timestamped, body)?;
+        Ok((latest, timestamped))
+    }
+
+    #[derive(Clone, Copy)]
+    struct BaselineMetrics {
+        chars: usize,
+        para: usize,
+        weird_total: usize,
+        glue: usize,
+        long_run: usize,
+        max_run: usize,
+    }
+
+    fn summary_key(set: &str, label: &str) -> String {
+        format!("{}\t{}", set, label)
+    }
+
+    fn header_index(headers: &[&str], name: &str) -> Option<usize> {
+        headers.iter().position(|header| *header == name)
+    }
+
+    fn field<'a>(fields: &'a [&str], headers: &[&str], name: &str) -> Option<&'a str> {
+        header_index(headers, name).and_then(|idx| fields.get(idx).copied())
+    }
+
+    fn parse_usize_field(fields: &[&str], headers: &[&str], name: &str) -> usize {
+        field(fields, headers, name)
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(0)
+    }
+
+    fn parse_baseline_summary(path: &Path) -> BTreeMap<String, BaselineMetrics> {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            return BTreeMap::new();
+        };
+        let mut lines = content.lines();
+        let Some(header_line) = lines.next() else {
+            return BTreeMap::new();
+        };
+        let headers: Vec<&str> = header_line.split('\t').collect();
+        let mut out = BTreeMap::new();
+
+        for line in lines {
+            let fields: Vec<&str> = line.split('\t').collect();
+            if field(&fields, &headers, "status") != Some("OK") {
+                continue;
+            }
+            let Some(set) = field(&fields, &headers, "set") else {
+                continue;
+            };
+            let Some(label) = field(&fields, &headers, "label") else {
+                continue;
+            };
+            out.insert(
+                summary_key(set, label),
+                BaselineMetrics {
+                    chars: parse_usize_field(&fields, &headers, "chars"),
+                    para: parse_usize_field(&fields, &headers, "para"),
+                    weird_total: parse_usize_field(&fields, &headers, "weird_total"),
+                    glue: parse_usize_field(&fields, &headers, "glue"),
+                    long_run: parse_usize_field(&fields, &headers, "long_run"),
+                    max_run: parse_usize_field(&fields, &headers, "max_run"),
+                },
+            );
+        }
+
+        out
+    }
+
+    fn signed_delta(current: usize, baseline: usize) -> String {
+        format!("{:+}", current as i128 - baseline as i128)
+    }
+
+    fn print_baseline_delta(summaries: &[ExtractSummary]) {
+        let Ok(baseline_path) = std::env::var("PDF_DIAGNOSTICS_BASELINE") else {
+            return;
+        };
+        let baseline = parse_baseline_summary(Path::new(&baseline_path));
+        if baseline.is_empty() {
+            println!("baseline delta: no readable OK rows in {}", baseline_path);
+            return;
+        }
+
+        println!("===== PDF DIAGNOSTIC DELTA vs {} =====", baseline_path);
+        println!(
+            "{:<8} {:<20} {:>7} {:>6} {:>7} {:>6} {:>8} {:>7}",
+            "set", "label", "chars", "para", "weird", "glue", "longrun", "maxrun"
+        );
+        for s in summaries.iter().filter(|s| s.ok) {
+            let key = summary_key(&s.set, &s.label);
+            let Some(base) = baseline.get(&key) else {
+                continue;
+            };
+            println!(
+                "{:<8} {:<20} {:>7} {:>6} {:>7} {:>6} {:>8} {:>7}",
+                s.set,
+                s.label,
+                signed_delta(s.chars, base.chars),
+                signed_delta(s.paragraph_breaks, base.para),
+                signed_delta(s.weird_total, base.weird_total),
+                signed_delta(s.script_glue, base.glue),
+                signed_delta(s.long_hangul_runs_ge12, base.long_run),
+                signed_delta(s.max_hangul_run, base.max_run),
+            );
         }
     }
 
     fn print_top_long_runs(label: &str, fixture_rel: &str, k: usize) {
-        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let path = manifest
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join(fixture_rel);
-        let bytes = std::fs::read(&path).unwrap();
+        let Some(bytes) = try_load_fixture(fixture_rel) else {
+            println!("--- top {} Hangul runs in {}: SKIP missing fixture ---", k, label);
+            return;
+        };
         let joined = match extract_text_from_pdf(bytes) {
             Ok(s) => s,
             Err(_) => return,
@@ -1404,79 +1854,76 @@ mod tests {
     #[test]
     #[ignore = "analysis dump — run with --ignored --nocapture"]
     fn dump_all_pdf_fixtures() {
-        let fixtures: &[(&str, &str)] = &[
-            ("sample_eng", "example/assets/sample_data/sample_eng.pdf"),
-            ("sample_kor", "example/assets/sample_data/sample_kor.pdf"),
-            ("kor_ins_20120401", "example/assets/sample_data/20120401_10101_1.pdf"),
-            ("kor_ins_20200101", "example/assets/sample_data/20200101_10108_1.pdf"),
-            ("kor_drone_2021", "example/assets/sample_data/2021-국방드론.pdf"),
-            ("kor_misc_202302", "example/assets/sample_data/202302091039136320.pdf"),
-            ("kor_dod_china_2025", "example/assets/sample_data/2025 미국방부 년례 보고서 - 중국 군사력 보고서.pdf"),
-            ("kor_accel_2026", "example/assets/sample_data/2026년 글로벌 액셀러레이팅 지원사업 창업기업 모집 공고.pdf"),
-            ("arxiv_2005_11401", "example/assets/sample_data/2005.11401v4.pdf"),
-            ("arxiv_2205_14135", "example/assets/sample_data/2205.14135v2.pdf"),
-            ("arxiv_2509_01092", "example/assets/sample_data/2509.01092v2.pdf"),
-            ("arxiv_2603_18196", "example/assets/sample_data/2603.18196v1.pdf"),
-        ];
-
+        let diagnostics_dir = diagnostics_dir();
         let mut summaries: Vec<ExtractSummary> = Vec::new();
-        for (label, path) in fixtures {
-            summaries.push(summarize_one(label, path));
+        for fixture in TRACKED_PDF_SMOKE_FIXTURES
+            .iter()
+            .chain(LOCAL_PDF_DIAGNOSTIC_FIXTURES.iter())
+        {
+            summaries.push(summarize_one(fixture, &diagnostics_dir));
         }
 
-        println!("===== PDF EXTRACTION SUMMARY (12 fixtures) =====");
+        let (latest_summary, timestamped_summary) =
+            write_summary_files(&summaries, &diagnostics_dir).expect("write PDF summary files");
+
         println!(
-            "{:<20} {:>4} {:>5} {:>8} {:>7} {:>7} {:>5} {:>4} {:>5} {:>5} {:>6} {:>6} {:>6} {:>5} {:>5}",
+            "===== PDF EXTRACTION SUMMARY ({} fixtures: tracked smoke + local diagnostic) =====",
+            summaries.len()
+        );
+        println!(
+            "{:<8} {:<6} {:<20} {:>5} {:>5} {:>8} {:>5} {:>9} {:>6} {:>8} {:>7} {}",
+            "set",
+            "status",
             "label",
-            "p",
+            "pages",
             "ms",
             "chars",
-            "hangul",
-            "ascii",
-            "digit",
-            "nl",
             "para",
-            "wkind",
-            "wtot",
-            "orph",
+            "weird",
             "glue",
-            "lrun",
-            "mrun",
+            "longrun",
+            "maxrun",
+            "log",
         );
         for s in &summaries {
             if !s.ok {
                 println!(
-                    "{:<20}  ERR: {}",
+                    "{:<8} {:<6} {:<20} {:>5} {:>5} {:>8} {:>5} {:>9} {:>6} {:>8} {:>7} {}",
+                    s.set,
+                    s.status,
                     s.label,
-                    s.err.clone().unwrap_or_default()
+                    s.page_count,
+                    s.extract_ms,
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    s.err.as_deref().map(short_error).unwrap_or_default(),
                 );
                 continue;
             }
             println!(
-                "{:<20} {:>4} {:>5} {:>8} {:>7} {:>7} {:>5} {:>4} {:>5} {:>5} {:>6} {:>6} {:>6} {:>5} {:>5}",
+                "{:<8} {:<6} {:<20} {:>5} {:>5} {:>8} {:>5} {:>9} {:>6} {:>8} {:>7} {}",
+                s.set,
+                s.status,
                 s.label,
                 s.page_count,
                 s.extract_ms,
                 s.chars,
-                s.hangul,
-                s.ascii,
-                s.digit,
-                s.newlines,
                 s.paragraph_breaks,
-                s.weird_kinds,
-                s.weird_total,
-                s.orphan_hangul,
+                format!("{}/{}", s.weird_kinds, s.weird_total),
                 s.script_glue,
                 s.long_hangul_runs_ge12,
                 s.max_hangul_run,
+                s.log_path.as_deref().unwrap_or("-"),
             );
         }
-        println!("legend:");
-        println!("  p=pages  ms=extract_ms  nl=newlines  para=blank-line paragraph breaks");
-        println!("  wkind/wtot=weird-char distinct kinds / total occurrences");
-        println!("  orph=single Hangul flanked by spaces (CJK linebreak symptom)");
-        println!("  glue=Hangul<->ASCII alnum boundary count w/o space (heading-glue symptom)");
-        println!("  lrun=runs of >=12 consecutive Hangul (eaten space symptom)  mrun=max run len");
+        println!("summary: {}", latest_summary.display());
+        println!("snapshot: {}", timestamped_summary.display());
+        println!("legend: weird=distinct/total; longrun=runs of >=12 consecutive Hangul");
+        print_baseline_delta(&summaries);
     }
 
     #[test]
@@ -1492,9 +1939,10 @@ mod tests {
             ("arxiv_2603_18196", "example/assets/sample_data/2603.18196v1.pdf"),
         ];
         for (label, rel) in picks {
-            let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            let path = manifest.parent().unwrap().parent().unwrap().join(rel);
-            let bytes = std::fs::read(&path).unwrap();
+            let Some(bytes) = try_load_fixture(rel) else {
+                println!("\n=== arxiv dedup-match samples: {} SKIP missing fixture ===", label);
+                continue;
+            };
             let pages = pdf_extract::extract_text_from_mem_by_pages(&bytes).unwrap();
 
             println!("\n=== arxiv dedup-match samples: {} ===", label);
@@ -1539,9 +1987,10 @@ mod tests {
             ("sample_kor", "example/assets/sample_data/sample_kor.pdf"),
         ];
         for (label, rel) in picks {
-            let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            let path = manifest.parent().unwrap().parent().unwrap().join(rel);
-            let bytes = std::fs::read(&path).unwrap();
+            let Some(bytes) = try_load_fixture(rel) else {
+                println!("\n=== density per page: {} SKIP missing fixture ===", label);
+                continue;
+            };
             let pages = pdf_extract::extract_text_from_mem_by_pages(&bytes).unwrap();
 
             println!("\n=== density per page: {} (trigger >= {:.2}) ===", label, DEDUP_DENSITY_TRIGGER);
