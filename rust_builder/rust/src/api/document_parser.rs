@@ -614,6 +614,54 @@ mod tests {
         },
     ];
 
+    /// Per-fixture quality floors for the tracked PDF smoke gate.
+    ///
+    /// `MIN_EXTRACTED_NON_WHITESPACE` (16) is the floor the parser *itself*
+    /// already enforces before returning `Ok`, so asserting against it in a
+    /// test is tautological — it can never fail. These floors instead sit well
+    /// below the values actually observed on the committed fixtures (measured
+    /// via `extract_text_from_pdf`):
+    ///   sample_eng: 206,817 non-whitespace chars (246,969 total) /
+    ///               1,714 paragraph breaks;
+    ///   sample_kor: 6,270 non-whitespace chars (7,981 total) / 4,961 Hangul.
+    /// So a catastrophic regression — text collapsing to a fraction, lost
+    /// paragraph structure, lost CJK, or a key anchor phrase corrupted — fails
+    /// CI, while routine parser tuning stays comfortably inside the margin.
+    /// This gate is a *volume/structure/anchor* smoke floor; finer-grained CJK
+    /// spacing-quality metrics (orphan Hangul, script glue, long runs) are
+    /// tracked by the diagnostic dump (`dump_all_pdf_fixtures`), not gated here.
+    struct SmokeFloor {
+        label: &'static str,
+        /// Minimum non-whitespace `char` count the extraction must yield.
+        min_nonwhitespace: usize,
+        /// Minimum blank-line paragraph breaks (`\n\n`); 0 disables the check.
+        min_paragraph_breaks: usize,
+        /// Minimum Hangul syllables; 0 disables the check (non-CJK fixtures).
+        min_hangul: usize,
+        /// Substrings that must survive extraction.
+        must_contain: &'static [&'static str],
+    }
+
+    const TRACKED_PDF_SMOKE_FLOORS: &[SmokeFloor] = &[
+        SmokeFloor {
+            label: "sample_eng",
+            min_nonwhitespace: 100_000, // observed 206_817
+            min_paragraph_breaks: 400,  // observed 1_714
+            min_hangul: 0,
+            must_contain: &["Insurance Contracts"],
+        },
+        SmokeFloor {
+            label: "sample_kor",
+            min_nonwhitespace: 3_000, // observed 6_270
+            min_paragraph_breaks: 0,  // kor sample has too few blank-line breaks to gate on
+            min_hangul: 1_000,        // observed 4_961
+            // Contiguous-Hangul anchors from the doc (title + recurring body
+            // term): give the CJK fixture content teeth, not just volume — a
+            // regression that garbles Korean tokens trips these.
+            must_contain: &["맞춤형", "스마트폰"],
+        },
+    ];
+
     const LOCAL_PDF_DIAGNOSTIC_FIXTURES: &[PdfFixture] = &[
         PdfFixture {
             set: "local",
@@ -711,25 +759,66 @@ mod tests {
     #[test]
     fn test_tracked_pdf_smoke_fixtures_extract() {
         for fixture in TRACKED_PDF_SMOKE_FIXTURES {
+            // Fail closed: a tracked fixture with no quality floor would
+            // otherwise pass on extraction alone, re-introducing a toothless
+            // gate. Force every tracked fixture to declare its expectations.
+            let floor = TRACKED_PDF_SMOKE_FLOORS
+                .iter()
+                .find(|f| f.label == fixture.label)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "no TRACKED_PDF_SMOKE_FLOORS entry for tracked fixture '{}'; \
+                         add one so the smoke gate has teeth",
+                        fixture.label
+                    )
+                });
+
             let bytes = load_fixture(fixture.fixture_rel);
             let out = extract_text_from_pdf(bytes)
                 .unwrap_or_else(|err| panic!("{} extract failed: {}", fixture.label, err));
+
+            let nonwhitespace = out.chars().filter(|c| !c.is_whitespace()).count();
             assert!(
-                out.chars().filter(|c| !c.is_whitespace()).count()
-                    >= MIN_EXTRACTED_NON_WHITESPACE,
-                "{} extracted too little text",
-                fixture.label,
+                nonwhitespace >= floor.min_nonwhitespace,
+                "{}: extracted {} non-whitespace chars, expected >= {} (extraction-quality regression?)",
+                fixture.label, nonwhitespace, floor.min_nonwhitespace,
             );
 
-            if fixture.label == "sample_eng" {
-                assert!(out.contains("Insurance Contracts"));
-                assert!(out.contains("\n\n"));
+            let paragraph_breaks = out.matches("\n\n").count();
+            assert!(
+                paragraph_breaks >= floor.min_paragraph_breaks,
+                "{}: {} paragraph breaks, expected >= {} (lost paragraph structure?)",
+                fixture.label, paragraph_breaks, floor.min_paragraph_breaks,
+            );
+
+            if floor.min_hangul > 0 {
+                let (_, _, hangul, _, _) = classify_chars(&out);
+                assert!(
+                    hangul >= floor.min_hangul,
+                    "{}: {} Hangul syllables, expected >= {} (CJK extraction regression?)",
+                    fixture.label, hangul, floor.min_hangul,
+                );
             }
 
-            if fixture.label == "sample_kor" {
-                let (_, _, hangul, _, _) = classify_chars(&out);
-                assert!(hangul > 100, "sample_kor Hangul count too low: {}", hangul);
+            for needle in floor.must_contain {
+                assert!(
+                    out.contains(needle),
+                    "{}: extracted text missing required substring {:?}",
+                    fixture.label, needle,
+                );
             }
+        }
+
+        // Fail closed in the other direction too: an orphaned floor (e.g. one
+        // left behind after a fixture rename) must not silently go dead.
+        for floor in TRACKED_PDF_SMOKE_FLOORS {
+            assert!(
+                TRACKED_PDF_SMOKE_FIXTURES
+                    .iter()
+                    .any(|fixture| fixture.label == floor.label),
+                "orphaned TRACKED_PDF_SMOKE_FLOORS entry '{}' has no matching tracked fixture",
+                floor.label,
+            );
         }
     }
 

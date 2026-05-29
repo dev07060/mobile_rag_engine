@@ -18,7 +18,20 @@ case "$TARGET" in
   native)
     echo "[ci] Running native-dependent tests from test/native"
     echo "[ci] Running Rust tracked PDF parser smoke"
-    cargo test --manifest-path rust_builder/rust/Cargo.toml test_tracked_pdf_smoke_fixtures_extract --lib
+    # Fail closed: `cargo test <filter>` exits 0 even when the filter matches
+    # ZERO tests, so a rename/cfg-exclusion would silently drop the only Rust
+    # test in CI while staying green. Capture the run and require a passing
+    # "test result: ok. N passed" line with N >= 1.
+    if ! smoke_out="$(cargo test --manifest-path rust_builder/rust/Cargo.toml --lib test_tracked_pdf_smoke_fixtures_extract 2>&1)"; then
+      echo "$smoke_out"
+      echo "[ci] ERROR: tracked PDF smoke test failed" >&2
+      exit 1
+    fi
+    echo "$smoke_out"
+    if ! grep -Eq 'test result: ok\. [1-9][0-9]* passed' <<<"$smoke_out"; then
+      echo "[ci] ERROR: tracked PDF smoke matched 0 tests (renamed/excluded?); failing closed" >&2
+      exit 1
+    fi
     cargo build --manifest-path rust_builder/rust/Cargo.toml --release
     flutter test test/native
     ;;
