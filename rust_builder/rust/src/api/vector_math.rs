@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT
 //
 // Shared vector math kernels for retrieval paths.
-// Keeping this module allocation-free helps mobile hot paths.
+//
+// The fallback backend is allocation-free. The shipped `vector_faer` backend
+// trades a small per-call result allocation for SIMD gemm kernels that measure
+// 2-8x faster on the retrieval hot path (see docs/perf/vector-math-refactor).
 
 /// Decode a SQLite `BLOB` column previously written as a native-endian
 /// f32 byte stream back into a `Vec<f32>`. Returns `None` when the

@@ -32,7 +32,25 @@ case "$TARGET" in
       echo "[ci] ERROR: tracked PDF smoke matched 0 tests (renamed/excluded?); failing closed" >&2
       exit 1
     fi
-    cargo build --manifest-path rust_builder/rust/Cargo.toml --release
+    echo "[ci] Running vector_math kernels under the SHIPPED faer backend"
+    # The release app builds with `--features vector_faer,vector_quant_i8` via
+    # cargokit, but plain `cargo build`/`cargo test` use default features, so the
+    # shipped faer kernels are otherwise never exercised in CI. Run the faer-backed
+    # vector_math tests (including the faer<->fused parity net) and fail closed,
+    # same as the PDF smoke above: `cargo test <filter>` exits 0 on zero matches.
+    if ! faer_out="$(cargo test --manifest-path rust_builder/rust/Cargo.toml --lib --features vector_faer vector_math -- --test-threads=1 2>&1)"; then
+      echo "$faer_out"
+      echo "[ci] ERROR: faer-backend vector_math tests failed" >&2
+      exit 1
+    fi
+    echo "$faer_out"
+    if ! grep -Eq 'test result: ok\. [1-9][0-9]* passed' <<<"$faer_out"; then
+      echo "[ci] ERROR: faer vector_math matched 0 tests (renamed/cfg-excluded?); failing closed" >&2
+      exit 1
+    fi
+    # Compile-check the actual shipped feature combo (faer + i8 quant). A
+    # default-feature release build would never cover the backend that ships.
+    cargo build --manifest-path rust_builder/rust/Cargo.toml --release --features vector_faer,vector_quant_i8
     flutter test test/native
     ;;
   integration)
