@@ -167,3 +167,75 @@ mod backend {
         }
     }
 }
+
+// Parity safety net for PR2 (faer removal). Only compiled with the faer backend.
+// Asserts the shipped faer-backed kernels agree with an independent fused
+// reference within a generous epsilon across representative dims, so swapping
+// the backend out in PR2 is provably behaviour-preserving. CI never enables
+// `vector_faer`, so this runs locally via `cargo test --features vector_faer`.
+#[cfg(all(test, feature = "vector_faer"))]
+mod faer_parity_tests {
+    use super::*;
+
+    // Independent reference: the fused single-pass algorithm (identical to the
+    // non-faer backend), inlined here so both implementations are in scope.
+    fn fused_dot(a: &[f32], b: &[f32]) -> f32 {
+        a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
+    }
+    fn fused_cosine(query: &[f32], query_norm: f32, target: &[f32]) -> f32 {
+        if query.len() != target.len() || query.is_empty() || query_norm == 0.0 {
+            return 0.0;
+        }
+        let mut dot = 0.0f32;
+        let mut tsq = 0.0f32;
+        for (q, t) in query.iter().zip(target.iter()) {
+            dot += q * t;
+            tsq += t * t;
+        }
+        let tn = tsq.sqrt();
+        if tn == 0.0 {
+            0.0
+        } else {
+            dot / (query_norm * tn)
+        }
+    }
+
+    // Deterministic pseudo-random vector (no rand dep; reproducible run-to-run).
+    fn pseudo_vec(dim: usize, seed: u32) -> Vec<f32> {
+        (0..dim)
+            .map(|i| {
+                let x = (i as u32)
+                    .wrapping_mul(2_654_435_761)
+                    .wrapping_add(seed.wrapping_mul(40_503));
+                ((x % 1000) as f32 / 1000.0) - 0.5
+            })
+            .collect()
+    }
+
+    #[test]
+    fn faer_matches_fused_within_eps() {
+        // f32 worst-case accumulation error at dim 1536 is ~n*eps ~ 2e-4, so a
+        // 1e-3 bound catches algorithmic divergence while tolerating the
+        // reassociation difference between faer's matmul and the fused loop.
+        const EPS: f32 = 1e-3;
+        for &dim in &[1usize, 2, 3, 16, 384, 768, 1024, 1536] {
+            let q = pseudo_vec(dim, 1);
+            let t = pseudo_vec(dim, 2);
+            let qn = l2_norm_f32(&q);
+
+            let dot_faer = dot_f32(&q, &t);
+            let dot_ref = fused_dot(&q, &t);
+            assert!(
+                (dot_faer - dot_ref).abs() <= EPS * (1.0 + dot_ref.abs()),
+                "dot dim={dim}: faer={dot_faer} fused={dot_ref}"
+            );
+
+            let cos_faer = cosine_with_query_norm_f32(&q, qn, &t);
+            let cos_ref = fused_cosine(&q, qn, &t);
+            assert!(
+                (cos_faer - cos_ref).abs() <= EPS,
+                "cosine dim={dim}: faer={cos_faer} fused={cos_ref}"
+            );
+        }
+    }
+}

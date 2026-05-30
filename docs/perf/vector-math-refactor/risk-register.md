@@ -7,7 +7,8 @@
 |----|--------|---------|-------------------|------|------|------|
 | R1 | faer 제거로 **배치 gemv 미래 경로**를 닫음 | PR2 | 대규모 exact scan 성능 요구가 로드맵에 등장 | 측정 후 그때 재도입(또는 PR2에서 dep만 optional 유지) | faer feature/dep 복구 커밋 | ⬜ 열림 |
 | R2 | release 수치 ~1e-6 변동으로 **결과 순서** 변동 | PR2 | 회귀 테스트에서 top_k 순서 차이 | 코드근거상 컷오프 의존 0 (분석 §3). PR1 패리티(ε)로 등가 증명 | PR2 revert | ⬜ 열림(실효≈0) |
-| R3 | 고차원·대량 linear scan에서 **스칼라 throughput-bound** | PR2 후 | 벤치에서 1024+ 차원 회귀 | PR4 다중 누산기 언롤 | PR4 미적용 시 기존 fused 유지 | ⬜ 열림 |
+| R3 | 고차원·대량 linear scan에서 **스칼라 throughput-bound** | PR2 후 | 벤치에서 1024+ 차원 회귀 | PR4 다중 누산기 언롤 | PR4 미적용 시 기존 fused 유지 | 🟥 PR1 확정(fused가 faer 대비 2–8× 느림) |
+| **R9** | **PR2 전제 반증**: faer 제거가 핫 패스를 회귀시킴(faer가 2–8× 빠름) | PR1 | PR1 벤치 (exact_scan 2.8×, dot 최대 7.8×) | PR2를 “faer 유지 + N2/N1”로 피벗 | — (PR2 미진행) | 🟥 발생함 — 계획 변경 필요 |
 | R4 | PR4 **언롤 새 버그**(remainder/lane 합산 off-by-one) | PR4 | 패리티 테스트 ε 초과 / 단위 테스트 실패 | 스칼라 대비 property/ε 테스트 필수 | PR4 revert(커널은 PR2 상태로) | ⬜ 열림 |
 | R5 | **스택 PR 고아화** (PR4/PR5 base=PR2) | PR2 머지 | PR4/PR5 diff에 PR2 변경분이 섞여 보임 | PR2 머지 직후 base→main retarget | 재타깃 PR | ⬜ 열림 |
 | R6 | PR3 핫 루프 수정으로 **동작 변경** | PR3 | 검색 결과 diff | 결과 동일성 테스트 + N3로 적용 여부 게이트 | PR3 revert | ⬜ 열림 |

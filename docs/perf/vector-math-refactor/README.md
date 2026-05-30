@@ -11,7 +11,11 @@
 - **출시(release) 빌드는 `vector_faer` 백엔드**, 디버그/`cargo test`는 fallback — [cargokit.yaml:5](../../../rust_builder/rust/cargokit.yaml).
 - faer는 이 파일의 1-D 닷곱에서만 쓰이며(다른 사용처 0건), `*` 연산이 **호출당 힙 할당** + 2-pass +
   gemm 디스패치를 유발 → 현재 호출 형태에선 fused 스칼라 루프보다 느릴 가능성이 큼.
-- 가장 큰 실효 조치: **faer 제거 → fused 커널 통일** (Claim 2·3 + 누락 N1·N2 동시 해소).
+- ~~가장 큰 실효 조치: faer 제거 → fused 커널 통일~~ → **⚠️ PR1 실측으로 반증됨 (아래)**.
+
+> **⚠️ 2026-05-30 PR1 업데이트:** 벤치 결과 **faer가 fused보다 2–8× 빠름**(exact_scan 2.8×). f32 리덕션이
+> 자동 벡터화되지 않아 fused가 스칼라로 도는 반면 faer는 SIMD gemm 사용. **PR2 “faer 제거” 전제는 반증** →
+> faer 유지 + N2(CI 커버리지)[+선택 N1 무할당화]로 피벗 검토 중. 상세 [PR1.md](PR1.md).
 
 ## PR 분할 / 상태
 
@@ -19,9 +23,9 @@
 
 | PR | 제목 | 해소 | 리스크 | 의존 | Linear | 상태 |
 |----|------|------|--------|------|--------|------|
-| PR0 | 작업 저널 스캐폴드 | 보존 체계 | 없음(문서) | — | [LOC-58](https://linear.app/loceract/issue/LOC-58) | 🟦 진행 |
-| PR1 | 벤치 하니스 + faer/fused 패리티 안전망 | 측정근거, N2 선제 | 없음 | — | [LOC-59](https://linear.app/loceract/issue/LOC-59) | ⬜ TODO |
-| PR2 | faer 제거 → fused 커널 통일 | Claim2·3, N1, N2 | 낮음(가역) | PR1 | [LOC-60](https://linear.app/loceract/issue/LOC-60) | ⬜ TODO |
+| PR0 | 작업 저널 스캐폴드 | 보존 체계 | 없음(문서) | — | [LOC-58](https://linear.app/loceract/issue/LOC-58) | 🟩 머지(#63) |
+| PR1 | 벤치 하니스 + faer/fused 패리티 안전망 | 측정근거, N2 선제 | 없음 | — | [LOC-59](https://linear.app/loceract/issue/LOC-59) | 🟦 진행([PR1.md](PR1.md)) |
+| PR2 | ~~faer 제거~~ → **피벗 검토** | N2(+N1) | — | PR1 | [LOC-60](https://linear.app/loceract/issue/LOC-60) | ⏸ 보류(전제 반증) |
 | PR3 | decode 버퍼 재사용 | Claim1 | 낮음~중 | 벤치/N3 게이트 | [LOC-61](https://linear.app/loceract/issue/LOC-61) | ⬜ TODO |
 | PR4 | 다중 누산기 언롤(선택) | Claim3 "진짜 NEON" | 중 | PR2 기반, 벤치 게이트 | [LOC-62](https://linear.app/loceract/issue/LOC-62) | ⬜ TODO |
 | PR5 | 위생: 엔디안 정규화 + 손상 로깅 | N5, N6 | 낮음(독립) | — | [LOC-63](https://linear.app/loceract/issue/LOC-63) | ⬜ TODO |
