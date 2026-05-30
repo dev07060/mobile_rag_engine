@@ -31,6 +31,33 @@ pub fn decode_f32_embedding(blob: &[u8]) -> Option<Vec<f32>> {
     vector_math::decode_f32_embedding(blob)
 }
 
+#[cfg(feature = "vector_quant_i8")]
+use crate::api::vector_quant;
+
+#[cfg(feature = "vector_quant_i8")]
+#[inline]
+pub fn quantize_f32_to_i8(input: &[f32]) -> (Vec<i8>, f32) {
+    vector_quant::quantize_f32_to_i8(input)
+}
+
+#[cfg(feature = "vector_quant_i8")]
+#[inline]
+pub fn l2_norm_i8(v: &[i8]) -> f32 {
+    vector_quant::l2_norm_i8(v)
+}
+
+#[cfg(feature = "vector_quant_i8")]
+#[inline]
+pub fn i8_blob_from_slice(input: &[i8]) -> Vec<u8> {
+    vector_quant::i8_blob_from_slice(input)
+}
+
+#[cfg(feature = "vector_quant_i8")]
+#[inline]
+pub fn cosine_with_query_norm_i8_blob(query: &[i8], query_norm: f32, target_blob: &[u8]) -> f32 {
+    vector_quant::cosine_with_query_norm_i8_blob(query, query_norm, target_blob)
+}
+
 /// Which backend this build compiled (for labelling bench output).
 pub const BACKEND: &str = if cfg!(feature = "vector_faer") {
     "faer"
