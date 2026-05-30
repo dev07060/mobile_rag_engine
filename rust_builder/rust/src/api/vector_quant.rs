@@ -195,4 +195,60 @@ mod tests {
             assert_eq!(direct_blob, two_step_blob);
         }
     }
+
+    // --- PR6 shared test helpers (deterministic, no rand dep) ---
+
+    // Same generator as benches/vector_math.rs: reproducible run-to-run.
+    fn pseudo_vec(dim: usize, seed: u32) -> Vec<f32> {
+        (0..dim)
+            .map(|i| {
+                let x = (i as u32)
+                    .wrapping_mul(2_654_435_761)
+                    .wrapping_add(seed.wrapping_mul(40_503));
+                ((x % 1000) as f32 / 1000.0) - 0.5
+            })
+            .collect()
+    }
+
+    // Independent f64 reference cosine of two i8 vectors. Different accumulation
+    // width (i64) and float precision (f64) than the i32->f32 kernel, so a match
+    // proves the kernel math, not just that it agrees with itself.
+    fn ref_cosine_i8_f64(q: &[i8], t: &[i8]) -> f64 {
+        if q.len() != t.len() || q.is_empty() {
+            return 0.0;
+        }
+        let mut dot: i64 = 0;
+        let mut qsq: i64 = 0;
+        let mut tsq: i64 = 0;
+        for (&a, &b) in q.iter().zip(t.iter()) {
+            dot += (a as i64) * (b as i64);
+            qsq += (a as i64) * (a as i64);
+            tsq += (b as i64) * (b as i64);
+        }
+        if qsq == 0 || tsq == 0 {
+            return 0.0;
+        }
+        (dot as f64) / ((qsq as f64).sqrt() * (tsq as f64).sqrt())
+    }
+
+    #[test]
+    fn i8_blob_cosine_matches_independent_reference() {
+        // Integer dot/sq are exact; only the final f32 sqrt+div can drift.
+        const EPS: f64 = 1e-4;
+        for &dim in &[1usize, 2, 3, 16, 384, 768, 1024, 1536] {
+            let q = pseudo_vec(dim, 7);
+            let t = pseudo_vec(dim, 9);
+            let (qi, _) = quantize_f32_to_i8(&q);
+            let (ti, _) = quantize_f32_to_i8(&t);
+            let blob = i8_blob_from_slice(&ti);
+            let qn = l2_norm_i8(&qi);
+
+            let kernel = cosine_with_query_norm_i8_blob(&qi, qn, &blob) as f64;
+            let reference = ref_cosine_i8_f64(&qi, &ti);
+            assert!(
+                (kernel - reference).abs() < EPS,
+                "i8 cosine dim={dim}: kernel={kernel} ref={reference}"
+            );
+        }
+    }
 }
