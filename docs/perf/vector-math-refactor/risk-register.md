@@ -13,7 +13,8 @@
 | R4 | PR4 **언롤 새 버그**(remainder/lane 합산 off-by-one) | PR4 | 패리티 테스트 ε 초과 / 단위 테스트 실패 | 스칼라 대비 property/ε 테스트 필수 | PR4 revert(커널은 PR2 상태로) | ⬜ 열림 |
 | R5 | **스택 PR 고아화** (PR4/PR5 base=PR2) | PR2 머지 | PR4/PR5 diff에 PR2 변경분이 섞여 보임 | PR2 머지 직후 base→main retarget | 재타깃 PR | ⬜ 열림 |
 | R6 | PR3 핫 루프 수정으로 **동작 변경** | PR3 | 검색 결과 diff | 결과 동일성 테스트 + N3로 적용 여부 게이트 | PR3 revert | ⬜ 열림 |
-| R7 | N5 엔디안 변경이 **기존 DB 호환성** 깨짐 | PR5 | 기존 인덱스 로드 실패 | LE 기기선 ne==le 바이트 동일 → 무마이그레이션 확인 후만 적용 | 변경 revert | ⬜ 열림 |
+| R7 | N5 엔디안 변경이 **기존 DB 호환성** 깨짐 | PR5 | 기존 인덱스 로드 실패 | LE 기기선 ne==le 바이트 동일 → 무마이그레이션 확인 후만 적용 | 변경 revert | 🟩 닫힘 — PR5는 포맷 미변경(문서화만), 호환 리스크 없음 |
+| N6 | 손상 임베딩 블롭이 **무음 드롭** | 상시 | 손상 DB에서 인덱스 누락이 로그 없이 발생 | PR5: `decode_f32_embedding_or_warn`로 `log::warn!` 가시화(동작 보존) | 헬퍼 revert | 🟩 닫힘(PR5) |
 | R8 | CI 병렬 실행으로 **공유 SQLite 테스트 플레이크** | 전체 | cargo test 간헐 실패 | `-- --test-threads=1` 고정 | — | ⬜ 열림 |
 
 상태 범례: ⬜ 열림 · 🟨 관찰중 · 🟩 닫힘(해소) · 🟥 발생함

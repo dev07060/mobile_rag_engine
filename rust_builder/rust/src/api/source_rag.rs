@@ -32,7 +32,9 @@ use crate::api::query_metrics::{
     record_hydrated_content_read, QueryContentReadGuard, QueryContentReadPhase,
 };
 use crate::api::tokenizer::count_plain_text_tokens_untruncated;
-use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
+use crate::api::vector_math::{
+    cosine_with_query_norm_f32, decode_f32_embedding, decode_f32_embedding_or_warn, l2_norm_f32,
+};
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{
     cosine_with_query_norm_i8_blob, dequantize_i8_to_f32, i8_vec_from_blob, l2_norm_i8,
@@ -888,18 +890,18 @@ pub fn rebuild_chunk_hnsw_index_for_collection(collection_id: String) -> Result<
                 let quantized = i8_vec_from_blob(qblob);
                 let restored = dequantize_i8_to_f32(&quantized, scale);
                 if restored.is_empty() {
-                    decode_f32_embedding(&embedding_blob).unwrap_or_default()
+                    decode_f32_embedding_or_warn(&embedding_blob, id)
                 } else {
                     restored
                 }
             } else {
-                decode_f32_embedding(&embedding_blob).unwrap_or_default()
+                decode_f32_embedding_or_warn(&embedding_blob, id)
             };
 
             #[cfg(not(feature = "vector_quant_i8"))]
             let embedding = {
                 let _ = (embedding_i8_blob, embedding_scale);
-                decode_f32_embedding(&embedding_blob).unwrap_or_default()
+                decode_f32_embedding_or_warn(&embedding_blob, id)
             };
             Ok((id, embedding))
         })
