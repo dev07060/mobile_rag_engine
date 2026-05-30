@@ -106,12 +106,68 @@ fn bench_scan(c: &mut Criterion) {
     g.finish();
 }
 
+#[cfg(feature = "vector_quant_i8")]
+fn bench_cosine_i8(c: &mut Criterion) {
+    let mut g = c.benchmark_group("cosine_i8");
+    for &dim in &DIMS {
+        let (qi, _) = bench_api::quantize_f32_to_i8(&pseudo_vec(dim, 1));
+        let (ti, _) = bench_api::quantize_f32_to_i8(&pseudo_vec(dim, 2));
+        let qn = bench_api::l2_norm_i8(&qi);
+        let tblob = bench_api::i8_blob_from_slice(&ti);
+        g.throughput(Throughput::Elements(dim as u64));
+        g.bench_with_input(BenchmarkId::from_parameter(dim), &dim, |b, _| {
+            b.iter(|| {
+                bench_api::cosine_with_query_norm_i8_blob(
+                    black_box(&qi),
+                    black_box(qn),
+                    black_box(&tblob),
+                )
+            })
+        });
+    }
+    g.finish();
+}
+#[cfg(not(feature = "vector_quant_i8"))]
+fn bench_cosine_i8(_c: &mut Criterion) {}
+
+// Shipped exact-scan inner loop: one query vs N candidate i8 blobs, scored with
+// zero f32 decode / zero per-row alloc — the actual release hot path.
+#[cfg(feature = "vector_quant_i8")]
+fn bench_scan_i8(c: &mut Criterion) {
+    let (qi, _) = bench_api::quantize_f32_to_i8(&pseudo_vec(SCAN_DIM, 1));
+    let qn = bench_api::l2_norm_i8(&qi);
+    let blobs: Vec<Vec<u8>> = (0..SCAN_N)
+        .map(|i| {
+            let (vi, _) = bench_api::quantize_f32_to_i8(&pseudo_vec(SCAN_DIM, 100 + i as u32));
+            bench_api::i8_blob_from_slice(&vi)
+        })
+        .collect();
+
+    let mut g = c.benchmark_group("exact_scan_i8");
+    g.throughput(Throughput::Elements(SCAN_N as u64));
+    g.bench_function(BenchmarkId::new("i8_blob_cosine", SCAN_N), |b| {
+        b.iter(|| {
+            let mut best = f32::MIN;
+            for blob in &blobs {
+                let s = bench_api::cosine_with_query_norm_i8_blob(black_box(&qi), qn, black_box(blob));
+                if s > best {
+                    best = s;
+                }
+            }
+            black_box(best)
+        })
+    });
+    g.finish();
+}
+#[cfg(not(feature = "vector_quant_i8"))]
+fn bench_scan_i8(_c: &mut Criterion) {}
+
 criterion_group! {
     name = benches;
     config = Criterion::default()
         .sample_size(30)
         .warm_up_time(Duration::from_millis(500))
         .measurement_time(Duration::from_secs(2));
-    targets = bench_cosine, bench_dot, bench_decode, bench_scan
+    targets = bench_cosine, bench_dot, bench_decode, bench_scan, bench_cosine_i8, bench_scan_i8
 }
 criterion_main!(benches);
