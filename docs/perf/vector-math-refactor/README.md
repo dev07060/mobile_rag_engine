@@ -26,9 +26,11 @@
 | PR0 | 작업 저널 스캐폴드 | 보존 체계 | 없음(문서) | — | [LOC-58](https://linear.app/loceract/issue/LOC-58) | 🟩 머지(#63) |
 | PR1 | 벤치 하니스 + faer/fused 패리티 안전망 | 측정근거, N2 선제 | 없음 | — | [LOC-59](https://linear.app/loceract/issue/LOC-59) | 🟦 진행([PR1.md](PR1.md)) |
 | PR2 | 출시 faer 백엔드 **CI 커버리지** (N2) [faer 유지] | N2 | 낮음 | PR1 ✅ | [LOC-60](https://linear.app/loceract/issue/LOC-60) | 🟦 진행([PR2.md](PR2.md)) |
-| PR3 | decode 버퍼 재사용 | Claim1 | 낮음~중 | 벤치/N3 게이트 | [LOC-61](https://linear.app/loceract/issue/LOC-61) | ⬜ TODO |
-| PR4 | 다중 누산기 언롤(선택) | Claim3 "진짜 NEON" | 중 | PR2 기반, 벤치 게이트 | [LOC-62](https://linear.app/loceract/issue/LOC-62) | ⬜ TODO |
-| PR5 | 위생: 엔디안 정규화 + 손상 로깅 | N5, N6 | 낮음(독립) | — | [LOC-63](https://linear.app/loceract/issue/LOC-63) | ⬜ TODO |
+| PR3 | decode 버퍼 재사용 | Claim1 | 낮음~중 | 벤치/N3 게이트 | [LOC-61](https://linear.app/loceract/issue/LOC-61) | ⏸ 보류(저가치, 다음 세션) |
+| PR4 | ~~다중 누산기 언롤~~ | — | — | — | [LOC-62](https://linear.app/loceract/issue/LOC-62) | ❌ 폐기(faer 유지로 무의미) |
+| PR5 | 위생: 손상 로깅(N6) + 엔디안 문서화(N5) | N6, N5 | 낮음(독립) | — | [LOC-63](https://linear.app/loceract/issue/LOC-63) | 🟦 진행([PR5.md](PR5.md)) |
+
+종료 회고: [RETRO.md](RETRO.md) · 다음 세션 이어가기: [LOC-61](https://linear.app/loceract/issue/LOC-61)(PR3 재평가) + 프로젝트 핸드오프 노트.
 
 상태 범례: ⬜ TODO · 🟦 진행 · 🟩 머지 · ⏸ 보류 · ❌ 폐기 · PR별 상세는 `PRn.md`
 

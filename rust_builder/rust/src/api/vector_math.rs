@@ -11,6 +11,14 @@
 /// f32 byte stream back into a `Vec<f32>`. Returns `None` when the
 /// stored length is not a multiple of 4, which would indicate a corrupt
 /// or unexpected payload.
+///
+/// Endianness: embeddings are stored/read in **native** byte order (the
+/// encode sites use `f32::to_ne_bytes`). All supported targets (iOS/Android
+/// arm64, desktop x86_64) are little-endian, so the on-disk format is
+/// effectively little-endian; moving a DB across a big-endian boundary is
+/// unsupported. `chunks_exact(4) + from_ne_bytes` is also the alignment-safe
+/// decode — SQLite blob buffers are not guaranteed 4-byte aligned, so a
+/// zero-copy `&[u8] -> &[f32]` cast would be unsound.
 #[inline]
 pub(crate) fn decode_f32_embedding(blob: &[u8]) -> Option<Vec<f32>> {
     if blob.len() % 4 != 0 {
@@ -21,6 +29,26 @@ pub(crate) fn decode_f32_embedding(blob: &[u8]) -> Option<Vec<f32>> {
             .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
             .collect(),
     )
+}
+
+/// Decode like [`decode_f32_embedding`], but log a warning when the blob is
+/// corrupt (length not a multiple of 4) instead of silently yielding nothing.
+/// Returns an empty `Vec` on failure so existing "drop empty embeddings"
+/// filters at call sites keep their behaviour — the only change is that the
+/// corruption becomes visible in logs (keyed by `row_id`).
+#[inline]
+pub(crate) fn decode_f32_embedding_or_warn(blob: &[u8], row_id: i64) -> Vec<f32> {
+    match decode_f32_embedding(blob) {
+        Some(v) => v,
+        None => {
+            log::warn!(
+                "decode_f32_embedding: corrupt embedding blob (len={} not a multiple of 4) for row id={}; skipping",
+                blob.len(),
+                row_id
+            );
+            Vec::new()
+        }
+    }
 }
 
 #[inline]

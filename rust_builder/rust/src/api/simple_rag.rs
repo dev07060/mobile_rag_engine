@@ -23,7 +23,8 @@ use crate::api::hnsw_index::{
 };
 use crate::api::incremental_index::{clear_buffer, incremental_add};
 use crate::api::vector_math::{
-    cosine_f32, cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32,
+    cosine_f32, cosine_with_query_norm_f32, decode_f32_embedding, decode_f32_embedding_or_warn,
+    l2_norm_f32,
 };
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{
@@ -185,18 +186,18 @@ fn rebuild_hnsw_index_internal(conn: &Connection) -> anyhow::Result<()> {
                 let quantized = i8_vec_from_blob(qblob);
                 let restored = dequantize_i8_to_f32(&quantized, scale);
                 if restored.is_empty() {
-                    decode_f32_embedding(&embedding_blob).unwrap_or_default()
+                    decode_f32_embedding_or_warn(&embedding_blob, id)
                 } else {
                     restored
                 }
             } else {
-                decode_f32_embedding(&embedding_blob).unwrap_or_default()
+                decode_f32_embedding_or_warn(&embedding_blob, id)
             };
 
             #[cfg(not(feature = "vector_quant_i8"))]
             let embedding = {
                 let _ = (embedding_i8_blob, embedding_scale);
-                decode_f32_embedding(&embedding_blob).unwrap_or_default()
+                decode_f32_embedding_or_warn(&embedding_blob, id)
             };
 
             Ok((id, embedding))
