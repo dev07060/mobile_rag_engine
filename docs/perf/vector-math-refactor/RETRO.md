@@ -7,8 +7,8 @@
 - **PR0** ([#63](https://github.com/dev07060/mobile_rag_engine/pull/63), 🟩): 작업 저널 스캐폴드 — PR 단위 결과/피드백 보존 체계.
 - **PR1** ([#64](https://github.com/dev07060/mobile_rag_engine/pull/64), 🟩): criterion 벤치 + faer/fused 패리티 안전망. **핵심 발견의 출처.**
 - **PR2** ([#65](https://github.com/dev07060/mobile_rag_engine/pull/65), 🟩): 출시 faer+quant 백엔드를 CI에서 빌드+테스트(N2 닫음). *원안 "faer 제거"에서 피벗.*
-- **PR5** ([LOC-63](https://linear.app/loceract/issue/LOC-63), 🟦 머지 대기): 손상 블롭 `log::warn`(N6) + 엔디안 문서화(N5).
-- **PR3** ⏸ 보류(저가치), **PR4** ❌ 폐기(faer 유지로 무의미).
+- **PR5** ([#66](https://github.com/dev07060/mobile_rag_engine/pull/66), 🟩): 손상 블롭 `log::warn`(N6) + 엔디안 문서화(N5).
+- **PR3** ❌ 폐기(출시 i8 빌드서 f32 decode 비핫 — §5), **PR4** ❌ 폐기(faer 유지로 무의미).
 
 ## 2. 측정 결과 (가설 대조)
 - **착수 가설(틀림):** "faer가 1-D 닷에서 fused보다 느리니 제거하고 fused로 통일하면 빨라진다."
@@ -35,7 +35,8 @@
 - 정적 분석은 "무엇이 비싼가"는 잘 잡지만 "무엇이 지배적인가"는 못 잡는다 → 둘을 분리해서 말할 것.
 
 ## 5. 후속 작업 (다음 세션)
-- **[LOC-61] PR3 재평가** (decode 버퍼 재사용): N1 무의미 + N3(i8 우선)로 저가치. 벤치로 f32 decode가 실제 핫임이 입증될 때만. 기본은 폐기 권장.
+- **[LOC-61] PR3 — ❌ 폐기 확정** (2026-05-30, 코드 검증). 출시 빌드(`vector_faer,vector_quant_i8`)에서 per-candidate 스캔의 1차 경로는 `cosine_with_query_norm_i8_blob`(무디코드·무할당, [hybrid_search.rs:281](../../../rust_builder/rust/src/api/hybrid_search.rs)); `decode_f32_embedding`는 i8 blob 누락 시 폴백일 뿐이고, 순수 f32 스캔 루프는 `#[cfg(not(feature="vector_quant_i8"))]`라 릴리스에 컴파일조차 안 됨 → **f32 decode는 출시 핫패스 아님**. Gate2: PR1에서 alloc은 throughput 비지배(faer가 row당 alloc을 더 안고도 2.8× 우세). 두 게이트 모두 실패 → 폐기. 적대적 검증 3개 렌즈 전부 결론 유지.
+  - ⚠️ **dequant ≠ decode 뉘앙스**: 유일하게 출시 빌드에서 row당 `Vec<f32>`를 만드는 곳은 HNSW 빌드 루프지만, i8 빌드의 1차 arm은 `dequantize_i8_to_f32`([vector_quant.rs:34](../../../rust_builder/rust/src/api/vector_quant.rs))로 **이것도 row당 할당**이며 비용은 `Hnsw::insert`가 지배. PR3의 decode 버퍼 재사용은 이 경로에 적용 대상조차 아님. 향후 HNSW-빌드 할당을 미세최적화한다면 타깃은 *dequant* 경로지 decode가 아님.
 - **온디바이스 벤치**: 실제 폰(arm64)에서 faer 우위 크기 확인(선택).
 - **공유 encode 헬퍼**: 5개 인코딩 사이트(`to_ne_bytes`) dedup + 원하면 LE 정규화(저가치).
 - **(선택) N1 무할당 faer**: `faer::linalg::matmul`로 결과 할당 제거 — throughput 무의미하므로 마이크로옵트로만.

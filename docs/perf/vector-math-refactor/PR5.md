@@ -2,7 +2,8 @@
 
 - 브랜치: `feat/loc-63-hygiene`
 - Linear: [LOC-63](https://linear.app/loceract/issue/LOC-63)
-- 상태: 🟦 진행 (PR 열림, CI green 대기)
+- PR: [#66](https://github.com/dev07060/mobile_rag_engine/pull/66)
+- 상태: 🟩 머지 (CI 6/6 green → main `271f5a7`)
 
 ## 스코프 (백엔드 무관, 독립)
 ### N6 — 손상 블롭 로깅 (실제 코드 변경)
@@ -24,7 +25,7 @@ asymmetric 누락 위험만 있어 **전면 정규화는 하지 않음**. 대신
 - 손상 임베딩: 무음 드롭 → **`log::warn!` 가시화** (동작 동일).
 - 로컬 검증: fallback `cargo test --lib vector_math` 3 green; faer `--features vector_faer` 4 green(패리티 포함);
   `cargo check --features vector_faer,vector_quant_i8` 통과(quant 분기의 헬퍼 호출 포함).
-- CI: (PR #__ green 후 갱신)
+- CI: PR [#66](https://github.com/dev07060/mobile_rag_engine/pull/66) 6/6 green → main 머지(`271f5a7`).
 
 ## 받은 피드백 (리뷰)
 - (PR 리뷰 후 갱신)
