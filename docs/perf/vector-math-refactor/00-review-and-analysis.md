@@ -2,6 +2,11 @@
 
 작성: 2026-05-30. 대상: `rust_builder/rust/src/api/vector_math.rs` (전부 검증 완료, 코드 인용 기준).
 
+> **⚠️ 정정 (PR1, 2026-05-30):** 아래 §1 Claim 2/3과 §3의 가설 “faer가 1-D에서 fused보다 느림”은 **PR1 벤치로 반증**됨 —
+> faer가 2–8× 더 빠름(exact_scan 2.8×). 정적 코드 분석(할당·2-pass)은 옳았으나 **실측 throughput 결론은 틀렸다.**
+> 자동 벡터화 안 되는 스칼라 fused가 SIMD gemm보다 느렸기 때문. 근거: [PR1.md](PR1.md), 후속: [risk-register.md](risk-register.md) R9.
+> 이 문서는 착수 시점 기록으로 보존하되, 결론은 PR1.md를 따른다.
+
 ## 0. 어떤 백엔드가 출시되는가 (가장 중요한 컨텍스트)
 - `Cargo.toml`: `default = []` → 기본은 **fallback 백엔드**.
 - `cargokit.yaml:5`: release 빌드가 `--features vector_faer,vector_quant_i8` 주입 → **출시 = faer**.

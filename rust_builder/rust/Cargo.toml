@@ -4,12 +4,17 @@ version = "0.8.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib", "staticlib"]
+# "lib" (rlib) is required so in-package benches/tests can link the crate as a
+# Rust dependency; "cdylib"/"staticlib" remain the artifacts the Flutter app links.
+crate-type = ["cdylib", "staticlib", "lib"]
 
 [features]
 default = []
 vector_faer = ["dep:faer"]
 vector_quant_i8 = []
+# Bench-only: exposes a thin `bench_api` re-export of the (otherwise pub(crate))
+# vector_math kernels so `benches/` can reach them. Never set in production builds.
+bench = []
 
 [dependencies]
 flutter_rust_bridge = "=2.11.1"
@@ -66,3 +71,10 @@ oslog = "0.2"
 [dev-dependencies]
 gag = "1.0"
 tempfile = "3.10"
+# Lean config: skip plotters/html report deps; we only need timing numbers.
+criterion = { version = "0.5", default-features = false }
+
+[[bench]]
+name = "vector_math"
+harness = false
+required-features = ["bench"]
