@@ -23,7 +23,7 @@ vector_math 커널 슬라이스는 거의 최적임을 확인했으나 **온디�
 |----|------|--------|------|
 | 스펙+계획 | DESIGN + PLAN | [LOC-65](https://linear.app/loceract/issue/LOC-65) | 🟩 머지(#69) |
 | P1 | report 모델 + JSON/CSV (host-TDD) | [LOC-66](https://linear.app/loceract/issue/LOC-66) | 🟩 머지(#70, [PR-P1.md](PR-P1.md)) |
-| P2 | example integration_test 배선 + A/B 픽스처 | [LOC-67](https://linear.app/loceract/issue/LOC-67) | 🟦 진행 |
+| P2 | example integration_test 배선 + A/B 픽스처 | [LOC-67](https://linear.app/loceract/issue/LOC-67) | 🟦 진행([PR-P2.md](PR-P2.md), 기기 green) |
 | P3 | 세그먼트 타이밍 + 3시나리오 + metrics 스냅샷 | [LOC-68](https://linear.app/loceract/issue/LOC-68) | ⬜ TODO |
 | P4 | JSON/CSV export + 로그 + 메타 (baseline 산출) | [LOC-69](https://linear.app/loceract/issue/LOC-69) | ⬜ TODO |
 | P5 | (조건부) Phase-2 드릴다운 — 지배 버킷별 | [LOC-70](https://linear.app/loceract/issue/LOC-70) | ⏸ 데이터 게이트 |
