@@ -9,9 +9,8 @@ import 'package:mobile_rag_engine/mobile_rag_engine.dart';
 import 'package:mobile_rag_engine_example/profiling/query_fixture.dart';
 import 'package:mobile_rag_engine_example/profiling/query_profiler.dart';
 import 'package:mobile_rag_engine_example/profiling/query_profile_report.dart';
-import 'package:mobile_rag_engine_example/profiling/profile_export.dart';
 
-// On-device RAG query profiler — P3 (LOC-68) measurement + P4 (LOC-69) export.
+// On-device RAG query profiler — P3 (LOC-68) measurement.
 //
 // Runs ALONE in its own process (separate from the P2 smoke) under flutter
 // drive in PROFILE mode, so the shipped `vector_faer,vector_quant_i8` backend
@@ -66,9 +65,6 @@ void main() {
         'build_mode':
             kReleaseMode ? 'release' : (kProfileMode ? 'profile' : 'debug'),
         'features': 'vector_faer,vector_quant_i8', // shipped in profile/release
-        'os': Platform.operatingSystem,
-        'os_version': Platform.operatingSystemVersion,
-        // Device model + charging state: document manually in PR-P4.md.
         'docs_per_collection': measuredDocs,
         'top_k': topK,
         'vector_weight': profiler.vectorWeight,
@@ -197,19 +193,9 @@ void main() {
         }
       }
 
-      // P3: per-segment p50/p95 to the device log (greppable CSV block).
-      final report = QueryProfileReport(runs: runs);
-      _emitReport(report);
-
-      // P4: export JSON + CSV to the app documents dir (the baseline artifact)
-      // and log the dir + filename so the operator can pull them off-device.
-      final tsTag = DateTime.now().millisecondsSinceEpoch.toString();
-      final dir = await ProfileExport.write(report, tsTag: tsTag);
-      // ignore: avoid_print
-      print('PROFILE_EXPORT_DIR $dir');
-      // ignore: avoid_print
-      print('PROFILE_EXPORT_FILE query_profile_$tsTag.json '
-          'query_profile_$tsTag.csv');
+      // P3 deliverable: per-segment p50/p95 to the device log (greppable CSV).
+      // P4 adds JSON/CSV export to the app documents dir on top of this.
+      _emitReport(QueryProfileReport(runs: runs));
     },
     // Seeding 2x500 real ONNX embeddings + the measured loops far exceed the
     // default 30s per-test timeout; give it generous headroom.
