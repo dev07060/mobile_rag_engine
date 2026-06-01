@@ -21,4 +21,29 @@ void main() {
       expect(decodeF32Blob(Uint8List.fromList([1, 2, 3])), isNull);
     });
   });
+
+  group('cosineSimilarity', () {
+    test('identical vectors returns 1.0', () {
+      final v = <double>[1, 2, 3];
+      expect(cosineSimilarity(v, v), closeTo(1.0, 1e-9));
+    });
+
+    test('orthogonal vectors returns 0.0', () {
+      expect(
+        cosineSimilarity(<double>[1, 0], <double>[0, 1]),
+        closeTo(0.0, 1e-9),
+      );
+    });
+
+    test('opposite vectors returns -1.0', () {
+      expect(
+        cosineSimilarity(<double>[1, 0], <double>[-1, 0]),
+        closeTo(-1.0, 1e-9),
+      );
+    });
+
+    test('zero vector returns 0.0 without NaN', () {
+      expect(cosineSimilarity(<double>[0, 0], <double>[1, 1]), 0.0);
+    });
+  });
 }
