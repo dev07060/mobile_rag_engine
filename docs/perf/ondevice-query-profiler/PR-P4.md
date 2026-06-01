@@ -23,6 +23,11 @@ I/O(query_metrics): full_hydrate_rows pure_warm 300 / filtered 90 / pure_cold 10
 - **Cold 첫 쿼리: `activate`(HNSW build/load) 지배** — 247ms ≫ embed/search/hydrate. *Phase-2(P5)에서 activate를 `bm25_rebuild` vs `hnsw_load`로 분해(cold/switch에 한해 필수).*
 - 부가: 필터(i8 exact-scan) search가 unfiltered(HNSW+BM25 RRF)보다 빠름(0.76 vs 1.60ms) — [LOC-64](https://linear.app/loceract/issue/LOC-64) i8 결과와 일관.
 
+## ⚠️ 측정 범위 (헤드라인 정정 — latency ≠ quality)
+- 본 baseline은 **지연(latency) 분해**만 측정한다. **검색 품질(recall)은 측정하지 않는다.**
+- LOC-64의 `recall@10 = 0.997`은 **i8 exact-scan vs f32 전수조사의 수학적 충실도**(양자화 커널 정확도)일 뿐, **실제 출시 경로의 HNSW 그래프 e2e 하이브리드 리콜이 아니다** — HNSW는 `dequantize_i8_to_f32`로 복원한 찌그러진 벡터 공간 위에서 그래프를 탐색하므로 별개. 즉 "i8가 빠르다 + 0.997"을 "출시 검색 품질이 우수하다"로 읽으면 안 된다.
+- **실제 프로덕션 e2e 하이브리드 리콜은 미측정** → **P5(LOC-70)의 1순위 타깃**(폰에서 `[f32 순수 원본 전수조사 top-K]` 대비 `[i8-HNSW + BM25 RRF top-K]` 교집합률 산출). 90% 미만이면 모바일용 `M`/`ef_search` 상향 튜닝 필요.
+
 ## 받은 피드백 / 한계
 - 어드버서리얼 리뷰 HIGH: 초기 추출 안내가 simctl(시뮬전용)이었음 → 물리기기는 Xcode Download Container / `devicectl`로 정정.
 - `switching_cold`의 activate(스위치당 load 비용) 미확보: 콘솔 트렁케이션 + 성공 런 export가 다음 런 재설치로 삭제 + 이후 DDS 간헐실패. **결론 불변**(pure_cold 247ms가 cold에서 activate 지배 입증). CSV 행 단위 print 수정으로 다음 런에서 완전 수집 가능.
