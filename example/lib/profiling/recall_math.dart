@@ -30,3 +30,20 @@ double cosineSimilarity(List<double> a, List<double> b) {
   if (normA == 0.0 || normB == 0.0) return 0.0;
   return dot / (math.sqrt(normA) * math.sqrt(normB));
 }
+
+/// Brute-force ground truth: rank every chunk vector by cosine to [query],
+/// tie-break by ascending chunkId for determinism, then return top-k chunkIds.
+List<int> groundTruthTopK({
+  required List<double> query,
+  required Map<int, List<double>> corpus,
+  required int k,
+}) {
+  final scored = corpus.entries
+      .map((entry) => (id: entry.key, score: cosineSimilarity(query, entry.value)))
+      .toList()
+    ..sort((a, b) {
+      final byScore = b.score.compareTo(a.score);
+      return byScore != 0 ? byScore : a.id.compareTo(b.id);
+    });
+  return [for (final score in scored.take(k)) score.id];
+}

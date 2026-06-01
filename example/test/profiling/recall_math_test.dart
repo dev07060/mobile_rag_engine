@@ -46,4 +46,39 @@ void main() {
       expect(cosineSimilarity(<double>[0, 0], <double>[1, 1]), 0.0);
     });
   });
+
+  group('groundTruthTopK', () {
+    test('ranks corpus by cosine to query, returns top-k chunkIds in order', () {
+      final query = <double>[1.0, 0.0];
+      final corpus = <int, List<double>>{
+        10: [1.0, 0.0],
+        20: [0.9, 0.1],
+        30: [0.0, 1.0],
+        40: [-1.0, 0.0],
+      };
+
+      expect(groundTruthTopK(query: query, corpus: corpus, k: 2), [10, 20]);
+    });
+
+    test('k larger than corpus returns all, ranked', () {
+      final corpus = <int, List<double>>{
+        1: [1.0, 0.0],
+        2: [0.0, 1.0],
+      };
+
+      expect(groundTruthTopK(query: [1.0, 0.0], corpus: corpus, k: 10), [
+        1,
+        2,
+      ]);
+    });
+
+    test('ties are broken by ascending chunkId', () {
+      final corpus = <int, List<double>>{
+        7: [1.0, 0.0],
+        3: [1.0, 0.0],
+      };
+
+      expect(groundTruthTopK(query: [1.0, 0.0], corpus: corpus, k: 2), [3, 7]);
+    });
+  });
 }
