@@ -81,4 +81,22 @@ void main() {
       expect(groundTruthTopK(query: [1.0, 0.0], corpus: corpus, k: 2), [3, 7]);
     });
   });
+
+  group('recallAtK', () {
+    test('full overlap returns 1.0', () {
+      expect(recallAtK(gt: [1, 2, 3], prod: [3, 2, 1], k: 3), 1.0);
+    });
+
+    test('half overlap returns 0.5', () {
+      expect(recallAtK(gt: [1, 2, 3, 4], prod: [1, 2, 9, 8], k: 4), 0.5);
+    });
+
+    test('denominator is min(k, gt.length) for short corpora', () {
+      expect(recallAtK(gt: [1, 2], prod: [2, 1], k: 10), 1.0);
+    });
+
+    test('prod is truncated to k before intersect', () {
+      expect(recallAtK(gt: [1, 2], prod: [9, 8, 1, 2], k: 2), 0.0);
+    });
+  });
 }

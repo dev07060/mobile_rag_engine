@@ -47,3 +47,16 @@ List<int> groundTruthTopK({
     });
   return [for (final score in scored.take(k)) score.id];
 }
+
+/// recall@k = |topK(gt) ∩ topK(prod)| / min(k, gt.length).
+/// Both lists are truncated to k before intersecting.
+double recallAtK({
+  required List<int> gt,
+  required List<int> prod,
+  required int k,
+}) {
+  final gtTop = gt.take(k).toSet();
+  if (gtTop.isEmpty) return 0.0;
+  final prodTop = prod.take(k).toSet();
+  return gtTop.intersection(prodTop).length / gtTop.length;
+}
