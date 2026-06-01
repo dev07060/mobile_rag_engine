@@ -13,6 +13,10 @@ dependencies:
     path: ../
   path_provider: ^2.1.5
   file_picker: ^9.2.1
+  # Profiler-only (LOC-68): the on-device query profiler constructs the FRB
+  # generalized Int64List for sourceIds / chunkIds, matching the engine's
+  # low-level rust API. Version pinned to the engine's frb (root pubspec.yaml).
+  flutter_rust_bridge: ^2.11.1
 
 dev_dependencies:
   flutter_test:
