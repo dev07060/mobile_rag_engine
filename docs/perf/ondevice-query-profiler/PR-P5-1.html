@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P5-1 e2e Hybrid Recall Report</title>
+  <style>
+    :root {
+      --ink: #172026;
+      --muted: #64727d;
+      --line: #d8e0e6;
+      --panel: #f7f9fb;
+      --ok: #0f7b55;
+      --warn: #a15c00;
+      --accent: #2457c5;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #ffffff;
+    }
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 24px 56px;
+    }
+    h1, h2, h3 {
+      line-height: 1.2;
+      margin: 0;
+    }
+    h1 {
+      font-size: 34px;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin-top: 34px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 22px;
+    }
+    h3 {
+      margin-top: 22px;
+      font-size: 17px;
+    }
+    p {
+      margin: 10px 0 0;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.94em;
+      background: #eef3f7;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    pre {
+      overflow-x: auto;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0f1720;
+      color: #edf4fa;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    table {
+      width: 100%;
+      margin-top: 12px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--panel);
+      font-weight: 650;
+    }
+    .lead {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      background: var(--panel);
+    }
+    .metric .label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .metric .value {
+      margin-top: 4px;
+      font-size: 28px;
+      font-weight: 720;
+    }
+    .ok {
+      color: var(--ok);
+    }
+    .warn {
+      color: var(--warn);
+    }
+    .note {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--accent);
+      background: #f2f6ff;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 20px;
+      margin-top: 12px;
+    }
+    .meta-grid div {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .meta-grid strong {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      text-transform: uppercase;
+    }
+    @media (max-width: 760px) {
+      .summary, .meta-grid {
+        grid-template-columns: 1fr;
+      }
+      h1 {
+        font-size: 28px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>P5-1 e2e Hybrid Recall Report</h1>
+    <p class="lead">
+      LOC-70 target 1 measured shipped on-device search quality against a Dart-side
+      original-f32 brute-force cosine ground truth on a physical iPhone profile build.
+    </p>
+
+    <section class="summary" aria-label="headline metrics">
+      <div class="metric">
+        <div class="label">Vector-only recall@10 mean</div>
+        <div class="value ok">1.00</div>
+      </div>
+      <div class="metric">
+        <div class="label">Hybrid recall@10 mean</div>
+        <div class="value warn">0.08</div>
+      </div>
+      <div class="metric">
+        <div class="label">Run status</div>
+        <div class="value ok">PASS</div>
+      </div>
+    </section>
+
+    <h2>Verdict</h2>
+    <p>
+      The vector-only path passes the P5 quality gate: <code>recall_vectoronly@10 = 1.00</code>,
+      above the <code>0.90</code> threshold in DESIGN-P5. On this 500-chunk collection there is
+      no evidence that the current i8-dequant HNSW graph settings require an immediate M or
+      <code>ef_search</code> increase.
+    </p>
+    <p>
+      The shipped hybrid path intentionally measures a different behavior: BM25/RRF reordering
+      against a pure-vector f32 ground truth. Its low mean, <code>recall_hybrid@10 = 0.08</code>,
+      says BM25 dominates or heavily reorders this synthetic query set. It should not be read as
+      an HNSW quality failure.
+    </p>
+
+    <div class="note">
+      <strong>Key interpretation:</strong>
+      vector-only recall isolates graph approximation plus i8 quantization error against the f32
+      corpus. Hybrid recall is an end-to-end reorder signal and needs a relevance-labeled or
+      hybrid-aware ground truth before using it as a product-quality verdict.
+    </div>
+
+    <h2>Measured Results</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Query index</th>
+          <th>Query</th>
+          <th>recall_vectoronly@10</th>
+          <th>recall_hybrid@10</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>0</td>
+          <td><code>vector search ranking</code></td>
+          <td>1.0</td>
+          <td>0.0</td>
+        </tr>
+        <tr>
+          <td>1</td>
+          <td><code>embedding topic3 retrieval</code></td>
+          <td>1.0</td>
+          <td>0.1</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><code>bm25 token alpha</code></td>
+          <td>1.0</td>
+          <td>0.1</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td><code>mobile generation gamma</code></td>
+          <td>1.0</td>
+          <td>0.1</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td><code>topic9 delta epsilon</code></td>
+          <td>1.0</td>
+          <td>0.1</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Run Metadata</h2>
+    <div class="meta-grid">
+      <div><strong>Device</strong>Physical iPhone, iOS 26.5</div>
+      <div><strong>Build mode</strong><code>flutter drive --profile</code></div>
+      <div><strong>Flutter attach mode</strong><code>--no-dds</code> was required for wireless VM Service attach</div>
+      <div><strong>Fixture</strong><code>profile_a</code> / <code>profile_b</code>, 500 docs per collection</div>
+      <div><strong>Measured collection</strong><code>profile_a</code>, 500 chunks</div>
+      <div><strong>Embedding fingerprint</strong><code>model.onnx|768|f32</code></div>
+      <div><strong>Ground truth</strong>Dart-side f32 brute-force cosine over <code>chunks.embedding</code></div>
+      <div><strong>Production calls</strong><code>searchMetaHybrid</code>, chunkId intersection at <code>k=10</code></div>
+    </div>
+
+    <h2>Command</h2>
+    <pre><code>cd example
+flutter drive \
+  --driver=test_driver/integration_test.dart \
+  --target=integration_test/query_recall_measure_test.dart \
+  --profile \
+  --no-keep-app-running \
+  --no-dds \
+  --device-timeout=60 \
+  -d 00008110-001524992E38801E \
+  2&gt;&amp;1 | tee /tmp/loc70_full_recall_no_dds.log</code></pre>
+
+    <h2>Evidence</h2>
+    <pre><code>RECALL_CSV query_index,query,recall_vectoronly@10,recall_hybrid@10
+RECALL_CSV 0,vector search ranking,1.0,0.0
+RECALL_CSV 1,embedding topic3 retrieval,1.0,0.1
+RECALL_CSV 2,bm25 token alpha,1.0,0.1
+RECALL_CSV 3,mobile generation gamma,1.0,0.1
+RECALL_CSV 4,topic9 delta epsilon,1.0,0.1
+RECALL_EXPORT_DIR /var/mobile/Containers/Data/Application/1A21C4FF-ADEA-49E3-A45C-D999136ACD2C/Documents
+RECALL_MEAN vectoronly=1.0 hybrid=0.08
+All tests passed.</code></pre>
+
+    <h2>Trade-offs</h2>
+    <p>
+      The run uses a deterministic synthetic fixture with 500 chunks in the measured collection.
+      It is good enough to validate the current vector index quality path, but it is not a
+      broad product relevance benchmark.
+    </p>
+    <p>
+      The hybrid number is intentionally harsh because the ground truth is pure f32 cosine.
+      A future product-facing hybrid-quality report should compare against labeled relevance,
+      a hybrid-aware oracle, or separate semantic and lexical expected sets.
+    </p>
+
+    <h2>Recommended Next Steps</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Priority</th>
+          <th>Action</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Next</td>
+          <td>Proceed to P5-2 activate breakdown.</td>
+          <td>The vector-only quality gate passed, while cold activate remains the latency gate.</td>
+        </tr>
+        <tr>
+          <td>Later</td>
+          <td>Add a labeled or hybrid-aware relevance suite.</td>
+          <td>Hybrid recall against pure-vector GT is a reorder diagnostic, not a final relevance metric.</td>
+        </tr>
+        <tr>
+          <td>Maintenance</td>
+          <td>Use <code>--no-dds</code> for wireless iPhone profile drives in this harness.</td>
+          <td>Standard DDS attach repeatedly failed before test body execution; <code>--no-dds</code> completed.</td>
+        </tr>
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>
