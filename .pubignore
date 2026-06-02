@@ -54,6 +54,8 @@ refrag-develop.md
 # 테스트 드라이버
 test_driver/
 integration_test/
+example/test_driver/
+example/integration_test/
 
 # 플랫폼별 디렉토리 (rust_builder에서 제공, 루트 레벨만 제외)
 /android/
@@ -70,3 +72,5 @@ example/assets/evalsets/
 
 # Example evaluation/performance runners (local only)
 example/lib/*_runner.dart
+example/lib/profiling/
+example/test/profiling/
