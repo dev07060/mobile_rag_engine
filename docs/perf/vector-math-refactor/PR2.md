@@ -2,7 +2,7 @@
 
 - 브랜치: `feat/loc-60-faer-ci-coverage`
 - Linear: [LOC-60](https://linear.app/loceract/issue/LOC-60)
-- 상태: 🟦 진행 (PR 열림, CI green 대기)
+- 상태: 🟩 머지(#65)
 
 ## 재설계 배경
 PR1([PR1.md](PR1.md)) 벤치가 원안("faer 제거 → fused 통일")의 전제를 반증 — faer가 2–8× 빠름.
@@ -22,10 +22,10 @@ PR1([PR1.md](PR1.md)) 벤치가 원안("faer 제거 → fused 통일")의 전제
 - N2 갭: **닫힘** — 출시 faer+quant 경로가 CI에서 빌드 + 테스트됨.
 - 로컬 검증: `bash -n` OK; faer 테스트 4개(패리티 포함) green, fail-closed PASS; `cargo build --release
   --features vector_faer,vector_quant_i8` 성공(50s, 기존 dead_code 경고만).
-- CI: (PR #__ green 후 갱신)
+- CI: PR #65 green 후 머지.
 
 ## 받은 피드백 (리뷰)
-- (PR 리뷰 후 갱신)
+- faer 제거 대신 출시 faer 백엔드를 CI에서 검증하는 방향으로 피벗했고, PR1 측정 결과와 일치.
 
 ## 리스크 / 롤백
 - CI native 잡 시간 증가(faer 2회 컴파일: test+release 프로파일). 게이트 가치 대비 수용.

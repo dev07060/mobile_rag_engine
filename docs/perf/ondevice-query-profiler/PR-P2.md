@@ -2,7 +2,7 @@
 
 - 브랜치: `feat/loc-67-profiler-fixture`
 - Linear: [LOC-67](https://linear.app/loceract/issue/LOC-67)
-- 상태: 🟦 진행 (PR 열림, 기기 스모크 green)
+- 상태: 🟩 머지(#71, 기기 스모크 green)
 
 ## 스코프
 실 ONNX 자산이 있는 example 앱에서 구동하는 디바이스 프로파일러의 기반.

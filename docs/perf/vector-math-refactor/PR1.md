@@ -2,7 +2,7 @@
 
 - 브랜치: `feat/loc-59-vector-math-bench`
 - Linear: [LOC-59](https://linear.app/loceract/issue/LOC-59)
-- 상태: 🟦 진행 (PR 열림, CI green 대기)
+- 상태: 🟩 머지(#64)
 
 ## 스코프 (무엇을/왜)
 faer 삭제 **전에** 성능 베이스라인을 캡처하고, fused가 faer와 등가임을 박아 PR2를 안전화하기 위함.
@@ -42,5 +42,5 @@ faer 삭제 **전에** 성능 베이스라인을 캡처하고, fused가 faer와 
 - 벤치/패리티는 CI에서 안 돎(`bench`·`vector_faer` 미설정) → 로컬 실행/기록이 본 PR의 산출.
 
 ## 결정 로그
-- **PR2 전제 반증** → PR2를 “faer 제거”에서 **“faer 유지 + N2(CI 커버리지) [+ 선택 N1 무할당화]”로 피벗** 후보. 사용자 결정 대기.
+- **PR2 전제 반증** → PR2를 “faer 제거”에서 **“faer 유지 + N2(CI 커버리지)”로 피벗**했고, PR2(#65)에서 완료.
 - 디바이스 캐비엇: 위 수치는 개발기(Apple Silicon). 방향(faer 우위)은 스칼라-vs-SIMD 차이라 폰 NEON에서도 견고할 것으로 예상하나, 크기는 온디바이스 프로파일로 확인 권장.

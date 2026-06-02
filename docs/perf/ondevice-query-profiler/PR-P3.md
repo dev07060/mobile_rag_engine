@@ -2,7 +2,7 @@
 
 - 브랜치: `feat/loc-68-profiler-timing`
 - Linear: [LOC-68](https://linear.app/loceract/issue/LOC-68)
-- 상태: 🟦 진행 (PR 열림 예정, iPhone 실기 profile 런 green)
+- 상태: 🟩 머지(#72, iPhone 실기 profile 런 green)
 
 ## 스코프
 실 ONNX 자산 example 앱에서 쿼리 단계를 **격리 계측**하는 디바이스 프로파일러 본체.

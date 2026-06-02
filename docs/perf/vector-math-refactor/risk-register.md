@@ -9,12 +9,12 @@
 | R2 | release 수치 ~1e-6 변동으로 **결과 순서** 변동 | PR2 | 회귀 테스트에서 top_k 순서 차이 | 코드근거상 컷오프 의존 0 (분석 §3). PR1 패리티(ε)로 등가 증명 | PR2 revert | 🟩 닫힘 — faer 유지로 백엔드 교체 없음 |
 | R3 | 고차원·대량 linear scan에서 **스칼라 throughput-bound** | PR2 후 | 벤치에서 1024+ 차원 회귀 | PR4 다중 누산기 언롤 | PR4 미적용 시 기존 fused 유지 | 🟥 PR1 확정(fused가 faer 대비 2–8× 느림) |
 | **R9** | **PR2 전제 반증**: faer 제거가 핫 패스를 회귀시킴(faer가 2–8× 빠름) | PR1 | PR1 벤치 (exact_scan 2.8×, dot 최대 7.8×) | PR2를 “faer 유지 + N2”로 피벗(완료) | — | 🟩 닫힘 — faer 유지 확정, PR2=N2 CI 커버리지 |
-| **N2** | 출시 faer+quant 백엔드가 **CI에서 빌드/테스트 0회** | 상시(출시) | release만 faer 활성, CI는 default/debug | PR2: faer 테스트 + 출시 조합 릴리스 빌드 게이트 | test_ci.sh revert | 🟨 PR2에서 닫는 중 |
-| R4 | PR4 **언롤 새 버그**(remainder/lane 합산 off-by-one) | PR4 | 패리티 테스트 ε 초과 / 단위 테스트 실패 | 스칼라 대비 property/ε 테스트 필수 | PR4 revert(커널은 PR2 상태로) | ⬜ 열림 |
-| R5 | **스택 PR 고아화** (PR4/PR5 base=PR2) | PR2 머지 | PR4/PR5 diff에 PR2 변경분이 섞여 보임 | PR2 머지 직후 base→main retarget | 재타깃 PR | ⬜ 열림 |
-| R6 | PR3 핫 루프 수정으로 **동작 변경** | PR3 | 검색 결과 diff | 결과 동일성 테스트 + N3로 적용 여부 게이트 | PR3 revert | ⬜ 열림 |
+| **N2** | 출시 faer+quant 백엔드가 **CI에서 빌드/테스트 0회** | 상시(출시) | release만 faer 활성, CI는 default/debug | PR2: faer 테스트 + 출시 조합 릴리스 빌드 게이트 | test_ci.sh revert | 🟩 닫힘(PR2) |
+| R4 | PR4 **언롤 새 버그**(remainder/lane 합산 off-by-one) | PR4 | 패리티 테스트 ε 초과 / 단위 테스트 실패 | 스칼라 대비 property/ε 테스트 필수 | PR4 revert(커널은 PR2 상태로) | 🟩 닫힘 — PR4 폐기 |
+| R5 | **스택 PR 고아화** (PR4/PR5 base=PR2) | PR2 머지 | PR4/PR5 diff에 PR2 변경분이 섞여 보임 | PR2 머지 직후 base→main retarget | 재타깃 PR | 🟩 닫힘 — main 기반 PR로 회피 |
+| R6 | PR3 핫 루프 수정으로 **동작 변경** | PR3 | 검색 결과 diff | 결과 동일성 테스트 + N3로 적용 여부 게이트 | PR3 revert | 🟩 닫힘 — PR3 폐기 |
 | R7 | N5 엔디안 변경이 **기존 DB 호환성** 깨짐 | PR5 | 기존 인덱스 로드 실패 | LE 기기선 ne==le 바이트 동일 → 무마이그레이션 확인 후만 적용 | 변경 revert | 🟩 닫힘 — PR5는 포맷 미변경(문서화만), 호환 리스크 없음 |
 | N6 | 손상 임베딩 블롭이 **무음 드롭** | 상시 | 손상 DB에서 인덱스 누락이 로그 없이 발생 | PR5: `decode_f32_embedding_or_warn`로 `log::warn!` 가시화(동작 보존) | 헬퍼 revert | 🟩 닫힘(PR5) |
-| R8 | CI 병렬 실행으로 **공유 SQLite 테스트 플레이크** | 전체 | cargo test 간헐 실패 | `-- --test-threads=1` 고정 | — | ⬜ 열림 |
+| R8 | CI 병렬 실행으로 **공유 SQLite 테스트 플레이크** | 전체 | cargo test 간헐 실패 | `-- --test-threads=1` 고정 | — | 🟨 관찰중 — 테스트 명령 고정으로 완화 |
 
 상태 범례: ⬜ 열림 · 🟨 관찰중 · 🟩 닫힘(해소) · 🟥 발생함
