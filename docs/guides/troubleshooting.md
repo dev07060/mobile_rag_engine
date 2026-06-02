@@ -154,6 +154,29 @@ await MobileRag.instance.rebuildIndex();
 
 ---
 
+### "PDF requires OCR"
+
+**Symptom:** PDF ingestion fails with a message that the file may be scanned or image-based.
+
+**Cause:** The PDF does not contain enough extractable text for semantic indexing. Mobile RAG Engine does not run OCR internally.
+
+**Solution:** Route the file through your app's OCR flow, then index the recognized text:
+```dart
+try {
+  await MobileRag.instance.addDocumentFromFile(file.path, name: fileName);
+} catch (error) {
+  if (DocumentParser.isOcrRequiredPdfExtractionError(error)) {
+    // Replace this with your app-specific OCR implementation.
+    final recognizedText = await runYourAppOcrPipeline(file);
+    await MobileRag.instance.addDocument(recognizedText, name: fileName);
+  } else {
+    rethrow;
+  }
+}
+```
+
+---
+
 ### "Out of memory" on large documents
 
 **Symptom:** App crashes when processing large PDFs

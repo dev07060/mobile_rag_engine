@@ -111,12 +111,16 @@ await MobileRag.instance.addDocument(
   'Flutter is Google\'s UI toolkit for building beautiful apps.',
 );
 
-// Add PDF/DOCX or other local files by path.
+// Add text-layer PDFs, beta DOCX files, or other local files by path.
 // This lets Rust read and chunk the file directly.
 await MobileRag.instance.addDocumentFromFile(
   'document.pdf',
   name: 'document.pdf',
 );
+
+// Scanned/image-only PDFs require OCR before indexing. If extraction fails,
+// use DocumentParser.isOcrRequiredPdfExtractionError(error) to route the file
+// to your app's OCR flow. DOCX extraction is beta for complex layouts.
 
 // If a stable local path is not available, fall back to bytes/text ingestion.
 final bytes = await File('notes.md').readAsBytes();

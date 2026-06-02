@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.18.6
+* **PDF extraction UX**:
+  - Added OCR-needed classification helpers for scanned/image-only PDF extraction errors.
+  - Keeps mixed scanned + partially failed PDFs on the OCR-recoverable path while leaving fully failed/corrupt PDFs as raw extraction errors.
+  - Clarified production support boundaries: text-layer PDFs are production-ready, scanned PDFs require app-provided OCR, and DOCX remains beta.
+* **Release-path validation**:
+  - Added i8 hot-path recall/fidelity safety nets for the shipped `vector_quant_i8` path.
+  - Runs the shipped `vector_faer,vector_quant_i8` native feature combo in CI with fail-closed checks for renamed or skipped safety nets.
+  - Logs corrupt f32 embedding blobs with row ids during HNSW rebuild instead of silently dropping them.
+* **Packaging**:
+  - Excludes profiler-only example harnesses and tests from the published archive.
+* **Compatibility**:
+  - Bumped dependency constraint to `rag_engine_flutter: ^0.18.4` so consumers receive the matching native hardening patch.
+
 ## 0.18.5
 * **PDF extraction quality**:
   - Bumped dependency constraint to `rag_engine_flutter: ^0.18.3` so consumers receive the native PDF extraction improvements.

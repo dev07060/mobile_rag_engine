@@ -2,7 +2,7 @@ name: rag_engine_flutter
 description: >
   Native Rust FFI plugin for mobile_rag_engine. Provides high-performance
   tokenization and HNSW vector indexing for on-device RAG.
-version: 0.18.3
+version: 0.18.4
 homepage: https://github.com/dev07060/mobile_rag_engine
 repository: https://github.com/dev07060/mobile_rag_engine
 issue_tracker: https://github.com/dev07060/mobile_rag_engine/issues

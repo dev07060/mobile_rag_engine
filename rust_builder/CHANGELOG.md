@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.18.4
+* **PDF extraction UX**:
+  - Preserves the `scanned/image-only` marker for mixed scanned PDFs that also contain page-level extraction failures so host apps can route them to OCR.
+  - Omits the OCR marker when every page fails to extract, avoiding misleading OCR guidance for fully corrupt/unsupported PDFs.
+* **Release-path validation**:
+  - Added i8 cosine, recall@10 floor, and cosine-fidelity safety nets for the shipped `vector_quant_i8` hot path.
+  - Added fail-closed CI guards for the shipped `vector_faer,vector_quant_i8` feature combo.
+  - Added bench-only i8 wrappers and measured i8 scan/hot-kernel baselines without changing production kernels.
+* **Diagnostics**:
+  - Logs corrupt f32 embedding blobs with row ids during index rebuild instead of silently skipping them.
+
 ## 0.18.3
 * **PDF extraction quality**:
   - Preserved paragraph boundaries while normalizing PDF text so downstream chunking can split on semantic breaks instead of one long flattened body.
