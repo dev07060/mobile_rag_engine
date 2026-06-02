@@ -16,8 +16,8 @@ void main() {
       );
       expect(
         DocumentParser.scannedPdfOcrRequiredMessage,
-        '이 PDF는 텍스트를 추출할 수 없습니다.\n'
-        '스캔본 또는 이미지 기반 PDF일 수 있어 OCR 처리가 필요합니다.',
+        'This PDF does not contain extractable text.\n'
+        'It may be scanned or image-based and require OCR processing.',
       );
     });
 
