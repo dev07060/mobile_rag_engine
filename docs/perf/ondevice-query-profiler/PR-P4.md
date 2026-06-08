@@ -2,7 +2,7 @@
 
 - 브랜치: `feat/loc-69-profiler-export` (P3 위에 스택)
 - Linear: [LOC-69](https://linear.app/loceract/issue/LOC-69)
-- 상태: 🟦 진행 (PR 열림 예정, iPhone 실기 profile 런 green) — **baseline 산출 = 1차 목표 달성**
+- 상태: 🟩 머지(#75 rescue, iPhone 실기 profile 런 green) — **baseline 산출 = 1차 목표 달성**
 
 ## 스코프
 - `example/lib/profiling/profile_export.dart` — 리포트를 앱 documents dir에 `query_profile_<ts>.json/.csv`로 flush 기록 + 실행당 `PROFILE` 로그 1줄 + dir/파일명 로그(추출용). 물리기기 추출은 Xcode Download Container 또는 `xcrun devicectl`(simctl은 시뮬전용).
@@ -26,7 +26,7 @@ I/O(query_metrics): full_hydrate_rows pure_warm 300 / filtered 90 / pure_cold 10
 ## ⚠️ 측정 범위 (헤드라인 정정 — latency ≠ quality)
 - 본 baseline은 **지연(latency) 분해**만 측정한다. **검색 품질(recall)은 측정하지 않는다.**
 - LOC-64의 `recall@10 = 0.997`은 **i8 exact-scan vs f32 전수조사의 수학적 충실도**(양자화 커널 정확도)일 뿐, **실제 출시 경로의 HNSW 그래프 e2e 하이브리드 리콜이 아니다** — HNSW는 `dequantize_i8_to_f32`로 복원한 찌그러진 벡터 공간 위에서 그래프를 탐색하므로 별개. 즉 "i8가 빠르다 + 0.997"을 "출시 검색 품질이 우수하다"로 읽으면 안 된다.
-- **실제 프로덕션 e2e 하이브리드 리콜은 미측정** → **P5(LOC-70)의 1순위 타깃**(폰에서 `[f32 순수 원본 전수조사 top-K]` 대비 `[i8-HNSW + BM25 RRF top-K]` 교집합률 산출). 90% 미만이면 모바일용 `M`/`ef_search` 상향 튜닝 필요.
+- **후속 업데이트:** P5-①에서 실제 프로덕션 e2e 리콜을 측정했고, vector-only recall@10=1.00으로 HNSW/i8 품질 게이트를 통과했다. hybrid recall@10=0.08은 순수-vector GT 대비 BM25/RRF reorder 진단으로 해석한다.
 
 ## 받은 피드백 / 한계
 - 어드버서리얼 리뷰 HIGH: 초기 추출 안내가 simctl(시뮬전용)이었음 → 물리기기는 Xcode Download Container / `devicectl`로 정정.
@@ -35,5 +35,4 @@ I/O(query_metrics): full_hydrate_rows pure_warm 300 / filtered 90 / pure_cold 10
 
 ## 리스크 / 롤백 / 다음
 - 동작 코드 변경 없음(example 프로파일링 export). 롤백: PR revert.
-- ⚠️ **스택 PR**: P3(#LOC-68) 위에 스택. P3 먼저 머지 후 본 PR을 main으로 retarget(아니면 orphan).
-- 다음: **P5(LOC-70)** Phase-2 — warm은 embed(ONNX) 지배라 Rust 벡터 작업 불요; cold가 중요하면 activate(bm25_rebuild vs hnsw_load) 분해. 데이터 게이트 충족.
+- P5-① 품질 게이트 완료 후 남은 P5-②~④는 0.18.6 이후의 측정 심화 작업으로 보류.

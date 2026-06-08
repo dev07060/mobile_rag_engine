@@ -2,7 +2,7 @@
 
 - 브랜치: `feat/loc-64-i8-measure-parity-net`
 - Linear: [LOC-64](https://linear.app/loceract/issue/LOC-64)
-- 상태: 🟦 진행 (PR 열림, CI green 대기)
+- 상태: 🟩 머지(#68)
 - 설계: [PR6-spec-i8-measure-parity-net.md](PR6-spec-i8-measure-parity-net.md) · 계획: [PR6-plan-i8-measure-parity-net.md](PR6-plan-i8-measure-parity-net.md)
 
 ## 스코프 (비파괴 — 커널/양자화 0줄 변경)

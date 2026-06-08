@@ -109,7 +109,7 @@ await MobileRag.instance.rebuildIndex();
 
 ### Q: Memory usage is high
 
-- **Prefer file-path ingest for large local files**: Use `addDocumentFromFile(path)` for PDF, DOCX, Markdown, and text files when you have a stable path.
+- **Prefer file-path ingest for large local files**: Use `addDocumentFromFile(path)` for text-layer PDFs, Markdown, and text files when you have a stable path. DOCX is beta, and scanned/image-only PDFs need OCR before indexing.
 - **Use UTF-8 ingest when bytes are already loaded**: Use `addDocumentUtf8(bytes)` for text/Markdown bytes instead of converting them to a Dart `String` first.
 - **Limit document count**: 10K+ may cause degradation.
 - **Use INT8 models**: Smaller models reduce memory pressure.

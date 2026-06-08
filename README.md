@@ -50,13 +50,15 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 
 | Category | Features |
 |:---------|:---------|
-| **Document Input** | PDF, DOCX, Markdown, Plain Text with smart dehyphenation; file-path and UTF-8 ingest fast paths |
+| **Document Input** | Text-layer PDF, Markdown, Plain Text, and beta DOCX support; file-path and UTF-8 ingest fast paths |
 | **Chunking** | Plain-text paragraph/line chunking with heading-aware split and tokenizer hard guard; Markdown structure-aware chunking with header-path metadata |
 | **Search** | HNSW vector + BM25 keyword hybrid search with RRF fusion; metadata-first search with explicit context/chunk hydration |
 | **Storage** | SQLite persistence, HNSW Index persistence (fast startup), connection pooling, resumable indexing |
 | **Collections** | Collection-scoped ingest/search/rebuild via `inCollection('id')` |
 | **Performance** | Rust core, 10x faster tokenization, thread control, memory optimized |
 | **Context** | Engine-tokenizer exact context budget, adjacent chunk expansion, single source mode |
+
+**Support boundaries:** text-layer PDFs are production-ready. Scanned or image-only PDFs should be routed through an OCR layer before indexing. DOCX extraction is available for early adopters, but complex DOCX layouts such as tables, headers, and footnotes should be treated as beta.
 
 ---
 
@@ -179,8 +181,17 @@ try {
       lower.endsWith('.markdown')) {
     await MobileRag.instance.addDocumentUtf8(bytes, name: fileName);
   } else {
-    final text = await DocumentParser.parse(bytes);
-    await MobileRag.instance.addDocument(text, name: fileName);
+    try {
+      final text = await DocumentParser.parse(bytes);
+      await MobileRag.instance.addDocument(text, name: fileName);
+    } catch (error) {
+      if (DocumentParser.isOcrRequiredPdfExtractionError(error)) {
+        throw UnsupportedError(
+          DocumentParser.userMessageForExtractionError(error),
+        );
+      }
+      rethrow;
+    }
   }
 }
 ```

@@ -550,27 +550,27 @@ git commit -m "ci(vector_quant): run i8 ε/recall/fidelity nets on shipped faer+
 
 - [ ] **Step 1: Create `PR6.md` with the measured results**
 
-Create `docs/perf/vector-math-refactor/PR6.md` (fill `<...>` from Task 2 Step 5 and Task 3 Step 4):
+Create `docs/perf/vector-math-refactor/PR6.md` with the measured values from Task 2 Step 5 and Task 3 Step 4:
 
 ```markdown
 # PR6 — i8 출시 핫패스 측정 + ε/recall/fidelity 안전망 (N: 측정 먼저)
 
 - 브랜치: `feat/loc-64-i8-measure-parity-net`
 - Linear: [LOC-64](https://linear.app/loceract/issue/LOC-64)
-- 상태: 🟦 진행 (PR 열림, CI green 대기)
+- 상태: 🟩 머지(#68)
 - 설계: [PR6-spec-i8-measure-parity-net.md](PR6-spec-i8-measure-parity-net.md)
 
 ## 스코프 (비파괴 — 커널/양자화 0줄 변경)
 출시 핫패스(i8 `cosine_with_query_norm_i8_blob`)에 PR1 패턴 적용: 측정 + 수치 ε 네트 + recall@k floor + 코사인 fidelity 네트 + CI fail-closed.
 
-## 결과 (측정)
-- **i8 핫커널 마이크로벤치** (dim별, ns): 384=<...> / 768=<...> / 1024=<...> / 1536=<...>
-- **스캔(2000×768) 비교**: `exact_scan[faer]`(f32 decode+cosine)=<...> µs vs `exact_scan_i8`(i8 blob)=<...> µs → i8가 f32-faer 대비 **<...>×**.
+## 결과 (측정, dev arm64)
+- **i8 핫커널 마이크로벤치** (ns): 384=7.87 / 768=14.97 / 1024=21.12 / 1536=31.28
+- **스캔(2000×768) 비교**: `exact_scan[faer]`(f32 decode+cosine)=452.82 µs vs `exact_scan_i8`(i8 blob)=29.98 µs → i8가 f32-faer 대비 **≈15.1×**.
 - **수치 ε 네트**: 차원 {1,2,3,16,384,768,1024,1536}에서 kernel ≈ f64 참조, ε=1e-4 green.
 - **핵심 발견**: i8 per-vector 양자화는 768d에서 **recall@10 ≈ 0.997**(=319/320, 거의 무손실) — '민감 밴드'는 출시 설정에서 도달 불가이며 강제 시 비대표적. 따라서 게이트는 이 높은 baseline을 잠금.
 - **recall@k floor 네트**: N=2000, Q=32, dim=768, k=10, clusters=16 → 측정 recall@10 = **0.996875**(dev arm64, CI 확인), FLOOR = **0.98** (= floor(X−0.02)). GT는 f64(플랫폼 jitter 제거), 전순서 `(score desc, index asc)`.
 - **코사인 fidelity 네트**: `max|cosine_i8 − cosine_f32_true|` = **0.00121**, 게이트 = **0.005** (≈4× baseline). 완전 결정론적·민감.
-- **CI**: `--features "vector_quant_i8,vector_faer" -- --test-threads=1` fail-closed + 3개 네트 이름별 가드 (N=<...> passed).
+- **CI**: `--features "vector_quant_i8,vector_faer" -- --test-threads=1` fail-closed + 3개 네트 이름별 가드, 7 passed.
 
 ## 받은 피드백 (리뷰 / 사전검증)
 - 설계 리뷰: N=2000/k=10, 전순서 타이브레이크, 출시 트리(faer+quant) CI.
@@ -591,7 +591,7 @@ Create `docs/perf/vector-math-refactor/PR6.md` (fill `<...>` from Task 2 Step 5 
 In `docs/perf/vector-math-refactor/README.md`, add after the PR5 row line:
 
 ```markdown
-| PR6 | i8 출시 핫패스 **측정 + ε/recall/fidelity 안전망** | i8 검증갭 | 낮음(비파괴) | main(#67) | [LOC-64](https://linear.app/loceract/issue/LOC-64) | 🟦 진행([PR6.md](PR6.md)) |
+| PR6 | i8 출시 핫패스 **측정 + ε/recall/fidelity 안전망** | i8 검증갭 | 낮음(비파괴) | main(#67) | [LOC-64](https://linear.app/loceract/issue/LOC-64) | 🟩 머지(#68, [PR6.md](PR6.md)) |
 ```
 
 - [ ] **Step 3: Commit**
@@ -649,6 +649,6 @@ Expected: all checks pass. **Do NOT merge** — report "PR opened, CI green" and
 ## Self-Review (filled by plan author)
 
 - **Spec coverage**: §3 bench → Task 3; §4 ε net → Task 1; §5 quality net → Task 2 (recall floor + fidelity, per the approved Net-2 redesign); §6 CI → Task 4; §7 tracking → Task 5 + issue created; §8 acceptance → Tasks 1–6; non-goal (0 kernel changes) → only `mod tests`, `bench_api`, `benches`, CI, docs touched. ✅ (Spec §5/§8/§9/§10 updated to the recall-floor + fidelity design.)
-- **Placeholders**: `MIN_RECALL`/`MAX_COS_ERR`/bench numbers are *measure-first outputs* with exact derivation + compile-time `const _` guards (Task 2 Steps 4–5), not vague TODOs. PR6.md `<...>` are explicitly "fill from measured results." ✅
+- **Placeholders**: `MIN_RECALL`/`MAX_COS_ERR`/bench numbers are *measure-first outputs* with exact derivation + compile-time `const _` guards (Task 2 Steps 4–5), not vague TODOs. The final PR6 journal uses measured values, not placeholders. ✅
 - **Type consistency**: `order_desc<T: PartialOrd>` used on both `(usize,f64)` (GT) and `(usize,f32)` (i8); `cosine_f64_true`/`ref_cosine_i8_f64`/`clustered_corpus`/`quantize_f32_to_i8`/`l2_norm_i8`/`i8_blob_from_slice`/`cosine_with_query_norm_i8_blob` match real `vector_quant.rs` signatures (verified). bench_api wrappers match. ✅
 - **Verification-driven fixes applied**: f64 GT (jitter), recall-floor not forced-band (saturation), const guards + CI name guards (vacuous gate), `pub(crate) mod` wording, flat `X−0.02` floor. ✅

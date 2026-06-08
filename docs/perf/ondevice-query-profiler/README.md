@@ -27,7 +27,7 @@ vector_math 커널 슬라이스는 거의 최적임을 확인했으나 **온디�
 | P3 | 세그먼트 타이밍 + 3시나리오 + metrics 스냅샷 | [LOC-68](https://linear.app/loceract/issue/LOC-68) | 🟩 머지(#72, [PR-P3.md](PR-P3.md), 기기 green) |
 | P4 | JSON/CSV export + 로그 + 메타 (baseline 산출) | [LOC-69](https://linear.app/loceract/issue/LOC-69) | 🟩 머지(#75 rescue, [PR-P4.md](PR-P4.md), 기기 green) |
 | P5-① | e2e hybrid recall@10 — 품질 | [LOC-70](https://linear.app/loceract/issue/LOC-70) | 🟩 완료([PR-P5-1.html](PR-P5-1.html), vector-only=1.00 / hybrid=0.08) |
-| P5-②~④ | activate 분해 / 동시성 / SQLite scale | [LOC-70](https://linear.app/loceract/issue/LOC-70) | ⏭ 다음 순서 |
+| P5-②~④ | activate 분해 / 동시성 / SQLite scale | [LOC-70](https://linear.app/loceract/issue/LOC-70) | ⏸ 0.18.6 이후 측정 심화 |
 
 ## 규약 (프로젝트 공통)
 - CI: `cargo test -- --test-threads=1`. 커밋/PR에 Claude 귀속 미포함. PR은 열고 CI green까지만, 머지는 본인.

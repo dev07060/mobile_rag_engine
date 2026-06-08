@@ -29,7 +29,7 @@
 | PR3 | decode 버퍼 재사용 | Claim1 | 낮음~중 | 벤치/N3 게이트 | [LOC-61](https://linear.app/loceract/issue/LOC-61) | ❌ 폐기(출시 i8 빌드서 f32 decode 비핫, 코드검증) |
 | PR4 | ~~다중 누산기 언롤~~ | — | — | — | [LOC-62](https://linear.app/loceract/issue/LOC-62) | ❌ 폐기(faer 유지로 무의미) |
 | PR5 | 위생: 손상 로깅(N6) + 엔디안 문서화(N5) | N6, N5 | 낮음(독립) | — | [LOC-63](https://linear.app/loceract/issue/LOC-63) | 🟩 머지(#66, [PR5.md](PR5.md)) |
-| PR6 | i8 출시 핫패스 **측정 + ε/recall/fidelity 안전망** | i8 검증갭 | 낮음(비파괴) | main(#67) | [LOC-64](https://linear.app/loceract/issue/LOC-64) | 🟦 진행([PR6.md](PR6.md)) |
+| PR6 | i8 출시 핫패스 **측정 + ε/recall/fidelity 안전망** | i8 검증갭 | 낮음(비파괴) | main(#67) | [LOC-64](https://linear.app/loceract/issue/LOC-64) | 🟩 머지(#68, [PR6.md](PR6.md)) |
 
 종료 회고: [RETRO.md](RETRO.md) · PR3([LOC-61](https://linear.app/loceract/issue/LOC-61)) ❌ 폐기 확정(RETRO §5) · 잔여(선택): 온디바이스 벤치 / encode 헬퍼 dedup — 프로젝트 핸드오프 노트 참조.
 

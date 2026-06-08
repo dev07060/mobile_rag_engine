@@ -20,7 +20,7 @@
 | P2 | example integration_test wiring + A/B fixture builder | LOC-67 | device |
 | P3 | Segment timing loop + 3 scenarios + query_metrics snapshot | LOC-68 | device |
 | P4 | JSON/CSV export to app-docs + structured log + run metadata | LOC-69 | device + host(serialize) |
-| P5 | (conditional) Phase-2 drill-down per dominant bucket | LOC-70 | TBD by P3/P4 data |
+| P5 | Phase-2 quality/latency drill-down | LOC-70 | P5-① recall complete; P5-②~④ deferred after 0.18.6 |
 
 Each PR: branch from main, commit (no Claude attribution), open PR, CI green (`cargo test -- --test-threads=1` unaffected — Dart-only), **user merges**. Fill `PRn.md` + README row before merge.
 
