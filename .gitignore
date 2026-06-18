@@ -61,8 +61,12 @@ example/assets/backup_onnx/
 # Python scripts (local tooling only)
 scripts/*.py
 
-# Validation artifacts / corpora (local only)
+# Validation artifacts / corpora / generated reports (local only)
 artifacts/
+docs/reports/*.html
+docs/perf/ondevice-query-profiler/GOALS-P5-*.md
+docs/perf/ondevice-query-profiler/PR-P5-[2-9]*.html
+docs/perf/ondevice-query-profiler/artifacts/
 example/assets/corpus/
 example/assets/evalsets/
 example/assets/sample_data/*.pdf
@@ -71,3 +75,10 @@ example/assets/sample_data/*.pdf
 
 # Example evaluation/performance runners (local only)
 example/lib/*_runner.dart
+example/lib/profiling/relevance_evalset.dart
+example/lib/profiling/relevance_metrics.dart
+example/test/profiling/relevance_evalset_test.dart
+example/test/profiling/relevance_metrics_test.dart
+example/integration_test/hybrid_relevance_measure_test.dart
+example/integration_test/hybrid_passage_relevance_measure_test.dart
+example/integration_test/pdf_to_rag_passage_measure_test.dart
