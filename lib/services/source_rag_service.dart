@@ -483,12 +483,21 @@ class SourceRagService {
 
   /// Clean up log stream resources (both Dart subscription and Rust sink).
   Future<void> _cleanupLogStream() async {
-    await _logSubscription?.cancel();
+    final subscription = _logSubscription;
     _logSubscription = null;
+
     try {
       closeLogStream(); // Close Rust-side sink
     } catch (_) {
       // Ignore errors during cleanup
+    }
+
+    if (subscription == null) return;
+
+    try {
+      await subscription.cancel().timeout(const Duration(seconds: 1));
+    } on TimeoutException {
+      debugPrint('[SourceRagService] log subscription cancel timed out');
     }
   }
 
