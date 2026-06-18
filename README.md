@@ -1,14 +1,21 @@
 # Mobile RAG Engine
 
+**Build local, on-device RAG in Flutter with a Dart package.**
+
+Mobile RAG Engine is a Flutter package for local Retrieval-Augmented Generation
+(RAG): ingest local documents, chunk and embed them on-device, then run hybrid
+semantic + keyword search through a Dart API. No server, no API cost, no network
+round-trip for retrieval.
+
 ![pub package](https://img.shields.io/pub/v/mobile_rag_engine)
 ![flutter](https://img.shields.io/badge/Flutter-3.9%2B-blue)
 ![rust](https://img.shields.io/badge/Core-Rust-orange)
 ![platform](https://img.shields.io/badge/Platform-iOS%20|%20Android%20|%20macOS-lightgrey)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Production-ready, fully local RAG (Retrieval-Augmented Generation) engine for Flutter.**
-
-Powered by a **Rust core**, it runs vector search and embedding generation directly on the device. No servers, no API costs, no network round-trips.
+Use it when you need a **Flutter local RAG engine** for private notes, document
+Q&A, chat with PDF, offline assistants, or enterprise apps where user data must
+stay on the device.
 
 ---
 
@@ -29,6 +36,21 @@ This package includes **pre-compiled binaries** for iOS, Android, and macOS. Jus
 | **Memory Usage** | High | Copy-minimized Rust core, `Float32List` zero-copy transport |
 
 > Numbers vary by device and corpus. See [`benchmark_service`](https://github.com/dev07060/mobile_rag_engine/blob/main/lib/services/benchmark_service.dart) and the `0.18.0` retrieval-hot-path notes in [CHANGELOG.md](https://github.com/dev07060/mobile_rag_engine/blob/main/CHANGELOG.md) for measured deltas on your own hardware.
+
+### Supported and Verified Scope
+
+| Area | Current status | Evidence / boundary |
+|:-----|:---------------|:--------------------|
+| **Local Flutter RAG retrieval** | Supported | Dart facade over a Rust core for ingest, chunking, embedding, SQLite storage, HNSW vector search, BM25 keyword search, RRF fusion, and context assembly |
+| **Offline / on-device operation** | Supported | Models and user documents stay local after you bundle the ONNX model and tokenizer assets |
+| **Hybrid source retrieval** | Verified on benchmark fixtures | 80-source balanced profile run: `source_recall@10 = 1.000` for shipped `default_hybrid` |
+| **Passage/context retrieval** | Verified on benchmark fixtures | 80-query passage run: `passage_recall@10 = 0.925`, `answerable_context@10 = 0.938`; semantic passage misses remain the main improvement area |
+| **Text-layer PDF-to-RAG** | Verified on sample scope | `sample_eng.pdf` and `sample_kor.pdf` profile run: 8/8 PDF-derived queries reached source, passage, and answerable context at top-10 |
+| **Scanned/image-only PDFs** | Detected, not OCR-processed | OCR-required PDFs are surfaced as extraction errors so your app can route to an OCR layer; OCR is not bundled in this package |
+| **Large, table-heavy, OCR-heavy PDFs** | Still being validated | Do not treat the PDF smoke result as broad PDF robustness or mobile latency/memory proof |
+
+For the implementation-oriented guide, see
+[Flutter Local RAG Engine Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/local-rag-engine.md).
 
 ### 100% Offline & Private
 
@@ -110,6 +132,7 @@ curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-Mini
 *   [Search Strategies](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/search_strategies.md) - Tune ranking and retrieval.
 
 ### Guides
+*   [Flutter Local RAG Engine Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/local-rag-engine.md) - Build local/on-device RAG in Flutter with Dart APIs.
 *   [Quick Start](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/quick_start.md) - Setup in 5 minutes.
 *   [Model Setup](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md) - Choosing and downloading models.
 *   [Release Build](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/release_build.md) - Bundle size optimization for production.
