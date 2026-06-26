@@ -3,8 +3,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:mobile_rag_engine/src/internal/embedding_dimension_state.dart';
-import 'package:onnxruntime/onnxruntime.dart';
 import 'package:mobile_rag_engine/src/rust/api/tokenizer.dart';
 import 'package:mobile_rag_engine/src/rust/frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
@@ -77,6 +78,7 @@ class EmbeddingService {
       'modelPath': modelPath,
       'modelBytes': modelBytes,
       'intraOpNumThreads': intraOpNumThreads,
+      'rootIsolateToken': RootIsolateToken.instance,
       'replyPort': replyPort.sendPort,
     });
 
@@ -193,8 +195,10 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
   final receivePort = ReceivePort();
   mainSendPort.send(receivePort.sendPort);
 
+  final ort = OnnxRuntime();
   OrtSession? session;
   Set<String> requiredInputNames = {};
+  File? temporaryModelFile;
 
   await for (final message in receivePort) {
     final msg = message as Map<String, dynamic>;
@@ -204,6 +208,13 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
     switch (cmd) {
       case 'init':
         try {
+          final rootIsolateToken = msg['rootIsolateToken'] as RootIsolateToken?;
+          if (rootIsolateToken != null) {
+            BackgroundIsolateBinaryMessenger.ensureInitialized(
+              rootIsolateToken,
+            );
+          }
+
           // Initialize Rust FFI (required for tokenizer)
           if (Platform.isMacOS) {
             await RustLib.init(
@@ -215,26 +226,28 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
             await RustLib.init();
           }
 
-          // Initialize ONNX Runtime
-          OrtEnv.instance.init();
-
-          final sessionOptions = OrtSessionOptions();
-          final threads = msg['intraOpNumThreads'] as int?;
-          if (threads != null) {
-            try {
-              sessionOptions.setIntraOpNumThreads(threads);
-            } catch (_) {
-              // Best-effort; fall back to ONNX default.
-            }
-          }
+          final sessionOptions = OrtSessionOptions(
+            intraOpNumThreads: msg['intraOpNumThreads'] as int?,
+          );
 
           final modelPath = msg['modelPath'] as String?;
           final modelBytes = msg['modelBytes'] as Uint8List?;
 
           if (modelPath != null) {
-            session = OrtSession.fromFile(File(modelPath), sessionOptions);
+            session = await ort.createSession(
+              modelPath,
+              options: sessionOptions,
+            );
           } else if (modelBytes != null) {
-            session = OrtSession.fromBuffer(modelBytes, sessionOptions);
+            temporaryModelFile = File(
+              '${Directory.systemTemp.path}${Platform.pathSeparator}'
+              'mobile_rag_engine_${DateTime.now().microsecondsSinceEpoch}.onnx',
+            );
+            await temporaryModelFile.writeAsBytes(modelBytes, flush: true);
+            session = await ort.createSession(
+              temporaryModelFile.path,
+              options: sessionOptions,
+            );
           } else {
             replyPort.send({
               'error': 'Either modelBytes or modelPath must be provided',
@@ -279,15 +292,15 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
           );
           final shape = [1, seqLen];
 
-          final inputIdsTensor = OrtValueTensor.createTensorWithDataList(
+          final inputIdsTensor = await OrtValue.fromList(
             inputIdsData,
             shape,
           );
-          final attentionMaskTensor = OrtValueTensor.createTensorWithDataList(
+          final attentionMaskTensor = await OrtValue.fromList(
             attentionMaskData,
             shape,
           );
-          OrtValueTensor? tokenTypeIdsTensor;
+          OrtValue? tokenTypeIdsTensor;
 
           final inputs = <String, OrtValue>{
             'input_ids': inputIdsTensor,
@@ -298,7 +311,7 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
             final tokenTypeIdsData = Int64List.fromList(
               List<int>.filled(seqLen, 0),
             );
-            tokenTypeIdsTensor = OrtValueTensor.createTensorWithDataList(
+            tokenTypeIdsTensor = await OrtValue.fromList(
               tokenTypeIdsData,
               shape,
             );
@@ -307,9 +320,9 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
 
           // 3. Run inference
           final runOptions = OrtRunOptions();
-          List<OrtValue?>? outputs;
+          Map<String, OrtValue>? outputs;
           try {
-            outputs = await session.runAsync(runOptions, inputs);
+            outputs = await session.run(inputs, options: runOptions);
           } catch (e) {
             // Wrap input-signature errors with helpful context.
             final message = e.toString();
@@ -327,10 +340,9 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
             }
             rethrow;
           } finally {
-            inputIdsTensor.release();
-            attentionMaskTensor.release();
-            tokenTypeIdsTensor?.release();
-            runOptions.release();
+            await inputIdsTensor.dispose();
+            await attentionMaskTensor.dispose();
+            await tokenTypeIdsTensor?.dispose();
           }
 
           // 4. Extract results and apply mean pooling.
@@ -338,13 +350,15 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
           // and transfer the Float32List across the isolate boundary without
           // copying via TransferableTypedData.
           try {
-            final outputTensor = outputs?[0];
+            final outputTensor = outputs['sentence_embedding'] ??
+                outputs['sentence_embeddings'] ??
+                outputs.values.firstOrNull;
             if (outputTensor == null) {
               replyPort.send({'error': 'ONNX inference returned null output'});
               continue;
             }
 
-            final outputData = outputTensor.value as List;
+            final outputData = await outputTensor.asList();
             Float32List embedding;
 
             if (outputData.isNotEmpty && outputData[0] is List) {
@@ -394,8 +408,8 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
 
             replyPort.send(TransferableTypedData.fromList([embedding]));
           } finally {
-            for (final output in outputs ?? <OrtValue?>[]) {
-              output?.release();
+            for (final output in outputs.values) {
+              await output.dispose();
             }
           }
         } catch (e) {
@@ -404,10 +418,11 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
 
       case 'dispose':
         try {
-          session?.release();
+          await session?.close();
           session = null;
           requiredInputNames = {};
-          OrtEnv.instance.release();
+          await temporaryModelFile?.delete();
+          temporaryModelFile = null;
         } catch (_) {
           // Best-effort cleanup.
         }

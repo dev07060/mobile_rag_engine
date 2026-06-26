@@ -154,12 +154,15 @@ python -m onnxruntime.quantization.quantize \
 
 ## ONNX Runtime Notes
 
-This package uses the [`onnxruntime`](https://pub.dev/packages/onnxruntime) Flutter plugin which bundles ONNX Runtime binaries for each platform.
+This package uses the [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime) Flutter plugin for ONNX Runtime.
 
-**No additional setup required** - the plugin automatically includes:
-- iOS: CoreML execution provider (uses Neural Engine on A12+ chips)
-- Android: NNAPI execution provider (hardware acceleration)
-- macOS: CoreML execution provider
+Runtime setup notes:
+- iOS apps need minimum deployment target 16.0.
+- macOS apps need minimum deployment target 14.0.
+- CocoaPods iOS builds require static framework linkage: `use_frameworks! :linkage => :static`.
+- Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
+
+`mobile_rag_engine` uses the default ONNX Runtime execution path for embedding inference. Do not assume CoreML, NNAPI, or another hardware execution provider is active unless you configure and validate that path in your host app.
 
 ### Performance Tips
 

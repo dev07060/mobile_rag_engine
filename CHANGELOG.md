@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.19.0
+* **Compatibility**:
+  - Replaced the unmaintained `onnxruntime` package dependency with `flutter_onnxruntime: ^1.8.0`.
+  - Updated ONNX session, tensor, output, and cleanup handling to the `flutter_onnxruntime` API while keeping the existing `EmbeddingService` public API.
+  - Raised the documented iOS/macOS runtime requirements to match `flutter_onnxruntime`: iOS 16.0+ and macOS 14.0+.
+* **Validation**:
+  - Validated the runtime swap with local init/embed/repeat/dispose/reinit smoke coverage.
+
 ## 0.18.6
 * **PDF extraction UX**:
   - Added OCR-needed classification helpers for scanned/image-only PDF extraction errors.
