@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.19.1
+* **Packaging**:
+  - Fixed the publish archive so `lib/models/*.dart` is included again.
+
 ## 0.19.0
 * **Compatibility**:
   - Replaced the unmaintained `onnxruntime` package dependency with `flutter_onnxruntime: ^1.8.0`.

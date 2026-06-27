@@ -38,7 +38,7 @@ rust/tests/
 # 대용량 모델 파일 (사용자가 직접 다운로드)
 assets/*
 !assets/readme-sources/
-models/
+/models/
 *.onnx
 *.bin
 
