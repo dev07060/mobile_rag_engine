@@ -34,6 +34,7 @@ pub fn dequantize_i8_to_f32(input: &[i8], scale: f32) -> Vec<f32> {
     input.iter().map(|v| (*v as f32) * scale).collect()
 }
 
+#[cfg(any(test, feature = "bench"))]
 #[inline]
 pub fn i8_blob_from_slice(input: &[i8]) -> Vec<u8> {
     input.iter().map(|v| *v as u8).collect()
@@ -41,10 +42,9 @@ pub fn i8_blob_from_slice(input: &[i8]) -> Vec<u8> {
 
 /// Quantize an `f32` embedding directly into the SQLite `BLOB`
 /// representation, skipping the intermediate `Vec<i8>` that
-/// [`quantize_f32_to_i8`] + [`i8_blob_from_slice`] would otherwise
-/// produce. Returns the quantized bytes together with the scale used
-/// to dequantize them later. Behaviour is bit-for-bit equivalent to
-/// calling the two helpers sequentially.
+/// [`quantize_f32_to_i8`] plus a byte conversion would otherwise produce.
+/// Returns the quantized bytes together with the scale used to dequantize
+/// them later. Behaviour is bit-for-bit equivalent to the older two-step path.
 #[inline]
 pub fn quantize_f32_to_u8_blob(input: &[f32]) -> (Vec<u8>, f32) {
     if input.is_empty() {

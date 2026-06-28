@@ -2277,13 +2277,6 @@ pub fn search_chunks_in_collection(
     Ok(results)
 }
 
-fn search_chunks_linear(
-    query_embedding: Vec<f32>,
-    top_k: u32,
-) -> Result<Vec<ChunkSearchResult>, RagError> {
-    search_chunks_linear_in_collection(DEFAULT_COLLECTION_ID, query_embedding, top_k)
-}
-
 fn search_chunks_linear_in_collection(
     collection_id: &str,
     query_embedding: Vec<f32>,
