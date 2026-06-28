@@ -88,11 +88,11 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 
 | Platform | Minimum Version |
 |:---------|:----------------|
-| **iOS** | 13.0+ |
+| **iOS** | 16.0+ |
 | **Android** | API 21+ (Android 5.0 Lollipop) |
-| **macOS** | 10.15+ (Catalina) |
+| **macOS** | 14.0+ |
 
-> **ONNX Runtime** is bundled automatically via the [`onnxruntime`](https://pub.dev/packages/onnxruntime) plugin. No additional native setup required.
+> ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods iOS builds require static framework linkage (`use_frameworks! :linkage => :static`), and Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
 
 ---
 
@@ -102,7 +102,7 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 
 ```yaml
 dependencies:
-  mobile_rag_engine:
+  mobile_rag_engine: ^0.19.0
 ```
 
 ### 2. Download Model Files

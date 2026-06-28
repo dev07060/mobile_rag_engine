@@ -7,7 +7,7 @@ Get started with `mobile_rag_engine` in 5 minutes.
 ## Prerequisites
 
 - Flutter 3.9+
-- iOS 13.0+ / Android API 21+ / macOS 10.15+
+- iOS 16.0+ / Android API 21+ / macOS 14.0+
 
 ---
 
@@ -16,7 +16,7 @@ Get started with `mobile_rag_engine` in 5 minutes.
 ```yaml
 # pubspec.yaml
 dependencies:
-  mobile_rag_engine:
+  mobile_rag_engine: ^0.19.0
 ```
 
 ```bash

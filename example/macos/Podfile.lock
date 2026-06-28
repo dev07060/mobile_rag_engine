@@ -1,9 +1,15 @@
 PODS:
   - file_picker (0.0.1):
     - FlutterMacOS
-  - FlutterMacOS (1.0.0)
-  - onnxruntime (0.0.1):
+  - flutter_onnxruntime (0.0.1):
     - FlutterMacOS
+    - onnxruntime-objc (= 1.24.2)
+  - FlutterMacOS (1.0.0)
+  - onnxruntime-c (1.24.2)
+  - onnxruntime-objc (1.24.2):
+    - onnxruntime-objc/Core (= 1.24.2)
+  - onnxruntime-objc/Core (1.24.2):
+    - onnxruntime-c (= 1.24.2)
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -37,23 +43,25 @@ PODS:
 
 DEPENDENCIES:
   - file_picker (from `Flutter/ephemeral/.symlinks/plugins/file_picker/macos`)
+  - flutter_onnxruntime (from `Flutter/ephemeral/.symlinks/plugins/flutter_onnxruntime/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
-  - onnxruntime (from `Flutter/ephemeral/.symlinks/plugins/onnxruntime/macos`)
   - path_provider_foundation (from `Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin`)
   - rag_engine_flutter (from `Flutter/ephemeral/.symlinks/plugins/rag_engine_flutter/macos`)
   - sqlite3_flutter_libs (from `Flutter/ephemeral/.symlinks/plugins/sqlite3_flutter_libs/darwin`)
 
 SPEC REPOS:
   trunk:
+    - onnxruntime-c
+    - onnxruntime-objc
     - sqlite3
 
 EXTERNAL SOURCES:
   file_picker:
     :path: Flutter/ephemeral/.symlinks/plugins/file_picker/macos
+  flutter_onnxruntime:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_onnxruntime/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
-  onnxruntime:
-    :path: Flutter/ephemeral/.symlinks/plugins/onnxruntime/macos
   path_provider_foundation:
     :path: Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin
   rag_engine_flutter:
@@ -63,13 +71,15 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   file_picker: e716a70a9fe5fd9e09ebc922d7541464289443af
+  flutter_onnxruntime: b195bce8c50601372e976ed9726508b576ebff82
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
-  onnxruntime: 922a85d3c9ed1b3c2b515ec903fc4d9b8f51d96b
+  onnxruntime-c: b58bafbc58707d165404665e46a7467a16e8e0e4
+  onnxruntime-objc: 99e0fe4b6d606970c6c1350c194c7629ef6e6fc9
   path_provider_foundation: 0b743cbb62d8e47eab856f09262bb8c1ddcfe6ba
   rag_engine_flutter: a9b5919020d1c7fb0e097bfcf6f8abb423e89a22
   sqlite3: a51c07cf16e023d6c48abd5e5791a61a47354921
   sqlite3_flutter_libs: f9114e4bbe1f2e03dd543373c53d23245982ca13
 
-PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
+PODFILE CHECKSUM: 429f567d9ab401e946f77b31dd025355fafef34e
 
 COCOAPODS: 1.16.2

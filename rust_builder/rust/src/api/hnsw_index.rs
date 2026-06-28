@@ -66,7 +66,7 @@ pub fn build_hnsw_index(points: Vec<(i64, Vec<f32>)>) -> anyhow::Result<()> {
     // Adaptive parameters based on dataset size
     // - Small datasets (<1000): faster build, adequate recall
     // - Large datasets (>10000): higher quality, better recall
-    let (m, m0, ef_construction, size_category) = if count > 10_000 {
+    let (m, m0, ef_construction, _size_category) = if count > 10_000 {
         (24, 48, 200, "large (>10K)")
     } else if count > 1_000 {
         (20, 40, 150, "medium (1K-10K)")
@@ -77,7 +77,7 @@ pub fn build_hnsw_index(points: Vec<(i64, Vec<f32>)>) -> anyhow::Result<()> {
     // Debug output for Flutter console (only in debug builds)
     #[cfg(debug_assertions)]
     {
-        println!("[HNSW] Dataset size: {} points ({})", count, size_category);
+        println!("[HNSW] Dataset size: {} points ({})", count, _size_category);
         println!(
             "[HNSW] Parameters: M={}, M0={}, efConstruction={}",
             m, m0, ef_construction

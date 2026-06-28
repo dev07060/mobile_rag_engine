@@ -24,6 +24,7 @@ artifacts/faer_int8_*
 .venv/
 *.env
 .env
+*.log
 
 # 빌드 산출물
 build/
@@ -37,6 +38,7 @@ rust/tests/
 # 대용량 모델 파일 (사용자가 직접 다운로드)
 assets/*
 !assets/readme-sources/
+/models/
 *.onnx
 *.bin
 
@@ -72,5 +74,6 @@ example/assets/evalsets/
 
 # Example evaluation/performance runners (local only)
 example/lib/*_runner.dart
+example/lib/*_smoke.dart
 example/lib/profiling/
 example/test/profiling/

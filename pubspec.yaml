@@ -1,6 +1,6 @@
 name: mobile_rag_engine
 description: Build local/on-device RAG in Flutter with Dart APIs, offline semantic search, HNSW+BM25 hybrid retrieval, and text-layer PDF indexing.
-version: 0.18.6
+version: 0.19.1
 homepage: https://github.com/dev07060/mobile_rag_engine
 repository: https://github.com/dev07060/mobile_rag_engine
 issue_tracker: https://github.com/dev07060/mobile_rag_engine/issues
@@ -19,10 +19,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_rust_bridge: 2.11.1
+  flutter_rust_bridge: ^2.11.1
   rag_engine_flutter: ^0.18.4
   path_provider: ^2.1.5
-  onnxruntime: ^1.4.1
+  flutter_onnxruntime: ^1.8.0
   freezed_annotation: ^3.1.0
 
 dev_dependencies:
