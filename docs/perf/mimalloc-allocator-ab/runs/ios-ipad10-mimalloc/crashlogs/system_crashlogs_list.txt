@@ -1,0 +1,77 @@
+Failed to load provisioning paramter list due to error: Error Domain=com.apple.dt.CoreDeviceError Code=1002 "No provider was found." UserInfo={NSLocalizedDescription=No provider was found.}.
+`devicectl manage create` may support a reduced set of arguments.
+02:30:29  Acquired tunnel connection to device.
+02:30:29  Enabling developer disk image services.
+02:30:30  Acquired usage assertion.
+69 files:
+Name                                                                              URL Resources                   Size        Modification date
+-------------------------------------------------------------------------------   -----------------------------   ---------   -----------------
+Assistant/SpeechLogs                                                              Writable, Readable, Directory   64 bytes    1/12/26, 5:35 PM 
+DiagnosticLogs                                                                    Writable, Readable, Directory   96 bytes    1/13/26, 11:10 PM
+Retired                                                                           Writable, Readable, Directory   64 bytes    1/13/26, 2:22 AM 
+ExcUserFault_ChatGPT-2026-06-01-194151.ips                                        Writable, Readable              5 KB        6/1/26, 7:41 PM  
+JetsamEvent-2026-06-10-103809.ips                                                 Writable, Readable              139 KB      6/10/26, 10:38 AM
+spotlightknowledged.cpu_resource-2026-06-10-104328.ips                            Writable, Readable              43 KB       6/10/26, 10:43 AM
+spotlightknowledged.cpu_resource-2026-06-10-122341.ips                            Writable, Readable              23 KB       6/10/26, 12:23 PM
+LowBatteryLog-2026-06-11-090411.ips                                               Writable, Readable              23 KB       6/11/26, 9:04 AM 
+gpuEvent-MobileSafari-2026-06-14-185042.ips                                       Writable, Readable              953 bytes   6/14/26, 6:50 PM 
+biomesyncd.diskwrites_resource-2026-06-14-194440.ips                              Writable, Readable              106 KB      6/14/26, 7:44 PM 
+ota_patch.txt                                                                     Writable, Readable              29 KB       6/16/26, 1:10 PM 
+JetsamEvent-2026-06-16-131520.ips                                                 Writable, Readable              259 KB      6/16/26, 1:15 PM 
+lsd.diskwrites_resource-2026-06-16-025806.ips                                     Writable, Readable              115 KB      6/16/26, 2:58 AM 
+STExtractionService.privileged.diskwrites_resource-2026-06-16-051510.ips          Writable, Readable              144 KB      6/16/26, 5:15 AM 
+com.apple.WebKit.WebContent.EnhancedSecurity.cpu_resource-2026-06-19-223254.ips   Writable, Readable              98 KB       6/19/26, 10:32 PM
+SiriSearchFeedback-2026-06-19-234234.ips                                          Writable, Readable              350 bytes   6/19/26, 11:42 PM
+SiriSearchFeedback-2026-06-19-234226.ips                                          Writable, Readable              338 bytes   6/19/26, 11:42 PM
+duetexpertd.cpu_resource-2026-06-19-234709.ips                                    Writable, Readable              52 KB       6/19/26, 11:47 PM
+lsd.diskwrites_resource-2026-06-19-011448.ips                                     Writable, Readable              68 KB       6/19/26, 1:14 AM 
+PerfPowerServices.diskwrites_resource-2026-06-19-022246.ips                       Writable, Readable              66 KB       6/19/26, 2:22 AM 
+searchd.diskwrites_resource-2026-06-19-191231.ips                                 Writable, Readable              147 KB      6/19/26, 7:12 PM 
+SiriSearchFeedback-2026-06-19-194859.ips                                          Writable, Readable              350 bytes   6/19/26, 7:48 PM 
+SiriSearchFeedback-2026-06-19-194818.ips                                          Writable, Readable              338 bytes   6/19/26, 7:48 PM 
+SiriSearchFeedback-2026-06-19-200724.ips                                          Writable, Readable              350 bytes   6/19/26, 8:07 PM 
+gpuEvent-MobileSafari-2026-06-02-021051.ips                                       Writable, Readable              953 bytes   6/2/26, 2:10 AM  
+SiriSearchFeedback-2026-06-20-204124.ips                                          Writable, Readable              338 bytes   6/20/26, 8:41 PM 
+SiriSearchFeedback-2026-06-23-012530.ips                                          Writable, Readable              350 bytes   6/23/26, 1:25 AM 
+SiriSearchFeedback-2026-06-23-012529.ips                                          Writable, Readable              338 bytes   6/23/26, 1:25 AM 
+JetsamEvent-2026-06-23-133122.ips                                                 Writable, Readable              198 KB      6/23/26, 1:31 PM 
+SiriSearchFeedback-2026-06-23-133150.ips                                          Writable, Readable              349 bytes   6/23/26, 1:31 PM 
+SiriSearchFeedback-2026-06-23-013312.ips                                          Writable, Readable              350 bytes   6/23/26, 1:33 AM 
+SiriSearchFeedback-2026-06-23-014634.ips                                          Writable, Readable              350 bytes   6/23/26, 1:46 AM 
+SiriSearchFeedback-2026-06-23-015404.ips                                          Writable, Readable              350 bytes   6/23/26, 1:54 AM 
+SiriSearchFeedback-2026-06-23-021138.ips                                          Writable, Readable              350 bytes   6/23/26, 2:11 AM 
+SiriSearchFeedback-2026-06-23-024111.ips                                          Writable, Readable              350 bytes   6/23/26, 2:41 AM 
+SiriSearchFeedback-2026-06-27-230102.ips                                          Writable, Readable              350 bytes   6/27/26, 11:01 PM
+SiriSearchFeedback-2026-06-27-230607.ips                                          Writable, Readable              350 bytes   6/27/26, 11:06 PM
+SiriSearchFeedback-2026-06-27-232247.ips                                          Writable, Readable              350 bytes   6/27/26, 11:22 PM
+SiriSearchFeedback-2026-06-27-233502.ips                                          Writable, Readable              350 bytes   6/27/26, 11:35 PM
+SiriSearchFeedback-2026-06-27-235507.ips                                          Writable, Readable              350 bytes   6/27/26, 11:55 PM
+spotlightknowledged.cpu_resource-2026-06-27-192741.ips                            Writable, Readable              65 KB       6/27/26, 7:27 PM 
+SiriSearchFeedback-2026-06-28-000005.ips                                          Writable, Readable              350 bytes   6/28/26, 12:00 AM
+com.apple.WebKit.WebContent.cpu_resource-2026-06-28-000805.ips                    Writable, Readable              705 KB      6/28/26, 12:08 AM
+SiriSearchFeedback-2026-06-28-001255.ips                                          Writable, Readable              350 bytes   6/28/26, 12:12 AM
+com.apple.WebKit.WebContent.cpu_resource-2026-06-28-002124.ips                    Writable, Readable              549 KB      6/28/26, 12:21 AM
+SiriSearchFeedback-2026-06-28-002352.ips                                          Writable, Readable              350 bytes   6/28/26, 12:23 AM
+SiriSearchFeedback-2026-06-28-005126.ips                                          Writable, Readable              350 bytes   6/28/26, 12:51 AM
+SiriSearchFeedback-2026-06-28-005500.ips                                          Writable, Readable              350 bytes   6/28/26, 12:55 AM
+SiriSearchFeedback-2026-06-28-011254.ips                                          Writable, Readable              350 bytes   6/28/26, 1:12 AM 
+DiagnosticLogs/Search                                                             Writable, Readable, Directory   96 bytes    6/29/26, 1:06 AM 
+DiagnosticLogs/Search/spotlight_heartbeat_last.log                                Writable, Readable              16 KB       6/29/26, 1:06 AM 
+Assistant                                                                         Writable, Readable, Directory   96 bytes    6/29/26, 2:29 AM 
+JetsamEvent-2026-06-04-230041.ips                                                 Writable, Readable              213 KB      6/4/26, 11:00 PM 
+JetsamEvent-2026-06-04-232150.ips                                                 Writable, Readable              200 KB      6/4/26, 11:21 PM 
+JetsamEvent-2026-06-04-233030.ips                                                 Writable, Readable              448 KB      6/4/26, 11:30 PM 
+JetsamEvent-2026-06-04-233118.ips                                                 Writable, Readable              134 KB      6/4/26, 11:31 PM 
+JetsamEvent-2026-06-04-233449.ips                                                 Writable, Readable              157 KB      6/4/26, 11:34 PM 
+JetsamEvent-2026-06-04-233941.ips                                                 Writable, Readable              212 KB      6/4/26, 11:39 PM 
+Runner.cpu_resource-2026-06-05-113905.ips                                         Writable, Readable              20 KB       6/5/26, 11:39 AM 
+JetsamEvent-2026-06-05-000009.ips                                                 Writable, Readable              171 KB      6/5/26, 12:00 AM 
+JetsamEvent-2026-06-05-000119.ips                                                 Writable, Readable              144 KB      6/5/26, 12:01 AM 
+JetsamEvent-2026-06-05-000306.ips                                                 Writable, Readable              249 KB      6/5/26, 12:03 AM 
+JetsamEvent-2026-06-05-000341.ips                                                 Writable, Readable              140 KB      6/5/26, 12:03 AM 
+spotlightknowledged.cpu_resource-2026-06-05-163628.ips                            Writable, Readable              16 KB       6/5/26, 4:36 PM  
+spotlightknowledged.cpu_resource-2026-06-06-122448.ips                            Writable, Readable              25 KB       6/6/26, 12:24 PM 
+spotlightknowledged.cpu_resource-2026-06-07-122358.ips                            Writable, Readable              31 KB       6/7/26, 12:23 PM 
+spotlightknowledged.cpu_resource-2026-06-08-104246.ips                            Writable, Readable              37 KB       6/8/26, 10:42 AM 
+JetsamEvent-2026-06-08-225830.ips                                                 Writable, Readable              233 KB      6/8/26, 10:58 PM 
+spotlightknowledged.cpu_resource-2026-06-09-122345.ips                            Writable, Readable              33 KB       6/9/26, 12:23 PM 
