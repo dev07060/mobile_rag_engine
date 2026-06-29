@@ -21,8 +21,8 @@ use crate::api::bm25_search::{bm25_add_documents, bm25_clear_index, is_bm25_inde
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
 use crate::api::hnsw_index::{
-    build_hnsw_index, clear_hnsw_index, is_hnsw_index_loaded, load_hnsw_index, save_hnsw_index,
-    search_hnsw,
+    build_hnsw_index_streaming, clear_hnsw_index, is_hnsw_index_loaded, load_hnsw_index,
+    save_hnsw_index, search_hnsw,
 };
 use crate::api::hybrid_search::{search_hybrid_meta_inner, RrfConfig, SearchFilter};
 use crate::api::ingest_metrics::{
@@ -862,6 +862,26 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     ensure_collection_row(&conn, &collection_id)?;
 
+    let point_count_hint: usize = conn
+        .query_row(
+            "SELECT COUNT(*)
+             FROM chunks c
+             JOIN sources s ON s.id = c.source_id
+             WHERE c.collection_id = ?1
+               AND COALESCE(s.status, 'completed') = 'completed'",
+            params![&collection_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|count| count.max(0) as usize)
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    if point_count_hint == 0 {
+        clear_hnsw_index();
+        set_active_hnsw_collection(&collection_id);
+        mark_collection_hnsw_clean(&conn, &collection_id)?;
+        return Ok(());
+    }
+
     let has_chunk_embedding_i8: bool = conn
         .prepare("SELECT embedding_i8 FROM chunks LIMIT 1")
         .is_ok();
@@ -887,8 +907,8 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
     }
     .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
-    let points: Vec<(i64, Vec<f32>)> = stmt
-        .query_map(params![collection_id], |row| {
+    let rows = stmt
+        .query_map(params![&collection_id], |row| {
             let id: i64 = row.get(0)?;
             let embedding_blob: Vec<u8> = row.get(1)?;
             let embedding_i8_blob: Option<Vec<u8>> = row.get(2)?;
@@ -916,16 +936,21 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
             };
             Ok((id, embedding))
         })
-        .map_err(|e| RagError::DatabaseError(e.to_string()))?
-        .filter_map(|r| r.ok())
-        .filter(|(_, embedding)| !embedding.is_empty())
-        .collect();
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
-    if points.is_empty() {
+    let points = rows
+        .filter_map(|row| row.ok())
+        .filter(|(_, embedding)| !embedding.is_empty());
+    let inserted = build_hnsw_index_streaming(point_count_hint, points)
+        .map_err(|e| RagError::InternalError(e.to_string()))?;
+
+    if inserted == 0 {
         clear_hnsw_index();
     } else {
-        build_hnsw_index(points).map_err(|e| RagError::InternalError(e.to_string()))?;
-        info!("[rebuild_chunk_hnsw] Built index for {}", collection_id);
+        info!(
+            "[rebuild_chunk_hnsw] Built index for {} with {} chunks",
+            collection_id, inserted
+        );
     }
     set_active_hnsw_collection(&collection_id);
     mark_collection_hnsw_clean(&conn, &collection_id)?;

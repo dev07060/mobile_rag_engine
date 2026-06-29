@@ -47,46 +47,52 @@ impl EmbeddingPoint {
 static HNSW_INDEX: Lazy<RwLock<Option<Hnsw<'static, f32, DistCosine>>>> =
     Lazy::new(|| RwLock::new(None));
 
-/// Build HNSW index from embedding points.
-///
-/// Parameters are tuned for optimal recall vs speed tradeoff:
-/// - M (max connections per node): 16-24 based on dataset size
-/// - M0 (layer 0 connections): 2*M for better recall
-/// - efConstruction: 100-200 based on dataset size
-pub fn build_hnsw_index(points: Vec<(i64, Vec<f32>)>) -> anyhow::Result<()> {
-    info!("[hnsw] Building index with {} points", points.len());
-
-    if points.is_empty() {
-        warn!("[hnsw] No points provided");
-        return Ok(());
-    }
-
-    let count = points.len();
-
-    // Adaptive parameters based on dataset size
-    // - Small datasets (<1000): faster build, adequate recall
-    // - Large datasets (>10000): higher quality, better recall
-    let (m, m0, ef_construction, _size_category) = if count > 10_000 {
+fn hnsw_build_params(count: usize) -> (usize, usize, usize, &'static str) {
+    if count > 10_000 {
         (24, 48, 200, "large (>10K)")
     } else if count > 1_000 {
         (20, 40, 150, "medium (1K-10K)")
     } else {
         (16, 32, 100, "small (<1K)")
-    };
+    }
+}
+
+/// Build HNSW index from an iterator of embedding points.
+pub(crate) fn build_hnsw_index_streaming<I>(
+    point_count_hint: usize,
+    points: I,
+) -> anyhow::Result<usize>
+where
+    I: IntoIterator<Item = (i64, Vec<f32>)>,
+{
+    info!(
+        "[hnsw] Building index with {} point capacity hint",
+        point_count_hint
+    );
+
+    let capacity = point_count_hint.max(1);
+
+    // Adaptive parameters based on dataset size
+    // - Small datasets (<1000): faster build, adequate recall
+    // - Large datasets (>10000): higher quality, better recall
+    let (m, m0, ef_construction, _size_category) = hnsw_build_params(capacity);
 
     // Debug output for Flutter console (only in debug builds)
     #[cfg(debug_assertions)]
     {
-        println!("[HNSW] Dataset size: {} points ({})", count, _size_category);
+        println!(
+            "[HNSW] Dataset size hint: {} points ({})",
+            point_count_hint, _size_category
+        );
         println!(
             "[HNSW] Parameters: M={}, M0={}, efConstruction={}",
             m, m0, ef_construction
         );
         println!(
             "[HNSW] Expected recall: ~{}%",
-            if count > 10_000 {
+            if capacity > 10_000 {
                 "97"
-            } else if count > 1_000 {
+            } else if capacity > 1_000 {
                 "95"
             } else {
                 "92"
@@ -99,22 +105,44 @@ pub fn build_hnsw_index(points: Vec<(i64, Vec<f32>)>) -> anyhow::Result<()> {
         m, m0, ef_construction
     );
 
-    let hnsw = Hnsw::new(m, count, m0, ef_construction, DistCosine);
+    let hnsw = Hnsw::new(m, capacity, m0, ef_construction, DistCosine);
+    let mut inserted = 0usize;
 
     for (id, embedding) in points {
+        if embedding.is_empty() {
+            continue;
+        }
         hnsw.insert((&embedding, id as usize));
+        inserted += 1;
+    }
+
+    if inserted == 0 {
+        warn!("[hnsw] No points provided");
+        return Ok(0);
     }
 
     let mut index_guard = HNSW_INDEX.write().unwrap();
     *index_guard = Some(hnsw);
 
     #[cfg(debug_assertions)]
-    println!("[HNSW] ✅ Index build complete");
+    println!("[HNSW] Index build complete");
 
     info!(
-        "[hnsw] Index build complete (M={}, M0={}, efC={})",
-        m, m0, ef_construction
+        "[hnsw] Index build complete (inserted={}, M={}, M0={}, efC={})",
+        inserted, m, m0, ef_construction
     );
+    Ok(inserted)
+}
+
+/// Build HNSW index from embedding points.
+///
+/// Parameters are tuned for optimal recall vs speed tradeoff:
+/// - M (max connections per node): 16-24 based on dataset size
+/// - M0 (layer 0 connections): 2*M for better recall
+/// - efConstruction: 100-200 based on dataset size
+pub fn build_hnsw_index(points: Vec<(i64, Vec<f32>)>) -> anyhow::Result<()> {
+    let point_count = points.len();
+    let _ = build_hnsw_index_streaming(point_count, points)?;
     Ok(())
 }
 
@@ -317,6 +345,33 @@ mod tests {
         let result = build_hnsw_index(vec![]);
         assert!(result.is_ok());
         assert!(!is_hnsw_index_loaded());
+    }
+
+    #[test]
+    fn test_streaming_build_empty_index() {
+        clear_hnsw_index();
+
+        let inserted = build_hnsw_index_streaming(0, std::iter::empty()).unwrap();
+
+        assert_eq!(inserted, 0);
+        assert!(!is_hnsw_index_loaded());
+    }
+
+    #[test]
+    fn test_streaming_build_and_search() {
+        clear_hnsw_index();
+        let points: Vec<(i64, Vec<f32>)> = (0..100)
+            .map(|i| (i, make_random_embedding(i as u64, 384)))
+            .collect();
+
+        let inserted = build_hnsw_index_streaming(points.len(), points.into_iter()).unwrap();
+
+        assert_eq!(inserted, 100);
+        assert!(is_hnsw_index_loaded());
+
+        let query = make_random_embedding(42, 384);
+        let results = search_hnsw(query, 5).unwrap();
+        assert!(!results.is_empty());
     }
 
     #[test]
