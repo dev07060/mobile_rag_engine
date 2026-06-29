@@ -73,8 +73,7 @@ import 'rag_config.dart';
 import 'source_rag_service.dart';
 import 'context_builder.dart';
 import '../src/rust/api/hybrid_search.dart' as hybrid;
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-import '../src/rust/frb_generated.dart';
+import '../src/rust/rust_library_loader.dart';
 
 /// Unified RAG engine with simplified initialization.
 ///
@@ -86,13 +85,7 @@ class RagEngine {
   static Future<void> _ensureRustInitialized() async {
     if (_isRustInitialized) return;
 
-    if (Platform.isMacOS) {
-      await RustLib.init(
-        externalLibrary: ExternalLibrary.process(iKnowHowToUseIt: true),
-      );
-    } else {
-      await RustLib.init();
-    }
+    await initRustLibForPlatform();
     _isRustInitialized = true;
   }
 

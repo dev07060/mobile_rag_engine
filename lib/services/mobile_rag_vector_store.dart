@@ -1,12 +1,10 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
-    show ExternalLibrary;
-
 import '../src/rust/api/db_pool.dart' as db_pool;
 import '../src/rust/api/source_rag.dart' as source_rag;
 import '../src/rust/frb_generated.dart';
+import '../src/rust/rust_library_loader.dart';
 
 /// LLM-agnostic vector-store facade backed by mobile_rag_engine's source/chunk
 /// storage.
@@ -230,14 +228,7 @@ class MobileRagVectorStore {
       return;
     }
 
-    try {
-      await RustLib.init();
-    } catch (_) {
-      if (!Platform.isMacOS || RustLib.instance.initialized) rethrow;
-      await RustLib.init(
-        externalLibrary: ExternalLibrary.process(iKnowHowToUseIt: true),
-      );
-    }
+    await initRustLibForPlatform();
     _rustInitialized = true;
   }
 }

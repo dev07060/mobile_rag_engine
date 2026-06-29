@@ -7,9 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:mobile_rag_engine/src/internal/embedding_dimension_state.dart';
 import 'package:mobile_rag_engine/src/rust/api/tokenizer.dart';
-import 'package:mobile_rag_engine/src/rust/frb_generated.dart';
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
-    as frb;
+import 'package:mobile_rag_engine/src/rust/rust_library_loader.dart';
 
 /// Dart-based embedding service backed by a dedicated background isolate.
 ///
@@ -119,9 +117,8 @@ class EmbeddingService {
       throw Exception(result['error']);
     }
 
-    final embedding = (result as TransferableTypedData)
-        .materialize()
-        .asFloat32List();
+    final embedding =
+        (result as TransferableTypedData).materialize().asFloat32List();
     _dimensionState.validateAndRemember(embedding.length);
     return embedding;
   }
@@ -215,16 +212,8 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
             );
           }
 
-          // Initialize Rust FFI (required for tokenizer)
-          if (Platform.isMacOS) {
-            await RustLib.init(
-              externalLibrary: frb.ExternalLibrary.process(
-                iKnowHowToUseIt: true,
-              ),
-            );
-          } else {
-            await RustLib.init();
-          }
+          // Initialize Rust FFI (required for tokenizer).
+          await initRustLibForPlatform();
 
           final sessionOptions = OrtSessionOptions(
             intraOpNumThreads: msg['intraOpNumThreads'] as int?,
@@ -330,8 +319,7 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
                 message.contains('Invalid Feed Input Name')) {
               final sortedNames = requiredInputNames.toList()..sort();
               replyPort.send({
-                'error':
-                    'ONNX input signature mismatch: $message\n'
+                'error': 'ONNX input signature mismatch: $message\n'
                     'Model input names: ${sortedNames.join(', ')}\n'
                     'mobile_rag_engine sends: input_ids, attention_mask, '
                     'optional token_type_ids.',
