@@ -16,17 +16,18 @@
 //
 //! Extended RAG API with sources and chunks for LLM-optimized context.
 
+use crate::api::activation_metrics;
 use crate::api::bm25_search::{bm25_add_documents, bm25_clear_index, is_bm25_index_loaded};
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
-use crate::api::ingest_metrics::{
-    legacy_counters_enabled, LEGACY_ADD_CHUNKS_IN, LEGACY_ADD_SOURCE_IN,
-};
 use crate::api::hnsw_index::{
     build_hnsw_index, clear_hnsw_index, is_hnsw_index_loaded, load_hnsw_index, save_hnsw_index,
     search_hnsw,
 };
 use crate::api::hybrid_search::{search_hybrid_meta_inner, RrfConfig, SearchFilter};
+use crate::api::ingest_metrics::{
+    legacy_counters_enabled, LEGACY_ADD_CHUNKS_IN, LEGACY_ADD_SOURCE_IN,
+};
 use crate::api::migration_meta::{detect_existing_install, initialize_migration_meta};
 use crate::api::query_metrics::{
     record_hydrated_content_read, QueryContentReadGuard, QueryContentReadPhase,
@@ -49,6 +50,7 @@ use rusqlite::{params, OptionalExtension};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::Instant;
 
 pub const DEFAULT_COLLECTION_ID: &str = "__default__";
 
@@ -61,6 +63,10 @@ static CJK_OR_HANGUL_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7A3]"#)
         .expect("valid cjk regex")
 });
+
+fn elapsed_nanos_u64(start: Instant) -> u64 {
+    start.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
+}
 
 #[cfg(test)]
 static SEARCH_META_TEST_HOOK: Lazy<RwLock<Option<fn()>>> = Lazy::new(|| RwLock::new(None));
@@ -733,8 +739,7 @@ pub struct ChunkData {
 /// Add chunks for a source (uses transaction for atomicity).
 pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagError> {
     if legacy_counters_enabled() {
-        LEGACY_ADD_CHUNKS_IN
-            .record(chunks.iter().map(|c| c.content.len() as u64).sum());
+        LEGACY_ADD_CHUNKS_IN.record(chunks.iter().map(|c| c.content.len() as u64).sum());
     }
     info!(
         "[add_chunks] Adding {} chunks for source {}",
@@ -768,8 +773,7 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
 
         #[cfg(feature = "vector_quant_i8")]
         {
-            let (embedding_i8_bytes, embedding_scale) =
-                quantize_f32_to_u8_blob(&chunk.embedding);
+            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&chunk.embedding);
 
             if has_chunk_embedding_i8 && has_chunk_embedding_scale {
                 tx.execute(
@@ -843,6 +847,13 @@ pub fn rebuild_chunk_hnsw_index() -> Result<(), RagError> {
 
 /// Rebuild HNSW index from chunks table for a specific collection.
 pub fn rebuild_chunk_hnsw_index_for_collection(collection_id: String) -> Result<(), RagError> {
+    let start = Instant::now();
+    let result = rebuild_chunk_hnsw_index_for_collection_inner(collection_id);
+    activation_metrics::record_hnsw_rebuild_nanos(elapsed_nanos_u64(start));
+    result
+}
+
+fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Result<(), RagError> {
     let collection_id = normalize_collection_id(collection_id);
     info!(
         "[rebuild_chunk_hnsw] Starting for collection={}",
@@ -928,6 +939,13 @@ pub fn rebuild_chunk_bm25_index() -> Result<(), RagError> {
 
 /// Rebuild BM25 index from chunks table for a specific collection.
 pub fn rebuild_chunk_bm25_index_for_collection(collection_id: String) -> Result<(), RagError> {
+    let start = Instant::now();
+    let result = rebuild_chunk_bm25_index_for_collection_inner(collection_id);
+    activation_metrics::record_bm25_rebuild_nanos(elapsed_nanos_u64(start));
+    result
+}
+
+fn rebuild_chunk_bm25_index_for_collection_inner(collection_id: String) -> Result<(), RagError> {
     let collection_id = normalize_collection_id(collection_id);
     info!(
         "[rebuild_chunk_bm25] Starting for collection={}",
@@ -979,7 +997,10 @@ pub fn save_collection_hnsw_index(
     base_path: String,
 ) -> Result<(), RagError> {
     let collection_id = normalize_collection_id(collection_id);
-    save_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()))?;
+    let start = Instant::now();
+    let result = save_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()));
+    activation_metrics::record_hnsw_save_nanos(elapsed_nanos_u64(start));
+    result?;
     set_active_hnsw_collection(&collection_id);
     Ok(())
 }
@@ -990,7 +1011,18 @@ pub fn load_collection_hnsw_index(
     base_path: String,
 ) -> Result<bool, RagError> {
     let collection_id = normalize_collection_id(collection_id);
-    let loaded = load_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()))?;
+    let start = Instant::now();
+    let load_result = load_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()));
+    let loaded = match load_result {
+        Ok(loaded) => {
+            activation_metrics::record_hnsw_load_nanos(elapsed_nanos_u64(start), loaded);
+            loaded
+        }
+        Err(err) => {
+            activation_metrics::record_hnsw_load_nanos(elapsed_nanos_u64(start), false);
+            return Err(err);
+        }
+    };
     if loaded {
         set_active_hnsw_collection(&collection_id);
         let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -1007,6 +1039,16 @@ pub fn activate_collection_for_hybrid_search(
     collection_id: String,
     base_path: String,
 ) -> Result<(), RagError> {
+    let total_start = Instant::now();
+    let result = activate_collection_for_hybrid_search_inner(collection_id, base_path);
+    activation_metrics::record_activate_total_nanos(elapsed_nanos_u64(total_start));
+    result
+}
+
+fn activate_collection_for_hybrid_search_inner(
+    collection_id: String,
+    base_path: String,
+) -> Result<(), RagError> {
     let collection_id = normalize_collection_id(collection_id);
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     ensure_collection_row(&conn, &collection_id)?;
@@ -1016,13 +1058,28 @@ pub fn activate_collection_for_hybrid_search(
     }
 
     if !is_hnsw_index_loaded() || !is_active_hnsw_collection(&collection_id) {
-        let loaded = load_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()))?;
+        let load_start = Instant::now();
+        let load_result = load_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()));
+        let loaded = match load_result {
+            Ok(loaded) => {
+                activation_metrics::record_hnsw_load_nanos(elapsed_nanos_u64(load_start), loaded);
+                loaded
+            }
+            Err(err) => {
+                activation_metrics::record_hnsw_load_nanos(elapsed_nanos_u64(load_start), false);
+                return Err(err);
+            }
+        };
         if loaded {
             set_active_hnsw_collection(&collection_id);
             let _ = mark_collection_hnsw_clean(&conn, &collection_id);
         } else {
             rebuild_chunk_hnsw_index_for_collection(collection_id.clone())?;
-            save_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()))?;
+            let save_start = Instant::now();
+            let save_result =
+                save_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()));
+            activation_metrics::record_hnsw_save_nanos(elapsed_nanos_u64(save_start));
+            save_result?;
         }
     }
 
@@ -1203,12 +1260,8 @@ impl SearchHandle {
         // returns from the cache and bypasses SQLite entirely.
         let (from_cache, missing) = partition_by_cache(&self.content_cache, &requested_ids);
 
-        let (newly_fetched, stale_missing) = hydrate_chunk_search_results(
-            &conn,
-            &self.collection_id,
-            missing,
-            &self.ordered_hits,
-        )?;
+        let (newly_fetched, stale_missing) =
+            hydrate_chunk_search_results(&conn, &self.collection_id, missing, &self.ordered_hits)?;
         self.ensure_generation_unchanged_with_conn(&conn, start_generation)?;
         if let Some(missing) = stale_missing.first() {
             return Err(RagError::StaleSearchHandle(format!(
@@ -1218,10 +1271,8 @@ impl SearchHandle {
         }
         populate_cache(&self.content_cache, &newly_fetched);
 
-        let mut by_id: HashMap<i64, ChunkSearchResult> = from_cache
-            .into_iter()
-            .map(|c| (c.chunk_id, c))
-            .collect();
+        let mut by_id: HashMap<i64, ChunkSearchResult> =
+            from_cache.into_iter().map(|c| (c.chunk_id, c)).collect();
         for chunk in newly_fetched {
             by_id.insert(chunk.chunk_id, chunk);
         }
@@ -1268,10 +1319,8 @@ impl SearchHandle {
             )));
         }
 
-        let mut by_id: HashMap<i64, ChunkSearchResult> = from_cache
-            .into_iter()
-            .map(|c| (c.chunk_id, c))
-            .collect();
+        let mut by_id: HashMap<i64, ChunkSearchResult> =
+            from_cache.into_iter().map(|c| (c.chunk_id, c)).collect();
         for chunk in newly_fetched {
             by_id.insert(chunk.chunk_id, chunk);
         }
@@ -1332,12 +1381,7 @@ pub fn search_meta_hybrid(
     // `search_meta_hybrid_once` constructs the owned `SearchHandle`
     // payload internally, cloning only what the handle actually stores.
     for _attempt in 0..=1 {
-        match search_meta_hybrid_once(
-            &collection_id,
-            &query_text,
-            &query_embedding,
-            &options,
-        ) {
+        match search_meta_hybrid_once(&collection_id, &query_text, &query_embedding, &options) {
             Ok(handle) => return Ok(RustAutoOpaque::new(handle)),
             Err(err @ RagError::ConcurrentMutation(_)) => last_error = Some(err),
             Err(err) => return Err(err),
@@ -1614,15 +1658,10 @@ fn partition_by_cache(
 
 /// Insert newly-fetched full-content rows into the cache. `or_insert_with`
 /// keeps the first writer's value if two calls race for the same id.
-fn populate_cache(
-    cache: &Mutex<HashMap<i64, ChunkSearchResult>>,
-    rows: &[ChunkSearchResult],
-) {
+fn populate_cache(cache: &Mutex<HashMap<i64, ChunkSearchResult>>, rows: &[ChunkSearchResult]) {
     let mut guard = cache.lock().expect("content_cache mutex poisoned");
     for row in rows {
-        guard
-            .entry(row.chunk_id)
-            .or_insert_with(|| row.clone());
+        guard.entry(row.chunk_id).or_insert_with(|| row.clone());
     }
 }
 
@@ -2046,10 +2085,8 @@ fn hydrate_rows_for_assembly(
         hydrate_chunk_search_results(conn, collection_id, missing, hits)?;
     populate_cache(cache, &newly_fetched);
 
-    let mut by_id: HashMap<i64, ChunkSearchResult> = from_cache
-        .into_iter()
-        .map(|c| (c.chunk_id, c))
-        .collect();
+    let mut by_id: HashMap<i64, ChunkSearchResult> =
+        from_cache.into_iter().map(|c| (c.chunk_id, c)).collect();
     for chunk in newly_fetched {
         by_id.insert(chunk.chunk_id, chunk);
     }

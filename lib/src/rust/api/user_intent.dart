@@ -53,21 +53,30 @@ class ParsedIntent {
 sealed class UserIntent with _$UserIntent {
   const UserIntent._();
 
-  const factory UserIntent.summary({required String query}) =
-      UserIntent_Summary;
-  const factory UserIntent.define({required String term}) = UserIntent_Define;
-  const factory UserIntent.expandKnowledge({required String query}) =
-      UserIntent_ExpandKnowledge;
-  const factory UserIntent.general({required String query}) =
-      UserIntent_General;
+  const factory UserIntent.summary({
+    required String query,
+  }) = UserIntent_Summary;
+  const factory UserIntent.define({
+    required String term,
+  }) = UserIntent_Define;
+  const factory UserIntent.expandKnowledge({
+    required String query,
+  }) = UserIntent_ExpandKnowledge;
+  const factory UserIntent.general({
+    required String query,
+  }) = UserIntent_General;
   const factory UserIntent.invalidCommand({
     required String command,
     required String reason,
   }) = UserIntent_InvalidCommand;
 
   Future<void> getQuery() =>
-      RustLib.instance.api.crateApiUserIntentUserIntentGetQuery(that: this);
+      RustLib.instance.api.crateApiUserIntentUserIntentGetQuery(
+        that: this,
+      );
 
   Future<void> intentType() =>
-      RustLib.instance.api.crateApiUserIntentUserIntentIntentType(that: this);
+      RustLib.instance.api.crateApiUserIntentUserIntentIntentType(
+        that: this,
+      );
 }

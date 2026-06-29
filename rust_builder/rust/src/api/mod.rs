@@ -5,6 +5,7 @@
 // This file is part of the core engine. Any modifications require owner approval.
 // Please submit a PR with detailed explanation of changes before modifying.
 
+pub mod activation_metrics;
 pub mod bm25_search;
 pub mod compression_utils;
 pub mod db_pool;
@@ -18,6 +19,7 @@ pub mod ingest_session;
 pub mod logger;
 pub mod migration_meta;
 pub mod query_metrics;
+pub mod runtime_info;
 pub mod semantic_chunker;
 pub mod simple;
 pub(crate) mod simple_rag;

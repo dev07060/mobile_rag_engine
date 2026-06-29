@@ -6,10 +6,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+// ignore: implementation_imports
+import 'package:mobile_rag_engine/src/rust/api/runtime_info.dart'
+    as runtime_info;
+import 'package:mobile_rag_engine_example/profiling/native_runtime_expectations.dart';
 import 'package:mobile_rag_engine_example/profiling/query_fixture.dart';
 import 'package:mobile_rag_engine_example/profiling/query_profiler.dart';
 import 'package:mobile_rag_engine_example/profiling/query_profile_report.dart';
 import 'package:mobile_rag_engine_example/profiling/profile_export.dart';
+import 'package:mobile_rag_engine_example/profiling/rss_sampler.dart';
 
 // On-device RAG query profiler — P3 (LOC-68) measurement + P4 (LOC-69) export.
 //
@@ -32,6 +37,9 @@ void main() {
   const warmup = 5;
   const measured = 30;
   const topK = 10;
+  const expectedNativeAllocator =
+      String.fromEnvironment('EXPECTED_NATIVE_ALLOCATOR');
+  const expectedRustFeatures = String.fromEnvironment('EXPECTED_RUST_FEATURES');
 
   test(
     'profiler: pure_cold / pure_warm / switching_cold x 2 lanes',
@@ -42,7 +50,12 @@ void main() {
       // initialize so the engine starts clean and nothing races the seed.
       final docsDir = await getApplicationDocumentsDirectory();
       final dbStem = '${docsDir.path}/profile.sqlite';
-      for (final p in [dbStem, '$dbStem-wal', '$dbStem-shm', '$dbStem-journal']) {
+      for (final p in [
+        dbStem,
+        '$dbStem-wal',
+        '$dbStem-shm',
+        '$dbStem-journal'
+      ]) {
         final f = File(p);
         if (await f.exists()) await f.delete();
       }
@@ -52,6 +65,14 @@ void main() {
         modelAsset: 'assets/model.onnx',
         databaseName: 'profile.sqlite',
         deferIndexWarmup: true,
+      );
+
+      final nativeInfo = runtime_info.nativeRuntimeInfo();
+      verifyNativeRuntimeExpectations(
+        actualAllocator: nativeInfo.nativeAllocator,
+        actualRustFeatures: nativeInfo.rustFeatures,
+        expectedAllocator: expectedNativeAllocator,
+        expectedRustFeatures: expectedRustFeatures,
       );
 
       final ids = await QueryFixture.seed(docsPerCollection: measuredDocs);
@@ -65,7 +86,10 @@ void main() {
       final meta = <String, Object?>{
         'build_mode':
             kReleaseMode ? 'release' : (kProfileMode ? 'profile' : 'debug'),
-        'features': 'vector_faer,vector_quant_i8', // shipped in profile/release
+        'features': nativeInfo.rustFeatures,
+        'native_allocator': nativeInfo.nativeAllocator,
+        'expected_native_allocator': expectedNativeAllocator,
+        'expected_rust_features': expectedRustFeatures,
         'os': Platform.operatingSystem,
         'os_version': Platform.operatingSystemVersion,
         // Device model + charging state: document manually in PR-P4.md.
@@ -85,7 +109,8 @@ void main() {
       // single global HNSW slot so pure_cold's activate is genuinely cold.
       await profiler.deleteOnDiskIndex(QueryFixture.collectionA);
       await profiler.deleteOnDiskIndex(QueryFixture.collectionB);
-      await profiler.activateOnly(QueryFixture.collectionB); // active := B (A evicted)
+      await profiler
+          .activateOnly(QueryFixture.collectionB); // active := B (A evicted)
 
       /// Run one (lane, category) cell.
       /// - [activateOnce]: single cold shot measures the activate segment (pure_cold).
@@ -101,8 +126,12 @@ void main() {
       }) async {
         final measuresActivate = activateOnce || activatePerIter;
         final segs = {
-          for (final n in ['embed', 'search', 'hydrate',
-              if (measuresActivate) 'activate'])
+          for (final n in [
+            'embed',
+            'search',
+            'hydrate',
+            if (measuresActivate) 'activate'
+          ])
             n: SegmentSamples(n),
         };
         final allowed = sourceIds?.toSet();
@@ -121,6 +150,8 @@ void main() {
         }
 
         QueryProfiler.resetIo(); // I/O snapshot reflects measured iters only
+        final rss = RssSampler().start();
+        final activation = <String, int>{};
         var minHits = -1;
         for (var i = 0; i < measuredN; i++) {
           if (activatePerIter) {
@@ -135,6 +166,7 @@ void main() {
             activate: activateOnce || activatePerIter,
           );
           r.ms.forEach((k, v) => segs[k]?.add(v));
+          _addNumericMap(activation, r.activation);
           final hitCount = r.hitSourceIds.length;
           if (minHits < 0 || hitCount < minHits) minHits = hitCount;
           // Fail-closed (filtered lane): every hit must come from the requested
@@ -145,12 +177,18 @@ void main() {
                 reason: '$lane/$category returned a hit outside requested '
                     'sourceIds — filter not applied');
           }
+          rss.sample();
         }
-        final io = profiler.snapshotIo();
+        final io = {
+          ...profiler.snapshotIo(),
+          ...activation,
+          ...rss.finish().toJson(prefix: 'rss'),
+        };
 
         // Fail-closed: a wrong index path or empty corpus would return 0 hits.
         expect(minHits, greaterThan(0),
-            reason: '$lane/$category returned 0 hits — wrong index path/corpus');
+            reason:
+                '$lane/$category returned 0 hits — wrong index path/corpus');
         return QueryProfileRun(
             lane: lane, category: category, segments: segs, io: io, meta: meta);
       }
@@ -255,5 +293,19 @@ void _emitReport(QueryProfileReport report) {
   for (final r in report.runs) {
     // ignore: avoid_print
     print('PROFILE_IO ${r.lane}/${r.category} ${r.io}');
+  }
+}
+
+void _addNumericMap(Map<String, int> totals, Map<String, Object?> values) {
+  for (final entry in values.entries) {
+    final value = entry.value;
+    if (value is int) {
+      totals.update(entry.key, (current) => current + value,
+          ifAbsent: () => value);
+    } else if (value is BigInt) {
+      final asInt = value.toInt();
+      totals.update(entry.key, (current) => current + asInt,
+          ifAbsent: () => asInt);
+    }
   }
 }

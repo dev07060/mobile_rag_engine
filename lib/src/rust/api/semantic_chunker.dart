@@ -15,24 +15,18 @@ ChunkType classifyChunk({required String text}) =>
     RustLib.instance.api.crateApiSemanticChunkerClassifyChunk(text: text);
 
 /// Split text into semantic chunks using paragraph-first strategy.
-List<SemanticChunk> semanticChunk({
-  required String text,
-  required int maxChars,
-}) => RustLib.instance.api.crateApiSemanticChunkerSemanticChunk(
-  text: text,
-  maxChars: maxChars,
-);
+List<SemanticChunk> semanticChunk(
+        {required String text, required int maxChars}) =>
+    RustLib.instance.api
+        .crateApiSemanticChunkerSemanticChunk(text: text, maxChars: maxChars);
 
 /// Split text with overlap (API compatibility wrapper).
-List<SemanticChunk> semanticChunkWithOverlap({
-  required String text,
-  required int maxChars,
-  required int overlapChars,
-}) => RustLib.instance.api.crateApiSemanticChunkerSemanticChunkWithOverlap(
-  text: text,
-  maxChars: maxChars,
-  overlapChars: overlapChars,
-);
+List<SemanticChunk> semanticChunkWithOverlap(
+        {required String text,
+        required int maxChars,
+        required int overlapChars}) =>
+    RustLib.instance.api.crateApiSemanticChunkerSemanticChunkWithOverlap(
+        text: text, maxChars: maxChars, overlapChars: overlapChars);
 
 /// Markdown chunk with structure preservation and metadata inheritance.
 ///
@@ -40,13 +34,10 @@ List<SemanticChunk> semanticChunkWithOverlap({
 /// - Preserves code blocks (```) as single units
 /// - Preserves tables (|---|) as single units
 /// - Inherits header path as metadata
-List<StructuredChunk> markdownChunk({
-  required String text,
-  required int maxChars,
-}) => RustLib.instance.api.crateApiSemanticChunkerMarkdownChunk(
-  text: text,
-  maxChars: maxChars,
-);
+List<StructuredChunk> markdownChunk(
+        {required String text, required int maxChars}) =>
+    RustLib.instance.api
+        .crateApiSemanticChunkerMarkdownChunk(text: text, maxChars: maxChars);
 
 /// Chunk type classification.
 enum ChunkType {
@@ -55,10 +46,13 @@ enum ChunkType {
   list,
   procedure,
   comparison,
-  general;
+  general,
+  ;
 
   Future<void> asStr() =>
-      RustLib.instance.api.crateApiSemanticChunkerChunkTypeAsStr(that: this);
+      RustLib.instance.api.crateApiSemanticChunkerChunkTypeAsStr(
+        that: this,
+      );
 
   static Future<ChunkType> fromStr({required String s}) =>
       RustLib.instance.api.crateApiSemanticChunkerChunkTypeFromStr(s: s);
