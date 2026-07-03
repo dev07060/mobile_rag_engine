@@ -45,6 +45,32 @@ pub fn i8_blob_from_slice(input: &[i8]) -> Vec<u8> {
 /// [`quantize_f32_to_i8`] plus a byte conversion would otherwise produce.
 /// Returns the quantized bytes together with the scale used to dequantize
 /// them later. Behaviour is bit-for-bit equivalent to the older two-step path.
+#[cfg(feature = "vector_quant_i8")]
+#[inline]
+pub fn quantize_f32_to_u8_blob(input: &[f32]) -> (Vec<u8>, f32) {
+    if input.is_empty() {
+        return (Vec::new(), 1.0);
+    }
+    // Packed block-wise quantization format (Q8_0 style):
+    // 36 bytes per block of 32: 4-byte f32 scale (little-endian) + 32-byte i8 values.
+    let (quantized, scales) = quantize_f32_to_i8_blockwise(input);
+    let mut packed = Vec::with_capacity(scales.len() * 4 + quantized.len());
+
+    for block_idx in 0..scales.len() {
+        let scale_bytes = scales[block_idx].to_le_bytes();
+        packed.extend_from_slice(&scale_bytes);
+
+        let start = block_idx * BLOCK_SIZE;
+        let end = (start + BLOCK_SIZE).min(quantized.len());
+        for i in start..end {
+            packed.push(quantized[i] as u8);
+        }
+    }
+    // Return the packed blob and a dummy scale of 1.0
+    (packed, 1.0)
+}
+
+#[cfg(not(feature = "vector_quant_i8"))]
 #[inline]
 pub fn quantize_f32_to_u8_blob(input: &[f32]) -> (Vec<u8>, f32) {
     if input.is_empty() {
@@ -124,6 +150,176 @@ pub fn cosine_with_query_norm_i8_blob(query: &[i8], query_norm: f32, target_blob
         return 0.0;
     }
     (dot as f32) / (query_norm * (target_sq_sum as f32).sqrt())
+}
+
+
+const BLOCK_SIZE: usize = 32;
+
+/// Quantizes an f32 slice into block-wise i8 elements with independent scales (Q8_0 style).
+/// Returns the quantized bytes and a list of scales for each block.
+pub fn quantize_f32_to_i8_blockwise(input: &[f32]) -> (Vec<i8>, Vec<f32>) {
+    if input.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+
+    let num_blocks = (input.len() + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    let mut quantized = Vec::with_capacity(input.len());
+    let mut scales = Vec::with_capacity(num_blocks);
+
+    for block_idx in 0..num_blocks {
+        let start = block_idx * BLOCK_SIZE;
+        let end = (start + BLOCK_SIZE).min(input.len());
+        let slice = &input[start..end];
+
+        let max_abs = slice
+            .iter()
+            .fold(0.0f32, |acc, &v| acc.max(v.abs()));
+
+        if max_abs == 0.0 {
+            quantized.extend(vec![0; slice.len()]);
+            scales.push(1.0);
+        } else {
+            let scale = max_abs / 127.0;
+            let inv_scale = 1.0 / scale;
+            for &v in slice {
+                quantized.push((v * inv_scale).round().clamp(-127.0, 127.0) as i8);
+            }
+            scales.push(scale);
+        }
+    }
+
+    (quantized, scales)
+}
+
+/// Dequantizes block-wise i8 slice back into f32.
+pub fn dequantize_i8_to_f32_blockwise(input: &[i8], scales: &[f32]) -> Vec<f32> {
+    if input.is_empty() || scales.is_empty() {
+        return Vec::new();
+    }
+
+    let mut output = Vec::with_capacity(input.len());
+    for (block_idx, scale) in scales.iter().enumerate() {
+        let start = block_idx * BLOCK_SIZE;
+        let end = (start + BLOCK_SIZE).min(input.len());
+        if start >= input.len() {
+            break;
+        }
+        for i in start..end {
+            output.push((input[i] as f32) * scale);
+        }
+    }
+    output
+}
+
+
+#[derive(Clone, Debug)]
+pub struct QueryQ8 {
+    pub blocks: Vec<i8>,
+    pub scales: Vec<f32>,
+    pub norm: f32,
+}
+
+impl QueryQ8 {
+    pub fn new(query_f32: &[f32]) -> Self {
+        if query_f32.is_empty() {
+            return Self {
+                blocks: Vec::new(),
+                scales: Vec::new(),
+                norm: 0.0,
+            };
+        }
+
+        let (blocks, scales) = quantize_f32_to_i8_blockwise(query_f32);
+        
+        let mut sq_sum: f32 = 0.0;
+        let num_blocks = scales.len();
+        for block_idx in 0..num_blocks {
+            let scale = scales[block_idx];
+            let start = block_idx * BLOCK_SIZE;
+            let end = (start + BLOCK_SIZE).min(blocks.len());
+            let mut block_sum = 0i32;
+            for i in start..end {
+                let v = blocks[i];
+                block_sum += (v as i32) * (v as i32);
+            }
+            sq_sum += (block_sum as f32) * scale * scale;
+        }
+
+        Self {
+            blocks,
+            scales,
+            norm: sq_sum.sqrt(),
+        }
+    }
+}
+
+pub fn cosine_similarity_q8(
+    query_q8: &QueryQ8,
+    target_blob: &[u8],
+    legacy_query_i8: &[i8],
+    legacy_query_norm: f32,
+) -> f32 {
+    // If the target blob size matches legacy uniform (e.g. 768), fallback to legacy cosine similarity.
+    if target_blob.len() == legacy_query_i8.len() {
+        return cosine_with_query_norm_i8_blob(legacy_query_i8, legacy_query_norm, target_blob);
+    }
+
+    // Otherwise, parse the packed block-wise binary format.
+    // Each block is 36 bytes: 4-byte f32 scale (LE) + 32-byte i8 values.
+    if target_blob.len() % 36 != 0 || query_q8.blocks.is_empty() {
+        return 0.0;
+    }
+
+    let num_blocks = target_blob.len() / 36;
+    let mut dot_weighted: f32 = 0.0;
+    let mut target_sq_sum: f32 = 0.0;
+
+    for block_idx in 0..num_blocks {
+        let block_start = block_idx * 36;
+        if block_start + 4 > target_blob.len() {
+            break;
+        }
+        // 1. Read f32 scale
+        let mut scale_bytes = [0u8; 4];
+        scale_bytes.copy_from_slice(&target_blob[block_start..block_start + 4]);
+        let target_scale = f32::from_le_bytes(scale_bytes);
+
+        let query_scale = if block_idx < query_q8.scales.len() {
+            query_q8.scales[block_idx]
+        } else {
+            1.0
+        };
+
+        // 2. Compute integer dot product and squared sum for this block
+        let mut block_dot = 0i32;
+        let mut block_target_sq = 0i32;
+        
+        let start = block_idx * BLOCK_SIZE;
+        
+        for i in 0..32 {
+            let q_idx = start + i;
+            if q_idx >= query_q8.blocks.len() {
+                break;
+            }
+            let q = query_q8.blocks[q_idx];
+            let t = target_blob[block_start + 4 + i] as i8;
+
+            block_dot += (q as i32) * (t as i32);
+            block_target_sq += (t as i32) * (t as i32);
+        }
+
+        dot_weighted += (block_dot as f32) * query_scale * target_scale;
+        target_sq_sum += (block_target_sq as f32) * target_scale * target_scale;
+    }
+
+    let query_norm = query_q8.norm;
+    let target_norm = target_sq_sum.sqrt();
+
+    if query_norm == 0.0 || target_norm == 0.0 {
+        return 0.0;
+    }
+
+    dot_weighted / (query_norm * target_norm)
 }
 
 #[cfg(test)]
@@ -413,5 +609,82 @@ mod tests {
             max_err <= MAX_COS_ERR,
             "i8 cosine fidelity regressed: max err {max_err} > {MAX_COS_ERR}"
         );
+    }
+
+    #[test]
+    fn blockwise_quantize_dequantize_roundtrip() {
+        // Create an input vector with some outliers in a specific block
+        let mut input = vec![0.0f32; 100];
+        // Block 0: small values
+        for i in 0..32 {
+            input[i] = 0.05 * (i as f32 / 32.0);
+        }
+        // Block 1: huge values (outliers)
+        for i in 32..64 {
+            input[i] = 10.0 * (i as f32 / 64.0);
+        }
+        // Block 2: mid values
+        for i in 64..96 {
+            input[i] = 1.0 * (i as f32 / 96.0);
+        }
+
+        let (q, scales) = quantize_f32_to_i8_blockwise(&input);
+        assert_eq!(q.len(), input.len());
+        assert_eq!(scales.len(), 4); // 100 elements / 32 block size = 4 blocks
+
+        let restored = dequantize_i8_to_f32_blockwise(&q, &scales);
+        assert_eq!(restored.len(), input.len());
+
+        // Check that quantization error in block 0 is small despite the large outlier in block 1
+        for i in 0..32 {
+            let err = (input[i] - restored[i]).abs();
+            // With block-wise, block 0 scale is around 0.05/127 ~ 0.0004. Error should be very small.
+            assert!(err < 0.001, "Block 0 index {}: original={}, restored={}, err={}", i, input[i], restored[i], err);
+        }
+
+        // Verify with global quantization, the error in block 0 would be much larger
+        let (global_q, global_scale) = quantize_f32_to_i8(&input);
+        let global_restored = dequantize_i8_to_f32(&global_q, global_scale);
+        let mut global_max_err_block0 = 0.0f32;
+        for i in 0..32 {
+            global_max_err_block0 = global_max_err_block0.max((input[i] - global_restored[i]).abs());
+        }
+        // Global scale is around 10.0/127 ~ 0.08. Maximum quantization error can be up to 0.04.
+        println!("Block-wise block 0 max error: {}", (0..32).map(|i| (input[i] - restored[i]).abs()).fold(0.0f32, f32::max));
+        println!("Global block 0 max error: {}", global_max_err_block0);
+        assert!(global_max_err_block0 > 0.01);
+    }
+
+    #[test]
+    fn test_blockwise_cosine_similarity() {
+        // Create two 768-dim vectors with different patterns and outliers
+        let mut a = vec![0.0f32; 768];
+        let mut b = vec![0.0f32; 768];
+        for i in 0..768 {
+            a[i] = 0.1 * (i as f32).sin();
+            b[i] = 0.15 * (i as f32).cos();
+        }
+        // Introduce massive outliers in block 5
+        for i in 160..192 {
+            a[i] *= 25.0;
+            b[i] *= 20.0;
+        }
+
+        let true_cos = cosine_with_query_norm_f32(&a, l2_norm_f32(&a), &b);
+
+        let query_q8 = QueryQ8::new(&a);
+        let (packed_blob_b, _) = quantize_f32_to_u8_blob(&b);
+
+        // For legacy comparison fallback
+        let (legacy_q_a, _) = quantize_f32_to_i8(&a);
+        let legacy_norm_a = l2_norm_i8(&legacy_q_a);
+
+        let approx_cos = cosine_similarity_q8(&query_q8, &packed_blob_b, &legacy_q_a, legacy_norm_a);
+
+        println!("True f32 cosine: {}", true_cos);
+        println!("Block-wise approx cosine: {}", approx_cos);
+
+        let err = (true_cos - approx_cos).abs();
+        assert!(err < 0.005, "Block-wise cosine error too large: {} (true={}, approx={})", err, true_cos, approx_cos);
     }
 }

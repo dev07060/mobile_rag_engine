@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.19.2
+* **Block-wise Quantization**:
+  - Implemented block-wise scalar quantization (Q8_0 style) with 32-dimension block sizes.
+  - Implemented backwards-compatible exact-scan similarity kernel supporting dynamic fallback for legacy 768-byte uniform blobs and new 864-byte packed blobs.
+* **HNSW Reconstruction**:
+  - Re-routed HNSW rebuilding to load original high-precision f32 embeddings directly, resolving the compound distortion loop and restoring semantic recall.
+
 ## 0.18.4
 * **PDF extraction UX**:
   - Preserves the `scanned/image-only` marker for mixed scanned PDFs that also contain page-level extraction failures so host apps can route them to OCR.

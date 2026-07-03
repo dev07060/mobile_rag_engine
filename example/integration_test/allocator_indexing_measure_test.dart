@@ -12,6 +12,8 @@ import 'package:mobile_rag_engine/src/rust/api/activation_metrics.dart' as am;
 // ignore: implementation_imports
 import 'package:mobile_rag_engine/src/rust/api/db_pool.dart';
 // ignore: implementation_imports
+import 'package:mobile_rag_engine/src/rust/api/hnsw_index.dart' as hnsw;
+// ignore: implementation_imports
 import 'package:mobile_rag_engine/src/rust/api/runtime_info.dart'
     as runtime_info;
 // ignore: implementation_imports
@@ -37,7 +39,18 @@ void main() {
     'ALLOCATOR_INDEXING_TEXT_MB',
     defaultValue: '5,10,25',
   );
+  const repeatCount = int.fromEnvironment(
+    'ALLOCATOR_INDEXING_REPEATS',
+    defaultValue: 1,
+  );
   final textCases = _parseTextMbCases(textMbCsv);
+  if (repeatCount < 1) {
+    throw ArgumentError.value(
+      repeatCount,
+      'ALLOCATOR_INDEXING_REPEATS',
+      'must be positive',
+    );
+  }
 
   tearDown(() async {
     try {
@@ -66,108 +79,110 @@ void main() {
         '${docsDir.path}/allocator_indexing_profile_latest.jsonl',
       );
       if (await exportFile.exists()) await exportFile.delete();
-      for (final p in [
-        dbStem,
-        '$dbStem-wal',
-        '$dbStem-shm',
-        '$dbStem-journal',
-      ]) {
-        final f = File(p);
-        if (await f.exists()) await f.delete();
-      }
 
-      await initDbPool(dbPath: dbStem, maxSize: 4);
-      await rust_rag.initSourceDb();
+      for (var repeat = 1; repeat <= repeatCount; repeat++) {
+        final hnswBasePaths = textCases.map((textCase) {
+          final collectionId = _collectionId(repeat, textCase);
+          return '${dbStem}_hnsw_$collectionId';
+        });
+        await _resetAllocatorMacroDb(dbStem, hnswBasePaths);
+        await initDbPool(dbPath: dbStem, maxSize: 4);
+        await rust_rag.initSourceDb();
 
-      for (final textCase in textCases) {
-        final collectionId = 'allocator_indexing_${textCase.id}';
-        final basePath = '${dbStem}_hnsw_$collectionId';
+        for (final textCase in textCases) {
+          final collectionId = _collectionId(repeat, textCase);
+          final basePath = '${dbStem}_hnsw_$collectionId';
 
-        final seedSw = Stopwatch()..start();
-        final source = await rust_rag.addSourceInCollection(
-          collectionId: collectionId,
-          content: 'allocator indexing macro ${textCase.label}',
-          metadata: jsonEncode({
-            'kind': 'allocator_indexing_macro',
+          final seedSw = Stopwatch()..start();
+          final source = await rust_rag.addSourceInCollection(
+            collectionId: collectionId,
+            content: 'allocator indexing macro ${textCase.label}',
+            metadata: jsonEncode({
+              'kind': 'allocator_indexing_macro',
+              'repeat': repeat,
+              'target_text_mb': textCase.targetTextMb,
+              'target_text_bytes': textCase.targetTextBytes,
+              'actual_text_bytes': textCase.actualTextBytes,
+              'chunk_count': textCase.chunkCount,
+              'chunk_text_chars': _chunkTextChars,
+              'chunk_overlap_chars': _chunkOverlapChars,
+              'embedding_dim': _embeddingDim,
+            }),
+            name: 'allocator_indexing_r${repeat}_${textCase.id}',
+          );
+          await rust_rag.updateSourceStatus(
+            sourceId: source.sourceId,
+            status: 'completed',
+          );
+          await rust_rag.addChunks(
+            sourceId: source.sourceId,
+            chunks: _chunks(textCase.chunkCount),
+          );
+          seedSw.stop();
+
+          am.resetActivationTimingStats();
+          final rss = RssSampler().start();
+          final rebuildSw = Stopwatch()..start();
+          await rust_rag.rebuildChunkHnswIndexForCollection(
+            collectionId: collectionId,
+          );
+          rss.sample();
+          await rust_rag.saveCollectionHnswIndex(
+            collectionId: collectionId,
+            basePath: basePath,
+          );
+          rss.sample();
+          await rust_rag.rebuildChunkBm25IndexForCollection(
+            collectionId: collectionId,
+          );
+          rebuildSw.stop();
+          final stats = am.takeActivationTimingStats();
+          final rssSummary = rss.finish();
+
+          final row = {
+            'cell': 'indexing_rebuild',
+            'profile_label': textCase.label,
+            'repeat': repeat,
+            'repeat_count': repeatCount,
+            'text_unit': 'MB_decimal',
             'target_text_mb': textCase.targetTextMb,
             'target_text_bytes': textCase.targetTextBytes,
+            'actual_text_mb': textCase.actualTextMb,
             'actual_text_bytes': textCase.actualTextBytes,
             'chunk_count': textCase.chunkCount,
             'chunk_text_chars': _chunkTextChars,
             'chunk_overlap_chars': _chunkOverlapChars,
             'embedding_dim': _embeddingDim,
-          }),
-          name: 'allocator_indexing_${textCase.id}',
-        );
-        await rust_rag.updateSourceStatus(
-          sourceId: source.sourceId,
-          status: 'completed',
-        );
-        await rust_rag.addChunks(
-          sourceId: source.sourceId,
-          chunks: _chunks(textCase.chunkCount),
-        );
-        seedSw.stop();
+            'embedding_bytes': textCase.embeddingBytes,
+            'embedding_mib': textCase.embeddingMiB,
+            'seed_ms': seedSw.elapsedMicroseconds / 1000.0,
+            'rebuild_total_ms': rebuildSw.elapsedMicroseconds / 1000.0,
+            'native_allocator': nativeInfo.nativeAllocator,
+            'rust_features': nativeInfo.rustFeatures,
+            'build_mode': kReleaseMode
+                ? 'release'
+                : (kProfileMode ? 'profile' : 'debug'),
+            'hnsw_rebuild_nanos': stats.hnswRebuildNanos.toInt(),
+            'hnsw_rebuild_count': stats.hnswRebuildCount.toInt(),
+            'hnsw_save_nanos': stats.hnswSaveNanos.toInt(),
+            'hnsw_save_count': stats.hnswSaveCount.toInt(),
+            'bm25_rebuild_nanos': stats.bm25RebuildNanos.toInt(),
+            'bm25_rebuild_count': stats.bm25RebuildCount.toInt(),
+            ...rssSummary.toJson(prefix: 'rss'),
+          };
+          await exportFile.writeAsString(
+            '${jsonEncode(row)}\n',
+            mode: FileMode.append,
+            flush: true,
+          );
+          // ignore: avoid_print
+          print('INDEXING_PROFILE ${jsonEncode(row)}');
 
-        am.resetActivationTimingStats();
-        final rss = RssSampler().start();
-        final rebuildSw = Stopwatch()..start();
-        await rust_rag.rebuildChunkHnswIndexForCollection(
-          collectionId: collectionId,
-        );
-        rss.sample();
-        await rust_rag.saveCollectionHnswIndex(
-          collectionId: collectionId,
-          basePath: basePath,
-        );
-        rss.sample();
-        await rust_rag.rebuildChunkBm25IndexForCollection(
-          collectionId: collectionId,
-        );
-        rebuildSw.stop();
-        final stats = am.takeActivationTimingStats();
-        final rssSummary = rss.finish();
-
-        final row = {
-          'cell': 'indexing_rebuild',
-          'profile_label': textCase.label,
-          'text_unit': 'MB_decimal',
-          'target_text_mb': textCase.targetTextMb,
-          'target_text_bytes': textCase.targetTextBytes,
-          'actual_text_mb': textCase.actualTextMb,
-          'actual_text_bytes': textCase.actualTextBytes,
-          'chunk_count': textCase.chunkCount,
-          'chunk_text_chars': _chunkTextChars,
-          'chunk_overlap_chars': _chunkOverlapChars,
-          'embedding_dim': _embeddingDim,
-          'embedding_bytes': textCase.embeddingBytes,
-          'embedding_mib': textCase.embeddingMiB,
-          'seed_ms': seedSw.elapsedMicroseconds / 1000.0,
-          'rebuild_total_ms': rebuildSw.elapsedMicroseconds / 1000.0,
-          'native_allocator': nativeInfo.nativeAllocator,
-          'rust_features': nativeInfo.rustFeatures,
-          'build_mode': kReleaseMode
-              ? 'release'
-              : (kProfileMode ? 'profile' : 'debug'),
-          'hnsw_rebuild_nanos': stats.hnswRebuildNanos.toInt(),
-          'hnsw_rebuild_count': stats.hnswRebuildCount.toInt(),
-          'hnsw_save_nanos': stats.hnswSaveNanos.toInt(),
-          'hnsw_save_count': stats.hnswSaveCount.toInt(),
-          'bm25_rebuild_nanos': stats.bm25RebuildNanos.toInt(),
-          'bm25_rebuild_count': stats.bm25RebuildCount.toInt(),
-          ...rssSummary.toJson(prefix: 'rss'),
-        };
-        await exportFile.writeAsString(
-          '${jsonEncode(row)}\n',
-          mode: FileMode.append,
-          flush: true,
-        );
-        // ignore: avoid_print
-        print('INDEXING_PROFILE ${jsonEncode(row)}');
-
-        expect(stats.hnswRebuildCount.toInt(), 1);
-        expect(stats.hnswSaveCount.toInt(), 1);
-        expect(stats.bm25RebuildCount.toInt(), 1);
+          expect(stats.hnswRebuildCount.toInt(), 1);
+          expect(stats.hnswSaveCount.toInt(), 1);
+          expect(stats.bm25RebuildCount.toInt(), 1);
+        }
+        await closeDbPool();
       }
       // ignore: avoid_print
       print('INDEXING_PROFILE_EXPORT ${exportFile.path}');
@@ -243,10 +258,48 @@ void _assertProfileMode() {
       '--driver=test_driver/integration_test.dart '
       '--target=integration_test/allocator_indexing_measure_test.dart '
       '--dart-define=ALLOCATOR_INDEXING_TEXT_MB=5,10,25 '
+      '--dart-define=ALLOCATOR_INDEXING_REPEATS=5 '
       '--profile -d <device-id>\n'
       'Detected: kDebugMode=$kDebugMode, kProfileMode=$kProfileMode, '
       'kReleaseMode=$kReleaseMode',
     );
+  }
+}
+
+String _collectionId(int repeat, _IndexingTextCase textCase) =>
+    'allocator_indexing_r${repeat}_${textCase.id}';
+
+Future<void> _resetAllocatorMacroDb(
+  String dbStem,
+  Iterable<String> hnswBasePaths,
+) async {
+  try {
+    await closeDbPool();
+  } catch (_) {}
+  try {
+    await hnsw.clearHnswIndex();
+  } catch (_) {}
+
+  for (final p in [
+    dbStem,
+    '$dbStem-wal',
+    '$dbStem-shm',
+    '$dbStem-journal',
+    ...hnswBasePaths,
+  ]) {
+    await _deletePathIfExists(p);
+  }
+}
+
+Future<void> _deletePathIfExists(String path) async {
+  final dir = Directory(path);
+  if (await dir.exists()) {
+    await dir.delete(recursive: true);
+    return;
+  }
+  final file = File(path);
+  if (await file.exists()) {
+    await file.delete();
   }
 }
 

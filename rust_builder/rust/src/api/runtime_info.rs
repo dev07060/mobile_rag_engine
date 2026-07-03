@@ -10,7 +10,7 @@ pub struct NativeRuntimeInfo {
 pub fn native_runtime_info() -> NativeRuntimeInfo {
     NativeRuntimeInfo {
         native_allocator: native_allocator_label().to_string(),
-        rust_features: rust_features_label().to_string(),
+        rust_features: rust_features_label(),
     }
 }
 
@@ -22,20 +22,25 @@ fn native_allocator_label() -> &'static str {
     }
 }
 
-fn rust_features_label() -> &'static str {
-    match (
-        cfg!(feature = "vector_faer"),
-        cfg!(feature = "vector_quant_i8"),
-        cfg!(feature = "allocator_mimalloc"),
-    ) {
-        (true, true, true) => "vector_faer,vector_quant_i8,allocator_mimalloc",
-        (true, true, false) => "vector_faer,vector_quant_i8",
-        (true, false, true) => "vector_faer,allocator_mimalloc",
-        (true, false, false) => "vector_faer",
-        (false, true, true) => "vector_quant_i8,allocator_mimalloc",
-        (false, true, false) => "vector_quant_i8",
-        (false, false, true) => "allocator_mimalloc",
-        (false, false, false) => "default",
+fn rust_features_label() -> String {
+    let mut features = Vec::new();
+    if cfg!(feature = "vector_faer") {
+        features.push("vector_faer");
+    }
+    if cfg!(feature = "vector_quant_i8") {
+        features.push("vector_quant_i8");
+    }
+    if cfg!(feature = "allocator_mimalloc") {
+        features.push("allocator_mimalloc");
+    }
+    if cfg!(feature = "hnsw_streaming_rebuild") {
+        features.push("hnsw_streaming_rebuild");
+    }
+
+    if features.is_empty() {
+        "default".to_string()
+    } else {
+        features.join(",")
     }
 }
 
@@ -62,6 +67,17 @@ mod tests {
             assert!(info.rust_features.contains("allocator_mimalloc"));
         } else {
             assert!(!info.rust_features.contains("allocator_mimalloc"));
+        }
+    }
+
+    #[test]
+    fn rust_features_label_lists_enabled_hnsw_streaming_feature() {
+        let info = native_runtime_info();
+
+        if cfg!(feature = "hnsw_streaming_rebuild") {
+            assert!(info.rust_features.contains("hnsw_streaming_rebuild"));
+        } else {
+            assert!(!info.rust_features.contains("hnsw_streaming_rebuild"));
         }
     }
 }

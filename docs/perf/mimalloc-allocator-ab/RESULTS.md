@@ -66,11 +66,37 @@ yet.
 The safer near-term optimization is to reduce peak allocation in the rebuild
 pipeline itself instead of relying only on allocator behavior.
 
+### HNSW Streaming Platform Gate
+
+The realistic system-allocator HNSW A/B changed the HNSW streaming conclusion:
+it is not a universal package optimization.
+
+Benchmark shape: 384-dim f32 stub embeddings, 500-char chunks, 10k/20k/50k
+chunk counts, five-run median, app/profile mode, system allocator only.
+
+macOS matched the expected memory model. Removing the intermediate
+`Vec<(i64, Vec<f32>)>` lowered peak RSS by 4.5% / 5.4% / 8.6% at
+10k / 20k / 50k chunks, with runtime neutral to slightly better.
+
+iPad 10 did not match that model. Streaming was slower by 10.4% / 1.5% / 7.4%
+and peak RSS increased at all measured scales, including a 50k peak increase
+from 740.9 MiB to 821.9 MiB. Treat this as platform-specific interaction among
+row iteration, blob decode, per-row allocation, HNSW insertion timing, allocator
+retention, SQLite/cache accounting, and iOS RSS sampling.
+
+Decision: keep HNSW streaming as a macOS default memory-pressure optimization
+and as an opt-in experiment elsewhere via the `hnsw_streaming_rebuild` Rust
+feature. Keep iOS, Android, and other unvalidated targets on the existing
+collect-based rebuild path by default. Do not describe HNSW streaming as a
+mobile-wide or package-wide improvement.
+
 ## Safe Optimization Shortlist
 
-1. Stream HNSW rebuild rows instead of collecting `Vec<(i64, Vec<f32>)>`.
-   Count rows first to size the HNSW index, then insert while iterating SQLite
-   rows. This targets peak RSS directly.
+1. Keep HNSW rebuild streaming platform-gated.
+   macOS can stream rows by default because the realistic system-allocator A/B
+   showed lower peak RSS. iOS, Android, and unvalidated targets should keep the
+   collect-based path unless `hnsw_streaming_rebuild` is explicitly enabled for
+   an experiment.
 
 2. Stream BM25 rebuild rows instead of collecting `Vec<(i64, String)>`.
    Add each document to the in-memory BM25 index as rows are read from SQLite.

@@ -21,8 +21,8 @@ use crate::api::bm25_search::{bm25_add_documents, bm25_clear_index, is_bm25_inde
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
 use crate::api::hnsw_index::{
-    build_hnsw_index_streaming, clear_hnsw_index, is_hnsw_index_loaded, load_hnsw_index,
-    save_hnsw_index, search_hnsw,
+    build_hnsw_index, build_hnsw_index_streaming, clear_hnsw_index, is_hnsw_index_loaded,
+    load_hnsw_index, save_hnsw_index, search_hnsw,
 };
 use crate::api::hybrid_search::{search_hybrid_meta_inner, RrfConfig, SearchFilter};
 use crate::api::ingest_metrics::{
@@ -39,7 +39,7 @@ use crate::api::vector_math::{
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{
     cosine_with_query_norm_i8_blob, dequantize_i8_to_f32, i8_vec_from_blob, l2_norm_i8,
-    quantize_f32_to_i8, quantize_f32_to_u8_blob,
+    quantize_f32_to_i8, quantize_f32_to_u8_blob, QueryQ8, cosine_similarity_q8,
 };
 use crate::frb_generated::RustAutoOpaqueMoi as RustAutoOpaque;
 use flutter_rust_bridge::frb;
@@ -63,6 +63,17 @@ static CJK_OR_HANGUL_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7A3]"#)
         .expect("valid cjk regex")
 });
+
+fn hnsw_streaming_rebuild_enabled_for_target_os(target_os: &str, force_enabled: bool) -> bool {
+    force_enabled || target_os == "macos"
+}
+
+fn hnsw_streaming_rebuild_enabled() -> bool {
+    hnsw_streaming_rebuild_enabled_for_target_os(
+        std::env::consts::OS,
+        cfg!(feature = "hnsw_streaming_rebuild"),
+    )
+}
 
 fn elapsed_nanos_u64(start: Instant) -> u64 {
     start.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
@@ -914,35 +925,37 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
             let embedding_i8_blob: Option<Vec<u8>> = row.get(2)?;
             let embedding_scale: Option<f32> = row.get(3)?;
 
-            #[cfg(feature = "vector_quant_i8")]
-            let embedding = if let (Some(qblob), Some(scale)) =
-                (embedding_i8_blob.as_deref(), embedding_scale)
-            {
-                let quantized = i8_vec_from_blob(qblob);
-                let restored = dequantize_i8_to_f32(&quantized, scale);
-                if restored.is_empty() {
-                    decode_f32_embedding_or_warn(&embedding_blob, id)
-                } else {
-                    restored
-                }
-            } else {
-                decode_f32_embedding_or_warn(&embedding_blob, id)
-            };
-
-            #[cfg(not(feature = "vector_quant_i8"))]
-            let embedding = {
-                let _ = (embedding_i8_blob, embedding_scale);
-                decode_f32_embedding_or_warn(&embedding_blob, id)
-            };
+            // Build the HNSW graph using original high-precision f32 embeddings
+            // to prevent the Compound Distortion Loop and maintain optimal recall.
+            let _ = (embedding_i8_blob, embedding_scale);
+            let embedding = decode_f32_embedding_or_warn(&embedding_blob, id);
             Ok((id, embedding))
         })
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
-    let points = rows
-        .filter_map(|row| row.ok())
-        .filter(|(_, embedding)| !embedding.is_empty());
-    let inserted = build_hnsw_index_streaming(point_count_hint, points)
-        .map_err(|e| RagError::InternalError(e.to_string()))?;
+    let inserted = if hnsw_streaming_rebuild_enabled() {
+        info!(
+            "[rebuild_chunk_hnsw] Using streaming rebuild path for target_os={}",
+            std::env::consts::OS
+        );
+        let points = rows
+            .filter_map(|row| row.ok())
+            .filter(|(_, embedding)| !embedding.is_empty());
+        build_hnsw_index_streaming(point_count_hint, points)
+            .map_err(|e| RagError::InternalError(e.to_string()))?
+    } else {
+        info!(
+            "[rebuild_chunk_hnsw] Using collect rebuild path for target_os={}",
+            std::env::consts::OS
+        );
+        let points: Vec<(i64, Vec<f32>)> = rows
+            .filter_map(|row| row.ok())
+            .filter(|(_, embedding)| !embedding.is_empty())
+            .collect();
+        let inserted = points.len();
+        build_hnsw_index(points).map_err(|e| RagError::InternalError(e.to_string()))?;
+        inserted
+    };
 
     if inserted == 0 {
         clear_hnsw_index();
@@ -2350,6 +2363,8 @@ fn search_chunks_linear_in_collection(
     let (query_i8, _query_i8_scale) = quantize_f32_to_i8(&query_embedding);
     #[cfg(feature = "vector_quant_i8")]
     let query_i8_norm = l2_norm_i8(&query_i8);
+    #[cfg(feature = "vector_quant_i8")]
+    let query_q8 = QueryQ8::new(&query_embedding);
 
     let mut stmt = match conn.prepare(
         "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, c.embedding_i8, s.metadata
@@ -2412,8 +2427,8 @@ fn search_chunks_linear_in_collection(
 
         #[cfg(feature = "vector_quant_i8")]
         let similarity = if let Some(qblob) = embedding_i8_blob.as_deref() {
-            if qblob.len() == query_i8.len() && query_i8_norm > 0.0 {
-                cosine_with_query_norm_i8_blob(&query_i8, query_i8_norm, qblob) as f64
+            if (qblob.len() == query_i8.len() || qblob.len() % 36 == 0) && query_i8_norm > 0.0 {
+                cosine_similarity_q8(&query_q8, qblob, &query_i8, query_i8_norm) as f64
             } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
                 if embedding.len() != query_embedding.len() {
                     continue;
@@ -2820,6 +2835,19 @@ mod tests {
             .expect("failed to save source_rag test tokenizer");
         init_tokenizer(tokenizer_path.to_str().unwrap().to_string())
             .expect("failed to init source_rag test tokenizer");
+    }
+
+    #[test]
+    fn test_hnsw_streaming_rebuild_policy_is_macos_only_by_default() {
+        assert!(hnsw_streaming_rebuild_enabled_for_target_os("macos", false));
+        assert!(!hnsw_streaming_rebuild_enabled_for_target_os("ios", false));
+        assert!(!hnsw_streaming_rebuild_enabled_for_target_os(
+            "android", false
+        ));
+        assert!(!hnsw_streaming_rebuild_enabled_for_target_os(
+            "linux", false
+        ));
+        assert!(hnsw_streaming_rebuild_enabled_for_target_os("ios", true));
     }
 
     fn test_search_meta_hook_collection() -> &'static Mutex<Option<String>> {

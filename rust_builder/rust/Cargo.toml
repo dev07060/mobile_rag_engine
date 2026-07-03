@@ -13,6 +13,7 @@ default = []
 vector_faer = ["dep:faer"]
 vector_quant_i8 = []
 allocator_mimalloc = ["dep:mimalloc"]
+hnsw_streaming_rebuild = []
 # Bench-only: exposes a thin `bench_api` re-export of the (otherwise pub(crate))
 # vector_math kernels so `benches/` can reach them. Never set in production builds.
 bench = []
