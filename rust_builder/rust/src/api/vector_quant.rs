@@ -26,6 +26,7 @@ pub fn quantize_f32_to_i8(input: &[f32]) -> (Vec<i8>, f32) {
     (quantized, scale)
 }
 
+#[allow(dead_code)]
 #[inline]
 pub fn dequantize_i8_to_f32(input: &[i8], scale: f32) -> Vec<f32> {
     if input.is_empty() {
@@ -193,6 +194,7 @@ pub fn quantize_f32_to_i8_blockwise(input: &[f32]) -> (Vec<i8>, Vec<f32>) {
 }
 
 /// Dequantizes block-wise i8 slice back into f32.
+#[allow(dead_code)]
 pub fn dequantize_i8_to_f32_blockwise(input: &[i8], scales: &[f32]) -> Vec<f32> {
     if input.is_empty() || scales.is_empty() {
         return Vec::new();
