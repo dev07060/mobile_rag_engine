@@ -67,6 +67,14 @@ docs/reports/*.html
 docs/perf/ondevice-query-profiler/GOALS-P5-*.md
 docs/perf/ondevice-query-profiler/PR-P5-[2-9]*.html
 docs/perf/ondevice-query-profiler/artifacts/
+docs/architecture/managed-local-rag-final.png
+docs/architecture/managed-local-rag-final.svg
+docs/promo/flutter-rag-to-llm-workflow-part*-draft.*
+docs/promo/package_guide_android_staging/
+docs/promo/package_guide_staging/
+docs/promo/package_guide_sample_document.txt
+docs/promo/package_guide_validation_*.md
+docs/promo/screenshots/
 example/assets/corpus/
 example/assets/evalsets/
 example/assets/sample_data/*.pdf
@@ -74,6 +82,7 @@ example/assets/sample_data/*.pdf
 !example/assets/sample_data/sample_kor.pdf
 
 # Example evaluation/performance runners (local only)
+example/lib/onnx_runtime_smoke.dart
 example/lib/*_runner.dart
 example/lib/profiling/relevance_evalset.dart
 example/lib/profiling/relevance_metrics.dart

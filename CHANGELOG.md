@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.20.0
+* **Block-wise Quantization**:
+  - Integrated block-wise scalar quantization (Q8_0 style, 32-dim blocks) for on-device exact-scans.
+  - Implemented backward-compatible dynamic fallback in distance similarity logic to search both legacy 768-byte uniform blobs and new 864-byte packed block-wise blobs.
+* **Retrieval Quality**:
+  - Optimized HNSW index rebuild loops to load original high-precision f32 database embeddings directly, resolving the compound distortion loop and restoring semantic query recall to baseline parity.
+* **Compatibility**:
+  - Bumped native dependency constraint to `rag_engine_flutter: ^0.19.2`.
+
 ## 0.19.1
 * **Packaging**:
   - Fixed the publish archive so `lib/models/*.dart` is included again.

@@ -55,7 +55,7 @@ class IngestTrafficStats {
 
   /// Sum of text-body bytes that crossed FFI on the legacy chain.
   Future<BigInt> legacyTextTrafficTotal() => RustLib.instance.api
-      .crateApiIngestMetricsIngestTrafficStatsLegacyTextTrafficTotal(
+          .crateApiIngestMetricsIngestTrafficStatsLegacyTextTrafficTotal(
         that: this,
       );
 
@@ -63,7 +63,7 @@ class IngestTrafficStats {
   /// Excludes embedding vector bytes (vectors are not text and are tracked
   /// separately for transparency).
   Future<BigInt> sessionTextTrafficTotal() => RustLib.instance.api
-      .crateApiIngestMetricsIngestTrafficStatsSessionTextTrafficTotal(
+          .crateApiIngestMetricsIngestTrafficStatsSessionTextTrafficTotal(
         that: this,
       );
 

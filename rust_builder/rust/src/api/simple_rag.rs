@@ -28,8 +28,7 @@ use crate::api::vector_math::{
 };
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{
-    cosine_with_query_norm_i8_blob, dequantize_i8_to_f32, i8_vec_from_blob, l2_norm_i8,
-    quantize_f32_to_i8, quantize_f32_to_u8_blob,
+    l2_norm_i8, quantize_f32_to_i8, quantize_f32_to_u8_blob, QueryQ8, cosine_similarity_q8,
 };
 use flutter_rust_bridge::frb;
 use log::{debug, error, info, warn};
@@ -179,27 +178,9 @@ fn rebuild_hnsw_index_internal(conn: &Connection) -> anyhow::Result<()> {
             let embedding_i8_blob: Option<Vec<u8>> = row.get(2)?;
             let embedding_scale: Option<f32> = row.get(3)?;
 
-            #[cfg(feature = "vector_quant_i8")]
-            let embedding = if let (Some(qblob), Some(scale)) =
-                (embedding_i8_blob.as_deref(), embedding_scale)
-            {
-                let quantized = i8_vec_from_blob(qblob);
-                let restored = dequantize_i8_to_f32(&quantized, scale);
-                if restored.is_empty() {
-                    decode_f32_embedding_or_warn(&embedding_blob, id)
-                } else {
-                    restored
-                }
-            } else {
-                decode_f32_embedding_or_warn(&embedding_blob, id)
-            };
-
-            #[cfg(not(feature = "vector_quant_i8"))]
-            let embedding = {
-                let _ = (embedding_i8_blob, embedding_scale);
-                decode_f32_embedding_or_warn(&embedding_blob, id)
-            };
-
+            // Build the HNSW graph using original high-precision f32 embeddings
+            let _ = (embedding_i8_blob, embedding_scale);
+            let embedding = decode_f32_embedding_or_warn(&embedding_blob, id);
             Ok((id, embedding))
         })?
         .filter_map(|r| r.ok())
@@ -425,6 +406,8 @@ fn search_with_linear_scan(query_embedding: Vec<f32>, top_k: u32) -> anyhow::Res
     let (query_i8, _query_i8_scale) = quantize_f32_to_i8(&query_embedding);
     #[cfg(feature = "vector_quant_i8")]
     let query_i8_norm = l2_norm_i8(&query_i8);
+    #[cfg(feature = "vector_quant_i8")]
+    let query_q8 = QueryQ8::new(&query_embedding);
 
     let mut stmt = match conn.prepare("SELECT content, embedding, embedding_i8 FROM docs") {
         Ok(stmt) => stmt,
@@ -445,8 +428,8 @@ fn search_with_linear_scan(query_embedding: Vec<f32>, top_k: u32) -> anyhow::Res
 
         #[cfg(feature = "vector_quant_i8")]
         let similarity = if let Some(qblob) = embedding_i8_blob.as_deref() {
-            if qblob.len() == query_i8.len() && query_i8_norm > 0.0 {
-                cosine_with_query_norm_i8_blob(&query_i8, query_i8_norm, qblob)
+            if (qblob.len() == query_i8.len() || qblob.len() % 36 == 0) && query_i8_norm > 0.0 {
+                cosine_similarity_q8(&query_q8, qblob, &query_i8, query_i8_norm)
             } else if let Some(embedding_vec) = decode_f32_embedding(&embedding_blob) {
                 if embedding_vec.len() != query_embedding.len() {
                     continue;

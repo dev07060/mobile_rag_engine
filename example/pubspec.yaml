@@ -35,3 +35,12 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
+    - assets/corpus/ko/tech/
+    - assets/corpus/ko/finance/
+    - assets/corpus/ko/support/
+    - assets/corpus/ko/policy/
+    - assets/corpus/en/tech/
+    - assets/corpus/en/finance/
+    - assets/corpus/en/support/
+    - assets/corpus/en/policy/
+    - assets/evalsets/

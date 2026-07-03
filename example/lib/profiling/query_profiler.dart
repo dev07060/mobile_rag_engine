@@ -17,6 +17,8 @@ import 'dart:io';
 
 import 'package:mobile_rag_engine/services/embedding_service.dart';
 // ignore: implementation_imports
+import 'package:mobile_rag_engine/src/rust/api/activation_metrics.dart' as am;
+// ignore: implementation_imports
 import 'package:mobile_rag_engine/src/rust/api/source_rag.dart' as rust_rag;
 // ignore: implementation_imports
 import 'package:mobile_rag_engine/src/rust/api/query_metrics.dart' as qm;
@@ -30,7 +32,11 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
 
 /// Result of a single measured query: per-segment milliseconds + the sourceIds
 /// of the returned hits (used for fail-closed hit-count + filter checks).
-typedef MeasuredQuery = ({Map<String, double> ms, List<int> hitSourceIds});
+typedef MeasuredQuery = ({
+  Map<String, double> ms,
+  List<int> hitSourceIds,
+  Map<String, Object?> activation,
+});
 
 /// Per-segment timing driver. One instance per profiling run.
 class QueryProfiler {
@@ -143,14 +149,17 @@ class QueryProfiler {
     int topK = 10,
   }) async {
     final ms = <String, double>{};
+    var activation = <String, Object?>{};
 
     if (activate) {
+      QueryProfiler.resetActivation();
       ms['activate'] = await _timeMs(
         () => rust_rag.activateCollectionForHybridSearch(
           collectionId: collectionId,
           basePath: indexBasePath(collectionId),
         ),
       );
+      activation = QueryProfiler.takeActivation();
     }
 
     late final List<double> embedding; // Float32List is-a List<double>
@@ -175,13 +184,19 @@ class QueryProfiler {
     });
 
     final hits = await handle.hitMeta();
-    final chunkIds = <int>[for (final h in hits) h.chunkId]; // PlatformInt64==int (native)
+    final chunkIds = <int>[
+      for (final h in hits) h.chunkId
+    ]; // PlatformInt64==int (native)
     ms['hydrate'] = await _timeMs(() async {
       await handle.hydrateChunks(chunkIds: _toInt64List(chunkIds));
     });
 
     await handle.dispose();
-    return (ms: ms, hitSourceIds: <int>[for (final h in hits) h.sourceId]);
+    return (
+      ms: ms,
+      hitSourceIds: <int>[for (final h in hits) h.sourceId],
+      activation: activation,
+    );
   }
 
   /// Snapshot (and reset) the rust-side query_metrics I/O counters into a
@@ -202,4 +217,24 @@ class QueryProfiler {
   /// Reset the rust-side query_metrics counters (call after warmup, before the
   /// measured loop, so the I/O snapshot reflects measured iterations only).
   static void resetIo() => qm.resetQueryContentReadStats();
+
+  static void resetActivation() => am.resetActivationTimingStats();
+
+  static Map<String, Object?> takeActivation() {
+    final s = am.takeActivationTimingStats();
+    return {
+      'activate_total_nanos': s.activateTotalNanos.toInt(),
+      'activate_count': s.activateCount.toInt(),
+      'bm25_rebuild_nanos': s.bm25RebuildNanos.toInt(),
+      'bm25_rebuild_count': s.bm25RebuildCount.toInt(),
+      'hnsw_load_nanos': s.hnswLoadNanos.toInt(),
+      'hnsw_load_count': s.hnswLoadCount.toInt(),
+      'hnsw_load_success_count': s.hnswLoadSuccessCount.toInt(),
+      'hnsw_load_miss_count': s.hnswLoadMissCount.toInt(),
+      'hnsw_rebuild_nanos': s.hnswRebuildNanos.toInt(),
+      'hnsw_rebuild_count': s.hnswRebuildCount.toInt(),
+      'hnsw_save_nanos': s.hnswSaveNanos.toInt(),
+      'hnsw_save_count': s.hnswSaveCount.toInt(),
+    };
+  }
 }

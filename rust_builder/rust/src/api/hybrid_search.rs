@@ -26,7 +26,7 @@ use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw_slice, HnswSearch
 use crate::api::query_metrics::record_hybrid_result_content_read;
 use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
-use crate::api::vector_quant::{cosine_with_query_norm_i8_blob, l2_norm_i8, quantize_f32_to_i8};
+use crate::api::vector_quant::{l2_norm_i8, quantize_f32_to_i8, QueryQ8, cosine_similarity_q8};
 
 #[derive(Debug, Clone)]
 pub struct SearchFilter {
@@ -264,6 +264,8 @@ fn compute_hybrid_rrf_scores(
             let (query_i8, _query_i8_scale) = quantize_f32_to_i8(query_embedding);
             #[cfg(feature = "vector_quant_i8")]
             let query_i8_norm = l2_norm_i8(&query_i8);
+            #[cfg(feature = "vector_quant_i8")]
+            let query_q8 = QueryQ8::new(query_embedding);
 
             let mut scoped_doc_ids = Vec::new();
 
@@ -277,8 +279,8 @@ fn compute_hybrid_rrf_scores(
                     let _ = &embedding_i8_blob;
                     #[cfg(feature = "vector_quant_i8")]
                     let sim = if let Some(qblob) = embedding_i8_blob.as_deref() {
-                        if qblob.len() == query_i8.len() && query_i8_norm > 0.0 {
-                            cosine_with_query_norm_i8_blob(&query_i8, query_i8_norm, qblob)
+                        if (qblob.len() == query_i8.len() || qblob.len() % 36 == 0) && query_i8_norm > 0.0 {
+                            cosine_similarity_q8(&query_q8, qblob, &query_i8, query_i8_norm)
                         } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
                             if embedding.len() != query_embedding.len() {
                                 continue;

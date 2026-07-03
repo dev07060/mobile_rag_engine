@@ -10,7 +10,7 @@ round-trip for retrieval.
 ![pub package](https://img.shields.io/pub/v/mobile_rag_engine)
 ![flutter](https://img.shields.io/badge/Flutter-3.9%2B-blue)
 ![rust](https://img.shields.io/badge/Core-Rust-orange)
-![platform](https://img.shields.io/badge/Platform-iOS%20|%20Android%20|%20macOS-lightgrey)
+![platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Use it when you need a **Flutter local RAG engine** for private notes, document
@@ -25,7 +25,7 @@ stay on the device.
 
 **You do NOT need to install Rust, Cargo, or Android NDK.**
 
-This package includes **pre-compiled binaries** for iOS, Android, and macOS. Just `pub add` and run.
+This package includes **pre-compiled binaries** for iOS, Android, macOS, Windows, and Linux. Just `pub add` and run.
 
 ### Performance
 
@@ -91,6 +91,8 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 | **iOS** | 16.0+ |
 | **Android** | API 21+ (Android 5.0 Lollipop) |
 | **macOS** | 14.0+ |
+| **Windows** | Windows 10+ (x64) |
+| **Linux** | glibc 2.31+ (x64) |
 
 > ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods iOS builds require static framework linkage (`use_frameworks! :linkage => :static`), and Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
 
@@ -102,7 +104,7 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 
 ```yaml
 dependencies:
-  mobile_rag_engine: ^0.19.0
+  mobile_rag_engine: ^0.20.0
 ```
 
 ### 2. Download Model Files

@@ -16,17 +16,18 @@
 //
 //! Extended RAG API with sources and chunks for LLM-optimized context.
 
+use crate::api::activation_metrics;
 use crate::api::bm25_search::{bm25_add_documents, bm25_clear_index, is_bm25_index_loaded};
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
+use crate::api::hnsw_index::{
+    build_hnsw_index, build_hnsw_index_streaming, clear_hnsw_index, is_hnsw_index_loaded,
+    load_hnsw_index, save_hnsw_index, search_hnsw,
+};
+use crate::api::hybrid_search::{search_hybrid_meta_inner, RrfConfig, SearchFilter};
 use crate::api::ingest_metrics::{
     legacy_counters_enabled, LEGACY_ADD_CHUNKS_IN, LEGACY_ADD_SOURCE_IN,
 };
-use crate::api::hnsw_index::{
-    build_hnsw_index, clear_hnsw_index, is_hnsw_index_loaded, load_hnsw_index, save_hnsw_index,
-    search_hnsw,
-};
-use crate::api::hybrid_search::{search_hybrid_meta_inner, RrfConfig, SearchFilter};
 use crate::api::migration_meta::{detect_existing_install, initialize_migration_meta};
 use crate::api::query_metrics::{
     record_hydrated_content_read, QueryContentReadGuard, QueryContentReadPhase,
@@ -37,8 +38,7 @@ use crate::api::vector_math::{
 };
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{
-    cosine_with_query_norm_i8_blob, dequantize_i8_to_f32, i8_vec_from_blob, l2_norm_i8,
-    quantize_f32_to_i8, quantize_f32_to_u8_blob,
+    l2_norm_i8, quantize_f32_to_i8, quantize_f32_to_u8_blob, QueryQ8, cosine_similarity_q8,
 };
 use crate::frb_generated::RustAutoOpaqueMoi as RustAutoOpaque;
 use flutter_rust_bridge::frb;
@@ -49,6 +49,7 @@ use rusqlite::{params, OptionalExtension};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::Instant;
 
 pub const DEFAULT_COLLECTION_ID: &str = "__default__";
 
@@ -61,6 +62,21 @@ static CJK_OR_HANGUL_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7A3]"#)
         .expect("valid cjk regex")
 });
+
+fn hnsw_streaming_rebuild_enabled_for_target_os(target_os: &str, force_enabled: bool) -> bool {
+    force_enabled || target_os == "macos"
+}
+
+fn hnsw_streaming_rebuild_enabled() -> bool {
+    hnsw_streaming_rebuild_enabled_for_target_os(
+        std::env::consts::OS,
+        cfg!(feature = "hnsw_streaming_rebuild"),
+    )
+}
+
+fn elapsed_nanos_u64(start: Instant) -> u64 {
+    start.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
+}
 
 #[cfg(test)]
 static SEARCH_META_TEST_HOOK: Lazy<RwLock<Option<fn()>>> = Lazy::new(|| RwLock::new(None));
@@ -733,8 +749,7 @@ pub struct ChunkData {
 /// Add chunks for a source (uses transaction for atomicity).
 pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagError> {
     if legacy_counters_enabled() {
-        LEGACY_ADD_CHUNKS_IN
-            .record(chunks.iter().map(|c| c.content.len() as u64).sum());
+        LEGACY_ADD_CHUNKS_IN.record(chunks.iter().map(|c| c.content.len() as u64).sum());
     }
     info!(
         "[add_chunks] Adding {} chunks for source {}",
@@ -768,8 +783,7 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
 
         #[cfg(feature = "vector_quant_i8")]
         {
-            let (embedding_i8_bytes, embedding_scale) =
-                quantize_f32_to_u8_blob(&chunk.embedding);
+            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&chunk.embedding);
 
             if has_chunk_embedding_i8 && has_chunk_embedding_scale {
                 tx.execute(
@@ -843,6 +857,13 @@ pub fn rebuild_chunk_hnsw_index() -> Result<(), RagError> {
 
 /// Rebuild HNSW index from chunks table for a specific collection.
 pub fn rebuild_chunk_hnsw_index_for_collection(collection_id: String) -> Result<(), RagError> {
+    let start = Instant::now();
+    let result = rebuild_chunk_hnsw_index_for_collection_inner(collection_id);
+    activation_metrics::record_hnsw_rebuild_nanos(elapsed_nanos_u64(start));
+    result
+}
+
+fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Result<(), RagError> {
     let collection_id = normalize_collection_id(collection_id);
     info!(
         "[rebuild_chunk_hnsw] Starting for collection={}",
@@ -850,6 +871,26 @@ pub fn rebuild_chunk_hnsw_index_for_collection(collection_id: String) -> Result<
     );
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     ensure_collection_row(&conn, &collection_id)?;
+
+    let point_count_hint: usize = conn
+        .query_row(
+            "SELECT COUNT(*)
+             FROM chunks c
+             JOIN sources s ON s.id = c.source_id
+             WHERE c.collection_id = ?1
+               AND COALESCE(s.status, 'completed') = 'completed'",
+            params![&collection_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|count| count.max(0) as usize)
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    if point_count_hint == 0 {
+        clear_hnsw_index();
+        set_active_hnsw_collection(&collection_id);
+        mark_collection_hnsw_clean(&conn, &collection_id)?;
+        return Ok(());
+    }
 
     let has_chunk_embedding_i8: bool = conn
         .prepare("SELECT embedding_i8 FROM chunks LIMIT 1")
@@ -876,45 +917,52 @@ pub fn rebuild_chunk_hnsw_index_for_collection(collection_id: String) -> Result<
     }
     .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
-    let points: Vec<(i64, Vec<f32>)> = stmt
-        .query_map(params![collection_id], |row| {
+    let rows = stmt
+        .query_map(params![&collection_id], |row| {
             let id: i64 = row.get(0)?;
             let embedding_blob: Vec<u8> = row.get(1)?;
             let embedding_i8_blob: Option<Vec<u8>> = row.get(2)?;
             let embedding_scale: Option<f32> = row.get(3)?;
 
-            #[cfg(feature = "vector_quant_i8")]
-            let embedding = if let (Some(qblob), Some(scale)) =
-                (embedding_i8_blob.as_deref(), embedding_scale)
-            {
-                let quantized = i8_vec_from_blob(qblob);
-                let restored = dequantize_i8_to_f32(&quantized, scale);
-                if restored.is_empty() {
-                    decode_f32_embedding_or_warn(&embedding_blob, id)
-                } else {
-                    restored
-                }
-            } else {
-                decode_f32_embedding_or_warn(&embedding_blob, id)
-            };
-
-            #[cfg(not(feature = "vector_quant_i8"))]
-            let embedding = {
-                let _ = (embedding_i8_blob, embedding_scale);
-                decode_f32_embedding_or_warn(&embedding_blob, id)
-            };
+            // Build the HNSW graph using original high-precision f32 embeddings
+            // to prevent the Compound Distortion Loop and maintain optimal recall.
+            let _ = (embedding_i8_blob, embedding_scale);
+            let embedding = decode_f32_embedding_or_warn(&embedding_blob, id);
             Ok((id, embedding))
         })
-        .map_err(|e| RagError::DatabaseError(e.to_string()))?
-        .filter_map(|r| r.ok())
-        .filter(|(_, embedding)| !embedding.is_empty())
-        .collect();
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
-    if points.is_empty() {
+    let inserted = if hnsw_streaming_rebuild_enabled() {
+        info!(
+            "[rebuild_chunk_hnsw] Using streaming rebuild path for target_os={}",
+            std::env::consts::OS
+        );
+        let points = rows
+            .filter_map(|row| row.ok())
+            .filter(|(_, embedding)| !embedding.is_empty());
+        build_hnsw_index_streaming(point_count_hint, points)
+            .map_err(|e| RagError::InternalError(e.to_string()))?
+    } else {
+        info!(
+            "[rebuild_chunk_hnsw] Using collect rebuild path for target_os={}",
+            std::env::consts::OS
+        );
+        let points: Vec<(i64, Vec<f32>)> = rows
+            .filter_map(|row| row.ok())
+            .filter(|(_, embedding)| !embedding.is_empty())
+            .collect();
+        let inserted = points.len();
+        build_hnsw_index(points).map_err(|e| RagError::InternalError(e.to_string()))?;
+        inserted
+    };
+
+    if inserted == 0 {
         clear_hnsw_index();
     } else {
-        build_hnsw_index(points).map_err(|e| RagError::InternalError(e.to_string()))?;
-        info!("[rebuild_chunk_hnsw] Built index for {}", collection_id);
+        info!(
+            "[rebuild_chunk_hnsw] Built index for {} with {} chunks",
+            collection_id, inserted
+        );
     }
     set_active_hnsw_collection(&collection_id);
     mark_collection_hnsw_clean(&conn, &collection_id)?;
@@ -928,6 +976,13 @@ pub fn rebuild_chunk_bm25_index() -> Result<(), RagError> {
 
 /// Rebuild BM25 index from chunks table for a specific collection.
 pub fn rebuild_chunk_bm25_index_for_collection(collection_id: String) -> Result<(), RagError> {
+    let start = Instant::now();
+    let result = rebuild_chunk_bm25_index_for_collection_inner(collection_id);
+    activation_metrics::record_bm25_rebuild_nanos(elapsed_nanos_u64(start));
+    result
+}
+
+fn rebuild_chunk_bm25_index_for_collection_inner(collection_id: String) -> Result<(), RagError> {
     let collection_id = normalize_collection_id(collection_id);
     info!(
         "[rebuild_chunk_bm25] Starting for collection={}",
@@ -979,7 +1034,10 @@ pub fn save_collection_hnsw_index(
     base_path: String,
 ) -> Result<(), RagError> {
     let collection_id = normalize_collection_id(collection_id);
-    save_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()))?;
+    let start = Instant::now();
+    let result = save_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()));
+    activation_metrics::record_hnsw_save_nanos(elapsed_nanos_u64(start));
+    result?;
     set_active_hnsw_collection(&collection_id);
     Ok(())
 }
@@ -990,7 +1048,18 @@ pub fn load_collection_hnsw_index(
     base_path: String,
 ) -> Result<bool, RagError> {
     let collection_id = normalize_collection_id(collection_id);
-    let loaded = load_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()))?;
+    let start = Instant::now();
+    let load_result = load_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()));
+    let loaded = match load_result {
+        Ok(loaded) => {
+            activation_metrics::record_hnsw_load_nanos(elapsed_nanos_u64(start), loaded);
+            loaded
+        }
+        Err(err) => {
+            activation_metrics::record_hnsw_load_nanos(elapsed_nanos_u64(start), false);
+            return Err(err);
+        }
+    };
     if loaded {
         set_active_hnsw_collection(&collection_id);
         let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -1007,6 +1076,16 @@ pub fn activate_collection_for_hybrid_search(
     collection_id: String,
     base_path: String,
 ) -> Result<(), RagError> {
+    let total_start = Instant::now();
+    let result = activate_collection_for_hybrid_search_inner(collection_id, base_path);
+    activation_metrics::record_activate_total_nanos(elapsed_nanos_u64(total_start));
+    result
+}
+
+fn activate_collection_for_hybrid_search_inner(
+    collection_id: String,
+    base_path: String,
+) -> Result<(), RagError> {
     let collection_id = normalize_collection_id(collection_id);
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     ensure_collection_row(&conn, &collection_id)?;
@@ -1016,13 +1095,28 @@ pub fn activate_collection_for_hybrid_search(
     }
 
     if !is_hnsw_index_loaded() || !is_active_hnsw_collection(&collection_id) {
-        let loaded = load_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()))?;
+        let load_start = Instant::now();
+        let load_result = load_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()));
+        let loaded = match load_result {
+            Ok(loaded) => {
+                activation_metrics::record_hnsw_load_nanos(elapsed_nanos_u64(load_start), loaded);
+                loaded
+            }
+            Err(err) => {
+                activation_metrics::record_hnsw_load_nanos(elapsed_nanos_u64(load_start), false);
+                return Err(err);
+            }
+        };
         if loaded {
             set_active_hnsw_collection(&collection_id);
             let _ = mark_collection_hnsw_clean(&conn, &collection_id);
         } else {
             rebuild_chunk_hnsw_index_for_collection(collection_id.clone())?;
-            save_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()))?;
+            let save_start = Instant::now();
+            let save_result =
+                save_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()));
+            activation_metrics::record_hnsw_save_nanos(elapsed_nanos_u64(save_start));
+            save_result?;
         }
     }
 
@@ -1203,12 +1297,8 @@ impl SearchHandle {
         // returns from the cache and bypasses SQLite entirely.
         let (from_cache, missing) = partition_by_cache(&self.content_cache, &requested_ids);
 
-        let (newly_fetched, stale_missing) = hydrate_chunk_search_results(
-            &conn,
-            &self.collection_id,
-            missing,
-            &self.ordered_hits,
-        )?;
+        let (newly_fetched, stale_missing) =
+            hydrate_chunk_search_results(&conn, &self.collection_id, missing, &self.ordered_hits)?;
         self.ensure_generation_unchanged_with_conn(&conn, start_generation)?;
         if let Some(missing) = stale_missing.first() {
             return Err(RagError::StaleSearchHandle(format!(
@@ -1218,10 +1308,8 @@ impl SearchHandle {
         }
         populate_cache(&self.content_cache, &newly_fetched);
 
-        let mut by_id: HashMap<i64, ChunkSearchResult> = from_cache
-            .into_iter()
-            .map(|c| (c.chunk_id, c))
-            .collect();
+        let mut by_id: HashMap<i64, ChunkSearchResult> =
+            from_cache.into_iter().map(|c| (c.chunk_id, c)).collect();
         for chunk in newly_fetched {
             by_id.insert(chunk.chunk_id, chunk);
         }
@@ -1268,10 +1356,8 @@ impl SearchHandle {
             )));
         }
 
-        let mut by_id: HashMap<i64, ChunkSearchResult> = from_cache
-            .into_iter()
-            .map(|c| (c.chunk_id, c))
-            .collect();
+        let mut by_id: HashMap<i64, ChunkSearchResult> =
+            from_cache.into_iter().map(|c| (c.chunk_id, c)).collect();
         for chunk in newly_fetched {
             by_id.insert(chunk.chunk_id, chunk);
         }
@@ -1332,12 +1418,7 @@ pub fn search_meta_hybrid(
     // `search_meta_hybrid_once` constructs the owned `SearchHandle`
     // payload internally, cloning only what the handle actually stores.
     for _attempt in 0..=1 {
-        match search_meta_hybrid_once(
-            &collection_id,
-            &query_text,
-            &query_embedding,
-            &options,
-        ) {
+        match search_meta_hybrid_once(&collection_id, &query_text, &query_embedding, &options) {
             Ok(handle) => return Ok(RustAutoOpaque::new(handle)),
             Err(err @ RagError::ConcurrentMutation(_)) => last_error = Some(err),
             Err(err) => return Err(err),
@@ -1614,15 +1695,10 @@ fn partition_by_cache(
 
 /// Insert newly-fetched full-content rows into the cache. `or_insert_with`
 /// keeps the first writer's value if two calls race for the same id.
-fn populate_cache(
-    cache: &Mutex<HashMap<i64, ChunkSearchResult>>,
-    rows: &[ChunkSearchResult],
-) {
+fn populate_cache(cache: &Mutex<HashMap<i64, ChunkSearchResult>>, rows: &[ChunkSearchResult]) {
     let mut guard = cache.lock().expect("content_cache mutex poisoned");
     for row in rows {
-        guard
-            .entry(row.chunk_id)
-            .or_insert_with(|| row.clone());
+        guard.entry(row.chunk_id).or_insert_with(|| row.clone());
     }
 }
 
@@ -2046,10 +2122,8 @@ fn hydrate_rows_for_assembly(
         hydrate_chunk_search_results(conn, collection_id, missing, hits)?;
     populate_cache(cache, &newly_fetched);
 
-    let mut by_id: HashMap<i64, ChunkSearchResult> = from_cache
-        .into_iter()
-        .map(|c| (c.chunk_id, c))
-        .collect();
+    let mut by_id: HashMap<i64, ChunkSearchResult> =
+        from_cache.into_iter().map(|c| (c.chunk_id, c)).collect();
     for chunk in newly_fetched {
         by_id.insert(chunk.chunk_id, chunk);
     }
@@ -2288,6 +2362,8 @@ fn search_chunks_linear_in_collection(
     let (query_i8, _query_i8_scale) = quantize_f32_to_i8(&query_embedding);
     #[cfg(feature = "vector_quant_i8")]
     let query_i8_norm = l2_norm_i8(&query_i8);
+    #[cfg(feature = "vector_quant_i8")]
+    let query_q8 = QueryQ8::new(&query_embedding);
 
     let mut stmt = match conn.prepare(
         "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, c.embedding_i8, s.metadata
@@ -2350,8 +2426,8 @@ fn search_chunks_linear_in_collection(
 
         #[cfg(feature = "vector_quant_i8")]
         let similarity = if let Some(qblob) = embedding_i8_blob.as_deref() {
-            if qblob.len() == query_i8.len() && query_i8_norm > 0.0 {
-                cosine_with_query_norm_i8_blob(&query_i8, query_i8_norm, qblob) as f64
+            if (qblob.len() == query_i8.len() || qblob.len() % 36 == 0) && query_i8_norm > 0.0 {
+                cosine_similarity_q8(&query_q8, qblob, &query_i8, query_i8_norm) as f64
             } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
                 if embedding.len() != query_embedding.len() {
                     continue;
@@ -2758,6 +2834,19 @@ mod tests {
             .expect("failed to save source_rag test tokenizer");
         init_tokenizer(tokenizer_path.to_str().unwrap().to_string())
             .expect("failed to init source_rag test tokenizer");
+    }
+
+    #[test]
+    fn test_hnsw_streaming_rebuild_policy_is_macos_only_by_default() {
+        assert!(hnsw_streaming_rebuild_enabled_for_target_os("macos", false));
+        assert!(!hnsw_streaming_rebuild_enabled_for_target_os("ios", false));
+        assert!(!hnsw_streaming_rebuild_enabled_for_target_os(
+            "android", false
+        ));
+        assert!(!hnsw_streaming_rebuild_enabled_for_target_os(
+            "linux", false
+        ));
+        assert!(hnsw_streaming_rebuild_enabled_for_target_os("ios", true));
     }
 
     fn test_search_meta_hook_collection() -> &'static Mutex<Option<String>> {

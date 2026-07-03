@@ -5,6 +5,13 @@
 // This file is part of the core engine. Any modifications require owner approval.
 // Please submit a PR with detailed explanation of changes before modifying.
 
+#[cfg(feature = "allocator_mimalloc")]
+use mimalloc::MiMalloc;
+
+#[cfg(feature = "allocator_mimalloc")]
+#[global_allocator]
+static GLOBAL_ALLOCATOR: MiMalloc = MiMalloc;
+
 pub mod api;
 mod frb_generated;
 

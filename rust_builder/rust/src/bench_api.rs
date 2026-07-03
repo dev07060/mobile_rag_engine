@@ -58,6 +58,15 @@ pub fn cosine_with_query_norm_i8_blob(query: &[i8], query_norm: f32, target_blob
     vector_quant::cosine_with_query_norm_i8_blob(query, query_norm, target_blob)
 }
 
+#[cfg(feature = "vector_quant_i8")]
+#[inline]
+pub fn quantize_f32_to_i8_blockwise(input: &[f32]) -> (Vec<i8>, Vec<f32>) {
+    vector_quant::quantize_f32_to_i8_blockwise(input)
+}
+
+#[cfg(feature = "vector_quant_i8")]
+pub use crate::api::vector_quant::{QueryQ8, cosine_similarity_q8};
+
 /// Which backend this build compiled (for labelling bench output).
 pub const BACKEND: &str = if cfg!(feature = "vector_faer") {
     "faer"

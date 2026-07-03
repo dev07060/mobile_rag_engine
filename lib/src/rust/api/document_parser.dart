@@ -6,39 +6,46 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `is_cjk`, `is_noncharacter_code_point`, `is_private_use_code_point`, `join_pages`, `normalize_extracted_text`, `remove_trailing_page_number`
+// These functions are ignored because they are not marked as `pub`: `below_threshold_error_message`, `dedup_adjacent_repeats`, `extract_single_page`, `find_adjacent_repeats`, `is_cjk`, `is_extraction_effectively_empty`, `is_noncharacter_code_point`, `is_private_use_code_point`, `join_pages`, `normalize_extracted_text`, `remove_trailing_page_number`, `should_include_scanned_marker`
 
 /// Extract text content from a PDF file (bytes)
-/// Uses page-by-page extraction for safe page number removal and hyphenation handling
-Future<String> extractTextFromPdf({required List<int> fileBytes}) => RustLib
-    .instance
-    .api
-    .crateApiDocumentParserExtractTextFromPdf(fileBytes: fileBytes);
+///
+/// Walks the document one page at a time so a single malformed/unsupported
+/// page can be skipped without aborting the whole document. Failed pages
+/// are replaced with an empty string and a warning so the rest of the PDF
+/// still flows downstream; the skip count is included in the error message
+/// if the overall extraction ends up below
+/// [MIN_EXTRACTED_NON_WHITESPACE] characters.
+///
+/// Returns `Err` when the joined output falls below
+/// [MIN_EXTRACTED_NON_WHITESPACE] characters. pdf_extract reports
+/// scanned/image-only PDFs as a vector of empty strings (no error), so
+/// without this guard a 0-chunk source would be silently indexed and the
+/// user would see an "ingested but unsearchable" mystery.
+Future<String> extractTextFromPdf({required List<int> fileBytes}) =>
+    RustLib.instance.api
+        .crateApiDocumentParserExtractTextFromPdf(fileBytes: fileBytes);
 
 /// Extract text content from a DOCX file (bytes)
-Future<String> extractTextFromDocx({required List<int> fileBytes}) => RustLib
-    .instance
-    .api
-    .crateApiDocumentParserExtractTextFromDocx(fileBytes: fileBytes);
+Future<String> extractTextFromDocx({required List<int> fileBytes}) =>
+    RustLib.instance.api
+        .crateApiDocumentParserExtractTextFromDocx(fileBytes: fileBytes);
 
 /// Auto-detect document type and extract text
 /// Uses magic bytes to determine file format
 Future<String> extractTextFromDocument({required List<int> fileBytes}) =>
-    RustLib.instance.api.crateApiDocumentParserExtractTextFromDocument(
-      fileBytes: fileBytes,
-    );
+    RustLib.instance.api
+        .crateApiDocumentParserExtractTextFromDocument(fileBytes: fileBytes);
 
 /// Decode UTF-8 text bytes without altering content semantics.
-Future<String> extractTextFromUtf8({required List<int> fileBytes}) => RustLib
-    .instance
-    .api
-    .crateApiDocumentParserExtractTextFromUtf8(fileBytes: fileBytes);
+Future<String> extractTextFromUtf8({required List<int> fileBytes}) =>
+    RustLib.instance.api
+        .crateApiDocumentParserExtractTextFromUtf8(fileBytes: fileBytes);
 
 /// Read a file and extract text according to extension / magic bytes.
 ///
 /// Text-like files (`.txt`, `.md`, `.markdown`) are decoded as UTF-8.
 /// Binary document types fall back to the existing document extractor.
-Future<String> extractTextFromFile({required String filePath}) => RustLib
-    .instance
-    .api
-    .crateApiDocumentParserExtractTextFromFile(filePath: filePath);
+Future<String> extractTextFromFile({required String filePath}) =>
+    RustLib.instance.api
+        .crateApiDocumentParserExtractTextFromFile(filePath: filePath);

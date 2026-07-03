@@ -1,2 +1,4 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
 #include "Generated.xcconfig"
+DEAD_CODE_STRIPPING = NO
+OTHER_LDFLAGS = $(inherited) -force_load $(PODS_CONFIGURATION_BUILD_DIR)/rag_engine_flutter/librag_engine_flutter.a
