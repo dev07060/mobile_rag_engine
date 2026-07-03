@@ -26,7 +26,7 @@ use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw_slice, HnswSearch
 use crate::api::query_metrics::record_hybrid_result_content_read;
 use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
-use crate::api::vector_quant::{cosine_with_query_norm_i8_blob, l2_norm_i8, quantize_f32_to_i8, QueryQ8, cosine_similarity_q8};
+use crate::api::vector_quant::{l2_norm_i8, quantize_f32_to_i8, QueryQ8, cosine_similarity_q8};
 
 #[derive(Debug, Clone)]
 pub struct SearchFilter {

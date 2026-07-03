@@ -94,6 +94,7 @@ pub fn quantize_f32_to_u8_blob(input: &[f32]) -> (Vec<u8>, f32) {
     (blob, scale)
 }
 
+#[allow(dead_code)]
 #[inline]
 pub fn i8_vec_from_blob(blob: &[u8]) -> Vec<i8> {
     blob.iter().map(|v| *v as i8).collect()
@@ -325,6 +326,7 @@ pub fn cosine_similarity_q8(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::vector_math::{cosine_with_query_norm_f32, l2_norm_f32};
 
     #[test]
     fn quantize_dequantize_roundtrip_reasonable_error() {
