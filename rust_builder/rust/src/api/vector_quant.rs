@@ -377,7 +377,7 @@ mod tests {
     fn quantize_f32_to_u8_blob_matches_two_step_pipeline() {
         // The direct blob path skips an intermediate Vec<i8>; the
         // resulting bytes and scale must be bit-for-bit identical to
-        // quantize_f32_to_i8 + i8_blob_from_slice.
+        // the manual two-step process.
         let inputs: &[&[f32]] = &[
             &[],
             &[0.0],
@@ -385,11 +385,33 @@ mod tests {
             &[-3.4, 0.0, 3.4, -1.7, 1.7],
         ];
 
+        #[cfg(not(feature = "vector_quant_i8"))]
         for input in inputs {
             let (direct_blob, direct_scale) = quantize_f32_to_u8_blob(input);
             let (i8_vec, two_step_scale) = quantize_f32_to_i8(input);
             let two_step_blob = i8_blob_from_slice(&i8_vec);
             assert_eq!(direct_scale, two_step_scale);
+            assert_eq!(direct_blob, two_step_blob);
+        }
+
+        #[cfg(feature = "vector_quant_i8")]
+        for input in inputs {
+            let (direct_blob, direct_scale) = quantize_f32_to_u8_blob(input);
+            assert_eq!(direct_scale, 1.0);
+            if input.is_empty() {
+                assert!(direct_blob.is_empty());
+                continue;
+            }
+            let (quantized, scales) = quantize_f32_to_i8_blockwise(input);
+            let mut two_step_blob = Vec::new();
+            for block_idx in 0..scales.len() {
+                two_step_blob.extend_from_slice(&scales[block_idx].to_le_bytes());
+                let start = block_idx * BLOCK_SIZE;
+                let end = (start + BLOCK_SIZE).min(quantized.len());
+                for i in start..end {
+                    two_step_blob.push(quantized[i] as u8);
+                }
+            }
             assert_eq!(direct_blob, two_step_blob);
         }
     }
