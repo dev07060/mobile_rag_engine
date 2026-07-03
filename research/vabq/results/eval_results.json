@@ -1,0 +1,240 @@
+[
+  {
+    "name": "Uniform Q8 (Legacy)",
+    "bytes_per_vector": 384,
+    "recall_at_10": 0.9786666666666668,
+    "mean_latency_ms": 12.158669279015157,
+    "p50_latency_ms": 10.472083013155498,
+    "p95_latency_ms": 18.64727324427804,
+    "p99_latency_ms": 20.462861731648438,
+    "extra": {
+      "recall_std": 0.04096611065529924,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "Q8_0 (block=16)",
+    "bytes_per_vector": 480,
+    "recall_at_10": 0.9929999999999999,
+    "mean_latency_ms": 11.759217499056831,
+    "p50_latency_ms": 11.511291493661702,
+    "p95_latency_ms": 12.220972604700364,
+    "p99_latency_ms": 20.128691262798345,
+    "extra": {
+      "recall_std": 0.025514701644346143,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "Q8_0 (block=32)",
+    "bytes_per_vector": 432,
+    "recall_at_10": 0.9906666666666666,
+    "mean_latency_ms": 11.331243875611108,
+    "p50_latency_ms": 11.05518800613936,
+    "p95_latency_ms": 12.182712508365512,
+    "p99_latency_ms": 18.251015824498598,
+    "extra": {
+      "recall_std": 0.0290898989723619,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "Q8_0 (block=64)",
+    "bytes_per_vector": 408,
+    "recall_at_10": 0.991,
+    "mean_latency_ms": 11.252442523060987,
+    "p50_latency_ms": 10.919000007561408,
+    "p95_latency_ms": 12.478518768330106,
+    "p99_latency_ms": 15.271459596988265,
+    "extra": {
+      "recall_std": 0.02861817604250836,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "PQ (M=8, K=256)",
+    "bytes_per_vector": 8,
+    "recall_at_10": 0.06799999999999999,
+    "mean_latency_ms": 14.591230421501677,
+    "p50_latency_ms": 14.441916995565407,
+    "p95_latency_ms": 15.75087356613949,
+    "p99_latency_ms": 16.7962235212326,
+    "extra": {
+      "recall_std": 0.0737744309816529,
+      "recall_min": 0.0,
+      "recall_max": 0.3
+    }
+  },
+  {
+    "name": "PQ (M=12, K=256)",
+    "bytes_per_vector": 12,
+    "recall_at_10": 0.085,
+    "mean_latency_ms": 16.091298346291296,
+    "p50_latency_ms": 15.670041495468467,
+    "p95_latency_ms": 18.705527749261822,
+    "p99_latency_ms": 24.98595375422154,
+    "extra": {
+      "recall_std": 0.0833166649996666,
+      "recall_min": 0.0,
+      "recall_max": 0.3
+    }
+  },
+  {
+    "name": "PQ (M=16, K=256)",
+    "bytes_per_vector": 16,
+    "recall_at_10": 0.10633333333333334,
+    "mean_latency_ms": 15.108942620281596,
+    "p50_latency_ms": 14.565457997377962,
+    "p95_latency_ms": 18.565952753124293,
+    "p99_latency_ms": 24.810259814257734,
+    "extra": {
+      "recall_std": 0.09377218256083317,
+      "recall_min": 0.0,
+      "recall_max": 0.4
+    }
+  },
+  {
+    "name": "PQ (M=24, K=256)",
+    "bytes_per_vector": 24,
+    "recall_at_10": 0.18033333333333335,
+    "mean_latency_ms": 17.54837111298305,
+    "p50_latency_ms": 16.932249505771324,
+    "p95_latency_ms": 19.790326738439035,
+    "p99_latency_ms": 23.065741155587602,
+    "extra": {
+      "recall_std": 0.11363635959595952,
+      "recall_min": 0.0,
+      "recall_max": 0.5
+    }
+  },
+  {
+    "name": "PQ (M=32, K=256)",
+    "bytes_per_vector": 32,
+    "recall_at_10": 0.23533333333333337,
+    "mean_latency_ms": 21.434403612608246,
+    "p50_latency_ms": 21.02216648927424,
+    "p95_latency_ms": 23.30907084979117,
+    "p99_latency_ms": 25.553381481440734,
+    "extra": {
+      "recall_std": 0.12603526843264504,
+      "recall_min": 0.0,
+      "recall_max": 0.5
+    }
+  },
+  {
+    "name": "VABQ (h=115\u00d7INT8/b16, l=269\u00d7INT4/b64)",
+    "bytes_per_vector": 302,
+    "recall_at_10": 0.9843333333333336,
+    "mean_latency_ms": 46.07741969938312,
+    "p50_latency_ms": 44.72235399589408,
+    "p95_latency_ms": 48.88668687926838,
+    "p99_latency_ms": 74.307999157754,
+    "extra": {
+      "recall_std": 0.03634862063713315,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=115\u00d7INT8/b32, l=269\u00d7INT4/b64)",
+    "bytes_per_vector": 286,
+    "recall_at_10": 0.9829999999999999,
+    "mean_latency_ms": 45.37819480028702,
+    "p50_latency_ms": 44.68949948204681,
+    "p95_latency_ms": 48.770574359514285,
+    "p99_latency_ms": 60.27772517525589,
+    "extra": {
+      "recall_std": 0.03756327994198589,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=192\u00d7INT8/b16, l=192\u00d7INT4/b64)",
+    "bytes_per_vector": 348,
+    "recall_at_10": 0.9843333333333334,
+    "mean_latency_ms": 41.031319286460835,
+    "p50_latency_ms": 39.46314599306788,
+    "p95_latency_ms": 49.097443753271364,
+    "p99_latency_ms": 54.1816453138017,
+    "extra": {
+      "recall_std": 0.03634862063713315,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=192\u00d7INT8/b32, l=192\u00d7INT4/b64)",
+    "bytes_per_vector": 324,
+    "recall_at_10": 0.9833333333333333,
+    "mean_latency_ms": 39.226336002951335,
+    "p50_latency_ms": 38.88595898752101,
+    "p95_latency_ms": 40.97639344254276,
+    "p99_latency_ms": 44.86229271831684,
+    "extra": {
+      "recall_std": 0.03726779962499649,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=288\u00d7INT8/b16, l=96\u00d7INT4/b64)",
+    "bytes_per_vector": 416,
+    "recall_at_10": 0.9886666666666667,
+    "mean_latency_ms": 38.186742790179174,
+    "p50_latency_ms": 38.004270507371984,
+    "p95_latency_ms": 40.06155001552543,
+    "p99_latency_ms": 41.3195514230756,
+    "extra": {
+      "recall_std": 0.0316999824745833,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=288\u00d7INT8/b32, l=96\u00d7INT4/b64)",
+    "bytes_per_vector": 380,
+    "recall_at_10": 0.9856666666666668,
+    "mean_latency_ms": 41.26460554611791,
+    "p50_latency_ms": 40.137124989996664,
+    "p95_latency_ms": 47.685880966309924,
+    "p99_latency_ms": 55.68777675973242,
+    "extra": {
+      "recall_std": 0.03504124553849204,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=345\u00d7INT8/b16, l=39\u00d7INT4/b64)",
+    "bytes_per_vector": 457,
+    "recall_at_10": 0.9909999999999999,
+    "mean_latency_ms": 39.41379984316882,
+    "p50_latency_ms": 38.67712499049958,
+    "p95_latency_ms": 43.15464759565657,
+    "p99_latency_ms": 47.596605905273464,
+    "extra": {
+      "recall_std": 0.028618176042508364,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=345\u00d7INT8/b32, l=39\u00d7INT4/b64)",
+    "bytes_per_vector": 413,
+    "recall_at_10": 0.9883333333333335,
+    "mean_latency_ms": 42.38487632935479,
+    "p50_latency_ms": 41.898020514054224,
+    "p95_latency_ms": 48.96353096846724,
+    "p99_latency_ms": 60.55808917910326,
+    "extra": {
+      "recall_std": 0.032102267140430366,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  }
+]

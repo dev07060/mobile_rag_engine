@@ -262,53 +262,58 @@ pub fn cosine_similarity_q8(
     legacy_query_i8: &[i8],
     legacy_query_norm: f32,
 ) -> f32 {
-    // If the target blob size matches legacy uniform (e.g. 768), fallback to legacy cosine similarity.
+    // ── Fast path: legacy uniform blob (len == n_dims) ────────────────────────
+    // The blob is a flat array of i8 values cast to u8, one per dimension.
     if target_blob.len() == legacy_query_i8.len() {
         return cosine_with_query_norm_i8_blob(legacy_query_i8, legacy_query_norm, target_blob);
     }
 
-    // Otherwise, parse the packed block-wise binary format.
-    // Each block is 36 bytes: 4-byte f32 scale (LE) + 32-byte i8 values.
-    if target_blob.len() % 36 != 0 || query_q8.blocks.is_empty() {
+    // ── Block-wise Q8_0 path ──────────────────────────────────────────────────
+    // Each block is 36 bytes: [f32 scale (4 bytes LE)] + [32x i8 as u8].
+    const BLOCK_BYTES: usize = 36;
+    const VALS_PER_BLOCK: usize = 32;
+
+    if target_blob.len() % BLOCK_BYTES != 0 || query_q8.blocks.is_empty() {
         return 0.0;
     }
 
-    let num_blocks = target_blob.len() / 36;
+    let num_blocks = target_blob.len() / BLOCK_BYTES;
+    // Only iterate over blocks present in both query and target
+    let n_blocks = num_blocks.min(query_q8.scales.len());
+
     let mut dot_weighted: f32 = 0.0;
     let mut target_sq_sum: f32 = 0.0;
 
-    for block_idx in 0..num_blocks {
-        let block_start = block_idx * 36;
-        if block_start + 4 > target_blob.len() {
-            break;
-        }
-        // 1. Read f32 scale
-        let mut scale_bytes = [0u8; 4];
-        scale_bytes.copy_from_slice(&target_blob[block_start..block_start + 4]);
-        let target_scale = f32::from_le_bytes(scale_bytes);
+    for block_idx in 0..n_blocks {
+        let blob_off = block_idx * BLOCK_BYTES;
+        let q_off = block_idx * BLOCK_SIZE;
 
-        let query_scale = if block_idx < query_q8.scales.len() {
-            query_q8.scales[block_idx]
-        } else {
-            1.0
-        };
+        // Read target scale directly from the blob bytes (no intermediate buffer)
+        let target_scale = f32::from_le_bytes([
+            target_blob[blob_off],
+            target_blob[blob_off + 1],
+            target_blob[blob_off + 2],
+            target_blob[blob_off + 3],
+        ]);
+        let query_scale = query_q8.scales[block_idx]; // safe: block_idx < n_blocks <= scales.len()
 
-        // 2. Compute integer dot product and squared sum for this block
+        // Determine actual block length (handles last partial block in query)
+        let q_end = (q_off + VALS_PER_BLOCK).min(query_q8.blocks.len());
+        let block_len = q_end - q_off;
+
+        // Inner dot product: slice-based iteration — no per-element bounds checks,
+        // LLVM can auto-vectorize with ARM NEON / x86 AVX2
+        let q_slice = &query_q8.blocks[q_off..q_end];
+        let t_slice = &target_blob[blob_off + 4..blob_off + 4 + block_len];
+
         let mut block_dot = 0i32;
         let mut block_target_sq = 0i32;
-        
-        let start = block_idx * BLOCK_SIZE;
-        
-        for i in 0..32 {
-            let q_idx = start + i;
-            if q_idx >= query_q8.blocks.len() {
-                break;
-            }
-            let q = query_q8.blocks[q_idx];
-            let t = target_blob[block_start + 4 + i] as i8;
 
-            block_dot += (q as i32) * (t as i32);
-            block_target_sq += (t as i32) * (t as i32);
+        for (&q_byte, &t_byte) in q_slice.iter().zip(t_slice.iter()) {
+            let q = q_byte as i32;
+            let t = t_byte as i8 as i32;
+            block_dot += q * t;
+            block_target_sq += t * t;
         }
 
         dot_weighted += (block_dot as f32) * query_scale * target_scale;
