@@ -260,6 +260,22 @@ dyld: Library not loaded: @rpath/libonnxruntime.dylib
 
 ## Build Issues
 
+### iOS: Transitive dependencies include statically linked binaries
+
+**Symptom:**
+```
+[!] The 'Pods-Runner' target has transitive dependencies that include statically linked binaries: (onnxruntime-objc and onnxruntime-c)
+```
+
+**Cause:** `mobile_rag_engine` (since 0.19.0) uses `flutter_onnxruntime` which relies on statically linked ONNX Runtime binaries. Flutter's default iOS project uses dynamic frameworks (`use_frameworks!`).
+
+**Solution:** Update your `ios/Podfile` to use static linkage for frameworks:
+1. Open `ios/Podfile`
+2. Change `use_frameworks!` to `use_frameworks! :linkage => :static`
+3. Run `pod install` again.
+
+---
+
 ### iOS: Pod Install Failed
 
 ```bash
