@@ -107,6 +107,8 @@ dependencies:
   mobile_rag_engine: ^0.20.0
 ```
 
+> **iOS Setup:** Open your `ios/Podfile` and change `use_frameworks!` to `use_frameworks! :linkage => :static`. This is required because the underlying ONNX Runtime uses statically linked binaries.
+
 ### 2. Download Model Files
 
 ```bash
