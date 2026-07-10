@@ -27,6 +27,7 @@ use log::info;
 use once_cell::sync::OnceCell;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
+use std::path::Path;
 use std::sync::RwLock;
 
 /// Global database connection pool (thread-safe)
@@ -47,8 +48,10 @@ static DB_POOL: OnceCell<RwLock<Option<Pool<SqliteConnectionManager>>>> = OnceCe
 /// - 256MB mmap: Memory-mapped I/O for large databases
 ///
 /// # Example
-/// ```rust
-/// init_db_pool("/path/to/rag.sqlite", 4)?;
+/// ```rust,no_run
+/// use rag_engine_flutter::api::db_pool::init_db_pool;
+///
+/// init_db_pool("/path/to/rag.sqlite".to_string(), 4).unwrap();
 /// ```
 pub fn init_db_pool(db_path: String, max_size: u32) -> Result<()> {
     info!(
@@ -97,6 +100,22 @@ pub fn init_db_pool(db_path: String, max_size: u32) -> Result<()> {
         }
     }
 
+    let vec_path = Path::new(&db_path)
+        .with_extension("vec")
+        .to_string_lossy()
+        .into_owned();
+    info!("[mmap_store] Initializing MmapVectorStore at {}", vec_path);
+    match crate::api::mmap_store::MmapVectorStore::new(&vec_path) {
+        Ok(store) => {
+            let mut mmap_guard = crate::api::mmap_store::MMAP_STORE.write().unwrap();
+            *mmap_guard = Some(store);
+            info!("[mmap_store] MmapVectorStore initialized successfully");
+        }
+        Err(e) => {
+            log::error!("[mmap_store] Failed to initialize MmapVectorStore: {}", e);
+        }
+    }
+
     Ok(())
 }
 
@@ -114,7 +133,7 @@ pub fn init_db_pool(db_path: String, max_size: u32) -> Result<()> {
 /// - No connections are available within the timeout period
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// let conn = get_connection()?;
 /// conn.execute("INSERT INTO ...", params![])?;
 /// // Connection automatically returned to pool when `conn` goes out of scope

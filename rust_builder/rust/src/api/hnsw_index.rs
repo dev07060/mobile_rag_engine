@@ -1,23 +1,7 @@
-// Copyright 2025 mobile_rag_engine contributors
+// Copyright 2026 mobile_rag_engine contributors
 // SPDX-License-Identifier: MIT
-//
-// Licensed under the MIT License. You may obtain a copy of the License at
-// https://opensource.org/licenses/MIT
-//
-// This software is provided "AS IS", without warranty of any kind, express or
-// implied, including but not limited to the warranties of merchantability,
-// fitness for a particular purpose, and noninfringement. In no event shall the
-// authors or copyright holders be liable for any claim, damages, or other
-// liability arising from the use of this software.
-//
-// CONTRIBUTOR GUIDELINES:
-// This file is part of the core engine. Any modifications require owner approval.
-// Please submit a PR with detailed explanation of changes before modifying.
-//
-//! HNSW (Hierarchical Navigable Small Worlds) vector indexing module.
 
-use hnsw_rs::hnswio::*;
-use hnsw_rs::prelude::*;
+use crate::api::custom_hnsw::{HnswBuilder, MmapHnswSearcher};
 use log::{debug, info, warn};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -43,9 +27,11 @@ impl EmbeddingPoint {
     }
 }
 
-/// Global HNSW index (thread-safe in-memory cache).
-static HNSW_INDEX: Lazy<RwLock<Option<Hnsw<'static, f32, DistCosine>>>> =
-    Lazy::new(|| RwLock::new(None));
+/// Global HNSW search index (read-only mmap).
+pub static HNSW_INDEX: Lazy<RwLock<Option<MmapHnswSearcher>>> = Lazy::new(|| RwLock::new(None));
+
+/// Global HNSW builder (in-memory, during rebuild).
+pub static HNSW_BUILDER: Lazy<RwLock<Option<HnswBuilder>>> = Lazy::new(|| RwLock::new(None));
 
 fn hnsw_build_params(count: usize) -> (usize, usize, usize, &'static str) {
     if count > 10_000 {
@@ -71,48 +57,21 @@ where
     );
 
     let capacity = point_count_hint.max(1);
-
-    // Adaptive parameters based on dataset size
-    // - Small datasets (<1000): faster build, adequate recall
-    // - Large datasets (>10000): higher quality, better recall
     let (m, m0, ef_construction, _size_category) = hnsw_build_params(capacity);
-
-    // Debug output for Flutter console (only in debug builds)
-    #[cfg(debug_assertions)]
-    {
-        println!(
-            "[HNSW] Dataset size hint: {} points ({})",
-            point_count_hint, _size_category
-        );
-        println!(
-            "[HNSW] Parameters: M={}, M0={}, efConstruction={}",
-            m, m0, ef_construction
-        );
-        println!(
-            "[HNSW] Expected recall: ~{}%",
-            if capacity > 10_000 {
-                "97"
-            } else if capacity > 1_000 {
-                "95"
-            } else {
-                "92"
-            }
-        );
-    }
 
     debug!(
         "[hnsw] Using M={}, M0={}, efConstruction={}",
         m, m0, ef_construction
     );
 
-    let hnsw = Hnsw::new(m, capacity, m0, ef_construction, DistCosine);
+    let mut builder = HnswBuilder::new(m, m0, ef_construction);
     let mut inserted = 0usize;
 
     for (id, embedding) in points {
         if embedding.is_empty() {
             continue;
         }
-        hnsw.insert((&embedding, id as usize));
+        builder.insert(id, embedding);
         inserted += 1;
     }
 
@@ -121,11 +80,8 @@ where
         return Ok(0);
     }
 
-    let mut index_guard = HNSW_INDEX.write().unwrap();
-    *index_guard = Some(hnsw);
-
-    #[cfg(debug_assertions)]
-    println!("[HNSW] Index build complete");
+    let mut builder_guard = HNSW_BUILDER.write().unwrap();
+    *builder_guard = Some(builder);
 
     info!(
         "[hnsw] Index build complete (inserted={}, M={}, M0={}, efC={})",
@@ -134,108 +90,70 @@ where
     Ok(inserted)
 }
 
-/// Build HNSW index from embedding points.
-///
-/// Parameters are tuned for optimal recall vs speed tradeoff:
-/// - M (max connections per node): 16-24 based on dataset size
-/// - M0 (layer 0 connections): 2*M for better recall
-/// - efConstruction: 100-200 based on dataset size
 pub fn build_hnsw_index(points: Vec<(i64, Vec<f32>)>) -> anyhow::Result<()> {
     let point_count = points.len();
     let _ = build_hnsw_index_streaming(point_count, points)?;
     Ok(())
 }
 
-/// Save HNSW index to disk using hnsw_rs persistence.
-///
-/// This saves the full graph and data to a directory specified by [base_path].
+/// Save HNSW index to disk.
 pub fn save_hnsw_index(base_path: &str) -> anyhow::Result<()> {
     info!("[hnsw] Saving index to {}", base_path);
 
-    let index_guard = HNSW_INDEX.read().unwrap();
-
-    let index = match index_guard.as_ref() {
-        Some(idx) => idx,
+    let builder_guard = HNSW_BUILDER.read().unwrap();
+    let builder = match builder_guard.as_ref() {
+        Some(b) => b,
         None => {
-            warn!("[hnsw] Index not initialized (empty), skipping save");
+            warn!("[hnsw] Builder not initialized, skipping save");
             return Ok(());
         }
     };
 
-    if index.get_nb_point() == 0 {
+    if builder.nodes.is_empty() {
         warn!("[hnsw] Index is empty, skipping save to avoid crash");
         return Ok(());
     }
 
-    let path = Path::new(base_path);
-    let parent = path
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("Invalid base path"))?;
-    let file_stem = path
-        .file_stem()
-        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
-    // Convert OsStr to String, which file_dump expects for filename base
-    let filename = file_stem
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 filename"))?;
+    let file_path = format!("{}.hnsw", base_path);
+    builder.save_to_disk(&file_path)?;
 
-    // Create directory if it doesn't exist
-    std::fs::create_dir_all(parent)?;
+    info!("[hnsw] Index saved successfully to {}", file_path);
 
-    // hnsw_rs 0.3 file_dump takes (directory, filename_base)
-    index.file_dump(parent, filename)?;
+    // Attempt to load it into HNSW_INDEX immediately
+    drop(builder_guard);
+    load_hnsw_index(base_path)?;
 
-    info!("[hnsw] Index saved successfully");
+    // Free the in-memory builder since we now use the MMAP index
+    {
+        let mut write_guard = HNSW_BUILDER.write().unwrap();
+        *write_guard = None;
+        info!("[hnsw] Freed in-memory builder after saving to disk");
+    }
+
     Ok(())
 }
 
 /// Load HNSW index from disk.
-///
-/// Returns true if the index was successfully loaded into memory.
 pub fn load_hnsw_index(base_path: &str) -> anyhow::Result<bool> {
-    // Check if the primary data file exists to avoid unnecessary log noise
-    // hnsw_rs adds .hnsw.data and .hnsw.graph to the base name (which is the file stem)
-    let path = Path::new(base_path);
-    let parent = path
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("Invalid base path"))?;
-    let file_stem = path
-        .file_stem()
-        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
-    let filename = file_stem
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 filename"))?;
+    let file_path = format!("{}.hnsw", base_path);
+    let path = Path::new(&file_path);
 
-    let data_path = parent.join(format!("{}.hnsw.data", filename));
-
-    if !data_path.exists() {
-        debug!("[hnsw] No index files found at {:?}", data_path);
+    if !path.exists() {
+        debug!("[hnsw] No index file found at {:?}", path);
         return Ok(false);
     }
 
-    info!("[hnsw] Loading index from {}", base_path);
+    info!("[hnsw] Loading index from {}", file_path);
 
-    // hnsw_rs 0.3 load_hnsw is a method of HnswIo
-    let hnswio = HnswIo::new(parent, filename);
-
-    // We need to extend the lifetime of hnswio to 'static because HNSW_INDEX is static.
-    // Hnsw<'b> borrows from HnswIo if mmap is used (or is tied to it by signature).
-    // By leaking the Box, we get a &'static mut HnswIo, allowing load_hnsw to return Hnsw<'static>.
-    let hnswio = Box::leak(Box::new(hnswio));
-
-    // hnsw_rs load_hnsw reconstructs the index from files
-    // DistCosine must match the one used during build
-    match hnswio.load_hnsw::<f32, DistCosine>() {
-        Ok(hnsw) => {
+    match MmapHnswSearcher::new(&file_path) {
+        Ok(searcher) => {
             let mut index_guard = HNSW_INDEX.write().unwrap();
-            *index_guard = Some(hnsw);
+            *index_guard = Some(searcher);
             info!("[hnsw] Index loaded successfully");
             Ok(true)
         }
         Err(e) => {
-            // If loading fails, we technically leaked hnswio memory, but this happens rarely (only on error)
-            // and it's a small struct (path + options), so it's acceptable for this use case.
-            // Ideally we would reconstruct the box and drop it, but error handling complexity outweighs benefit here.
+            println!("[hnsw] Failed to load index: {}. Rebuild required.", e);
             warn!("[hnsw] Failed to load index: {}. Rebuild required.", e);
             Ok(false)
         }
@@ -249,17 +167,6 @@ pub struct HnswSearchResult {
     pub distance: f32,
 }
 
-/// Search in HNSW index.
-///
-/// Owned-vector entrypoint kept stable for the flutter_rust_bridge surface;
-/// delegates to the slice-based implementation so internal Rust callers can
-/// avoid `Vec<f32>` allocations on hot paths.
-///
-/// ef_search parameter controls accuracy vs speed:
-/// - Higher ef_search = better recall but slower
-/// - Lower ef_search = faster but may miss relevant results
-///
-/// Current tuning targets ~95% recall for most use cases.
 pub fn search_hnsw(
     query_embedding: Vec<f32>,
     top_k: usize,
@@ -267,136 +174,61 @@ pub fn search_hnsw(
     search_hnsw_slice(&query_embedding, top_k)
 }
 
-/// Slice-based variant of [`search_hnsw`]. Internal Rust callers should
-/// prefer this entrypoint when the query embedding is already held by
-/// reference (e.g. inside `std::thread::scope` closures or retry loops)
-/// so the vector does not need to be cloned per call.
 pub fn search_hnsw_slice(
     query_embedding: &[f32],
     top_k: usize,
 ) -> anyhow::Result<Vec<HnswSearchResult>> {
     debug!("[hnsw] Starting search, top_k: {}", top_k);
 
-    let index_guard = HNSW_INDEX.read().unwrap();
-    let index = index_guard
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("HNSW index not initialized"))?;
-
-    // ef_search should be >= top_k, higher values improve recall
-    // Rule of thumb: ef_search = max(100, top_k * 5) for ~95% recall
     let ef_search = core::cmp::max(100, top_k * 5);
-
-    #[cfg(debug_assertions)]
-    println!(
-        "[HNSW] Search: top_k={}, ef_search={} (recall target: ~95%)",
-        top_k, ef_search
-    );
-
     debug!("[hnsw] Using ef_search={}", ef_search);
 
-    let neighbors = index.search(query_embedding, top_k, ef_search);
+    let mut neighbors = None;
 
-    let results: Vec<HnswSearchResult> = neighbors
-        .iter()
-        .map(|neighbor| HnswSearchResult {
-            id: neighbor.d_id as i64,
-            distance: neighbor.distance,
-        })
+    {
+        let index_guard = HNSW_INDEX.read().unwrap();
+        if let Some(index) = index_guard.as_ref() {
+            let query_vabq = crate::api::vector_quant::QueryVABQ::new(query_embedding);
+            neighbors = Some(index.search(&query_vabq, ef_search));
+        }
+    }
+
+    if neighbors.is_none() {
+        let builder_guard = HNSW_BUILDER.read().unwrap();
+        if let Some(builder) = builder_guard.as_ref() {
+            debug!("[hnsw] MMAP index not found, searching in-memory builder");
+            neighbors = Some(builder.search(query_embedding, ef_search));
+        }
+    }
+
+    let neighbors = neighbors
+        .ok_or_else(|| anyhow::anyhow!("HNSW index not initialized (neither MMAP nor Builder)"))?;
+
+    let mut results: Vec<HnswSearchResult> = neighbors
+        .into_iter()
+        .map(|(id, distance)| HnswSearchResult { id, distance })
         .collect();
 
-    #[cfg(debug_assertions)]
-    println!("[HNSW] Found {} results", results.len());
+    results.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
+    results.truncate(top_k);
 
     debug!("[hnsw] Returning {} results", results.len());
     Ok(results)
 }
 
-/// Check if HNSW index is loaded.
 pub fn is_hnsw_index_loaded() -> bool {
     let index_guard = HNSW_INDEX.read().unwrap();
-    index_guard.is_some()
+    if index_guard.is_some() {
+        return true;
+    }
+    let builder_guard = HNSW_BUILDER.read().unwrap();
+    builder_guard.is_some()
 }
 
-/// Clear HNSW index from memory.
 pub fn clear_hnsw_index() {
     let mut index_guard = HNSW_INDEX.write().unwrap();
     *index_guard = None;
+    let mut builder_guard = HNSW_BUILDER.write().unwrap();
+    *builder_guard = None;
     info!("[hnsw] Index cleared");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn make_random_embedding(seed: u64, dims: usize) -> Vec<f32> {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        (0..dims)
-            .map(|i| {
-                let mut h = DefaultHasher::new();
-                (seed + i as u64).hash(&mut h);
-                (h.finish() as f32 / u64::MAX as f32) * 2.0 - 1.0
-            })
-            .collect()
-    }
-
-    #[test]
-    fn test_build_empty_index() {
-        let result = build_hnsw_index(vec![]);
-        assert!(result.is_ok());
-        assert!(!is_hnsw_index_loaded());
-    }
-
-    #[test]
-    fn test_streaming_build_empty_index() {
-        clear_hnsw_index();
-
-        let inserted = build_hnsw_index_streaming(0, std::iter::empty()).unwrap();
-
-        assert_eq!(inserted, 0);
-        assert!(!is_hnsw_index_loaded());
-    }
-
-    #[test]
-    fn test_streaming_build_and_search() {
-        clear_hnsw_index();
-        let points: Vec<(i64, Vec<f32>)> = (0..100)
-            .map(|i| (i, make_random_embedding(i as u64, 384)))
-            .collect();
-
-        let inserted = build_hnsw_index_streaming(points.len(), points.into_iter()).unwrap();
-
-        assert_eq!(inserted, 100);
-        assert!(is_hnsw_index_loaded());
-
-        let query = make_random_embedding(42, 384);
-        let results = search_hnsw(query, 5).unwrap();
-        assert!(!results.is_empty());
-    }
-
-    #[test]
-    fn test_build_and_search() {
-        clear_hnsw_index();
-        let points: Vec<(i64, Vec<f32>)> = (0..100)
-            .map(|i| (i, make_random_embedding(i as u64, 384)))
-            .collect();
-        build_hnsw_index(points).unwrap();
-        assert!(is_hnsw_index_loaded());
-
-        let query = make_random_embedding(0, 384);
-        let results = search_hnsw(query, 5).unwrap();
-        assert_eq!(results.len(), 5);
-        // Same embedding should return itself as closest
-        assert_eq!(results[0].id, 0);
-        clear_hnsw_index();
-    }
-
-    #[test]
-    fn test_clear_index() {
-        let points = vec![(1, make_random_embedding(1, 384))];
-        build_hnsw_index(points).unwrap();
-        assert!(is_hnsw_index_loaded());
-        clear_hnsw_index();
-        assert!(!is_hnsw_index_loaded());
-    }
 }

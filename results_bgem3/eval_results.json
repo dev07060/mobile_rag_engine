@@ -1,0 +1,226 @@
+[
+  {
+    "name": "Uniform Q8 (Legacy)",
+    "bytes_per_vector": 1024,
+    "recall_at_10": 0.998,
+    "mean_latency_ms": 0.7771666767075658,
+    "p50_latency_ms": 0.7715215033385903,
+    "p95_latency_ms": 0.8149543544277549,
+    "p99_latency_ms": 0.8366251335246487,
+    "extra": {
+      "recall_std": 0.013999999999999997,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "Q8_0 (block=16)",
+    "bytes_per_vector": 1280,
+    "recall_at_10": 0.996,
+    "mean_latency_ms": 0.8924983604811132,
+    "p50_latency_ms": 0.8915210200939327,
+    "p95_latency_ms": 0.9201081411447376,
+    "p99_latency_ms": 0.9819304133998228,
+    "extra": {
+      "recall_std": 0.01959591794226542,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "Q8_0 (block=32)",
+    "bytes_per_vector": 1152,
+    "recall_at_10": 0.998,
+    "mean_latency_ms": 0.8454475190956146,
+    "p50_latency_ms": 0.8461870020255446,
+    "p95_latency_ms": 0.8638435858301818,
+    "p99_latency_ms": 0.8722000650595874,
+    "extra": {
+      "recall_std": 0.013999999999999995,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "Q8_0 (block=64)",
+    "bytes_per_vector": 1088,
+    "recall_at_10": 1.0,
+    "mean_latency_ms": 0.841702533653006,
+    "p50_latency_ms": 0.8413130126427859,
+    "p95_latency_ms": 0.8600580040365458,
+    "p99_latency_ms": 0.8650061546359211,
+    "extra": {
+      "recall_std": 0.0,
+      "recall_min": 1.0,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "PQ (M=8, K=256)",
+    "bytes_per_vector": 8,
+    "recall_at_10": 0.534,
+    "mean_latency_ms": 0.6458808830939233,
+    "p50_latency_ms": 0.6433329835999757,
+    "p95_latency_ms": 0.6610332929994911,
+    "p99_latency_ms": 0.6772209634073079,
+    "extra": {
+      "recall_std": 0.19453534383242546,
+      "recall_min": 0.0,
+      "recall_max": 0.9
+    }
+  },
+  {
+    "name": "PQ (M=16, K=256)",
+    "bytes_per_vector": 16,
+    "recall_at_10": 0.606,
+    "mean_latency_ms": 0.7500516471918672,
+    "p50_latency_ms": 0.7199374958872795,
+    "p95_latency_ms": 0.9321225486928594,
+    "p99_latency_ms": 1.1799069383414458,
+    "extra": {
+      "recall_std": 0.16900887550658397,
+      "recall_min": 0.2,
+      "recall_max": 0.9
+    }
+  },
+  {
+    "name": "PQ (M=32, K=256)",
+    "bytes_per_vector": 32,
+    "recall_at_10": 0.6659999999999999,
+    "mean_latency_ms": 0.8080341038294137,
+    "p50_latency_ms": 0.803145463578403,
+    "p95_latency_ms": 0.8287457923870534,
+    "p99_latency_ms": 0.9039096103515474,
+    "extra": {
+      "recall_std": 0.15698407562552325,
+      "recall_min": 0.3,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "PQ (M=64, K=256)",
+    "bytes_per_vector": 64,
+    "recall_at_10": 0.76,
+    "mean_latency_ms": 1.140206716954708,
+    "p50_latency_ms": 1.09583351877518,
+    "p95_latency_ms": 1.3718652247916907,
+    "p99_latency_ms": 1.445391493034549,
+    "extra": {
+      "recall_std": 0.14142135623730953,
+      "recall_min": 0.4,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=307\u00d7INT8/b16, l=717\u00d7INT4/b64)",
+    "bytes_per_vector": 794,
+    "recall_at_10": 0.966,
+    "mean_latency_ms": 2.8367358073592186,
+    "p50_latency_ms": 2.785875025438145,
+    "p95_latency_ms": 3.0502392910420895,
+    "p99_latency_ms": 3.2386246731039137,
+    "extra": {
+      "recall_std": 0.062,
+      "recall_min": 0.7,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=307\u00d7INT8/b32, l=717\u00d7INT4/b64)",
+    "bytes_per_vector": 754,
+    "recall_at_10": 0.968,
+    "mean_latency_ms": 3.091589183313772,
+    "p50_latency_ms": 3.0594170093536377,
+    "p95_latency_ms": 3.5602187330368906,
+    "p99_latency_ms": 3.7290189391933377,
+    "extra": {
+      "recall_std": 0.0581033561853358,
+      "recall_min": 0.7,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=512\u00d7INT8/b16, l=512\u00d7INT4/b64)",
+    "bytes_per_vector": 928,
+    "recall_at_10": 0.9760000000000001,
+    "mean_latency_ms": 2.8556633193511516,
+    "p50_latency_ms": 2.8010415262542665,
+    "p95_latency_ms": 3.447781252907589,
+    "p99_latency_ms": 3.8911187363555646,
+    "extra": {
+      "recall_std": 0.042708313008125234,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=512\u00d7INT8/b32, l=512\u00d7INT4/b64)",
+    "bytes_per_vector": 864,
+    "recall_at_10": 0.9739999999999999,
+    "mean_latency_ms": 2.5431283190846443,
+    "p50_latency_ms": 2.497666486306116,
+    "p95_latency_ms": 2.970643909065984,
+    "p99_latency_ms": 2.985674302908592,
+    "extra": {
+      "recall_std": 0.04820788317277579,
+      "recall_min": 0.8,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=768\u00d7INT8/b16, l=256\u00d7INT4/b64)",
+    "bytes_per_vector": 1104,
+    "recall_at_10": 0.978,
+    "mean_latency_ms": 2.3693774943239987,
+    "p50_latency_ms": 2.3531454789917916,
+    "p95_latency_ms": 2.534022685722448,
+    "p99_latency_ms": 2.5665361603023484,
+    "extra": {
+      "recall_std": 0.045999999999999985,
+      "recall_min": 0.8,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=768\u00d7INT8/b32, l=256\u00d7INT4/b64)",
+    "bytes_per_vector": 1008,
+    "recall_at_10": 0.9760000000000001,
+    "mean_latency_ms": 2.3784616391640157,
+    "p50_latency_ms": 2.348625013837591,
+    "p95_latency_ms": 2.6298796612536535,
+    "p99_latency_ms": 2.6802630990277976,
+    "extra": {
+      "recall_std": 0.04715930449020637,
+      "recall_min": 0.8,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=921\u00d7INT8/b16, l=103\u00d7INT4/b64)",
+    "bytes_per_vector": 1213,
+    "recall_at_10": 0.968,
+    "mean_latency_ms": 2.347028360236436,
+    "p50_latency_ms": 2.332896023290232,
+    "p95_latency_ms": 2.5429440691368654,
+    "p99_latency_ms": 2.576360816601664,
+    "extra": {
+      "recall_std": 0.046647615158762396,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=921\u00d7INT8/b32, l=103\u00d7INT4/b64)",
+    "bytes_per_vector": 1097,
+    "recall_at_10": 0.968,
+    "mean_latency_ms": 2.4066324764862657,
+    "p50_latency_ms": 2.350624999962747,
+    "p95_latency_ms": 2.7081187174189836,
+    "p99_latency_ms": 2.774977405788377,
+    "extra": {
+      "recall_std": 0.046647615158762396,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  }
+]

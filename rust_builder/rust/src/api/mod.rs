@@ -8,6 +8,7 @@
 pub mod activation_metrics;
 pub mod bm25_search;
 pub mod compression_utils;
+pub(crate) mod custom_hnsw;
 pub mod db_pool;
 pub mod document_parser;
 pub mod error;
@@ -18,6 +19,7 @@ pub mod ingest_metrics;
 pub mod ingest_session;
 pub mod logger;
 pub mod migration_meta;
+pub(crate) mod mmap_store;
 pub mod query_metrics;
 pub mod runtime_info;
 pub mod semantic_chunker;

@@ -1,9 +1,26 @@
 # Changelog
 
+## 0.21.0-dev.5
+* **Bug Fix**: Required `rag_engine_flutter: ^0.20.0-dev.5` fixing HNSW Phase 2 binary offset calculation, preventing search panics.
+
+## 0.21.0-dev.4
+* **Bug Fix**: Required `rag_engine_flutter: ^0.20.0-dev.5` fixing HNSW index loading (buffer size 14 -> 18).
+
+## 0.21.0-dev.3
+* **Bug Fix**: Required `rag_engine_flutter: ^0.20.0-dev.5` fixing MMAP data reading and false 0.0 similarities in linear search fallback.
+
+## 0.21.0-dev.2
+* **Bug Fix**: Required `rag_engine_flutter: ^0.20.0-dev.5` which fixes a critical HNSW index rebuilding bug where quantized embeddings were not unpacked, causing a fallback to linear scanning.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## 0.21.0-dev.1
+* **VABQ Research Engine**:
+  - Implemented the VABQ (Variance-aware Adaptive Block Quantization) logic for Pareto-optimal compression of vector embeddings.
+  - Reduced vector size by another 34% compared to Q8_0 while retaining over 98% Recall@10 accuracy.
 
 ## 0.20.0
 * **Block-wise Quantization**:

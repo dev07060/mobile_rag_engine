@@ -9,7 +9,7 @@ edition = "2021"
 crate-type = ["cdylib", "staticlib", "lib"]
 
 [features]
-default = []
+default = ["vector_quant_i8"]
 vector_faer = ["dep:faer"]
 vector_quant_i8 = []
 allocator_mimalloc = ["dep:mimalloc"]
@@ -35,9 +35,6 @@ mimalloc = { version = "0.1.52", optional = true, default-features = false }
 # Using fancy-regex instead of onig for iOS cross-compilation compatibility
 tokenizers = { version = "0.22.2", default-features = false, features = ["fancy-regex", "http"] }
 
-# HNSW vector indexing for O(log n) search
-hnsw_rs = "0.3"
-
 # Serialization for saving/loading index
 serde = { version = "1.0", features = ["derive"] }
 bincode = "1.3"
@@ -58,6 +55,10 @@ docx-lite = "0.2"
 # Regex for PDF dehyphenation (fix line-break word splits)
 regex = "1.11"
 uuid = { version = "1.20.0", features = ["v4"] }
+memmap2 = "0.9.3"
+byteorder = "1.5.0"
+rand = "=0.8.5"
+crc32fast = "1.5.0"
 
 # Removed 'ort' crate: failed to load libonnxruntime.dylib on iOS
 # ONNX inference moved to Flutter onnxruntime package

@@ -65,7 +65,9 @@ pub fn quantize_f32_to_i8_blockwise(input: &[f32]) -> (Vec<i8>, Vec<f32>) {
 }
 
 #[cfg(feature = "vector_quant_i8")]
-pub use crate::api::vector_quant::{QueryQ8, cosine_similarity_q8};
+pub use crate::api::vector_quant::{
+    cosine_similarity_q8, cosine_similarity_vabq, quantize_f32_to_vabq, QueryQ8, QueryVABQ,
+};
 
 /// Which backend this build compiled (for labelling bench output).
 pub const BACKEND: &str = if cfg!(feature = "vector_faer") {

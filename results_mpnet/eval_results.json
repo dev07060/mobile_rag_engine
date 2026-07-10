@@ -1,0 +1,240 @@
+[
+  {
+    "name": "Uniform Q8 (Legacy)",
+    "bytes_per_vector": 768,
+    "recall_at_10": 0.998,
+    "mean_latency_ms": 0.6004258990287781,
+    "p50_latency_ms": 0.5900420364923775,
+    "p95_latency_ms": 0.6544788077007979,
+    "p99_latency_ms": 0.7155110721942037,
+    "extra": {
+      "recall_std": 0.013999999999999995,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "Q8_0 (block=16)",
+    "bytes_per_vector": 960,
+    "recall_at_10": 0.998,
+    "mean_latency_ms": 0.66327168722637,
+    "p50_latency_ms": 0.6604170193895698,
+    "p95_latency_ms": 0.6842956499895081,
+    "p99_latency_ms": 0.6887797295348719,
+    "extra": {
+      "recall_std": 0.013999999999999999,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "Q8_0 (block=32)",
+    "bytes_per_vector": 864,
+    "recall_at_10": 1.0,
+    "mean_latency_ms": 0.6337959156371653,
+    "p50_latency_ms": 0.6310209864750504,
+    "p95_latency_ms": 0.651893750182353,
+    "p99_latency_ms": 0.6541115761501715,
+    "extra": {
+      "recall_std": 0.0,
+      "recall_min": 1.0,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "Q8_0 (block=64)",
+    "bytes_per_vector": 816,
+    "recall_at_10": 1.0,
+    "mean_latency_ms": 0.6285741575993598,
+    "p50_latency_ms": 0.6262914976105094,
+    "p95_latency_ms": 0.6415937619749457,
+    "p99_latency_ms": 0.6495784863363951,
+    "extra": {
+      "recall_std": 0.0,
+      "recall_min": 1.0,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "PQ (M=8, K=256)",
+    "bytes_per_vector": 8,
+    "recall_at_10": 0.6399999999999999,
+    "mean_latency_ms": 0.5020499636884779,
+    "p50_latency_ms": 0.49935400602407753,
+    "p95_latency_ms": 0.5233081756159663,
+    "p99_latency_ms": 0.5307331669609994,
+    "extra": {
+      "recall_std": 0.18973665961010278,
+      "recall_min": 0.0,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "PQ (M=12, K=256)",
+    "bytes_per_vector": 12,
+    "recall_at_10": 0.6739999999999999,
+    "mean_latency_ms": 0.5444782599806786,
+    "p50_latency_ms": 0.5350209830794483,
+    "p95_latency_ms": 0.6069209601264446,
+    "p99_latency_ms": 0.6452544016065076,
+    "extra": {
+      "recall_std": 0.17298554852934972,
+      "recall_min": 0.2,
+      "recall_max": 0.9
+    }
+  },
+  {
+    "name": "PQ (M=16, K=256)",
+    "bytes_per_vector": 16,
+    "recall_at_10": 0.674,
+    "mean_latency_ms": 0.637280042283237,
+    "p50_latency_ms": 0.5603125027846545,
+    "p95_latency_ms": 1.3895793439587567,
+    "p99_latency_ms": 1.5887638425920159,
+    "extra": {
+      "recall_std": 0.17065755183993472,
+      "recall_min": 0.2,
+      "recall_max": 0.9
+    }
+  },
+  {
+    "name": "PQ (M=24, K=256)",
+    "bytes_per_vector": 24,
+    "recall_at_10": 0.704,
+    "mean_latency_ms": 0.6019675591960549,
+    "p50_latency_ms": 0.600125000346452,
+    "p95_latency_ms": 0.6169287808006629,
+    "p99_latency_ms": 0.6240920047275722,
+    "extra": {
+      "recall_std": 0.15486768546084753,
+      "recall_min": 0.4,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "PQ (M=32, K=256)",
+    "bytes_per_vector": 32,
+    "recall_at_10": 0.75,
+    "mean_latency_ms": 0.6565166206564754,
+    "p50_latency_ms": 0.6563125061802566,
+    "p95_latency_ms": 0.6600579945370555,
+    "p99_latency_ms": 0.6619721400784329,
+    "extra": {
+      "recall_std": 0.13601470508735444,
+      "recall_min": 0.5,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=230\u00d7INT8/b16, l=538\u00d7INT4/b64)",
+    "bytes_per_vector": 595,
+    "recall_at_10": 0.978,
+    "mean_latency_ms": 1.7134899587836117,
+    "p50_latency_ms": 1.6868959937710315,
+    "p95_latency_ms": 1.7809519136790186,
+    "p99_latency_ms": 1.7911753238877282,
+    "extra": {
+      "recall_std": 0.041424630354415945,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=230\u00d7INT8/b32, l=538\u00d7INT4/b64)",
+    "bytes_per_vector": 567,
+    "recall_at_10": 0.978,
+    "mean_latency_ms": 1.7199158028233796,
+    "p50_latency_ms": 1.6956875042524189,
+    "p95_latency_ms": 1.8726059381151572,
+    "p99_latency_ms": 2.0316618407377973,
+    "extra": {
+      "recall_std": 0.041424630354415945,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=384\u00d7INT8/b16, l=384\u00d7INT4/b64)",
+    "bytes_per_vector": 696,
+    "recall_at_10": 0.986,
+    "mean_latency_ms": 1.6020099224988371,
+    "p50_latency_ms": 1.5508540091104805,
+    "p95_latency_ms": 1.8385892530204728,
+    "p99_latency_ms": 2.0316523901419714,
+    "extra": {
+      "recall_std": 0.034698703145794936,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=384\u00d7INT8/b32, l=384\u00d7INT4/b64)",
+    "bytes_per_vector": 648,
+    "recall_at_10": 0.988,
+    "mean_latency_ms": 1.5445632569026202,
+    "p50_latency_ms": 1.5314789779949933,
+    "p95_latency_ms": 1.6432560980319977,
+    "p99_latency_ms": 1.7026434355648232,
+    "extra": {
+      "recall_std": 0.032496153618543834,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=576\u00d7INT8/b16, l=192\u00d7INT4/b64)",
+    "bytes_per_vector": 828,
+    "recall_at_10": 0.9940000000000001,
+    "mean_latency_ms": 1.4607908215839416,
+    "p50_latency_ms": 1.458229002309963,
+    "p95_latency_ms": 1.482726910035126,
+    "p99_latency_ms": 1.4972837269306183,
+    "extra": {
+      "recall_std": 0.023748684174075833,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=576\u00d7INT8/b32, l=192\u00d7INT4/b64)",
+    "bytes_per_vector": 756,
+    "recall_at_10": 0.9940000000000001,
+    "mean_latency_ms": 1.463380882050842,
+    "p50_latency_ms": 1.4596044784411788,
+    "p95_latency_ms": 1.48350884555839,
+    "p99_latency_ms": 1.4961799833690748,
+    "extra": {
+      "recall_std": 0.023748684174075833,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=691\u00d7INT8/b16, l=77\u00d7INT4/b64)",
+    "bytes_per_vector": 914,
+    "recall_at_10": 0.998,
+    "mean_latency_ms": 1.4224524819292128,
+    "p50_latency_ms": 1.419729000190273,
+    "p95_latency_ms": 1.4389661402674392,
+    "p99_latency_ms": 1.4515536784892902,
+    "extra": {
+      "recall_std": 0.013999999999999999,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  },
+  {
+    "name": "VABQ (h=691\u00d7INT8/b32, l=77\u00d7INT4/b64)",
+    "bytes_per_vector": 826,
+    "recall_at_10": 0.996,
+    "mean_latency_ms": 1.4219749183394015,
+    "p50_latency_ms": 1.4189795183483511,
+    "p95_latency_ms": 1.4366915478603914,
+    "p99_latency_ms": 1.4675392652861774,
+    "extra": {
+      "recall_std": 0.019595917942265423,
+      "recall_min": 0.9,
+      "recall_max": 1.0
+    }
+  }
+]

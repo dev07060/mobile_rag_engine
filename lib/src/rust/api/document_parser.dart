@@ -34,8 +34,9 @@ Future<String> extractTextFromDocx({required List<int> fileBytes}) =>
 /// Auto-detect document type and extract text
 /// Uses magic bytes to determine file format
 Future<String> extractTextFromDocument({required List<int> fileBytes}) =>
-    RustLib.instance.api
-        .crateApiDocumentParserExtractTextFromDocument(fileBytes: fileBytes);
+    RustLib.instance.api.crateApiDocumentParserExtractTextFromDocument(
+      fileBytes: fileBytes,
+    );
 
 /// Decode UTF-8 text bytes without altering content semantics.
 Future<String> extractTextFromUtf8({required List<int> fileBytes}) =>

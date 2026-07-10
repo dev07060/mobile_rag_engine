@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.20.0-dev.5
+* **Bug Fix**: Fixed a `PanicException` during Phase 2 of HNSW search by adding a missing cursor offset skip for `blob_len` (vector data) before reading `node_max_layer`.
+
+## 0.20.0-dev.4
+* **Bug Fix**: Fixed a binary header parsing bug in `custom_hnsw.rs` where the cursor size was `14` instead of `18` bytes, causing `failed to fill whole buffer` errors when loading the HNSW index.
+
+## 0.20.0-dev.3
+* **Critical Bug Fix**: Fixed HNSW and Linear search to read quantized blobs from `MMAP_STORE` via `mmap_id` when SQLite `embedding_i8` is empty. Fixed a false-positive in linear search fallback where empty arrays caused fake 0.0 similarity results.
+
+## 0.20.0-dev.2
+* **Bug Fix**: Fixed a critical bug in HNSW index rebuilding where `f32` vectors were read as empty instead of being dequantized from `i8` compressed blobs, causing a fallback to linear scan.
+
+## 0.20.0-dev.1
+* **VABQ Quantization**:
+  - Implemented core VABQ (Variance-aware Adaptive Block Quantization) kernel in Rust (`vector_quant.rs`).
+  - Asymmetric precision (INT8 for high-variance blocks, INT4 for low-variance blocks) optimizing for memory while preserving Recall.
+
 ## 0.19.2
 * **Block-wise Quantization**:
   - Implemented block-wise scalar quantization (Q8_0 style) with 32-dimension block sizes.

@@ -11,16 +11,22 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
 
 /// Add a single vector to buffer (immediately searchable).
-Future<void> incrementalAdd(
-        {required PlatformInt64 docId, required List<double> embedding}) =>
+Future<void> incrementalAdd({
+  required PlatformInt64 docId,
+  required List<double> embedding,
+}) =>
     RustLib.instance.api.crateApiIncrementalIndexIncrementalAdd(
-        docId: docId, embedding: embedding);
+      docId: docId,
+      embedding: embedding,
+    );
 
 /// Add multiple vectors to buffer.
-Future<void> incrementalAddBatch(
-        {required List<(PlatformInt64, Float32List)> docs}) =>
-    RustLib.instance.api
-        .crateApiIncrementalIndexIncrementalAddBatch(docs: docs);
+Future<void> incrementalAddBatch({
+  required List<(PlatformInt64, Float32List)> docs,
+}) =>
+    RustLib.instance.api.crateApiIncrementalIndexIncrementalAddBatch(
+      docs: docs,
+    );
 
 /// Remove a document from buffer.
 Future<void> incrementalRemove({required PlatformInt64 docId}) =>
@@ -28,10 +34,14 @@ Future<void> incrementalRemove({required PlatformInt64 docId}) =>
         .crateApiIncrementalIndexIncrementalRemove(docId: docId);
 
 /// Search both buffer and HNSW.
-Future<List<IncrementalSearchResult>> incrementalSearch(
-        {required List<double> queryEmbedding, required BigInt topK}) =>
+Future<List<IncrementalSearchResult>> incrementalSearch({
+  required List<double> queryEmbedding,
+  required BigInt topK,
+}) =>
     RustLib.instance.api.crateApiIncrementalIndexIncrementalSearch(
-        queryEmbedding: queryEmbedding, topK: topK);
+      queryEmbedding: queryEmbedding,
+      topK: topK,
+    );
 
 Future<BufferStats> getBufferStats() =>
     RustLib.instance.api.crateApiIncrementalIndexGetBufferStats();

@@ -52,47 +52,56 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   IngestSession
       dco_decode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   SearchHandle
       dco_decode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-          dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   IngestSession
       dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   SearchHandle
       dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-          dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   IngestSession
       dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   IngestSession
       dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   SearchHandle
       dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-          dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   IngestSession
       dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   SearchHandle
       dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-          dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   RustStreamSink<String> dco_decode_StreamSink_String_Sse(dynamic raw);
@@ -123,7 +132,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AssembleContextOptions dco_decode_box_autoadd_assemble_context_options(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   CompressionOptions dco_decode_box_autoadd_compression_options(dynamic raw);
@@ -142,7 +152,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   QueryContentReadStats dco_decode_box_autoadd_query_content_read_stats(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   (int, int, int) dco_decode_box_autoadd_record_u_32_u_32_u_32(dynamic raw);
@@ -155,7 +166,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchMetaHybridOptions dco_decode_box_autoadd_search_meta_hybrid_options(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
@@ -261,7 +273,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<IncrementalSearchResult> dco_decode_list_incremental_search_result(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   List<double> dco_decode_list_prim_f_32_loose(dynamic raw);
@@ -312,7 +325,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   IngestSession?
       dco_decode_opt_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -328,7 +342,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, int, int)? dco_decode_opt_box_autoadd_record_u_32_u_32_u_32(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   RrfConfig? dco_decode_opt_box_autoadd_rrf_config(dynamic raw);
@@ -359,7 +374,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (PlatformInt64, Float32List) dco_decode_record_i_64_list_prim_f_32_strict(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   (PlatformInt64, String) dco_decode_record_i_64_string(dynamic raw);
@@ -415,73 +431,87 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   IngestSession
       sse_decode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   SearchHandle
       sse_decode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-          SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   IngestSession
       sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   SearchHandle
       sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-          SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   IngestSession
       sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   IngestSession
       sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   SearchHandle
       sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-          SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   IngestSession
       sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   SearchHandle
       sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-          SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   RustStreamSink<String> sse_decode_StreamSink_String_Sse(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
   ActivationTimingStats sse_decode_activation_timing_stats(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   AddDocumentResult sse_decode_add_document_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   AddSourceResult sse_decode_add_source_result(SseDeserializer deserializer);
 
   @protected
   AssembleContextOptions sse_decode_assemble_context_options(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   AssembledContextV2 sse_decode_assembled_context_v_2(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   Bm25SearchResult sse_decode_bm_25_search_result(SseDeserializer deserializer);
@@ -491,11 +521,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AssembleContextOptions sse_decode_box_autoadd_assemble_context_options(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   CompressionOptions sse_decode_box_autoadd_compression_options(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
@@ -505,30 +537,36 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   IngestStrategy sse_decode_box_autoadd_ingest_strategy(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   IngestTrafficStats sse_decode_box_autoadd_ingest_traffic_stats(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   QueryContentReadStats sse_decode_box_autoadd_query_content_read_stats(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   (int, int, int) sse_decode_box_autoadd_record_u_32_u_32_u_32(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   RrfConfig sse_decode_box_autoadd_rrf_config(SseDeserializer deserializer);
 
   @protected
   SearchFilter sse_decode_box_autoadd_search_filter(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   SearchMetaHybridOptions sse_decode_box_autoadd_search_meta_hybrid_options(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
@@ -547,15 +585,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ChunkExcerptResult sse_decode_chunk_excerpt_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ChunkForReembedding sse_decode_chunk_for_reembedding(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ChunkSearchResult sse_decode_chunk_search_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ChunkType sse_decode_chunk_type(SseDeserializer deserializer);
@@ -565,15 +606,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CompressionOptions sse_decode_compression_options(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ContextAssemblyStrategy sse_decode_context_assembly_strategy(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   EmbeddingFingerprintGate sse_decode_embedding_fingerprint_gate(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   EmbeddingPoint sse_decode_embedding_point(SseDeserializer deserializer);
@@ -592,7 +636,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   HybridSearchResult sse_decode_hybrid_search_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -602,56 +647,67 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   IncrementalSearchResult sse_decode_incremental_search_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   IngestStrategy sse_decode_ingest_strategy(SseDeserializer deserializer);
 
   @protected
   IngestTrafficStats sse_decode_ingest_traffic_stats(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
   List<Bm25SearchResult> sse_decode_list_bm_25_search_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<ChunkData> sse_decode_list_chunk_data(SseDeserializer deserializer);
 
   @protected
   List<ChunkEmbedding> sse_decode_list_chunk_embedding(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<ChunkExcerptResult> sse_decode_list_chunk_excerpt_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<ChunkForReembedding> sse_decode_list_chunk_for_reembedding(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<ChunkSearchResult> sse_decode_list_chunk_search_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<EmbeddingRequest> sse_decode_list_embedding_request(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<HnswSearchResult> sse_decode_list_hnsw_search_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<HybridSearchResult> sse_decode_list_hybrid_search_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<IncrementalSearchResult> sse_decode_list_incremental_search_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<double> sse_decode_list_prim_f_32_loose(SseDeserializer deserializer);
@@ -677,38 +733,45 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<(PlatformInt64, Float32List)>
       sse_decode_list_record_i_64_list_prim_f_32_strict(
-          SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<(PlatformInt64, String)> sse_decode_list_record_i_64_string(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<SearchHitMeta> sse_decode_list_search_hit_meta(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<SemanticChunk> sse_decode_list_semantic_chunk(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<SourceEntry> sse_decode_list_source_entry(SseDeserializer deserializer);
 
   @protected
   List<StructuredChunk> sse_decode_list_structured_chunk(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   MigrationAxes sse_decode_migration_axes(SseDeserializer deserializer);
 
   @protected
   NativeRuntimeInfo sse_decode_native_runtime_info(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   IngestSession?
       sse_decode_opt_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
@@ -721,19 +784,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   IngestStrategy? sse_decode_opt_box_autoadd_ingest_strategy(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   (int, int, int)? sse_decode_opt_box_autoadd_record_u_32_u_32_u_32(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   RrfConfig? sse_decode_opt_box_autoadd_rrf_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   SearchFilter? sse_decode_opt_box_autoadd_search_filter(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
@@ -749,26 +816,31 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PreparedSourceState sse_decode_prepared_source_state(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   QueryContentReadStats sse_decode_query_content_read_stats(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   RagError sse_decode_rag_error(SseDeserializer deserializer);
 
   @protected
   (PlatformInt64, Float32List) sse_decode_record_i_64_list_prim_f_32_strict(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   (PlatformInt64, String) sse_decode_record_i_64_string(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   (int, int, int) sse_decode_record_u_32_u_32_u_32(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   RrfConfig sse_decode_rrf_config(SseDeserializer deserializer);
@@ -781,7 +853,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchMetaHybridOptions sse_decode_search_meta_hybrid_options(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   SemanticChunk sse_decode_semantic_chunk(SseDeserializer deserializer);
@@ -815,136 +888,192 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_AnyhowException(
-      AnyhowException self, SseSerializer serializer);
+    AnyhowException self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
       sse_encode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          IngestSession self, SseSerializer serializer);
+    IngestSession self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
       sse_encode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-          SearchHandle self, SseSerializer serializer);
+    SearchHandle self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
       sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          IngestSession self, SseSerializer serializer);
+    IngestSession self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
       sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-          SearchHandle self, SseSerializer serializer);
+    SearchHandle self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
       sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          IngestSession self, SseSerializer serializer);
+    IngestSession self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
       sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          IngestSession self, SseSerializer serializer);
+    IngestSession self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
       sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-          SearchHandle self, SseSerializer serializer);
+    SearchHandle self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
       sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          IngestSession self, SseSerializer serializer);
+    IngestSession self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
       sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-          SearchHandle self, SseSerializer serializer);
+    SearchHandle self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_StreamSink_String_Sse(
-      RustStreamSink<String> self, SseSerializer serializer);
+    RustStreamSink<String> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
   void sse_encode_activation_timing_stats(
-      ActivationTimingStats self, SseSerializer serializer);
+    ActivationTimingStats self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_add_document_result(
-      AddDocumentResult self, SseSerializer serializer);
+    AddDocumentResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_add_source_result(
-      AddSourceResult self, SseSerializer serializer);
+    AddSourceResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_assemble_context_options(
-      AssembleContextOptions self, SseSerializer serializer);
+    AssembleContextOptions self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_assembled_context_v_2(
-      AssembledContextV2 self, SseSerializer serializer);
+    AssembledContextV2 self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_bm_25_search_result(
-      Bm25SearchResult self, SseSerializer serializer);
+    Bm25SearchResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_assemble_context_options(
-      AssembleContextOptions self, SseSerializer serializer);
+    AssembleContextOptions self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_compression_options(
-      CompressionOptions self, SseSerializer serializer);
+    CompressionOptions self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_i_64(
-      PlatformInt64 self, SseSerializer serializer);
+    PlatformInt64 self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_ingest_strategy(
-      IngestStrategy self, SseSerializer serializer);
+    IngestStrategy self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_ingest_traffic_stats(
-      IngestTrafficStats self, SseSerializer serializer);
+    IngestTrafficStats self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_query_content_read_stats(
-      QueryContentReadStats self, SseSerializer serializer);
+    QueryContentReadStats self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_record_u_32_u_32_u_32(
-      (int, int, int) self, SseSerializer serializer);
+    (int, int, int) self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_rrf_config(
-      RrfConfig self, SseSerializer serializer);
+    RrfConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_search_filter(
-      SearchFilter self, SseSerializer serializer);
+    SearchFilter self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_search_meta_hybrid_options(
-      SearchMetaHybridOptions self, SseSerializer serializer);
+    SearchMetaHybridOptions self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_user_intent(
-      UserIntent self, SseSerializer serializer);
+    UserIntent self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_buffer_stats(BufferStats self, SseSerializer serializer);
@@ -954,46 +1083,66 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_chunk_embedding(
-      ChunkEmbedding self, SseSerializer serializer);
+    ChunkEmbedding self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_chunk_excerpt_result(
-      ChunkExcerptResult self, SseSerializer serializer);
+    ChunkExcerptResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_chunk_for_reembedding(
-      ChunkForReembedding self, SseSerializer serializer);
+    ChunkForReembedding self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_chunk_search_result(
-      ChunkSearchResult self, SseSerializer serializer);
+    ChunkSearchResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_chunk_type(ChunkType self, SseSerializer serializer);
 
   @protected
   void sse_encode_compressed_text(
-      CompressedText self, SseSerializer serializer);
+    CompressedText self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_compression_options(
-      CompressionOptions self, SseSerializer serializer);
+    CompressionOptions self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_context_assembly_strategy(
-      ContextAssemblyStrategy self, SseSerializer serializer);
+    ContextAssemblyStrategy self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_embedding_fingerprint_gate(
-      EmbeddingFingerprintGate self, SseSerializer serializer);
+    EmbeddingFingerprintGate self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_embedding_point(
-      EmbeddingPoint self, SseSerializer serializer);
+    EmbeddingPoint self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_embedding_request(
-      EmbeddingRequest self, SseSerializer serializer);
+    EmbeddingRequest self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
@@ -1003,11 +1152,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_hnsw_search_result(
-      HnswSearchResult self, SseSerializer serializer);
+    HnswSearchResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_hybrid_search_result(
-      HybridSearchResult self, SseSerializer serializer);
+    HybridSearchResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
@@ -1017,121 +1170,175 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_incremental_search_result(
-      IncrementalSearchResult self, SseSerializer serializer);
+    IncrementalSearchResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ingest_strategy(
-      IngestStrategy self, SseSerializer serializer);
+    IngestStrategy self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ingest_traffic_stats(
-      IngestTrafficStats self, SseSerializer serializer);
+    IngestTrafficStats self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_bm_25_search_result(
-      List<Bm25SearchResult> self, SseSerializer serializer);
+    List<Bm25SearchResult> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_chunk_data(
-      List<ChunkData> self, SseSerializer serializer);
+    List<ChunkData> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_chunk_embedding(
-      List<ChunkEmbedding> self, SseSerializer serializer);
+    List<ChunkEmbedding> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_chunk_excerpt_result(
-      List<ChunkExcerptResult> self, SseSerializer serializer);
+    List<ChunkExcerptResult> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_chunk_for_reembedding(
-      List<ChunkForReembedding> self, SseSerializer serializer);
+    List<ChunkForReembedding> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_chunk_search_result(
-      List<ChunkSearchResult> self, SseSerializer serializer);
+    List<ChunkSearchResult> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_embedding_request(
-      List<EmbeddingRequest> self, SseSerializer serializer);
+    List<EmbeddingRequest> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_hnsw_search_result(
-      List<HnswSearchResult> self, SseSerializer serializer);
+    List<HnswSearchResult> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_hybrid_search_result(
-      List<HybridSearchResult> self, SseSerializer serializer);
+    List<HybridSearchResult> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_incremental_search_result(
-      List<IncrementalSearchResult> self, SseSerializer serializer);
+    List<IncrementalSearchResult> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_f_32_loose(
-      List<double> self, SseSerializer serializer);
+    List<double> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_f_32_strict(
-      Float32List self, SseSerializer serializer);
+    Float32List self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_i_64_strict(
-      Int64List self, SseSerializer serializer);
+    Int64List self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_u_32_loose(
-      List<int> self, SseSerializer serializer);
+    List<int> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_u_32_strict(
-      Uint32List self, SseSerializer serializer);
+    Uint32List self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
-      Uint8List self, SseSerializer serializer);
+    Uint8List self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_record_i_64_list_prim_f_32_strict(
-      List<(PlatformInt64, Float32List)> self, SseSerializer serializer);
+    List<(PlatformInt64, Float32List)> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_record_i_64_string(
-      List<(PlatformInt64, String)> self, SseSerializer serializer);
+    List<(PlatformInt64, String)> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_search_hit_meta(
-      List<SearchHitMeta> self, SseSerializer serializer);
+    List<SearchHitMeta> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_semantic_chunk(
-      List<SemanticChunk> self, SseSerializer serializer);
+    List<SemanticChunk> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_source_entry(
-      List<SourceEntry> self, SseSerializer serializer);
+    List<SourceEntry> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_structured_chunk(
-      List<StructuredChunk> self, SseSerializer serializer);
+    List<StructuredChunk> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_migration_axes(MigrationAxes self, SseSerializer serializer);
 
   @protected
   void sse_encode_native_runtime_info(
-      NativeRuntimeInfo self, SseSerializer serializer);
+    NativeRuntimeInfo self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
       sse_encode_opt_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-          IngestSession? self, SseSerializer serializer);
+    IngestSession? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
@@ -1141,60 +1348,84 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_i_64(
-      PlatformInt64? self, SseSerializer serializer);
+    PlatformInt64? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_ingest_strategy(
-      IngestStrategy? self, SseSerializer serializer);
+    IngestStrategy? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_record_u_32_u_32_u_32(
-      (int, int, int)? self, SseSerializer serializer);
+    (int, int, int)? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_rrf_config(
-      RrfConfig? self, SseSerializer serializer);
+    RrfConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_search_filter(
-      SearchFilter? self, SseSerializer serializer);
+    SearchFilter? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_prim_i_64_strict(
-      Int64List? self, SseSerializer serializer);
+    Int64List? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_parsed_intent(ParsedIntent self, SseSerializer serializer);
 
   @protected
   void sse_encode_prepared_ingestion(
-      PreparedIngestion self, SseSerializer serializer);
+    PreparedIngestion self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_prepared_source_state(
-      PreparedSourceState self, SseSerializer serializer);
+    PreparedSourceState self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_query_content_read_stats(
-      QueryContentReadStats self, SseSerializer serializer);
+    QueryContentReadStats self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_rag_error(RagError self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_i_64_list_prim_f_32_strict(
-      (PlatformInt64, Float32List) self, SseSerializer serializer);
+    (PlatformInt64, Float32List) self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_record_i_64_string(
-      (PlatformInt64, String) self, SseSerializer serializer);
+    (PlatformInt64, String) self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_record_u_32_u_32_u_32(
-      (int, int, int) self, SseSerializer serializer);
+    (int, int, int) self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_rrf_config(RrfConfig self, SseSerializer serializer);
@@ -1207,7 +1438,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_search_meta_hybrid_options(
-      SearchMetaHybridOptions self, SseSerializer serializer);
+    SearchMetaHybridOptions self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_semantic_chunk(SemanticChunk self, SseSerializer serializer);
@@ -1220,7 +1453,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_structured_chunk(
-      StructuredChunk self, SseSerializer serializer);
+    StructuredChunk self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
@@ -1266,7 +1501,8 @@ class RustLibWire implements BaseWire {
 
   late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSessionPtr =
       _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-          'frbgen_mobile_rag_engine_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession');
+    'frbgen_mobile_rag_engine_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession',
+  );
   late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession =
       _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSessionPtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
@@ -1282,7 +1518,8 @@ class RustLibWire implements BaseWire {
 
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSessionPtr =
       _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-          'frbgen_mobile_rag_engine_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession');
+    'frbgen_mobile_rag_engine_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession',
+  );
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession =
       _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSessionPtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
@@ -1298,7 +1535,8 @@ class RustLibWire implements BaseWire {
 
   late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandlePtr =
       _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-          'frbgen_mobile_rag_engine_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle');
+    'frbgen_mobile_rag_engine_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle',
+  );
   late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle =
       _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandlePtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
@@ -1314,7 +1552,8 @@ class RustLibWire implements BaseWire {
 
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandlePtr =
       _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-          'frbgen_mobile_rag_engine_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle');
+    'frbgen_mobile_rag_engine_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle',
+  );
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle =
       _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandlePtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();

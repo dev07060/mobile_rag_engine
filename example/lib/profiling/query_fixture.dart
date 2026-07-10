@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+import 'dart:async';
 
 /// Deterministic fixture: two collections (A/B) with reproducible short docs,
 /// plus a fixed query set. Used by the on-device query profiler integration test.
@@ -27,17 +28,25 @@ class QueryFixture {
 
   /// Seed both collections via the real ingest path (chunks + embeddings + indexes).
   /// Returns source ids per collection (used to drive the filtered lane).
-  static Future<Map<String, List<int>>> seed({required int docsPerCollection}) async {
+  static Future<Map<String, List<int>>> seed(
+      {required int docsPerCollection}) async {
     final ids = <String, List<int>>{};
     for (final c in [collectionA, collectionB]) {
       final col = MobileRag.instance.inCollection(c);
       final ds = docs(c, docsPerCollection);
       final srcIds = <int>[];
       for (var i = 0; i < ds.length; i++) {
+        final completer = Completer<void>();
         final r = await col.addDocumentUtf8(
           Uint8List.fromList(utf8.encode(ds[i])),
           name: 'doc_${c}_$i',
+          onProgress: (done, total) {
+            if (done == total) {
+              if (!completer.isCompleted) completer.complete();
+            }
+          },
         );
+        await completer.future;
         srcIds.add(r.sourceId);
       }
       ids[c] = srcIds;

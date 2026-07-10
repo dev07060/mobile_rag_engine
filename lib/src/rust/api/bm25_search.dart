@@ -12,10 +12,14 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `add_document`, `clear`, `is_empty`, `len`, `new`, `remove_document`, `search_scoped_tokens`, `search`
 
 /// Add document to BM25 index.
-Future<void> bm25AddDocument(
-        {required PlatformInt64 docId, required String content}) =>
-    RustLib.instance.api
-        .crateApiBm25SearchBm25AddDocument(docId: docId, content: content);
+Future<void> bm25AddDocument({
+  required PlatformInt64 docId,
+  required String content,
+}) =>
+    RustLib.instance.api.crateApiBm25SearchBm25AddDocument(
+      docId: docId,
+      content: content,
+    );
 
 /// Add multiple documents to BM25 index (batch).
 Future<void> bm25AddDocuments({required List<(PlatformInt64, String)> docs}) =>
@@ -26,8 +30,10 @@ Future<void> bm25RemoveDocument({required PlatformInt64 docId}) =>
     RustLib.instance.api.crateApiBm25SearchBm25RemoveDocument(docId: docId);
 
 /// Search using BM25.
-Future<List<Bm25SearchResult>> bm25Search(
-        {required String query, required int topK}) =>
+Future<List<Bm25SearchResult>> bm25Search({
+  required String query,
+  required int topK,
+}) =>
     RustLib.instance.api.crateApiBm25SearchBm25Search(query: query, topK: topK);
 
 /// Clear BM25 index.
@@ -46,10 +52,7 @@ class Bm25SearchResult {
   final PlatformInt64 docId;
   final double score;
 
-  const Bm25SearchResult({
-    required this.docId,
-    required this.score,
-  });
+  const Bm25SearchResult({required this.docId, required this.score});
 
   @override
   int get hashCode => docId.hashCode ^ score.hashCode;

@@ -16,7 +16,7 @@
 //
 //! Hybrid Search: Vector + Keyword with Reciprocal Rank Fusion.
 
-use log::{debug, info};
+use log::{debug, error, info};
 use std::collections::{HashMap, HashSet};
 
 use crate::api::bm25_search::{bm25_search, bm25_search_scoped_tokens, tokenize_for_bm25};
@@ -26,7 +26,7 @@ use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw_slice, HnswSearch
 use crate::api::query_metrics::record_hybrid_result_content_read;
 use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
-use crate::api::vector_quant::{l2_norm_i8, quantize_f32_to_i8, QueryQ8, cosine_similarity_q8};
+use crate::api::vector_quant::{cosine_similarity_q8, l2_norm_i8, quantize_f32_to_i8, QueryQ8};
 
 #[derive(Debug, Clone)]
 pub struct SearchFilter {
@@ -226,35 +226,48 @@ fn compute_hybrid_rrf_scores(
             let need_bm25 = config.bm25_weight != 0.0 && !query_tokens.is_empty();
 
             // Fetch ALL chunks for this scoped set for exact vector scoring.
-            let query_with_i8 = format!(
-                "SELECT c.id, c.embedding, {}
+            let query_full = format!(
+                "SELECT c.id, c.embedding, c.mmap_id, c.embedding_i8
                      FROM chunks c
                      LEFT JOIN sources s ON c.source_id = s.id
                      WHERE {}",
-                "c.embedding_i8",
                 exact_conditions.join(" AND ")
             );
-            let query_without_i8 = format!(
-                "SELECT c.id, c.embedding, {}
+            let query_no_mmap = format!(
+                "SELECT c.id, c.embedding, NULL AS mmap_id, c.embedding_i8
                      FROM chunks c
                      LEFT JOIN sources s ON c.source_id = s.id
                      WHERE {}",
-                "NULL AS embedding_i8",
+                exact_conditions.join(" AND ")
+            );
+            let query_no_i8 = format!(
+                "SELECT c.id, c.embedding, c.mmap_id, NULL AS embedding_i8
+                     FROM chunks c
+                     LEFT JOIN sources s ON c.source_id = s.id
+                     WHERE {}",
+                exact_conditions.join(" AND ")
+            );
+            let query_minimal = format!(
+                "SELECT c.id, c.embedding, NULL AS mmap_id, NULL AS embedding_i8
+                     FROM chunks c
+                     LEFT JOIN sources s ON c.source_id = s.id
+                     WHERE {}",
                 exact_conditions.join(" AND ")
             );
 
-            let mut stmt = match conn.prepare(&query_with_i8) {
-                Ok(stmt) => stmt,
-                Err(_) => conn
-                    .prepare(&query_without_i8)
-                    .map_err(|e| RagError::DatabaseError(e.to_string()))?,
-            };
+            let mut stmt = conn
+                .prepare(&query_full)
+                .or_else(|_| conn.prepare(&query_no_mmap))
+                .or_else(|_| conn.prepare(&query_no_i8))
+                .or_else(|_| conn.prepare(&query_minimal))
+                .map_err(|e| RagError::DatabaseError(e.to_string()))?;
             let chunk_iter = stmt
                 .query_map([], |row| {
                     Ok((
                         row.get::<_, i64>(0)?,
                         row.get::<_, Vec<u8>>(1)?,
-                        row.get::<_, Option<Vec<u8>>>(2)?,
+                        row.get::<_, Option<i64>>(2)?,
+                        row.get::<_, Option<Vec<u8>>>(3)?,
                     ))
                 })
                 .map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -273,46 +286,85 @@ fn compute_hybrid_rrf_scores(
             vector_results.clear();
             bm25_results.clear();
 
+            // Lock MMAP store outside the loop for fast access
+            #[cfg(feature = "vector_quant_i8")]
+            let mmap_store = crate::api::mmap_store::MMAP_STORE.read().unwrap();
+
             for row in chunk_iter {
-                if let Ok((id, embedding_blob, embedding_i8_blob)) = row {
-                    #[cfg(not(feature = "vector_quant_i8"))]
-                    let _ = &embedding_i8_blob;
-                    #[cfg(feature = "vector_quant_i8")]
-                    let sim = if let Some(qblob) = embedding_i8_blob.as_deref() {
-                        if (qblob.len() == query_i8.len() || qblob.len() % 36 == 0) && query_i8_norm > 0.0 {
-                            cosine_similarity_q8(&query_q8, qblob, &query_i8, query_i8_norm)
-                        } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
+                match row {
+                    Ok((id, embedding_blob, mmap_id, embedding_i8_blob)) => {
+                        #[cfg(not(feature = "vector_quant_i8"))]
+                        let _ = (&mmap_id, &embedding_i8_blob);
+                        #[cfg(feature = "vector_quant_i8")]
+                        let sim = {
+                            let mut qblob_ref: Option<&[u8]> = None;
+
+                            // Priority 1: Check MMAP store
+                            if let Some(mid) = mmap_id {
+                                if let Some(s) = mmap_store.as_ref() {
+                                    qblob_ref = s.get(mid as usize);
+                                }
+                            }
+
+                            // Priority 2: Fallback to SQLite embedding_i8 column
+                            if qblob_ref.is_none() {
+                                qblob_ref = embedding_i8_blob.as_deref();
+                            }
+
+                            if let Some(qblob) = qblob_ref {
+                                if qblob.len() >= query_i8.len() + 4 && query_i8_norm > 0.0 {
+                                    crate::api::vector_quant::cosine_with_query_norm_i8_blob(
+                                        &query_i8,
+                                        query_i8_norm,
+                                        &qblob[4..],
+                                    )
+                                } else if (qblob.len() == query_i8.len() || qblob.len() % 36 == 0)
+                                    && query_i8_norm > 0.0
+                                {
+                                    cosine_similarity_q8(&query_q8, qblob, &query_i8, query_i8_norm)
+                                } else if let Some(embedding) =
+                                    decode_f32_embedding(&embedding_blob)
+                                {
+                                    if embedding.len() != query_embedding.len() {
+                                        continue;
+                                    }
+                                    cosine_with_query_norm_f32(
+                                        query_embedding,
+                                        query_norm,
+                                        &embedding,
+                                    )
+                                } else {
+                                    continue;
+                                }
+                            } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
+                                if embedding.len() != query_embedding.len() {
+                                    continue;
+                                }
+                                cosine_with_query_norm_f32(query_embedding, query_norm, &embedding)
+                            } else {
+                                continue;
+                            }
+                        };
+
+                        #[cfg(not(feature = "vector_quant_i8"))]
+                        let sim = if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
                             if embedding.len() != query_embedding.len() {
                                 continue;
                             }
                             cosine_with_query_norm_f32(query_embedding, query_norm, &embedding)
                         } else {
                             continue;
-                        }
-                    } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
-                        if embedding.len() != query_embedding.len() {
-                            continue;
-                        }
-                        cosine_with_query_norm_f32(query_embedding, query_norm, &embedding)
-                    } else {
-                        continue;
-                    };
+                        };
 
-                    #[cfg(not(feature = "vector_quant_i8"))]
-                    let sim = if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
-                        if embedding.len() != query_embedding.len() {
-                            continue;
-                        }
-                        cosine_with_query_norm_f32(query_embedding, query_norm, &embedding)
-                    } else {
-                        continue;
-                    };
-
-                    vector_results.push(HnswSearchResult {
-                        id,
-                        distance: (1.0 - sim) as f32, // lower is better
-                    });
-                    scoped_doc_ids.push(id);
+                        vector_results.push(HnswSearchResult {
+                            id,
+                            distance: (1.0 - sim) as f32, // lower is better
+                        });
+                        scoped_doc_ids.push(id);
+                    }
+                    Err(e) => {
+                        error!("[hybrid] Error parsing row during exact scan: {:?}", e);
+                    }
                 }
             }
 

@@ -14,43 +14,47 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 /// Combined entrypoint: insert/find source row, claim it, run the chunker, and
 /// return an `IngestSession` carrying the chunked content. Dart drives the
 /// per-batch embedding loop on the returned session.
-Future<PreparedIngestion> prepareSourceIngestion(
-        {required String collectionId,
-        required String content,
-        String? metadata,
-        String? name,
-        required IngestStrategy strategy,
-        required int maxChars,
-        required int overlapChars}) =>
+Future<PreparedIngestion> prepareSourceIngestion({
+  required String collectionId,
+  required String content,
+  String? metadata,
+  String? name,
+  required IngestStrategy strategy,
+  required int maxChars,
+  required int overlapChars,
+}) =>
     RustLib.instance.api.crateApiIngestSessionPrepareSourceIngestion(
-        collectionId: collectionId,
-        content: content,
-        metadata: metadata,
-        name: name,
-        strategy: strategy,
-        maxChars: maxChars,
-        overlapChars: overlapChars);
+      collectionId: collectionId,
+      content: content,
+      metadata: metadata,
+      name: name,
+      strategy: strategy,
+      maxChars: maxChars,
+      overlapChars: overlapChars,
+    );
 
 /// UTF-8 bytes variant: skips the Dart `String` materialization step. The
 /// caller hands raw bytes (typically a `Uint8List` from a file/network read);
 /// the Rust side performs UTF-8 decoding once. Identical staging behavior to
 /// `prepare_source_ingestion` once the bytes are decoded.
-Future<PreparedIngestion> prepareSourceIngestionFromUtf8(
-        {required String collectionId,
-        required List<int> contentBytes,
-        String? metadata,
-        String? name,
-        required IngestStrategy strategy,
-        required int maxChars,
-        required int overlapChars}) =>
+Future<PreparedIngestion> prepareSourceIngestionFromUtf8({
+  required String collectionId,
+  required List<int> contentBytes,
+  String? metadata,
+  String? name,
+  required IngestStrategy strategy,
+  required int maxChars,
+  required int overlapChars,
+}) =>
     RustLib.instance.api.crateApiIngestSessionPrepareSourceIngestionFromUtf8(
-        collectionId: collectionId,
-        contentBytes: contentBytes,
-        metadata: metadata,
-        name: name,
-        strategy: strategy,
-        maxChars: maxChars,
-        overlapChars: overlapChars);
+      collectionId: collectionId,
+      contentBytes: contentBytes,
+      metadata: metadata,
+      name: name,
+      strategy: strategy,
+      maxChars: maxChars,
+      overlapChars: overlapChars,
+    );
 
 /// File-path variant: Rust reads the file and never round-trips its body
 /// through Dart. Only the path string crosses FFI (Dart→Rust). When
@@ -59,22 +63,24 @@ Future<PreparedIngestion> prepareSourceIngestionFromUtf8(
 /// extensions (`.txt`, `.md`, `.markdown`) are decoded as UTF-8; everything
 /// else falls through to `document_parser::extract_text_from_document` (PDF /
 /// DOCX magic-byte routing).
-Future<PreparedIngestion> prepareSourceIngestionFromFile(
-        {required String collectionId,
-        required String filePath,
-        String? metadata,
-        String? name,
-        IngestStrategy? strategyHint,
-        required int maxChars,
-        required int overlapChars}) =>
+Future<PreparedIngestion> prepareSourceIngestionFromFile({
+  required String collectionId,
+  required String filePath,
+  String? metadata,
+  String? name,
+  IngestStrategy? strategyHint,
+  required int maxChars,
+  required int overlapChars,
+}) =>
     RustLib.instance.api.crateApiIngestSessionPrepareSourceIngestionFromFile(
-        collectionId: collectionId,
-        filePath: filePath,
-        metadata: metadata,
-        name: name,
-        strategyHint: strategyHint,
-        maxChars: maxChars,
-        overlapChars: overlapChars);
+      collectionId: collectionId,
+      filePath: filePath,
+      metadata: metadata,
+      name: name,
+      strategyHint: strategyHint,
+      maxChars: maxChars,
+      overlapChars: overlapChars,
+    );
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<IngestSession>>
 abstract class IngestSession implements RustOpaqueInterface {
@@ -121,10 +127,7 @@ class ChunkEmbedding {
   final int chunkIndex;
   final Float32List embedding;
 
-  const ChunkEmbedding({
-    required this.chunkIndex,
-    required this.embedding,
-  });
+  const ChunkEmbedding({required this.chunkIndex, required this.embedding});
 
   @override
   int get hashCode => chunkIndex.hashCode ^ embedding.hashCode;
@@ -161,11 +164,7 @@ class EmbeddingRequest {
 }
 
 /// Chunking strategy selector for `prepare_source_ingestion`.
-enum IngestStrategy {
-  recursive,
-  markdown,
-  ;
-}
+enum IngestStrategy { recursive, markdown }
 
 /// Result of `prepare_source_ingestion`.
 ///
@@ -235,5 +234,4 @@ enum PreparedSourceState {
 
   /// Existing source in `pending` or `processing` — owned by another worker.
   duplicateInProgress,
-  ;
 }

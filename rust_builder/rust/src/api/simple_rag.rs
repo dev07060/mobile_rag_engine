@@ -28,7 +28,8 @@ use crate::api::vector_math::{
 };
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{
-    l2_norm_i8, quantize_f32_to_i8, quantize_f32_to_u8_blob, QueryQ8, cosine_similarity_q8,
+    cosine_similarity_q8, cosine_similarity_vabq, l2_norm_i8, quantize_f32_to_i8,
+    quantize_f32_to_vabq, QueryQ8, QueryVABQ,
 };
 use flutter_rust_bridge::frb;
 use log::{debug, error, info, warn};
@@ -140,7 +141,7 @@ pub fn init_db() -> anyhow::Result<()> {
             if embedding.is_empty() {
                 continue;
             }
-            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&embedding);
+            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_vabq(&embedding);
             conn.execute(
                 "UPDATE docs SET embedding_i8 = ?1, embedding_scale = ?2 WHERE id = ?3",
                 params![embedding_i8_bytes, embedding_scale, id],
@@ -284,7 +285,7 @@ pub fn add_document(content: String, embedding: Vec<f32>) -> anyhow::Result<AddD
 
     #[cfg(feature = "vector_quant_i8")]
     {
-        let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&embedding);
+        let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_vabq(&embedding);
 
         if has_embedding_i8_column && has_embedding_scale_column {
             conn.execute(
@@ -408,6 +409,8 @@ fn search_with_linear_scan(query_embedding: Vec<f32>, top_k: u32) -> anyhow::Res
     let query_i8_norm = l2_norm_i8(&query_i8);
     #[cfg(feature = "vector_quant_i8")]
     let query_q8 = QueryQ8::new(&query_embedding);
+    #[cfg(feature = "vector_quant_i8")]
+    let query_vabq = QueryVABQ::new(&query_embedding);
 
     let mut stmt = match conn.prepare("SELECT content, embedding, embedding_i8 FROM docs") {
         Ok(stmt) => stmt,
@@ -428,7 +431,17 @@ fn search_with_linear_scan(query_embedding: Vec<f32>, top_k: u32) -> anyhow::Res
 
         #[cfg(feature = "vector_quant_i8")]
         let similarity = if let Some(qblob) = embedding_i8_blob.as_deref() {
-            if (qblob.len() == query_i8.len() || qblob.len() % 36 == 0) && query_i8_norm > 0.0 {
+            if !qblob.is_empty() && qblob[0] == 0x02 {
+                cosine_similarity_vabq(&query_vabq, qblob)
+            } else if qblob.len() >= query_i8.len() + 4 && query_i8_norm > 0.0 {
+                crate::api::vector_quant::cosine_with_query_norm_i8_blob(
+                    &query_i8,
+                    query_i8_norm,
+                    &qblob[4..],
+                )
+            } else if (qblob.len() == query_i8.len() || qblob.len() % 36 == 0)
+                && query_i8_norm > 0.0
+            {
                 cosine_similarity_q8(&query_q8, qblob, &query_i8, query_i8_norm)
             } else if let Some(embedding_vec) = decode_f32_embedding(&embedding_blob) {
                 if embedding_vec.len() != query_embedding.len() {

@@ -181,11 +181,7 @@ pub fn read_migration_axes() -> Result<MigrationAxes, RagError> {
 
 /// Insert `(key, value)` only when the key is absent. Existing rows are left
 /// untouched — axes are sticky once written.
-fn insert_axis_if_absent(
-    conn: &Connection,
-    key: &str,
-    value: &str,
-) -> Result<bool, RagError> {
+fn insert_axis_if_absent(conn: &Connection, key: &str, value: &str) -> Result<bool, RagError> {
     let changed = conn
         .execute(
             "INSERT INTO migration_meta(key, value)
@@ -412,7 +408,11 @@ pub fn begin_embedding_reembed(target_fingerprint: String) -> Result<i64, RagErr
              '{target_fingerprint}'"
         )));
     }
-    upsert_axis(&conn, KEY_EMBEDDING_FINGERPRINT_PENDING, &target_fingerprint)?;
+    upsert_axis(
+        &conn,
+        KEY_EMBEDDING_FINGERPRINT_PENDING,
+        &target_fingerprint,
+    )?;
     let remaining = count_chunks_with_non_matching_fingerprint(&conn, &target_fingerprint)?;
     info!(
         "[migration_meta] reembed started: target='{}', remaining_chunks={}",
@@ -472,8 +472,7 @@ pub fn finalize_embedding_reembed(target_fingerprint: String) -> Result<(), RagE
 /// [`acknowledge_and_clear_embeddings`] to opt into destructive deletion.
 /// The Dart facade wraps this behind a typed confirmation parameter so the
 /// destructive choice is explicit at the call site.
-pub const EMBEDDING_CLEAR_CONFIRMATION: &str =
-    "I_UNDERSTAND_THIS_DELETES_ALL_ON_DEVICE_EMBEDDINGS";
+pub const EMBEDDING_CLEAR_CONFIRMATION: &str = "I_UNDERSTAND_THIS_DELETES_ALL_ON_DEVICE_EMBEDDINGS";
 
 /// Discard every chunk row (and therefore every embedding BLOB) for sources
 /// the user has accepted as lost, then reset the fingerprint axes.
@@ -498,8 +497,7 @@ pub fn acknowledge_and_clear_embeddings(
     }
     if new_fingerprint.is_empty() {
         return Err(RagError::InvalidInput(
-            "new_fingerprint must be non-empty when clearing embeddings"
-                .to_string(),
+            "new_fingerprint must be non-empty when clearing embeddings".to_string(),
         ));
     }
     let mut conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -522,9 +520,7 @@ pub fn acknowledge_and_clear_embeddings(
 
 /// Bootstrap or refresh `migration_meta` in a single transaction and return
 /// the resulting axis snapshot. Called by `init_source_db`.
-pub(crate) fn initialize_migration_meta(
-    existing_install: bool,
-) -> Result<MigrationAxes, RagError> {
+pub(crate) fn initialize_migration_meta(existing_install: bool) -> Result<MigrationAxes, RagError> {
     let mut conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     let tx = conn
         .transaction()
@@ -677,7 +673,10 @@ mod tests {
         let pool = fresh_pool();
         initialize_migration_meta(false).unwrap();
         let gate = detect_embedding_fingerprint_gate("model|384|f32".to_string()).unwrap();
-        assert!(matches!(gate, EmbeddingFingerprintGate::RequiresInitialBaseline));
+        assert!(matches!(
+            gate,
+            EmbeddingFingerprintGate::RequiresInitialBaseline
+        ));
         drop(pool);
     }
 

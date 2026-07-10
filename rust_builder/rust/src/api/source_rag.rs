@@ -38,7 +38,8 @@ use crate::api::vector_math::{
 };
 #[cfg(feature = "vector_quant_i8")]
 use crate::api::vector_quant::{
-    l2_norm_i8, quantize_f32_to_i8, quantize_f32_to_u8_blob, QueryQ8, cosine_similarity_q8,
+    cosine_similarity_q8, cosine_similarity_vabq, l2_norm_i8, quantize_f32_to_i8,
+    quantize_f32_to_vabq, QueryQ8, QueryVABQ,
 };
 use crate::frb_generated::RustAutoOpaqueMoi as RustAutoOpaque;
 use flutter_rust_bridge::frb;
@@ -402,6 +403,13 @@ pub fn init_source_db() -> Result<(), RagError> {
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
     }
 
+    let has_mmap_id: bool = conn.prepare("SELECT mmap_id FROM chunks LIMIT 1").is_ok();
+    if !has_mmap_id {
+        info!("[init_source_db] Migrating: adding mmap_id to chunks");
+        conn.execute("ALTER TABLE chunks ADD COLUMN mmap_id INTEGER", [])
+            .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    }
+
     #[cfg(feature = "vector_quant_i8")]
     {
         let mut stmt = conn.prepare(
@@ -421,7 +429,7 @@ pub fn init_source_db() -> Result<(), RagError> {
             if embedding.is_empty() {
                 continue;
             }
-            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&embedding);
+            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_vabq(&embedding);
             conn.execute(
                 "UPDATE chunks SET embedding_i8 = ?1, embedding_scale = ?2 WHERE id = ?3",
                 params![embedding_i8_bytes, embedding_scale, id],
@@ -783,12 +791,23 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
 
         #[cfg(feature = "vector_quant_i8")]
         {
-            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&chunk.embedding);
+            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_vabq(&chunk.embedding);
+
+            // Append to MMAP_STORE
+            let mmap_id = {
+                let mut store = crate::api::mmap_store::MMAP_STORE.write().unwrap();
+                if let Some(s) = store.as_mut() {
+                    s.append(&embedding_i8_bytes).unwrap_or(0)
+                } else {
+                    0
+                }
+            };
+            let empty_blob: Vec<u8> = Vec::new();
 
             if has_chunk_embedding_i8 && has_chunk_embedding_scale {
                 tx.execute(
-                    "INSERT INTO chunks (source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding, embedding_i8, embedding_scale)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    "INSERT INTO chunks (source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding, embedding_i8, embedding_scale, mmap_id)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                     params![
                         source_id,
                         source_collection_id,
@@ -797,16 +816,17 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
                         chunk.start_pos,
                         chunk.end_pos,
                         chunk.chunk_type,
-                        embedding_bytes,
-                        embedding_i8_bytes,
-                        embedding_scale
+                        empty_blob,
+                        empty_blob, // We can also skip storing it in SQLite since it's in mmap
+                        embedding_scale,
+                        mmap_id as i64
                     ],
                 )
                 .map_err(|e| RagError::DatabaseError(e.to_string()))?;
             } else {
                 tx.execute(
-                    "INSERT INTO chunks (source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    "INSERT INTO chunks (source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding, mmap_id)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     params![
                         source_id,
                         source_collection_id,
@@ -815,7 +835,8 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
                         chunk.start_pos,
                         chunk.end_pos,
                         chunk.chunk_type,
-                        embedding_bytes
+                        empty_blob,
+                        mmap_id as i64
                     ],
                 )
                 .map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -900,7 +921,7 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
         .is_ok();
     let mut stmt = if has_chunk_embedding_i8 && has_chunk_embedding_scale {
         conn.prepare(
-            "SELECT c.id, c.embedding, c.embedding_i8, c.embedding_scale
+            "SELECT c.id, c.embedding, c.embedding_i8, c.embedding_scale, c.mmap_id
              FROM chunks c
              JOIN sources s ON s.id = c.source_id
              WHERE c.collection_id = ?1
@@ -908,7 +929,7 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
         )
     } else {
         conn.prepare(
-            "SELECT c.id, c.embedding, NULL AS embedding_i8, NULL AS embedding_scale
+            "SELECT c.id, c.embedding, NULL AS embedding_i8, NULL AS embedding_scale, c.mmap_id
              FROM chunks c
              JOIN sources s ON s.id = c.source_id
              WHERE c.collection_id = ?1
@@ -921,13 +942,45 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
         .query_map(params![&collection_id], |row| {
             let id: i64 = row.get(0)?;
             let embedding_blob: Vec<u8> = row.get(1)?;
-            let embedding_i8_blob: Option<Vec<u8>> = row.get(2)?;
+            let mut embedding_i8_blob: Option<Vec<u8>> = row.get(2)?;
             let embedding_scale: Option<f32> = row.get(3)?;
+            let mmap_id: Option<i64> = row.get(4)?;
+
+            // When vector_quant_i8 is active, the embedding column in SQLite is
+            // intentionally empty; the actual quantized data lives in MMAP_STORE.
+            // Retrieve it so we can decode back to f32 for HNSW construction.
+            if let Some(mid) = mmap_id {
+                if mid > 0 && embedding_i8_blob.as_ref().map_or(true, |b| b.is_empty()) {
+                    let store = crate::api::mmap_store::MMAP_STORE.read().unwrap();
+                    if let Some(s) = store.as_ref() {
+                        if let Some(data) = s.get(mid as usize) {
+                            embedding_i8_blob = Some(data.to_vec());
+                        }
+                    }
+                }
+            }
 
             // Build the HNSW graph using original high-precision f32 embeddings
             // to prevent the Compound Distortion Loop and maintain optimal recall.
-            let _ = (embedding_i8_blob, embedding_scale);
-            let embedding = decode_f32_embedding_or_warn(&embedding_blob, id);
+            let mut embedding = decode_f32_embedding_or_warn(&embedding_blob, id);
+
+            #[cfg(feature = "vector_quant_i8")]
+            {
+                if embedding.is_empty() {
+                    if let Some(packed_blob) = embedding_i8_blob {
+                        if let Some(decoded) =
+                            crate::api::vector_quant::decode_packed_blob_to_f32(&packed_blob)
+                        {
+                            embedding = decoded;
+                        } else {
+                            log::warn!("Failed to decode packed i8 blob for row id={}", id);
+                        }
+                    }
+                }
+            }
+
+            let _ = embedding_scale;
+
             Ok((id, embedding))
         })
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -2311,7 +2364,7 @@ pub fn search_chunks_in_collection(
     }
 
     if !is_hnsw_index_loaded() {
-        debug!("[search_chunks] Falling back to linear scan");
+        debug!("[search_chunks] Falling back to linear scan (rebuild failed or yielded no points)");
         return search_chunks_linear_in_collection(&collection_id, query_embedding, top_k);
     }
 
@@ -2357,16 +2410,20 @@ fn search_chunks_linear_in_collection(
     top_k: u32,
 ) -> Result<Vec<ChunkSearchResult>, RagError> {
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
     let query_norm = l2_norm_f32(&query_embedding);
+
     #[cfg(feature = "vector_quant_i8")]
     let (query_i8, _query_i8_scale) = quantize_f32_to_i8(&query_embedding);
     #[cfg(feature = "vector_quant_i8")]
     let query_i8_norm = l2_norm_i8(&query_i8);
     #[cfg(feature = "vector_quant_i8")]
     let query_q8 = QueryQ8::new(&query_embedding);
+    #[cfg(feature = "vector_quant_i8")]
+    let query_vabq = QueryVABQ::new(&query_embedding);
 
     let mut stmt = match conn.prepare(
-        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, c.embedding_i8, s.metadata
+        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, c.embedding_i8, s.metadata, c.mmap_id
          FROM chunks c
          JOIN sources s ON c.source_id = s.id
          WHERE c.collection_id = ?1
@@ -2375,7 +2432,7 @@ fn search_chunks_linear_in_collection(
         Ok(stmt) => stmt,
         Err(_) => conn
             .prepare(
-                "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, NULL AS embedding_i8, s.metadata
+                "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, NULL AS embedding_i8, s.metadata, c.mmap_id
                  FROM chunks c
                  JOIN sources s ON c.source_id = s.id
                  WHERE c.collection_id = ?1
@@ -2383,8 +2440,6 @@ fn search_chunks_linear_in_collection(
             )
             .map_err(|e| RagError::DatabaseError(e.to_string()))?,
     };
-
-    let mut candidates: Vec<(f64, i64, i64, i32, String, String, Option<String>)> = Vec::new();
 
     let rows = stmt
         .query_map(params![collection_id], |row| {
@@ -2397,9 +2452,12 @@ fn search_chunks_linear_in_collection(
                 row.get::<_, Vec<u8>>(5)?,
                 row.get::<_, Option<Vec<u8>>>(6)?,
                 row.get(7)?,
+                row.get::<_, Option<i64>>(8).unwrap_or(None),
             ))
         })
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    let mut candidates = Vec::new();
 
     for row in rows {
         let (
@@ -2411,6 +2469,7 @@ fn search_chunks_linear_in_collection(
             embedding_blob,
             embedding_i8_blob,
             metadata,
+            mmap_id,
         ): (
             i64,
             i64,
@@ -2420,13 +2479,65 @@ fn search_chunks_linear_in_collection(
             Vec<u8>,
             Option<Vec<u8>>,
             Option<String>,
+            Option<i64>,
         ) = row.map_err(|e| RagError::DatabaseError(e.to_string()))?;
-        #[cfg(not(feature = "vector_quant_i8"))]
-        let _ = &embedding_i8_blob;
 
         #[cfg(feature = "vector_quant_i8")]
-        let similarity = if let Some(qblob) = embedding_i8_blob.as_deref() {
-            if (qblob.len() == query_i8.len() || qblob.len() % 36 == 0) && query_i8_norm > 0.0 {
+        let mut sim_opt = None;
+
+        #[cfg(feature = "vector_quant_i8")]
+        if let Some(mid) = mmap_id {
+            if mid > 0 && embedding_i8_blob.as_ref().map_or(true, |b| b.is_empty()) {
+                let store = crate::api::mmap_store::MMAP_STORE.read().unwrap();
+                if let Some(s) = store.as_ref() {
+                    if let Some(data) = s.get(mid as usize) {
+                        let qblob = data;
+                        if !qblob.is_empty() && qblob[0] == 0x02 {
+                            sim_opt = Some(cosine_similarity_vabq(&query_vabq, qblob) as f64);
+                        } else if qblob.len() >= query_i8.len() + 4 && query_i8_norm > 0.0 {
+                            sim_opt =
+                                Some(crate::api::vector_quant::cosine_with_query_norm_i8_blob(
+                                    &query_i8,
+                                    query_i8_norm,
+                                    &qblob[4..],
+                                ) as f64);
+                        } else if !qblob.is_empty()
+                            && (qblob.len() == query_i8.len() || qblob.len() % 36 == 0)
+                            && query_i8_norm > 0.0
+                        {
+                            sim_opt = Some(cosine_similarity_q8(
+                                &query_q8,
+                                qblob,
+                                &query_i8,
+                                query_i8_norm,
+                            ) as f64);
+                        }
+                    }
+                }
+            }
+        }
+
+        #[cfg(not(feature = "vector_quant_i8"))]
+        let _ = &embedding_i8_blob;
+        #[cfg(not(feature = "vector_quant_i8"))]
+        let _ = &mmap_id;
+
+        #[cfg(feature = "vector_quant_i8")]
+        let similarity = if let Some(sim) = sim_opt {
+            sim
+        } else if let Some(qblob) = embedding_i8_blob.as_deref() {
+            if !qblob.is_empty() && qblob[0] == 0x02 {
+                cosine_similarity_vabq(&query_vabq, qblob) as f64
+            } else if qblob.len() >= query_i8.len() + 4 && query_i8_norm > 0.0 {
+                crate::api::vector_quant::cosine_with_query_norm_i8_blob(
+                    &query_i8,
+                    query_i8_norm,
+                    &qblob[4..],
+                ) as f64
+            } else if !qblob.is_empty()
+                && (qblob.len() == query_i8.len() || qblob.len() % 36 == 0)
+                && query_i8_norm > 0.0
+            {
                 cosine_similarity_q8(&query_q8, qblob, &query_i8, query_i8_norm) as f64
             } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
                 if embedding.len() != query_embedding.len() {
@@ -2485,10 +2596,6 @@ fn search_chunks_linear_in_collection(
         .collect())
 }
 
-/// Benchmark-only entrypoint for deterministic linear scan measurement.
-///
-/// This bypasses HNSW activation/rebuild and executes the exact
-/// chunk linear-scan path directly for the given collection.
 pub fn benchmark_search_chunks_linear_in_collection(
     collection_id: String,
     query_embedding: Vec<f32>,
@@ -2537,8 +2644,8 @@ pub fn get_adjacent_chunks(
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
     let mut stmt = conn.prepare(
-        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), s.metadata 
-         FROM chunks c 
+        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), s.metadata
+         FROM chunks c
          LEFT JOIN sources s ON c.source_id = s.id
          WHERE c.source_id = ?1 AND c.chunk_index >= ?2 AND c.chunk_index <= ?3 ORDER BY c.chunk_index"
     ).map_err(|e| RagError::DatabaseError(e.to_string()))?;

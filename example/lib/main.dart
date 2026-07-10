@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+import 'package:mobile_rag_engine/src/rust/api/simple.dart';
 
 import 'screens/benchmark_screen.dart';
 import 'screens/quality_test_screen.dart';
@@ -27,6 +28,20 @@ Future<void> main() async {
     deferIndexWarmup: true,
     threadLevel: ThreadUseLevel.medium, // Default: ~40% of cores
   );
+
+  print("=== STARTING VABQ BENCHMARK ON DEVICE ===");
+  final dims = [384, 768, 1024];
+  final iterations = 50000;
+  for (final dim in dims) {
+    try {
+      final ns = await benchmarkVabqDevice(
+          dim: BigInt.from(dim), iterations: iterations);
+      print("VABQ_NATIVE_BENCHMARK: Dimension $dim -> ${ns} ns / query");
+    } catch (e) {
+      print("VABQ_NATIVE_BENCHMARK ERROR for dim $dim: $e");
+    }
+  }
+  print("=== FINISHED VABQ BENCHMARK ON DEVICE ===");
 
   runApp(const MyApp());
 }
@@ -171,9 +186,7 @@ class _MyAppState extends State<MyApp> {
                       isLoading: _controller.isLoading,
                       isReady: _controller.isReady,
                     ),
-
                     const SizedBox(height: 24),
-
                     CollectionSection(
                       collectionController: _controller.collectionController,
                       activeCollectionId: _controller.activeCollectionId,
@@ -187,9 +200,7 @@ class _MyAppState extends State<MyApp> {
                       onWaitWarmup: _controller.waitWarmup,
                       onRebuild: _controller.rebuildActive,
                     ),
-
                     const SizedBox(height: 12),
-
                     DocumentSection(
                       docController: _controller.docController,
                       isReady: _controller.isReady,
@@ -197,9 +208,7 @@ class _MyAppState extends State<MyApp> {
                       onSave: _controller.saveDocument,
                       onImport: _controller.importAndEmbedDocument,
                     ),
-
                     const Divider(height: 40),
-
                     SearchSection(
                       queryController: _controller.queryController,
                       activeCollectionId: _controller.activeCollectionId,
@@ -213,9 +222,7 @@ class _MyAppState extends State<MyApp> {
                       onSourceFilterChanged: _controller.setSelectedSourceId,
                       onSearch: _controller.searchDocuments,
                     ),
-
                     const Divider(height: 40),
-
                     SourceListSection(
                       activeCollectionId: _controller.activeCollectionId,
                       sources: _controller.sources,
