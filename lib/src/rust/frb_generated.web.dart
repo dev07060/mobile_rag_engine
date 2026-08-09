@@ -27,6 +27,7 @@ import 'api/simple_rag.dart';
 import 'api/source_rag.dart';
 import 'api/tokenizer.dart';
 import 'api/user_intent.dart';
+import 'api/vabq_config.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -41,67 +42,67 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_IngestSessionPtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession;
+  get rust_arc_decrement_strong_count_IngestSessionPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_SearchHandlePtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle;
+  get rust_arc_decrement_strong_count_SearchHandlePtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle;
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
   IngestSession
-      dco_decode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  dco_decode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     dynamic raw,
   );
 
   @protected
   SearchHandle
-      dco_decode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  dco_decode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     dynamic raw,
   );
 
   @protected
   IngestSession
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     dynamic raw,
   );
 
   @protected
   SearchHandle
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     dynamic raw,
   );
 
   @protected
   IngestSession
-      dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     dynamic raw,
   );
 
   @protected
   IngestSession
-      dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     dynamic raw,
   );
 
   @protected
   SearchHandle
-      dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     dynamic raw,
   );
 
   @protected
   IngestSession
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     dynamic raw,
   );
 
   @protected
   SearchHandle
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     dynamic raw,
   );
 
@@ -176,6 +177,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UserIntent dco_decode_box_autoadd_user_intent(dynamic raw);
+
+  @protected
+  BigInt dco_decode_box_autoadd_usize(dynamic raw);
 
   @protected
   BufferStats dco_decode_buffer_stats(dynamic raw);
@@ -301,7 +305,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(PlatformInt64, Float32List)>
-      dco_decode_list_record_i_64_list_prim_f_32_strict(dynamic raw);
+  dco_decode_list_record_i_64_list_prim_f_32_strict(dynamic raw);
 
   @protected
   List<(PlatformInt64, String)> dco_decode_list_record_i_64_string(dynamic raw);
@@ -326,7 +330,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   IngestSession?
-      dco_decode_opt_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  dco_decode_opt_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     dynamic raw,
   );
 
@@ -355,6 +359,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_usize(dynamic raw);
 
   @protected
   Int64List? dco_decode_opt_list_prim_i_64_strict(dynamic raw);
@@ -432,55 +439,55 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   IngestSession
-      sse_decode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  sse_decode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     SseDeserializer deserializer,
   );
 
   @protected
   SearchHandle
-      sse_decode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  sse_decode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     SseDeserializer deserializer,
   );
 
   @protected
   IngestSession
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     SseDeserializer deserializer,
   );
 
   @protected
   SearchHandle
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     SseDeserializer deserializer,
   );
 
   @protected
   IngestSession
-      sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     SseDeserializer deserializer,
   );
 
   @protected
   IngestSession
-      sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     SseDeserializer deserializer,
   );
 
   @protected
   SearchHandle
-      sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     SseDeserializer deserializer,
   );
 
   @protected
   IngestSession
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     SseDeserializer deserializer,
   );
 
   @protected
   SearchHandle
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     SseDeserializer deserializer,
   );
 
@@ -575,6 +582,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UserIntent sse_decode_box_autoadd_user_intent(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer);
 
   @protected
   BufferStats sse_decode_buffer_stats(SseDeserializer deserializer);
@@ -734,7 +744,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(PlatformInt64, Float32List)>
-      sse_decode_list_record_i_64_list_prim_f_32_strict(
+  sse_decode_list_record_i_64_list_prim_f_32_strict(
     SseDeserializer deserializer,
   );
 
@@ -771,7 +781,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   IngestSession?
-      sse_decode_opt_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  sse_decode_opt_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     SseDeserializer deserializer,
   );
 
@@ -806,6 +816,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_usize(SseDeserializer deserializer);
 
   @protected
   Int64List? sse_decode_opt_list_prim_i_64_strict(SseDeserializer deserializer);
@@ -896,63 +909,63 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
-      sse_encode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  sse_encode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     IngestSession self,
     SseSerializer serializer,
   );
 
   @protected
   void
-      sse_encode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  sse_encode_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     SearchHandle self,
     SseSerializer serializer,
   );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     IngestSession self,
     SseSerializer serializer,
   );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     SearchHandle self,
     SseSerializer serializer,
   );
 
   @protected
   void
-      sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     IngestSession self,
     SseSerializer serializer,
   );
 
   @protected
   void
-      sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     IngestSession self,
     SseSerializer serializer,
   );
 
   @protected
   void
-      sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     SearchHandle self,
     SseSerializer serializer,
   );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     IngestSession self,
     SseSerializer serializer,
   );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     SearchHandle self,
     SseSerializer serializer,
   );
@@ -1076,6 +1089,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     UserIntent self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_buffer_stats(BufferStats self, SseSerializer serializer);
@@ -1337,7 +1353,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
-      sse_encode_opt_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  sse_encode_opt_AutoExplicit_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     IngestSession? self,
     SseSerializer serializer,
   );
@@ -1380,6 +1396,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_usize(BigInt? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_prim_i_64_strict(
@@ -1484,40 +1503,36 @@ class RustLibWire implements BaseWire {
   RustLibWire.fromExternalLibrary(ExternalLibrary lib);
 
   void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     int ptr,
-  ) =>
-          wasmModule
-              .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-            ptr,
-          );
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+        ptr,
+      );
 
   void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     int ptr,
-  ) =>
-          wasmModule
-              .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
-            ptr,
-          );
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+        ptr,
+      );
 
   void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     int ptr,
-  ) =>
-          wasmModule
-              .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-            ptr,
-          );
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+        ptr,
+      );
 
   void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     int ptr,
-  ) =>
-          wasmModule
-              .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
-            ptr,
-          );
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+        ptr,
+      );
 }
 
 @JS('wasm_bindgen')
@@ -1527,22 +1542,22 @@ external RustLibWasmModule get wasmModule;
 @anonymous
 extension type RustLibWasmModule._(JSObject _) implements JSObject {
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     int ptr,
   );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerIngestSession(
     int ptr,
   );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     int ptr,
   );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSearchHandle(
     int ptr,
   );
 }

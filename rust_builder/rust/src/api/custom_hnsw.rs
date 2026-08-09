@@ -1,4 +1,6 @@
-use crate::api::vector_quant::{cosine_similarity_vabq, quantize_f32_to_vabq, QueryVABQ};
+use crate::api::vector_quant::{
+    cosine_similarity_active_quantized, quantize_f32_for_active_profile, ActiveQuantizedQuery,
+};
 use anyhow::{Context, Result};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use flutter_rust_bridge::frb;
@@ -308,8 +310,14 @@ impl HnswBuilder {
             } else {
                 self.nodes[0].vector.len()
             };
+            if self.nodes.iter().any(|node| node.vector.len() != f32_dim) {
+                anyhow::bail!("HNSW index contains mixed embedding dimensions");
+            }
             let blob_len = if f32_dim > 0 {
-                quantize_f32_to_vabq(&self.nodes[0].vector).0.len()
+                quantize_f32_for_active_profile(&self.nodes[0].vector)
+                    .map_err(|error| anyhow::anyhow!(error.to_string()))?
+                    .0
+                    .len()
             } else {
                 0
             };
@@ -337,8 +345,9 @@ impl HnswBuilder {
                 // Write Node Data
                 for node in &self.nodes {
                     writer.write_i64::<LittleEndian>(node.id)?;
-                    let (vabq_blob, _scale) = quantize_f32_to_vabq(&node.vector);
-                    writer.write_all(&vabq_blob)?;
+                    let (quantized_blob, _scale) = quantize_f32_for_active_profile(&node.vector)
+                        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+                    writer.write_all(&quantized_blob)?;
                     writer.write_u8(node.max_layer as u8)?;
                     for lc in (0..=node.max_layer).rev() {
                         writer.write_u16::<LittleEndian>(node.connections[lc].len() as u16)?;
@@ -423,23 +432,27 @@ impl MmapHnswSearcher {
         bytes
     }
 
-    pub fn search(&self, query_vabq: &QueryVABQ, ef: usize) -> Vec<(i64, f32)> {
-        let distance_fn = |offset: usize| -> f32 {
+    pub(crate) fn search(
+        &self,
+        query: &ActiveQuantizedQuery,
+        ef: usize,
+    ) -> Result<Vec<(i64, f32)>> {
+        let distance_fn = |offset: usize| -> Result<f32> {
             let vec = self.get_node_vector(offset);
-            cosine_similarity_vabq(query_vabq, vec)
+            Ok(1.0
+                - cosine_similarity_active_quantized(query, vec)
+                    .map_err(|error| anyhow::anyhow!(error.to_string()))?)
         };
 
         if self.num_nodes == 0 {
-            return Vec::new();
+            return Ok(Vec::new());
         }
 
         let mut curr_ep = self.entry_point;
 
-        let ep_offset = self.get_node_offset(curr_ep);
-
         // Phase 1: greedy search down to layer 1
         for lc in (1..=self.max_layer).rev() {
-            let mut curr_dist = distance_fn(ep_offset);
+            let mut curr_dist = distance_fn(self.get_node_offset(curr_ep))?;
             let mut changed = true;
 
             while changed {
@@ -461,7 +474,7 @@ impl MmapHnswSearcher {
                 for _ in 0..num_conn {
                     let neighbor_idx = cursor.read_u32::<LittleEndian>().unwrap();
                     let n_offset = self.get_node_offset(neighbor_idx);
-                    let d = distance_fn(n_offset);
+                    let d = distance_fn(n_offset)?;
                     if d < curr_dist {
                         curr_dist = d;
                         curr_ep = neighbor_idx;
@@ -479,7 +492,7 @@ impl MmapHnswSearcher {
         visited.insert(curr_ep);
 
         let ep_offset = self.get_node_offset(curr_ep);
-        let dist = distance_fn(ep_offset);
+        let dist = distance_fn(ep_offset)?;
 
         candidates.push(std::cmp::Reverse(DistNode {
             index: curr_ep as usize,
@@ -520,7 +533,7 @@ impl MmapHnswSearcher {
 
                 if visited.insert(neighbor_idx) {
                     let n_offset = self.get_node_offset(neighbor_idx);
-                    let d = distance_fn(n_offset);
+                    let d = distance_fn(n_offset)?;
 
                     let furthest_dist = if top_results.len() >= ef {
                         top_results.sort_by(|a, b| a.dist.partial_cmp(&b.dist).unwrap());
@@ -548,7 +561,7 @@ impl MmapHnswSearcher {
         }
 
         // Map indices to DataIDs
-        top_results
+        Ok(top_results
             .into_iter()
             .map(|n| {
                 let offset = self.get_node_offset(n.index as u32);
@@ -557,6 +570,157 @@ impl MmapHnswSearcher {
                     .unwrap();
                 (data_id, n.dist)
             })
-            .collect()
+            .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::vector_quant::{active_quantized_query, configure_active_vabq_profile};
+    use tempfile::tempdir;
+
+    #[test]
+    fn mmap_search_preserves_builder_top_result_after_save() {
+        let query: Vec<f32> = (0..384)
+            .map(|index| if index % 2 == 0 { 1.0 } else { -0.5 })
+            .collect();
+        let near = query.clone();
+        let far: Vec<f32> = query.iter().map(|value| -*value).collect();
+
+        let mut builder = HnswBuilder::new(16, 32, 100);
+        builder.nodes = vec![
+            Node {
+                id: 1,
+                vector: near,
+                max_layer: 0,
+                connections: vec![vec![1]],
+            },
+            Node {
+                id: 2,
+                vector: far,
+                max_layer: 0,
+                connections: vec![vec![0]],
+            },
+        ];
+        builder.entry_point = Some(1);
+        builder.max_layer = 0;
+
+        let builder_results = builder.search(&query, 2);
+        assert_eq!(builder_results.first().map(|result| result.0), Some(1));
+
+        let directory = tempdir().unwrap();
+        let index_path = directory.path().join("parity.hnsw");
+        builder.save_to_disk(index_path.to_str().unwrap()).unwrap();
+
+        let searcher = MmapHnswSearcher::new(index_path.to_str().unwrap()).unwrap();
+        let active_query = active_quantized_query(&query).unwrap();
+        let mmap_results = searcher.search(&active_query, 2).unwrap();
+
+        assert_eq!(mmap_results.first().map(|result| result.0), Some(1));
+    }
+
+    #[test]
+    fn mmap_search_uses_current_entry_point_at_each_upper_layer() {
+        let mut query = vec![0.0f32; 384];
+        query[0] = 1.0;
+
+        let near = query.clone();
+        let mut middle = vec![0.0f32; 384];
+        middle[1] = 1.0;
+        let mut detour = vec![0.0f32; 384];
+        detour[0] = -0.5;
+        detour[1] = 0.866_025_4;
+        let far: Vec<f32> = query.iter().map(|value| -*value).collect();
+
+        let mut builder = HnswBuilder::new(16, 32, 100);
+        builder.nodes = vec![
+            Node {
+                id: 1,
+                vector: near,
+                max_layer: 0,
+                connections: vec![vec![]],
+            },
+            Node {
+                id: 2,
+                vector: middle,
+                max_layer: 2,
+                connections: vec![vec![0], vec![3], vec![2]],
+            },
+            Node {
+                id: 3,
+                vector: far,
+                max_layer: 2,
+                connections: vec![vec![1], vec![1], vec![1]],
+            },
+            Node {
+                id: 4,
+                vector: detour,
+                max_layer: 1,
+                connections: vec![vec![], vec![]],
+            },
+        ];
+        builder.entry_point = Some(2);
+        builder.max_layer = 2;
+
+        let directory = tempdir().unwrap();
+        let index_path = directory.path().join("current-entry-point.hnsw");
+        builder.save_to_disk(index_path.to_str().unwrap()).unwrap();
+
+        let searcher = MmapHnswSearcher::new(index_path.to_str().unwrap()).unwrap();
+        let active_query = active_quantized_query(&query).unwrap();
+        let results = searcher.search(&active_query, 1).unwrap();
+
+        assert_eq!(results.first().map(|result| result.0), Some(1));
+    }
+
+    #[test]
+    fn save_uses_q8_fallback_without_a_vabq_profile() {
+        configure_active_vabq_profile(None, 4).unwrap();
+        let mut builder = HnswBuilder::new(16, 32, 100);
+        builder.nodes = vec![Node {
+            id: 1,
+            vector: vec![1.0, 0.0, 0.0, 0.0],
+            max_layer: 0,
+            connections: vec![vec![]],
+        }];
+        builder.entry_point = Some(0);
+
+        let directory = tempdir().unwrap();
+        let index_path = directory.path().join("unsupported-profile.hnsw");
+        builder.save_to_disk(index_path.to_str().unwrap()).unwrap();
+        let searcher = MmapHnswSearcher::new(index_path.to_str().unwrap()).unwrap();
+        let query = active_quantized_query(&[1.0, 0.0, 0.0, 0.0]).unwrap();
+        assert_eq!(searcher.search(&query, 1).unwrap()[0].0, 1);
+    }
+
+    #[test]
+    fn bge_base_profile_survives_hnsw_save_and_load_without_q8_fallback() {
+        configure_active_vabq_profile(Some("bgeBaseEnV15".to_string()), 768).unwrap();
+        let query: Vec<f32> = (0..768)
+            .map(|index| if index % 2 == 0 { 1.0 } else { -0.5 })
+            .collect();
+        let mut builder = HnswBuilder::new(16, 32, 100);
+        builder.nodes = vec![Node {
+            id: 41,
+            vector: query.clone(),
+            max_layer: 0,
+            connections: vec![vec![]],
+        }];
+        builder.entry_point = Some(0);
+
+        let directory = tempdir().unwrap();
+        let index_path = directory.path().join("bge-base-vabq.hnsw");
+        builder.save_to_disk(index_path.to_str().unwrap()).unwrap();
+        let searcher = MmapHnswSearcher::new(index_path.to_str().unwrap()).unwrap();
+        assert_eq!(searcher.blob_len, 789);
+        let node_offset = searcher.get_node_offset(0);
+        assert_eq!(
+            &searcher.mmap[node_offset + 8..node_offset + 13],
+            &[0x02, 0x01, 0x00, 0x03, 0x04],
+        );
+        let active_query = active_quantized_query(&query).unwrap();
+        assert_eq!(searcher.search(&active_query, 1).unwrap()[0].0, 41);
+        configure_active_vabq_profile(None, 0).unwrap();
     }
 }

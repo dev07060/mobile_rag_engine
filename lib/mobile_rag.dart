@@ -45,7 +45,10 @@ import 'package:mobile_rag_engine/src/rust/api/hybrid_search.dart' as hybrid;
 
 // Export types for consumers
 export 'package:mobile_rag_engine/src/internal/embedding_fingerprint.dart'
-    show ClearAndRestartConfirmation, RagEmbeddingFingerprintLock, RagReembedProgress;
+    show
+        ClearAndRestartConfirmation,
+        RagEmbeddingFingerprintLock,
+        RagReembedProgress;
 export 'package:mobile_rag_engine/src/rust/api/migration_meta.dart'
     show MigrationAxes;
 export 'package:mobile_rag_engine/src/rust/api/source_rag.dart'
@@ -130,6 +133,7 @@ class MobileRag {
     int overlapChars = kDefaultOverlapChars,
     int? embeddingIntraOpNumThreads,
     ThreadUseLevel? threadLevel,
+    VabqProfile vabqProfile = VabqProfile.none,
     bool deferIndexWarmup = false,
     void Function(String status)? onProgress,
   }) async {
@@ -147,6 +151,7 @@ class MobileRag {
         overlapChars: overlapChars,
         embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
         threadLevel: threadLevel,
+        vabqProfile: vabqProfile,
         deferIndexWarmup: deferIndexWarmup,
       ),
       onProgress: onProgress,

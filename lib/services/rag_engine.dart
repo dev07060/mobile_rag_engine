@@ -73,6 +73,7 @@ import 'rag_config.dart';
 import 'source_rag_service.dart';
 import 'context_builder.dart';
 import '../src/rust/api/hybrid_search.dart' as hybrid;
+import '../src/rust/api/vabq_config.dart' as vabq_config;
 import '../src/rust/rust_library_loader.dart';
 
 /// Unified RAG engine with simplified initialization.
@@ -361,11 +362,23 @@ class RagEngine {
       intraOpNumThreads: threads,
     );
 
-    // 4. Initialize database connection pool
+    // 4. Probe the actual model output dimension and configure Rust before
+    // any database or MMAP write can occur. The host explicitly supplies the
+    // variance profile; the filename and dimension are never used to infer it.
+    onProgress?.call('Validating VABQ profile...');
+    final probe = await EmbeddingService.embed(_kFingerprintProbeText);
+    await vabq_config.configureVabqProfile(
+      profile: config.vabqProfile == VabqProfile.none
+          ? null
+          : vabqProfileWireName(config.vabqProfile),
+      embeddingDimension: probe.length,
+    );
+
+    // 5. Initialize database connection pool
     onProgress?.call('Initializing connection pool...');
     await initDbPool(dbPath: dbPath, maxSize: 4);
 
-    // 5. Initialize RAG service
+    // 6. Initialize RAG service
     onProgress?.call('Initializing database...');
     final ragService = SourceRagService(
       dbPath: dbPath,
@@ -375,16 +388,14 @@ class RagEngine {
     );
     await ragService.init(deferIndexWarmup: config.deferIndexWarmup);
 
-    // 6. Resolve the embedding fingerprint gate. The probe is a single
-    //    one-shot embed used purely to read the model's output dimension;
-    //    the result is discarded. Must happen AFTER migration_meta exists
-    //    (created by ragService.init via init_source_db).
+    // 7. Resolve the embedding fingerprint gate. The probe was also used to
+    //    validate the explicit VABQ profile before persistence was initialized.
+    //    Fingerprint resolution must happen AFTER migration_meta exists.
     onProgress?.call('Validating embedding fingerprint...');
-    final probe = await EmbeddingService.embed(_kFingerprintProbeText);
     final currentFingerprint = computeEmbeddingFingerprint(
       modelBasename: embeddingModelBasename(modelPath),
       dim: probe.length,
-      quant: kDefaultEmbeddingQuant,
+      quant: embeddingQuantizationFingerprintAxis(config.vabqProfile),
     );
     final initialLock = await _resolveFingerprintGate(currentFingerprint);
     if (initialLock != null) {

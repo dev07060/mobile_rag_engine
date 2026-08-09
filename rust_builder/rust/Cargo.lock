@@ -2160,6 +2160,7 @@ version = "0.8.0"
 dependencies = [
  "android_logger 0.13.3",
  "anyhow",
+ "base64 0.22.1",
  "bincode",
  "byteorder",
  "crc32fast",
@@ -2181,6 +2182,7 @@ dependencies = [
  "regex",
  "rusqlite",
  "serde",
+ "serde_json",
  "sha2",
  "tempfile",
  "text-splitter",

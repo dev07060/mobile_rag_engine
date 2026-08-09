@@ -28,6 +28,6 @@ pub(crate) mod simple_rag;
 pub mod source_rag;
 pub mod tokenizer;
 pub mod user_intent;
+pub mod vabq_config;
 pub(crate) mod vector_math;
-#[cfg(feature = "vector_quant_i8")]
 pub(crate) mod vector_quant;

@@ -6,11 +6,39 @@
 /// produces on each boot.
 library;
 
+/// Explicit host selection for the variance map used by VABQ.
+///
+/// [none] is deliberately the default: an embedding dimension or model asset
+/// filename is not a reliable model identity and must never enable VABQ.
+enum VabqProfile {
+  none,
+  allMiniLmL6V2,
+  allMpnetBaseV2,
+  bgeBaseEnV15,
+  bgeM3,
+}
+
+/// Stable host-to-Rust wire value for [VabqProfile].
+String vabqProfileWireName(VabqProfile profile) => switch (profile) {
+      VabqProfile.none => 'none',
+      VabqProfile.allMiniLmL6V2 => 'allMiniLmL6V2',
+      VabqProfile.allMpnetBaseV2 => 'allMpnetBaseV2',
+      VabqProfile.bgeBaseEnV15 => 'bgeBaseEnV15',
+      VabqProfile.bgeM3 => 'bgeM3',
+    };
+
+/// Quantization axis persisted inside an embedding fingerprint.
+///
+/// Profile changes deliberately take the same re-embedding-lock path as model
+/// or dimension changes.
+String embeddingQuantizationFingerprintAxis(VabqProfile profile) =>
+    'f32+vabq:${vabqProfileWireName(profile)}';
+
 /// Wire format produced by [computeEmbeddingFingerprint].
 ///
 /// `{modelBasename}|{dim}|{quant}`
 ///
-/// Example: `my-model.onnx|384|f32`.
+/// Example: `my-model.onnx|384|f32+vabq:allMiniLmL6V2`.
 ///
 /// The basename is taken from `modelPath` rather than its bytes so a host
 /// app that replaces the file in-place forces a mismatch (same path, new
@@ -50,13 +78,6 @@ String embeddingModelBasename(String modelPath) {
   final cut = lastSlash > lastBackslash ? lastSlash : lastBackslash;
   return cut >= 0 ? modelPath.substring(cut + 1) : modelPath;
 }
-
-/// Default quantization tag emitted by the engine binary's default build.
-///
-/// Phase P2-5 may want to plumb the actual build flag (`vector_quant_i8`)
-/// through here; for P0-2 every build serves `f32` embeddings on the search
-/// hot path, so a single constant is honest and stable.
-const String kDefaultEmbeddingQuant = 'f32';
 
 /// Must exactly match `EMBEDDING_CLEAR_CONFIRMATION` in
 /// `rust_builder/rust/src/api/migration_meta.rs`. Duplicated here because the

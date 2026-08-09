@@ -188,8 +188,9 @@ pub fn search_hnsw_slice(
     {
         let index_guard = HNSW_INDEX.read().unwrap();
         if let Some(index) = index_guard.as_ref() {
-            let query_vabq = crate::api::vector_quant::QueryVABQ::new(query_embedding);
-            neighbors = Some(index.search(&query_vabq, ef_search));
+            let query = crate::api::vector_quant::active_quantized_query(query_embedding)
+                .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            neighbors = Some(index.search(&query, ef_search)?);
         }
     }
 
@@ -223,6 +224,16 @@ pub fn is_hnsw_index_loaded() -> bool {
     }
     let builder_guard = HNSW_BUILDER.read().unwrap();
     builder_guard.is_some()
+}
+
+/// Number of nodes in the currently loaded persisted HNSW index. Callers use
+/// this to reject a cache whose header does not cover every eligible DB row.
+pub fn loaded_hnsw_node_count() -> Option<usize> {
+    HNSW_INDEX
+        .read()
+        .unwrap()
+        .as_ref()
+        .map(|searcher| searcher.get_num_nodes() as usize)
 }
 
 pub fn clear_hnsw_index() {

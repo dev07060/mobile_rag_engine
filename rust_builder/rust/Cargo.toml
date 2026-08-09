@@ -75,6 +75,8 @@ oslog = "0.2"
 [dev-dependencies]
 gag = "1.0"
 tempfile = "3.10"
+base64 = "0.22"
+serde_json = "1.0"
 # Lean config: skip plotters/html report deps; we only need timing numbers.
 criterion = { version = "0.5", default-features = false }
 

@@ -8,10 +8,21 @@ use std::fs::{File, OpenOptions};
 use std::path::Path;
 use std::sync::RwLock;
 
+#[cfg(test)]
+use std::sync::atomic::{AtomicBool, Ordering};
+
 const MAGIC_HEADER: &[u8; 4] = b"VEC1";
 const HEADER_SIZE: usize = 4;
 
 pub static MMAP_STORE: Lazy<RwLock<Option<MmapVectorStore>>> = Lazy::new(|| RwLock::new(None));
+
+#[cfg(test)]
+static FAIL_NEXT_APPEND: AtomicBool = AtomicBool::new(false);
+
+#[cfg(test)]
+pub(crate) fn fail_next_append_for_test() {
+    FAIL_NEXT_APPEND.store(true, Ordering::SeqCst);
+}
 
 pub struct MmapVectorStore {
     file: File,
@@ -101,6 +112,10 @@ impl MmapVectorStore {
     }
 
     pub(crate) fn append(&mut self, vector: &[u8]) -> Result<usize> {
+        #[cfg(test)]
+        if FAIL_NEXT_APPEND.swap(false, Ordering::SeqCst) {
+            anyhow::bail!("injected mmap append failure");
+        }
         let len = vector.len();
         let total_len = 8 + len;
 
