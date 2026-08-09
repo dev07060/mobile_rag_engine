@@ -43,6 +43,7 @@ library;
 
 // Primary API (Singleton Pattern)
 export 'mobile_rag.dart';
+export 'model_pack.dart';
 
 // High-level services (for advanced usage)
 export 'services/rag_config.dart';

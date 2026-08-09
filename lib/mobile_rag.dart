@@ -29,6 +29,8 @@ import 'package:mobile_rag_engine/src/internal/defaults.dart';
 import 'package:mobile_rag_engine/services/rag_config.dart';
 import 'package:mobile_rag_engine/services/rag_engine.dart';
 import 'package:mobile_rag_engine/services/context_builder.dart';
+import 'package:mobile_rag_engine/model_pack.dart';
+import 'package:mobile_rag_engine/src/model_pack/model_pack_resolver.dart';
 import 'package:mobile_rag_engine/services/source_rag_service.dart';
 // Explicitly import SourceEntry so it can be used in types
 import 'package:mobile_rag_engine/src/rust/api/migration_meta.dart'
@@ -126,8 +128,9 @@ class MobileRag {
   /// );
   /// ```
   static Future<void> initialize({
-    required String tokenizerAsset,
-    required String modelAsset,
+    String? tokenizerAsset,
+    String? modelAsset,
+    RagModelPack? modelPack,
     String? databaseName,
     int maxChunkChars = kDefaultMaxChunkChars,
     int overlapChars = kDefaultOverlapChars,
@@ -142,10 +145,38 @@ class MobileRag {
       return;
     }
 
-    _engine = await RagEngine.initialize(
-      config: RagConfig.fromAssets(
-        tokenizerAsset: tokenizerAsset,
-        modelAsset: modelAsset,
+    final hasLegacyAssets = tokenizerAsset != null || modelAsset != null;
+    if (modelPack != null && hasLegacyAssets) {
+      throw ArgumentError(
+        'Specify either modelPack or tokenizerAsset/modelAsset, not both.',
+      );
+    }
+    if (modelPack != null && vabqProfile != VabqProfile.none) {
+      throw ArgumentError('Model Pack v1 is fixed to Q8_0 and does not support VABQ profiles.');
+    }
+    if (modelPack == null && (tokenizerAsset == null || modelAsset == null)) {
+      throw ArgumentError(
+        'Specify modelPack or both tokenizerAsset and modelAsset.',
+      );
+    }
+    final RagConfig config;
+    if (modelPack != null) {
+      final resolved = await const RagModelPackResolver().resolve(modelPack);
+      config = RagConfig.fromPreparedFiles(
+        tokenizerPath: resolved.tokenizerPath,
+        modelPath: resolved.modelPath,
+        expectedEmbeddingDimension: resolved.manifest.embeddingDimension,
+        databaseName: databaseName,
+        maxChunkChars: maxChunkChars,
+        overlapChars: overlapChars,
+        embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
+        threadLevel: threadLevel,
+        deferIndexWarmup: deferIndexWarmup,
+      );
+    } else {
+      config = RagConfig.fromAssets(
+        tokenizerAsset: tokenizerAsset!,
+        modelAsset: modelAsset!,
         databaseName: databaseName,
         maxChunkChars: maxChunkChars,
         overlapChars: overlapChars,
@@ -153,7 +184,10 @@ class MobileRag {
         threadLevel: threadLevel,
         vabqProfile: vabqProfile,
         deferIndexWarmup: deferIndexWarmup,
-      ),
+      );
+    }
+    _engine = await RagEngine.initialize(
+      config: config,
       onProgress: onProgress,
     );
     _instance = MobileRag._();
@@ -236,8 +270,7 @@ class MobileRag {
   Future<void> reembedAll({
     void Function(RagReembedProgress progress)? onProgress,
     int batchSize = 32,
-  }) =>
-      _engine!.reembedAll(onProgress: onProgress, batchSize: batchSize);
+  }) => _engine!.reembedAll(onProgress: onProgress, batchSize: batchSize);
 
   /// Discard every on-device embedding (chunks table) and rotate the
   /// fingerprint baseline to the currently loaded model.
@@ -251,8 +284,7 @@ class MobileRag {
   /// Throws [StateError] when no mismatch is active.
   Future<void> clearAndRestart({
     required ClearAndRestartConfirmation confirm,
-  }) =>
-      _engine!.clearAndRestart(confirm: confirm);
+  }) => _engine!.clearAndRestart(confirm: confirm);
 
   /// Up-to-date count of chunks still tagged with a non-current fingerprint.
   /// Safe to call while [reembedAll] is running.
@@ -284,16 +316,15 @@ class MobileRag {
     ChunkingStrategy? strategy,
     Duration? chunkDelay,
     void Function(int done, int total)? onProgress,
-  }) =>
-      _engine!.addDocument(
-        content,
-        metadata: metadata,
-        name: name,
-        filePath: filePath,
-        strategy: strategy,
-        chunkDelay: chunkDelay,
-        onProgress: onProgress,
-      );
+  }) => _engine!.addDocument(
+    content,
+    metadata: metadata,
+    name: name,
+    filePath: filePath,
+    strategy: strategy,
+    chunkDelay: chunkDelay,
+    onProgress: onProgress,
+  );
 
   Future<SourceAddResult> addDocumentUtf8(
     Uint8List bytes, {
@@ -302,15 +333,14 @@ class MobileRag {
     ChunkingStrategy? strategy,
     Duration? chunkDelay,
     void Function(int done, int total)? onProgress,
-  }) =>
-      _engine!.addDocumentUtf8(
-        bytes,
-        metadata: metadata,
-        name: name,
-        strategy: strategy,
-        chunkDelay: chunkDelay,
-        onProgress: onProgress,
-      );
+  }) => _engine!.addDocumentUtf8(
+    bytes,
+    metadata: metadata,
+    name: name,
+    strategy: strategy,
+    chunkDelay: chunkDelay,
+    onProgress: onProgress,
+  );
 
   Future<SourceAddResult> addDocumentFromFile(
     String filePath, {
@@ -319,15 +349,14 @@ class MobileRag {
     ChunkingStrategy? strategy,
     Duration? chunkDelay,
     void Function(int done, int total)? onProgress,
-  }) =>
-      _engine!.addDocumentFromFile(
-        filePath,
-        metadata: metadata,
-        name: name,
-        strategy: strategy,
-        chunkDelay: chunkDelay,
-        onProgress: onProgress,
-      );
+  }) => _engine!.addDocumentFromFile(
+    filePath,
+    metadata: metadata,
+    name: name,
+    strategy: strategy,
+    chunkDelay: chunkDelay,
+    onProgress: onProgress,
+  );
 
   /// Get a list of all stored sources.
   Future<List<SourceEntry>> listSources() => _engine!.listSources();
@@ -353,12 +382,11 @@ class MobileRag {
     required int sourceId,
     required int minIndex,
     required int maxIndex,
-  }) =>
-      _engine!.getAdjacentChunks(
-        sourceId: sourceId,
-        minIndex: minIndex,
-        maxIndex: maxIndex,
-      );
+  }) => _engine!.getAdjacentChunks(
+    sourceId: sourceId,
+    minIndex: minIndex,
+    maxIndex: maxIndex,
+  );
 
   /// Get the number of chunks for a specific source.
   Future<int> getSourceChunkCount(int sourceId) =>
@@ -379,16 +407,15 @@ class MobileRag {
     int adjacentChunks = 0,
     bool singleSourceMode = false,
     List<int>? sourceIds,
-  }) =>
-      _engine!.search(
-        query,
-        topK: topK,
-        tokenBudget: tokenBudget,
-        strategy: strategy,
-        adjacentChunks: adjacentChunks,
-        singleSourceMode: singleSourceMode,
-        sourceIds: sourceIds,
-      );
+  }) => _engine!.search(
+    query,
+    topK: topK,
+    tokenBudget: tokenBudget,
+    strategy: strategy,
+    adjacentChunks: adjacentChunks,
+    singleSourceMode: singleSourceMode,
+    sourceIds: sourceIds,
+  );
 
   Future<SearchMetaResult> searchMeta(
     String query, {
@@ -397,15 +424,14 @@ class MobileRag {
     double bm25Weight = kDefaultBm25Weight,
     List<int>? sourceIds,
     int adjacentChunks = 0,
-  }) =>
-      _engine!.searchMeta(
-        query,
-        topK: topK,
-        vectorWeight: vectorWeight,
-        bm25Weight: bm25Weight,
-        sourceIds: sourceIds,
-        adjacentChunks: adjacentChunks,
-      );
+  }) => _engine!.searchMeta(
+    query,
+    topK: topK,
+    vectorWeight: vectorWeight,
+    bm25Weight: bm25Weight,
+    sourceIds: sourceIds,
+    adjacentChunks: adjacentChunks,
+  );
 
   Future<AssembledContextV2> assembleContext({
     required SearchHandle searchHandle,
@@ -413,31 +439,28 @@ class MobileRag {
     ContextStrategy strategy = ContextStrategy.relevanceFirst,
     String separator = '\n\n---\n\n',
     bool singleSourceMode = false,
-  }) =>
-      _engine!.assembleContext(
-        searchHandle: searchHandle,
-        tokenBudget: tokenBudget,
-        strategy: strategy,
-        separator: separator,
-        singleSourceMode: singleSourceMode,
-      );
+  }) => _engine!.assembleContext(
+    searchHandle: searchHandle,
+    tokenBudget: tokenBudget,
+    strategy: strategy,
+    separator: separator,
+    singleSourceMode: singleSourceMode,
+  );
 
   Future<List<ChunkSearchResult>> hydrateChunks({
     required SearchHandle searchHandle,
     required List<int> chunkIds,
-  }) =>
-      _engine!.hydrateChunks(searchHandle: searchHandle, chunkIds: chunkIds);
+  }) => _engine!.hydrateChunks(searchHandle: searchHandle, chunkIds: chunkIds);
 
   Future<List<ChunkExcerptResult>> getChunkExcerpts({
     required SearchHandle searchHandle,
     required List<int> chunkIds,
     required int maxBytes,
-  }) =>
-      _engine!.getChunkExcerpts(
-        searchHandle: searchHandle,
-        chunkIds: chunkIds,
-        maxBytes: maxBytes,
-      );
+  }) => _engine!.getChunkExcerpts(
+    searchHandle: searchHandle,
+    chunkIds: chunkIds,
+    maxBytes: maxBytes,
+  );
 
   Future<int> deriveContextBudgetForPromptV2({
     required int fullPromptBudget,
@@ -446,15 +469,14 @@ class MobileRag {
     bool useStrictMode = true,
     int safetyMarginTokens = 0,
     int? fixedPromptOverheadTokens,
-  }) =>
-      _engine!.deriveContextBudgetForPromptV2(
-        fullPromptBudget: fullPromptBudget,
-        query: query,
-        systemInstruction: systemInstruction,
-        useStrictMode: useStrictMode,
-        safetyMarginTokens: safetyMarginTokens,
-        fixedPromptOverheadTokens: fixedPromptOverheadTokens,
-      );
+  }) => _engine!.deriveContextBudgetForPromptV2(
+    fullPromptBudget: fullPromptBudget,
+    query: query,
+    systemInstruction: systemInstruction,
+    useStrictMode: useStrictMode,
+    safetyMarginTokens: safetyMarginTokens,
+    fixedPromptOverheadTokens: fixedPromptOverheadTokens,
+  );
 
   /// Hybrid search combining vector and keyword (BM25) search.
   Future<List<hybrid.HybridSearchResult>> searchHybrid(
@@ -463,14 +485,13 @@ class MobileRag {
     double vectorWeight = kDefaultVectorWeight,
     double bm25Weight = kDefaultBm25Weight,
     List<int>? sourceIds,
-  }) =>
-      _engine!.searchHybrid(
-        query,
-        topK: topK,
-        vectorWeight: vectorWeight,
-        bm25Weight: bm25Weight,
-        sourceIds: sourceIds,
-      );
+  }) => _engine!.searchHybrid(
+    query,
+    topK: topK,
+    vectorWeight: vectorWeight,
+    bm25Weight: bm25Weight,
+    sourceIds: sourceIds,
+  );
 
   /// Hybrid search with context assembly for LLM.
   Future<RagSearchResult> searchHybridWithContext(
@@ -485,20 +506,19 @@ class MobileRag {
     List<int>? sourceIds,
     SearchHydrationMode hydrationMode = SearchHydrationMode.full,
     int previewMaxBytes = 512,
-  }) =>
-      _engine!.searchHybridWithContext(
-        query,
-        topK: topK,
-        tokenBudget: tokenBudget,
-        strategy: strategy,
-        adjacentChunks: adjacentChunks,
-        vectorWeight: vectorWeight,
-        bm25Weight: bm25Weight,
-        singleSourceMode: singleSourceMode,
-        sourceIds: sourceIds,
-        hydrationMode: hydrationMode,
-        previewMaxBytes: previewMaxBytes,
-      );
+  }) => _engine!.searchHybridWithContext(
+    query,
+    topK: topK,
+    tokenBudget: tokenBudget,
+    strategy: strategy,
+    adjacentChunks: adjacentChunks,
+    vectorWeight: vectorWeight,
+    bm25Weight: bm25Weight,
+    singleSourceMode: singleSourceMode,
+    sourceIds: sourceIds,
+    hydrationMode: hydrationMode,
+    previewMaxBytes: previewMaxBytes,
+  );
 
   /// Rebuild the HNSW index.
   ///
@@ -550,9 +570,9 @@ class CollectionRag {
   final String _collectionId;
 
   CollectionRag._(this._engine, String collectionId)
-      : _collectionId = collectionId.trim().isEmpty
-            ? SourceRagService.defaultCollectionId
-            : collectionId.trim();
+    : _collectionId = collectionId.trim().isEmpty
+          ? SourceRagService.defaultCollectionId
+          : collectionId.trim();
 
   String get collectionId => _collectionId;
 
@@ -568,17 +588,16 @@ class CollectionRag {
     ChunkingStrategy? strategy,
     Duration? chunkDelay,
     void Function(int done, int total)? onProgress,
-  }) =>
-      _engine.addDocument(
-        content,
-        metadata: metadata,
-        name: name,
-        filePath: filePath,
-        strategy: strategy,
-        chunkDelay: chunkDelay,
-        onProgress: onProgress,
-        collectionId: _collectionId,
-      );
+  }) => _engine.addDocument(
+    content,
+    metadata: metadata,
+    name: name,
+    filePath: filePath,
+    strategy: strategy,
+    chunkDelay: chunkDelay,
+    onProgress: onProgress,
+    collectionId: _collectionId,
+  );
 
   Future<SourceAddResult> addDocumentUtf8(
     Uint8List bytes, {
@@ -587,16 +606,15 @@ class CollectionRag {
     ChunkingStrategy? strategy,
     Duration? chunkDelay,
     void Function(int done, int total)? onProgress,
-  }) =>
-      _engine.addDocumentUtf8(
-        bytes,
-        metadata: metadata,
-        name: name,
-        strategy: strategy,
-        chunkDelay: chunkDelay,
-        onProgress: onProgress,
-        collectionId: _collectionId,
-      );
+  }) => _engine.addDocumentUtf8(
+    bytes,
+    metadata: metadata,
+    name: name,
+    strategy: strategy,
+    chunkDelay: chunkDelay,
+    onProgress: onProgress,
+    collectionId: _collectionId,
+  );
 
   Future<SourceAddResult> addDocumentFromFile(
     String filePath, {
@@ -605,16 +623,15 @@ class CollectionRag {
     ChunkingStrategy? strategy,
     Duration? chunkDelay,
     void Function(int done, int total)? onProgress,
-  }) =>
-      _engine.addDocumentFromFile(
-        filePath,
-        metadata: metadata,
-        name: name,
-        strategy: strategy,
-        chunkDelay: chunkDelay,
-        onProgress: onProgress,
-        collectionId: _collectionId,
-      );
+  }) => _engine.addDocumentFromFile(
+    filePath,
+    metadata: metadata,
+    name: name,
+    strategy: strategy,
+    chunkDelay: chunkDelay,
+    onProgress: onProgress,
+    collectionId: _collectionId,
+  );
 
   Future<List<SourceEntry>> listSources() =>
       _engine.listSources(collectionId: _collectionId);
@@ -630,17 +647,16 @@ class CollectionRag {
     int adjacentChunks = 0,
     bool singleSourceMode = false,
     List<int>? sourceIds,
-  }) =>
-      _engine.search(
-        query,
-        topK: topK,
-        tokenBudget: tokenBudget,
-        strategy: strategy,
-        adjacentChunks: adjacentChunks,
-        singleSourceMode: singleSourceMode,
-        sourceIds: sourceIds,
-        collectionId: _collectionId,
-      );
+  }) => _engine.search(
+    query,
+    topK: topK,
+    tokenBudget: tokenBudget,
+    strategy: strategy,
+    adjacentChunks: adjacentChunks,
+    singleSourceMode: singleSourceMode,
+    sourceIds: sourceIds,
+    collectionId: _collectionId,
+  );
 
   Future<SearchMetaResult> searchMeta(
     String query, {
@@ -649,16 +665,15 @@ class CollectionRag {
     double bm25Weight = kDefaultBm25Weight,
     List<int>? sourceIds,
     int adjacentChunks = 0,
-  }) =>
-      _engine.searchMeta(
-        query,
-        topK: topK,
-        vectorWeight: vectorWeight,
-        bm25Weight: bm25Weight,
-        sourceIds: sourceIds,
-        adjacentChunks: adjacentChunks,
-        collectionId: _collectionId,
-      );
+  }) => _engine.searchMeta(
+    query,
+    topK: topK,
+    vectorWeight: vectorWeight,
+    bm25Weight: bm25Weight,
+    sourceIds: sourceIds,
+    adjacentChunks: adjacentChunks,
+    collectionId: _collectionId,
+  );
 
   Future<AssembledContextV2> assembleContext({
     required SearchHandle searchHandle,
@@ -666,37 +681,34 @@ class CollectionRag {
     ContextStrategy strategy = ContextStrategy.relevanceFirst,
     String separator = '\n\n---\n\n',
     bool singleSourceMode = false,
-  }) =>
-      _engine.assembleContext(
-        searchHandle: searchHandle,
-        tokenBudget: tokenBudget,
-        strategy: strategy,
-        separator: separator,
-        singleSourceMode: singleSourceMode,
-        collectionId: _collectionId,
-      );
+  }) => _engine.assembleContext(
+    searchHandle: searchHandle,
+    tokenBudget: tokenBudget,
+    strategy: strategy,
+    separator: separator,
+    singleSourceMode: singleSourceMode,
+    collectionId: _collectionId,
+  );
 
   Future<List<ChunkSearchResult>> hydrateChunks({
     required SearchHandle searchHandle,
     required List<int> chunkIds,
-  }) =>
-      _engine.hydrateChunks(
-        searchHandle: searchHandle,
-        chunkIds: chunkIds,
-        collectionId: _collectionId,
-      );
+  }) => _engine.hydrateChunks(
+    searchHandle: searchHandle,
+    chunkIds: chunkIds,
+    collectionId: _collectionId,
+  );
 
   Future<List<ChunkExcerptResult>> getChunkExcerpts({
     required SearchHandle searchHandle,
     required List<int> chunkIds,
     required int maxBytes,
-  }) =>
-      _engine.getChunkExcerpts(
-        searchHandle: searchHandle,
-        chunkIds: chunkIds,
-        maxBytes: maxBytes,
-        collectionId: _collectionId,
-      );
+  }) => _engine.getChunkExcerpts(
+    searchHandle: searchHandle,
+    chunkIds: chunkIds,
+    maxBytes: maxBytes,
+    collectionId: _collectionId,
+  );
 
   Future<int> deriveContextBudgetForPromptV2({
     required int fullPromptBudget,
@@ -705,16 +717,15 @@ class CollectionRag {
     bool useStrictMode = true,
     int safetyMarginTokens = 0,
     int? fixedPromptOverheadTokens,
-  }) =>
-      _engine.deriveContextBudgetForPromptV2(
-        fullPromptBudget: fullPromptBudget,
-        query: query,
-        systemInstruction: systemInstruction,
-        useStrictMode: useStrictMode,
-        safetyMarginTokens: safetyMarginTokens,
-        fixedPromptOverheadTokens: fixedPromptOverheadTokens,
-        collectionId: _collectionId,
-      );
+  }) => _engine.deriveContextBudgetForPromptV2(
+    fullPromptBudget: fullPromptBudget,
+    query: query,
+    systemInstruction: systemInstruction,
+    useStrictMode: useStrictMode,
+    safetyMarginTokens: safetyMarginTokens,
+    fixedPromptOverheadTokens: fixedPromptOverheadTokens,
+    collectionId: _collectionId,
+  );
 
   Future<List<hybrid.HybridSearchResult>> searchHybrid(
     String query, {
@@ -722,15 +733,14 @@ class CollectionRag {
     double vectorWeight = kDefaultVectorWeight,
     double bm25Weight = kDefaultBm25Weight,
     List<int>? sourceIds,
-  }) =>
-      _engine.searchHybrid(
-        query,
-        topK: topK,
-        vectorWeight: vectorWeight,
-        bm25Weight: bm25Weight,
-        sourceIds: sourceIds,
-        collectionId: _collectionId,
-      );
+  }) => _engine.searchHybrid(
+    query,
+    topK: topK,
+    vectorWeight: vectorWeight,
+    bm25Weight: bm25Weight,
+    sourceIds: sourceIds,
+    collectionId: _collectionId,
+  );
 
   Future<RagSearchResult> searchHybridWithContext(
     String query, {
@@ -744,21 +754,20 @@ class CollectionRag {
     List<int>? sourceIds,
     SearchHydrationMode hydrationMode = SearchHydrationMode.full,
     int previewMaxBytes = 512,
-  }) =>
-      _engine.searchHybridWithContext(
-        query,
-        topK: topK,
-        tokenBudget: tokenBudget,
-        strategy: strategy,
-        adjacentChunks: adjacentChunks,
-        vectorWeight: vectorWeight,
-        bm25Weight: bm25Weight,
-        singleSourceMode: singleSourceMode,
-        sourceIds: sourceIds,
-        hydrationMode: hydrationMode,
-        previewMaxBytes: previewMaxBytes,
-        collectionId: _collectionId,
-      );
+  }) => _engine.searchHybridWithContext(
+    query,
+    topK: topK,
+    tokenBudget: tokenBudget,
+    strategy: strategy,
+    adjacentChunks: adjacentChunks,
+    vectorWeight: vectorWeight,
+    bm25Weight: bm25Weight,
+    singleSourceMode: singleSourceMode,
+    sourceIds: sourceIds,
+    hydrationMode: hydrationMode,
+    previewMaxBytes: previewMaxBytes,
+    collectionId: _collectionId,
+  );
 
   Future<void> rebuildIndex({bool force = false}) =>
       _engine.rebuildIndex(force: force, collectionId: _collectionId);

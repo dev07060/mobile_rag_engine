@@ -1,8 +1,59 @@
 # Model Setup Guide
 
-This guide covers embedding model selection, download, and deployment strategies for `mobile_rag_engine`.
+This guide covers the recommended fixed Model Pack plus advanced custom ONNX
+assets for `mobile_rag_engine`. The Model Pack is installed during development,
+bundled with the app, and never downloaded at runtime.
+
+## Recommended: stable MiniLM Model Pack
+
+From your Flutter project, run:
+
+```bash
+dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en
+```
+
+It verifies the immutable revision and creates exactly:
+
+```text
+assets/mobile_rag/model.onnx
+assets/mobile_rag/tokenizer.json
+assets/mobile_rag/model-pack.json
+```
+
+The command does not edit `pubspec.yaml`. Declare the directory yourself:
+
+```yaml
+flutter:
+  assets:
+    - assets/mobile_rag/
+```
+
+Initialize from the manifest:
+
+```dart
+await MobileRag.initialize(
+  modelPack: const RagModelPack.asset(
+    'assets/mobile_rag/model-pack.json',
+  ),
+);
+```
+
+The sole v1 preset is `stable-minilm-l6-v2-arm64-en`: English, arm64,
+384-dimensional, Apache-2.0 MiniLM at revision
+`1110a243fdf4706b3f48f1d95db1a4f5529b4d41`. Vector storage is fixed to Q8_0;
+it never enables a VABQ profile. Use `--check` to verify a prior installation
+or `--repair` to replace a file that fails its SHA-256/length check.
+
+```bash
+dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en --check
+```
+
+The first success is adding documents, rebuilding the index, then searching for
+non-empty chunks/context. LLM generation is outside this package step.
 
 ---
+
+## Advanced / legacy custom ONNX assets
 
 ## Model Comparison
 
@@ -15,7 +66,7 @@ This guide covers embedding model selection, download, and deployment strategies
 
 ### Validated ONNX Artifacts
 
-- MiniLM: `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx`
+- MiniLM: `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/onnx/model_qint8_arm64.onnx`
 - BGE-m3: `https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx`
 
 These are the regression-tested artifacts for each patch release.
@@ -31,16 +82,16 @@ Validated examples during this compatibility patch: `all-MiniLM-L6-v2/onnx`, `in
 
 ## Download Instructions
 
-### all-MiniLM-L6-v2 (Default — English, Lightweight)
+### all-MiniLM-L6-v2
 
 ```bash
 mkdir -p assets && cd assets
 
 # Download INT8 quantized model for ARM64 (~23MB)
-curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx"
+curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/onnx/model_qint8_arm64.onnx"
 
 # Download tokenizer
-curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json"
+curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer.json"
 ```
 
 ### BGE-m3 (Multilingual — Korean, CJK, etc.)
@@ -79,42 +130,6 @@ flutter:
 **Cons:**
 - Increases app download size
 - App store limits (iOS: 4GB, Android Play: 150MB AAB)
-
-### Strategy 2: Download on First Launch (Recommended for >100MB)
-
-Download models from your CDN or Hugging Face on first app launch.
-
-```dart
-import 'dart:io';
-import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
-
-Future<void> downloadModelIfNeeded() async {
-  final dir = await getApplicationDocumentsDirectory();
-  final modelFile = File('${dir.path}/model.onnx');
-  
-  if (!await modelFile.exists()) {
-    final response = await http.get(Uri.parse(
-      'https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx'
-    ));
-    await modelFile.writeAsBytes(response.bodyBytes);
-  }
-}
-```
-
-**Pros:**
-- Smaller initial app size
-- Can update models without app update
-
-**Cons:**
-- Requires network on first launch
-- Need to handle download failures
-
-### Strategy 3: Hybrid (Best of Both Worlds)
-
-Bundle a small model (MiniLM) for immediate use, then download a larger model (BGE-m3) in background.
-
----
 
 ## Custom Model Export
 

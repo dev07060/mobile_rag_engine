@@ -44,7 +44,8 @@ import '../src/rust/api/source_rag.dart'
         AssembledContextV2;
 import '../src/rust/api/db_pool.dart';
 import '../src/rust/api/error.dart';
-import '../src/rust/api/migration_meta.dart' as migration_meta
+import '../src/rust/api/migration_meta.dart'
+    as migration_meta
     show
         EmbeddingFingerprintGate_Mismatch,
         EmbeddingFingerprintGate_Ok,
@@ -57,11 +58,13 @@ import '../src/rust/api/migration_meta.dart' as migration_meta
         finalizeEmbeddingReembed,
         readMigrationAxes,
         writeEmbeddingFingerprint;
-import '../src/rust/api/source_rag.dart' as rust_rag
+import '../src/rust/api/source_rag.dart'
+    as rust_rag
     show listChunksNeedingReembed, updateChunkReembedded;
 import '../src/internal/defaults.dart';
 import '../src/internal/embedding_fingerprint.dart';
 import '../src/internal/validation.dart';
+import '../model_pack.dart';
 
 export '../src/internal/embedding_fingerprint.dart'
     show
@@ -119,14 +122,12 @@ class RagEngine {
     required this.currentEmbeddingFingerprint,
     required RagEmbeddingFingerprintLock? initialLock,
     required bool deferIndexWarmup,
-  })  : _ragService = ragService,
-        _deferIndexWarmup = deferIndexWarmup,
-        _fingerprintLock = initialLock,
-        _collectionServices = {
-          SourceRagService.defaultCollectionId: ragService
-        },
-        _initializedCollections = {SourceRagService.defaultCollectionId},
-        _collectionInitInFlight = {};
+  }) : _ragService = ragService,
+       _deferIndexWarmup = deferIndexWarmup,
+       _fingerprintLock = initialLock,
+       _collectionServices = {SourceRagService.defaultCollectionId: ragService},
+       _initializedCollections = {SourceRagService.defaultCollectionId},
+       _collectionInitInFlight = {};
 
   /// Snapshot of the active embedding fingerprint lock (null when unlocked).
   ///
@@ -291,19 +292,26 @@ class RagEngine {
     // 1. Get app documents directory
     final dir = await getApplicationDocumentsDirectory();
     final dbPath = "${dir.path}/${config.databaseName ?? 'rag.sqlite'}";
-    final tokenizerPath = "${dir.path}/tokenizer.json";
-    final modelPath = "${dir.path}/${config.modelAsset.split('/').last}";
+    final tokenizerPath =
+        config.preparedTokenizerPath ?? "${dir.path}/tokenizer.json";
+    final modelPath =
+        config.preparedModelPath ??
+        "${dir.path}/${config.modelAsset.split('/').last}";
 
     // 2. Copy and initialize tokenizer
     onProgress?.call('Initializing tokenizer...');
-    await _copyAssetToFile(config.tokenizerAsset, tokenizerPath);
+    if (config.preparedTokenizerPath == null) {
+      await _copyAssetToFile(config.tokenizerAsset, tokenizerPath);
+    }
     await initTokenizer(tokenizerPath: tokenizerPath);
     final vocabSize = getVocabSize();
 
     // 3. Prepare ONNX embedding model (Copy logic)
     onProgress?.call('Preparing embedding model...');
     // Copy model asset to file (optimized for memory)
-    await _copyAssetToFile(config.modelAsset, modelPath);
+    if (config.preparedModelPath == null) {
+      await _copyAssetToFile(config.modelAsset, modelPath);
+    }
 
     final normalizedMaxChunkChars = normalizeMaxChunkChars(
       config.maxChunkChars,
@@ -357,66 +365,82 @@ class RagEngine {
     // OrtSessionOptions internally (native objects can't cross isolate
     // boundaries).
     onProgress?.call('Loading embedding model...');
-    await EmbeddingService.init(
-      modelPath: modelPath,
-      intraOpNumThreads: threads,
-    );
-
-    // 4. Probe the actual model output dimension and configure Rust before
-    // any database or MMAP write can occur. The host explicitly supplies the
-    // variance profile; the filename and dimension are never used to infer it.
-    onProgress?.call('Validating VABQ profile...');
-    final probe = await EmbeddingService.embed(_kFingerprintProbeText);
-    await vabq_config.configureVabqProfile(
-      profile: config.vabqProfile == VabqProfile.none
-          ? null
-          : vabqProfileWireName(config.vabqProfile),
-      embeddingDimension: probe.length,
-    );
-
-    // 5. Initialize database connection pool
-    onProgress?.call('Initializing connection pool...');
-    await initDbPool(dbPath: dbPath, maxSize: 4);
-
-    // 6. Initialize RAG service
-    onProgress?.call('Initializing database...');
-    final ragService = SourceRagService(
-      dbPath: dbPath,
-      modelPath: modelPath,
-      maxChunkChars: normalizedMaxChunkChars,
-      overlapChars: normalizedOverlapChars,
-    );
-    await ragService.init(deferIndexWarmup: config.deferIndexWarmup);
-
-    // 7. Resolve the embedding fingerprint gate. The probe was also used to
-    //    validate the explicit VABQ profile before persistence was initialized.
-    //    Fingerprint resolution must happen AFTER migration_meta exists.
-    onProgress?.call('Validating embedding fingerprint...');
-    final currentFingerprint = computeEmbeddingFingerprint(
-      modelBasename: embeddingModelBasename(modelPath),
-      dim: probe.length,
-      quant: embeddingQuantizationFingerprintAxis(config.vabqProfile),
-    );
-    final initialLock = await _resolveFingerprintGate(currentFingerprint);
-    if (initialLock != null) {
-      debugPrint(
-        '[RagEngine] Embedding fingerprint mismatch detected: '
-        'stored="${initialLock.stored}", current="$currentFingerprint", '
-        'remaining=${initialLock.remainingChunks}, '
-        'resume=${initialLock.resumeInProgress}. '
-        'Search/ingest will be locked until reembedAll() or clearAndRestart().',
+    var embeddingWorkerInitialized = false;
+    try {
+      await EmbeddingService.init(
+        modelPath: modelPath,
+        intraOpNumThreads: threads,
       );
-    }
+      embeddingWorkerInitialized = true;
 
-    onProgress?.call('Ready!');
-    return RagEngine._(
-      ragService: ragService,
-      dbPath: dbPath,
-      vocabSize: vocabSize,
-      currentEmbeddingFingerprint: currentFingerprint,
-      initialLock: initialLock,
-      deferIndexWarmup: config.deferIndexWarmup,
-    );
+      // 4. Probe the actual model output dimension and configure Rust before
+      // any database or MMAP write can occur. The host explicitly supplies the
+      // variance profile; the filename and dimension are never used to infer it.
+      onProgress?.call('Validating VABQ profile...');
+      final probe = await EmbeddingService.embed(_kFingerprintProbeText);
+      final expectedDimension = config.expectedEmbeddingDimension;
+      if (expectedDimension != null && probe.length != expectedDimension) {
+        RagModelPackManifest.validateExpectedEmbeddingDimension(
+          expectedDimension: expectedDimension,
+          actualDimension: probe.length,
+        );
+      }
+      await vabq_config.configureVabqProfile(
+        profile: config.vabqProfile == VabqProfile.none
+            ? null
+            : vabqProfileWireName(config.vabqProfile),
+        embeddingDimension: probe.length,
+      );
+
+      // 5. Initialize database connection pool
+      onProgress?.call('Initializing connection pool...');
+      await initDbPool(dbPath: dbPath, maxSize: 4);
+
+      // 6. Initialize RAG service
+      onProgress?.call('Initializing database...');
+      final ragService = SourceRagService(
+        dbPath: dbPath,
+        modelPath: modelPath,
+        maxChunkChars: normalizedMaxChunkChars,
+        overlapChars: normalizedOverlapChars,
+      );
+      await ragService.init(deferIndexWarmup: config.deferIndexWarmup);
+
+      // 7. Resolve the embedding fingerprint gate. The probe was also used to
+      //    validate the explicit VABQ profile before persistence was initialized.
+      //    Fingerprint resolution must happen AFTER migration_meta exists.
+      onProgress?.call('Validating embedding fingerprint...');
+      final currentFingerprint = computeEmbeddingFingerprint(
+        modelBasename: embeddingModelBasename(modelPath),
+        dim: probe.length,
+        quant: embeddingQuantizationFingerprintAxis(config.vabqProfile),
+      );
+      final initialLock = await _resolveFingerprintGate(currentFingerprint);
+      if (initialLock != null) {
+        debugPrint(
+          '[RagEngine] Embedding fingerprint mismatch detected: '
+          'stored="${initialLock.stored}", current="$currentFingerprint", '
+          'remaining=${initialLock.remainingChunks}, '
+          'resume=${initialLock.resumeInProgress}. '
+          'Search/ingest will be locked until reembedAll() or clearAndRestart().',
+        );
+      }
+
+      onProgress?.call('Ready!');
+      return RagEngine._(
+        ragService: ragService,
+        dbPath: dbPath,
+        vocabSize: vocabSize,
+        currentEmbeddingFingerprint: currentFingerprint,
+        initialLock: initialLock,
+        deferIndexWarmup: config.deferIndexWarmup,
+      );
+    } catch (_) {
+      if (embeddingWorkerInitialized) {
+        await EmbeddingService.disposeAsync();
+      }
+      rethrow;
+    }
   }
 
   /// One-shot probe text used solely to read the model's output dimension.
@@ -438,11 +462,11 @@ class RagEngine {
       case migration_meta.EmbeddingFingerprintGate_Ok():
         return null;
       case migration_meta.EmbeddingFingerprintGate_Mismatch(
-          stored: final stored,
-          current: final current,
-          remainingChunks: final remaining,
-          resumeInProgress: final resume,
-        ):
+        stored: final stored,
+        current: final current,
+        remainingChunks: final remaining,
+        resumeInProgress: final resume,
+      ):
         return RagEmbeddingFingerprintLock(
           stored: stored,
           current: current,
@@ -883,12 +907,11 @@ class RagEngine {
     required int sourceId,
     required int minIndex,
     required int maxIndex,
-  }) =>
-      _ragService.getAdjacentChunks(
-        sourceId: sourceId,
-        minIndex: minIndex,
-        maxIndex: maxIndex,
-      );
+  }) => _ragService.getAdjacentChunks(
+    sourceId: sourceId,
+    minIndex: minIndex,
+    maxIndex: maxIndex,
+  );
 
   /// Get the number of chunks for a specific source.
   ///

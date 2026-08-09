@@ -107,18 +107,37 @@ dependencies:
   mobile_rag_engine: ^0.20.0
 ```
 
-### 2. Download Model Files
+### 2. Install the verified Model Pack
 
 ```bash
-# Create assets folder
-mkdir -p assets && cd assets
-
-# Download all-MiniLM-L6-v2 model (INT8 quantized for ARM64, ~23MB)
-curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx"
-curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json"
+dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en
 ```
 
-> Need multilingual (Korean, CJK, etc.)? See [Model Setup Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md) for BGE-m3 and other model options.
+It writes `assets/mobile_rag/model.onnx`, `tokenizer.json`, and
+`model-pack.json`. Add the directory to your app assets:
+
+```yaml
+flutter:
+  assets:
+    - assets/mobile_rag/
+```
+
+Then initialize with one manifest:
+
+```dart
+await MobileRag.initialize(
+  modelPack: const RagModelPack.asset(
+    'assets/mobile_rag/model-pack.json',
+  ),
+);
+```
+
+The first success is add documents, rebuild the index, and get non-empty
+chunks/context from search. LLM generation remains your app's separate step.
+
+Need a custom or multilingual ONNX model? The original two-asset initializer
+remains available as an advanced/legacy path; see the
+[Model Setup Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md).
 
 ---
 
