@@ -24,6 +24,7 @@ dependencies:
   path_provider: ^2.1.5
   flutter_onnxruntime: ^1.8.0
   freezed_annotation: ^3.1.0
+  crypto: ^3.0.6
 
 dev_dependencies:
   flutter_test:
