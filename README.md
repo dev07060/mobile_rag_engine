@@ -165,6 +165,21 @@ if (!MobileRag.instance.isIndexReady) {
 }
 ```
 
+### Storage default and experimental VABQ
+
+The normal public initialization paths use Q8_0 storage by default. VABQ is
+an experimental, advanced opt-in: it is enabled only when you explicitly pass
+a matching `VabqProfile` to `MobileRag.initialize` or `RagConfig`. Model asset
+names and embedding dimensions never select VABQ automatically.
+
+```dart
+await MobileRag.initialize(
+  tokenizerAsset: 'assets/tokenizer.json',
+  modelAsset: 'assets/model.onnx',
+  vabqProfile: VabqProfile.allMiniLmL6V2, // explicit experimental opt-in
+);
+```
+
 ### Adding Documents and Searching
 
 ```dart

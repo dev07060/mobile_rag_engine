@@ -19,8 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 0.21.0-dev.1
 * **VABQ Research Engine**:
-  - Implemented the VABQ (Variance-aware Adaptive Block Quantization) logic for Pareto-optimal compression of vector embeddings.
-  - Reduced vector size by another 34% compared to Q8_0 while retaining over 98% Recall@10 accuracy.
+  - Added experimental Variance-aware Adaptive Block Quantization (VABQ) research support.
+  - VABQ is an explicit advanced opt-in; normal initialization continues to use Q8_0 storage by default. This research entry does not make general speed, memory, or retrieval-quality claims relative to Q8_0.
 
 ## 0.20.0
 * **Block-wise Quantization**:
