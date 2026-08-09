@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.20.0-dev.11
+* **Compatibility**: Align the native companion with the committed Flutter Rust Bridge 2.11.1 bindings, including the required content-hash ABI symbol.
+
 ## 0.20.0-dev.5
 * **Bug Fix**: Fixed a `PanicException` during Phase 2 of HNSW search by adding a missing cursor offset skip for `blob_len` (vector data) before reading `node_max_layer`.
 
