@@ -24,26 +24,24 @@ Future<List<HybridSearchResult>> searchHybrid({
   required int topK,
   RrfConfig? config,
   SearchFilter? filter,
-}) =>
-    RustLib.instance.api.crateApiHybridSearchSearchHybrid(
-      queryText: queryText,
-      queryEmbedding: queryEmbedding,
-      topK: topK,
-      config: config,
-      filter: filter,
-    );
+}) => RustLib.instance.api.crateApiHybridSearchSearchHybrid(
+  queryText: queryText,
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+  config: config,
+  filter: filter,
+);
 
 /// Simplified hybrid search returning content strings only.
 Future<List<String>> searchHybridSimple({
   required String queryText,
   required List<double> queryEmbedding,
   required int topK,
-}) =>
-    RustLib.instance.api.crateApiHybridSearchSearchHybridSimple(
-      queryText: queryText,
-      queryEmbedding: queryEmbedding,
-      topK: topK,
-    );
+}) => RustLib.instance.api.crateApiHybridSearchSearchHybridSimple(
+  queryText: queryText,
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
 
 /// Search with custom weights (vector_weight + bm25_weight = 1.0 recommended).
 Future<List<HybridSearchResult>> searchHybridWeighted({
@@ -52,14 +50,13 @@ Future<List<HybridSearchResult>> searchHybridWeighted({
   required int topK,
   required double vectorWeight,
   required double bm25Weight,
-}) =>
-    RustLib.instance.api.crateApiHybridSearchSearchHybridWeighted(
-      queryText: queryText,
-      queryEmbedding: queryEmbedding,
-      topK: topK,
-      vectorWeight: vectorWeight,
-      bm25Weight: bm25Weight,
-    );
+}) => RustLib.instance.api.crateApiHybridSearchSearchHybridWeighted(
+  queryText: queryText,
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+  vectorWeight: vectorWeight,
+  bm25Weight: bm25Weight,
+);
 
 class HybridSearchResult {
   final PlatformInt64 docId;

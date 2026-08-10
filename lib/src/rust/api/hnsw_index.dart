@@ -11,8 +11,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 Future<void> buildHnswIndex({
   required List<(PlatformInt64, Float32List)> points,
-}) =>
-    RustLib.instance.api.crateApiHnswIndexBuildHnswIndex(points: points);
+}) => RustLib.instance.api.crateApiHnswIndexBuildHnswIndex(points: points);
 
 /// Save HNSW index to disk.
 Future<void> saveHnswIndex({required String basePath}) =>
@@ -25,23 +24,26 @@ Future<bool> loadHnswIndex({required String basePath}) =>
 Future<List<HnswSearchResult>> searchHnsw({
   required List<double> queryEmbedding,
   required BigInt topK,
-}) =>
-    RustLib.instance.api.crateApiHnswIndexSearchHnsw(
-      queryEmbedding: queryEmbedding,
-      topK: topK,
-    );
+}) => RustLib.instance.api.crateApiHnswIndexSearchHnsw(
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
 
 Future<List<HnswSearchResult>> searchHnswSlice({
   required List<double> queryEmbedding,
   required BigInt topK,
-}) =>
-    RustLib.instance.api.crateApiHnswIndexSearchHnswSlice(
-      queryEmbedding: queryEmbedding,
-      topK: topK,
-    );
+}) => RustLib.instance.api.crateApiHnswIndexSearchHnswSlice(
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
 
 Future<bool> isHnswIndexLoaded() =>
     RustLib.instance.api.crateApiHnswIndexIsHnswIndexLoaded();
+
+/// Number of nodes in the currently loaded persisted HNSW index. Callers use
+/// this to reject a cache whose header does not cover every eligible DB row.
+Future<BigInt?> loadedHnswNodeCount() =>
+    RustLib.instance.api.crateApiHnswIndexLoadedHnswNodeCount();
 
 Future<void> clearHnswIndex() =>
     RustLib.instance.api.crateApiHnswIndexClearHnswIndex();
@@ -62,11 +64,10 @@ class EmbeddingPoint {
   static Future<EmbeddingPoint> newInstance({
     required PlatformInt64 id,
     required List<double> embedding,
-  }) =>
-      RustLib.instance.api.crateApiHnswIndexEmbeddingPointNew(
-        id: id,
-        embedding: embedding,
-      );
+  }) => RustLib.instance.api.crateApiHnswIndexEmbeddingPointNew(
+    id: id,
+    embedding: embedding,
+  );
 
   @override
   int get hashCode => id.hashCode ^ embedding.hashCode ^ norm.hashCode;

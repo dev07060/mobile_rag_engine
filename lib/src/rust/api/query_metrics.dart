@@ -61,7 +61,7 @@ class QueryContentReadStats {
       .crateApiQueryMetricsQueryContentReadStatsContentBytesTotal(that: this);
 
   Future<BigInt> hydrationContentBytesTotal() => RustLib.instance.api
-          .crateApiQueryMetricsQueryContentReadStatsHydrationContentBytesTotal(
+      .crateApiQueryMetricsQueryContentReadStatsHydrationContentBytesTotal(
         that: this,
       );
 

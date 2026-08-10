@@ -27,10 +27,9 @@ Future<MigrationAxes> readMigrationAxes() =>
 /// migration plan).
 Future<EmbeddingFingerprintGate> detectEmbeddingFingerprintGate({
   required String currentFingerprint,
-}) =>
-    RustLib.instance.api.crateApiMigrationMetaDetectEmbeddingFingerprintGate(
-      currentFingerprint: currentFingerprint,
-    );
+}) => RustLib.instance.api.crateApiMigrationMetaDetectEmbeddingFingerprintGate(
+  currentFingerprint: currentFingerprint,
+);
 
 /// Record the engine's current model fingerprint as the persisted baseline.
 ///
@@ -43,7 +42,8 @@ Future<EmbeddingFingerprintGate> detectEmbeddingFingerprintGate({
 /// Refuses to overwrite a non-empty baseline. Use the reembed/clear flows
 /// to rotate an existing fingerprint instead.
 Future<void> writeEmbeddingFingerprint({required String fingerprint}) => RustLib
-    .instance.api
+    .instance
+    .api
     .crateApiMigrationMetaWriteEmbeddingFingerprint(fingerprint: fingerprint);
 
 /// Begin a reembed-to-`target_fingerprint` flow.
@@ -54,20 +54,18 @@ Future<void> writeEmbeddingFingerprint({required String fingerprint}) => RustLib
 /// target is safe.
 Future<PlatformInt64> beginEmbeddingReembed({
   required String targetFingerprint,
-}) =>
-    RustLib.instance.api.crateApiMigrationMetaBeginEmbeddingReembed(
-      targetFingerprint: targetFingerprint,
-    );
+}) => RustLib.instance.api.crateApiMigrationMetaBeginEmbeddingReembed(
+  targetFingerprint: targetFingerprint,
+);
 
 /// Count chunks still tagged with anything other than `target_fingerprint`.
 ///
 /// Reads only — safe to call during progress polling.
 Future<PlatformInt64> countChunksNeedingReembed({
   required String targetFingerprint,
-}) =>
-    RustLib.instance.api.crateApiMigrationMetaCountChunksNeedingReembed(
-      targetFingerprint: targetFingerprint,
-    );
+}) => RustLib.instance.api.crateApiMigrationMetaCountChunksNeedingReembed(
+  targetFingerprint: targetFingerprint,
+);
 
 /// Commit a completed reembed atomically.
 ///
@@ -93,11 +91,10 @@ Future<void> finalizeEmbeddingReembed({required String targetFingerprint}) =>
 Future<PlatformInt64> acknowledgeAndClearEmbeddings({
   required String confirmation,
   required String newFingerprint,
-}) =>
-    RustLib.instance.api.crateApiMigrationMetaAcknowledgeAndClearEmbeddings(
-      confirmation: confirmation,
-      newFingerprint: newFingerprint,
-    );
+}) => RustLib.instance.api.crateApiMigrationMetaAcknowledgeAndClearEmbeddings(
+  confirmation: confirmation,
+  newFingerprint: newFingerprint,
+);
 
 @freezed
 sealed class EmbeddingFingerprintGate with _$EmbeddingFingerprintGate {

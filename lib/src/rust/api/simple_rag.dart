@@ -13,11 +13,10 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 double calculateCosineSimilarity({
   required List<double> vecA,
   required List<double> vecB,
-}) =>
-    RustLib.instance.api.crateApiSimpleRagCalculateCosineSimilarity(
-      vecA: vecA,
-      vecB: vecB,
-    );
+}) => RustLib.instance.api.crateApiSimpleRagCalculateCosineSimilarity(
+  vecA: vecA,
+  vecB: vecB,
+);
 
 /// Initialize database with docs table.
 Future<void> initDb() => RustLib.instance.api.crateApiSimpleRagInitDb();
@@ -34,31 +33,28 @@ Future<void> rebuildBm25Index() =>
 Future<AddDocumentResult> addDocument({
   required String content,
   required List<double> embedding,
-}) =>
-    RustLib.instance.api.crateApiSimpleRagAddDocument(
-      content: content,
-      embedding: embedding,
-    );
+}) => RustLib.instance.api.crateApiSimpleRagAddDocument(
+  content: content,
+  embedding: embedding,
+);
 
 /// Legacy add_document for backward compatibility.
 Future<void> addDocumentSimple({
   required String content,
   required List<double> embedding,
-}) =>
-    RustLib.instance.api.crateApiSimpleRagAddDocumentSimple(
-      content: content,
-      embedding: embedding,
-    );
+}) => RustLib.instance.api.crateApiSimpleRagAddDocumentSimple(
+  content: content,
+  embedding: embedding,
+);
 
 /// Similarity-based search (uses HNSW).
 Future<List<String>> searchSimilar({
   required List<double> queryEmbedding,
   required int topK,
-}) =>
-    RustLib.instance.api.crateApiSimpleRagSearchSimilar(
-      queryEmbedding: queryEmbedding,
-      topK: topK,
-    );
+}) => RustLib.instance.api.crateApiSimpleRagSearchSimilar(
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
 
 /// Benchmark-only entrypoint for deterministic linear scan measurement.
 ///
@@ -67,11 +63,10 @@ Future<List<String>> searchSimilar({
 Future<List<String>> benchmarkSearchLinearScan({
   required List<double> queryEmbedding,
   required int topK,
-}) =>
-    RustLib.instance.api.crateApiSimpleRagBenchmarkSearchLinearScan(
-      queryEmbedding: queryEmbedding,
-      topK: topK,
-    );
+}) => RustLib.instance.api.crateApiSimpleRagBenchmarkSearchLinearScan(
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
 
 /// Get document count.
 Future<PlatformInt64> getDocumentCount() =>

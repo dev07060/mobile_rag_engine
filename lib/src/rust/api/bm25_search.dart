@@ -15,11 +15,10 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 Future<void> bm25AddDocument({
   required PlatformInt64 docId,
   required String content,
-}) =>
-    RustLib.instance.api.crateApiBm25SearchBm25AddDocument(
-      docId: docId,
-      content: content,
-    );
+}) => RustLib.instance.api.crateApiBm25SearchBm25AddDocument(
+  docId: docId,
+  content: content,
+);
 
 /// Add multiple documents to BM25 index (batch).
 Future<void> bm25AddDocuments({required List<(PlatformInt64, String)> docs}) =>

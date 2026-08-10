@@ -21,12 +21,11 @@ Future<CompressedText> compressText({
   required String text,
   required int maxChars,
   required CompressionOptions options,
-}) =>
-    RustLib.instance.api.crateApiCompressionUtilsCompressText(
-      text: text,
-      maxChars: maxChars,
-      options: options,
-    );
+}) => RustLib.instance.api.crateApiCompressionUtilsCompressText(
+  text: text,
+  maxChars: maxChars,
+  options: options,
+);
 
 /// Quick compress with default options.
 Future<String> compressTextSimple({required String text, required int level}) =>
@@ -39,11 +38,10 @@ Future<String> compressTextSimple({required String text, required int level}) =>
 Future<bool> shouldCompress({
   required String text,
   required int tokenThreshold,
-}) =>
-    RustLib.instance.api.crateApiCompressionUtilsShouldCompress(
-      text: text,
-      tokenThreshold: tokenThreshold,
-    );
+}) => RustLib.instance.api.crateApiCompressionUtilsShouldCompress(
+  text: text,
+  tokenThreshold: tokenThreshold,
+);
 
 class CompressedText {
   final String text;

@@ -22,16 +22,15 @@ Future<PreparedIngestion> prepareSourceIngestion({
   required IngestStrategy strategy,
   required int maxChars,
   required int overlapChars,
-}) =>
-    RustLib.instance.api.crateApiIngestSessionPrepareSourceIngestion(
-      collectionId: collectionId,
-      content: content,
-      metadata: metadata,
-      name: name,
-      strategy: strategy,
-      maxChars: maxChars,
-      overlapChars: overlapChars,
-    );
+}) => RustLib.instance.api.crateApiIngestSessionPrepareSourceIngestion(
+  collectionId: collectionId,
+  content: content,
+  metadata: metadata,
+  name: name,
+  strategy: strategy,
+  maxChars: maxChars,
+  overlapChars: overlapChars,
+);
 
 /// UTF-8 bytes variant: skips the Dart `String` materialization step. The
 /// caller hands raw bytes (typically a `Uint8List` from a file/network read);
@@ -45,16 +44,15 @@ Future<PreparedIngestion> prepareSourceIngestionFromUtf8({
   required IngestStrategy strategy,
   required int maxChars,
   required int overlapChars,
-}) =>
-    RustLib.instance.api.crateApiIngestSessionPrepareSourceIngestionFromUtf8(
-      collectionId: collectionId,
-      contentBytes: contentBytes,
-      metadata: metadata,
-      name: name,
-      strategy: strategy,
-      maxChars: maxChars,
-      overlapChars: overlapChars,
-    );
+}) => RustLib.instance.api.crateApiIngestSessionPrepareSourceIngestionFromUtf8(
+  collectionId: collectionId,
+  contentBytes: contentBytes,
+  metadata: metadata,
+  name: name,
+  strategy: strategy,
+  maxChars: maxChars,
+  overlapChars: overlapChars,
+);
 
 /// File-path variant: Rust reads the file and never round-trips its body
 /// through Dart. Only the path string crosses FFI (Dart→Rust). When
@@ -71,16 +69,15 @@ Future<PreparedIngestion> prepareSourceIngestionFromFile({
   IngestStrategy? strategyHint,
   required int maxChars,
   required int overlapChars,
-}) =>
-    RustLib.instance.api.crateApiIngestSessionPrepareSourceIngestionFromFile(
-      collectionId: collectionId,
-      filePath: filePath,
-      metadata: metadata,
-      name: name,
-      strategyHint: strategyHint,
-      maxChars: maxChars,
-      overlapChars: overlapChars,
-    );
+}) => RustLib.instance.api.crateApiIngestSessionPrepareSourceIngestionFromFile(
+  collectionId: collectionId,
+  filePath: filePath,
+  metadata: metadata,
+  name: name,
+  strategyHint: strategyHint,
+  maxChars: maxChars,
+  overlapChars: overlapChars,
+);
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<IngestSession>>
 abstract class IngestSession implements RustOpaqueInterface {
