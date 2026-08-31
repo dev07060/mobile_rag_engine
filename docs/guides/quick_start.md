@@ -9,6 +9,31 @@ Get started with `mobile_rag_engine` in 5 minutes.
 - Flutter 3.9+
 - iOS 16.0+ / Android API 21+ / macOS 14.0+ / Windows 10+ / Linux
 
+For CocoaPods hosts, set the platform and static framework linkage in the
+generated app's Podfile. Keep the rest of the generated Podfile unchanged:
+
+```ruby
+# ios/Podfile
+platform :ios, '16.0'
+
+target 'Runner' do
+  use_frameworks! :linkage => :static
+  # flutter_install_all_ios_pods ...
+end
+```
+
+```ruby
+# macos/Podfile
+platform :osx, '14.0'
+
+target 'Runner' do
+  use_frameworks! :linkage => :static
+  # flutter_install_all_macos_pods ...
+end
+```
+
+For macOS, also set the Runner project's deployment target to 14.0 in Xcode.
+
 ---
 
 ## Step 1: Add Dependency
@@ -25,27 +50,29 @@ flutter pub get
 
 ---
 
-## Step 2: Download Model
+## Step 2: Install and Verify the Model Pack
 
 Run from your project root:
 
 ```bash
-mkdir -p assets && cd assets
-
-# all-MiniLM-L6-v2 (INT8 quantized for ARM64, ~23MB)
-curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx"
-curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json"
+dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en
+dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en --check
 ```
 
-> Need multilingual support (Korean, CJK)? See [Model Setup Guide](model_setup.md) for BGE-m3.
+The setup command installs the immutable MiniLM model, tokenizer, and
+`model-pack.json` under `assets/mobile_rag/`. The check command verifies their
+lengths and SHA-256 hashes before the app initializes them.
+
+> Need multilingual support (Korean, CJK) or another custom ONNX model? The
+> two-asset initializer remains an advanced path; see the
+> [Model Setup Guide](model_setup.md).
 
 Register assets in `pubspec.yaml`:
 
 ```yaml
 flutter:
   assets:
-    - assets/model.onnx
-    - assets/tokenizer.json
+    - assets/mobile_rag/
 ```
 
 ---
@@ -57,8 +84,9 @@ import 'package:mobile_rag_engine/mobile_rag_engine.dart';
 
 Future<void> initializeRAG() async {
   await MobileRag.initialize(
-    tokenizerAsset: 'assets/tokenizer.json',
-    modelAsset: 'assets/model.onnx',
+    modelPack: const RagModelPack.asset(
+      'assets/mobile_rag/model-pack.json',
+    ),
     threadLevel: ThreadUseLevel.medium, // Recommended for most apps
     // Optional: return before BM25/HNSW warmup finishes
     deferIndexWarmup: true,
@@ -70,8 +98,9 @@ Future<void> initializeRAG() async {
 
 | Parameter | Default | Description |
 |:----------|:--------|:------------|
-| `tokenizerAsset` | (required) | Path to tokenizer.json in assets |
-| `modelAsset` | (required) | Path to ONNX model in assets |
+| `modelPack` | (recommended) | Model Pack manifest asset; use instead of `tokenizerAsset` / `modelAsset` |
+| `tokenizerAsset` | `null` | Advanced/legacy tokenizer asset; required with `modelAsset` when no Model Pack is supplied |
+| `modelAsset` | `null` | Advanced/legacy ONNX asset; required with `tokenizerAsset` when no Model Pack is supplied |
 | `databaseName` | `'rag.sqlite'` | SQLite database file name |
 | `maxChunkChars` | `500` | Soft character target per chunk |
 | `overlapChars` | `30` | Boundary-snapped target overlap between chunks |
@@ -79,6 +108,10 @@ Future<void> initializeRAG() async {
 | `embeddingIntraOpNumThreads` | `null` | Precise thread count (⚠️ mutually exclusive with `threadLevel`) |
 | `deferIndexWarmup` | `false` | If `true`, initialization returns before BM25/HNSW warmup completes |
 | `onProgress` | `null` | Callback for initialization status |
+
+Model Pack v1 always selects Q8_0 vector storage. VABQ is an experimental,
+advanced opt-in available only through an explicit profile on the custom
+two-asset path; a model name or embedding dimension never enables it.
 
 > **Validation behavior (soft + stable):**
 > - `maxChunkChars < 100` is normalized to `100` at runtime.
@@ -215,8 +248,9 @@ void main() async {
   
   // Initialize
   await MobileRag.initialize(
-    tokenizerAsset: 'assets/tokenizer.json',
-    modelAsset: 'assets/model.onnx',
+    modelPack: const RagModelPack.asset(
+      'assets/mobile_rag/model-pack.json',
+    ),
     threadLevel: ThreadUseLevel.medium, // CPU usage control
   );
   

@@ -2,7 +2,11 @@
 
 This example demonstrates the `mobile_rag_engine` package with the `MobileRag` facade.
 
-## Quick Start
+## Repository Demo Initialization
+
+This repository demo intentionally uses the advanced multilingual BGE-m3
+two-asset path. For a new app, use the Q8_0 Model Pack setup, `--check`, and
+manifest initialization in the package [Quick Start](../docs/guides/quick_start.md).
 
 ```dart
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
@@ -33,7 +37,7 @@ print(result.context.text);
 
 ## Running the Example
 
-1. Download model files to `assets/`:
+1. Download the demo's custom BGE-m3 model files to `assets/`:
    ```bash
    cd assets
    curl -L -o model.onnx "https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx"

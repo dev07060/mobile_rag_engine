@@ -94,7 +94,7 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 | **Windows** | Windows 10+ (x64) |
 | **Linux** | glibc 2.31+ (x64) |
 
-> ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods iOS builds require static framework linkage (`use_frameworks! :linkage => :static`), and Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
+> ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods builds on both iOS and macOS require static framework linkage (`use_frameworks! :linkage => :static`); set the host deployment targets to iOS 16.0+ and macOS 14.0+. Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
 
 ---
 
@@ -111,6 +111,7 @@ dependencies:
 
 ```bash
 dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en
+dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en --check
 ```
 
 It writes `assets/mobile_rag/model.onnx`, `tokenizer.json`, and
@@ -173,8 +174,9 @@ Initialize the engine once in your `main()` function. See the [Quick Start Guide
 
 ```dart
 await MobileRag.initialize(
-  tokenizerAsset: 'assets/tokenizer.json',
-  modelAsset: 'assets/model.onnx',
+  modelPack: const RagModelPack.asset(
+    'assets/mobile_rag/model-pack.json',
+  ),
   deferIndexWarmup: true,
 );
 
@@ -189,7 +191,9 @@ if (!MobileRag.instance.isIndexReady) {
 The normal public initialization paths use Q8_0 storage by default. VABQ is
 an experimental, advanced opt-in: it is enabled only when you explicitly pass
 a matching `VabqProfile` to `MobileRag.initialize` or `RagConfig`. Model asset
-names and embedding dimensions never select VABQ automatically.
+names and embedding dimensions never select VABQ automatically. Model Pack v1
+is fixed to Q8_0 and rejects a VABQ profile; use the custom two-asset path for
+VABQ research.
 
 ```dart
 await MobileRag.initialize(

@@ -2,7 +2,11 @@
 
 A complete on-device RAG (Retrieval-Augmented Generation) implementation.
 
-## Quick Start
+## Repository Demo Initialization
+
+This checked-in demo uses the advanced custom two-asset path. New apps should
+follow the Q8_0 Model Pack setup, `--check`, and manifest initialization in the
+package [Quick Start](../docs/guides/quick_start.md).
 
 ```dart
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';

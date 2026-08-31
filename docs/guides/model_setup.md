@@ -20,6 +20,12 @@ assets/mobile_rag/tokenizer.json
 assets/mobile_rag/model-pack.json
 ```
 
+Verify the installed files before initializing the engine:
+
+```bash
+dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en --check
+```
+
 The command does not edit `pubspec.yaml`. Declare the directory yourself:
 
 ```yaml
@@ -41,12 +47,9 @@ await MobileRag.initialize(
 The sole v1 preset is `stable-minilm-l6-v2-arm64-en`: English, arm64,
 384-dimensional, Apache-2.0 MiniLM at revision
 `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`. Vector storage is fixed to Q8_0;
-it never enables a VABQ profile. Use `--check` to verify a prior installation
-or `--repair` to replace a file that fails its SHA-256/length check.
-
-```bash
-dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en --check
-```
+it never enables a VABQ profile. Use `--repair` only to replace a file that
+fails its SHA-256/length check. VABQ remains an experimental advanced opt-in on
+the custom two-asset initialization path.
 
 The first success is adding documents, rebuilding the index, then searching for
 non-empty chunks/context. LLM generation is outside this package step.
@@ -174,7 +177,10 @@ This package uses the [`flutter_onnxruntime`](https://pub.dev/packages/flutter_o
 Runtime setup notes:
 - iOS apps need minimum deployment target 16.0.
 - macOS apps need minimum deployment target 14.0.
-- CocoaPods iOS builds require static framework linkage: `use_frameworks! :linkage => :static`.
+- CocoaPods builds on both iOS and macOS require static framework linkage:
+  `use_frameworks! :linkage => :static` in the Runner target.
+- Set the macOS Runner project's deployment target to 14.0 as well as
+  `platform :osx, '14.0'` in its Podfile.
 - Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
 
 `mobile_rag_engine` uses the default ONNX Runtime execution path for embedding inference. Do not assume CoreML, NNAPI, or another hardware execution provider is active unless you configure and validate that path in your host app.
