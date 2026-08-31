@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.21.0-dev.11
+* **Model Pack onboarding**:
+  - Made the immutable MiniLM Model Pack `setup` -> `--check` -> manifest initialization flow the recommended install-to-first-search path.
+* **Storage contract**:
+  - Kept Q8_0 as the public default and VABQ as an explicit advanced research opt-in, without making speed, RSS, or retrieval-quality claims for VABQ.
+* **Native compatibility**:
+  - Aligned exactly with hosted `rag_engine_flutter 0.20.0-dev.11` and `flutter_rust_bridge 2.11.1`.
+* **macOS qualification boundary**:
+  - A fresh macOS consumer completed Model Pack initialization and first search in profile mode plus a separate universal release build with this root as a clean path package and the native companion hosted. This is not a fully hosted root-package proof until this version is published and retested from pub.dev.
+
 ## 0.21.0-dev.5
 * **Bug Fix**: Required `rag_engine_flutter: ^0.20.0-dev.5` fixing HNSW Phase 2 binary offset calculation, preventing search panics.
 
