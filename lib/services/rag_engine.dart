@@ -396,7 +396,14 @@ class RagEngine {
       onProgress?.call('Initializing connection pool...');
       await initDbPool(dbPath: dbPath, maxSize: 4);
 
-      // 6. Initialize RAG service
+      final currentFingerprint = computeEmbeddingFingerprint(
+        modelBasename: embeddingModelBasename(modelPath),
+        dim: probe.length,
+        quant: embeddingQuantizationFingerprintAxis(config.vabqProfile),
+      );
+
+      // 6. Initialize the database and resolve the embedding fingerprint before
+      // any deferred BM25/HNSW warmup can contend for the same SQLite database.
       onProgress?.call('Initializing database...');
       final ragService = SourceRagService(
         dbPath: dbPath,
@@ -404,24 +411,26 @@ class RagEngine {
         maxChunkChars: normalizedMaxChunkChars,
         overlapChars: normalizedOverlapChars,
       );
-      await ragService.init(deferIndexWarmup: config.deferIndexWarmup);
-
-      // 7. Resolve the embedding fingerprint gate. The probe was also used to
-      //    validate the explicit VABQ profile before persistence was initialized.
-      //    Fingerprint resolution must happen AFTER migration_meta exists.
-      onProgress?.call('Validating embedding fingerprint...');
-      final currentFingerprint = computeEmbeddingFingerprint(
-        modelBasename: embeddingModelBasename(modelPath),
-        dim: probe.length,
-        quant: embeddingQuantizationFingerprintAxis(config.vabqProfile),
+      RagEmbeddingFingerprintLock? initialLock;
+      await ragService.initForEngine(
+        deferIndexWarmup: config.deferIndexWarmup,
+        afterDatabaseInitialized: () async {
+          // The fingerprint tables are created by SourceRagService.init, so this
+          // must remain inside its pre-warmup database-ready boundary.
+          onProgress?.call('Validating embedding fingerprint...');
+          initialLock = await _resolveFingerprintGate(currentFingerprint);
+        },
       );
-      final initialLock = await _resolveFingerprintGate(currentFingerprint);
-      if (initialLock != null) {
+
+      // 7. Surface an existing embedding mismatch after the database and index
+      // initialization sequence has been established.
+      final resolvedInitialLock = initialLock;
+      if (resolvedInitialLock != null) {
         debugPrint(
           '[RagEngine] Embedding fingerprint mismatch detected: '
-          'stored="${initialLock.stored}", current="$currentFingerprint", '
-          'remaining=${initialLock.remainingChunks}, '
-          'resume=${initialLock.resumeInProgress}. '
+          'stored="${resolvedInitialLock.stored}", current="$currentFingerprint", '
+          'remaining=${resolvedInitialLock.remainingChunks}, '
+          'resume=${resolvedInitialLock.resumeInProgress}. '
           'Search/ingest will be locked until reembedAll() or clearAndRestart().',
         );
       }
@@ -432,7 +441,7 @@ class RagEngine {
         dbPath: dbPath,
         vocabSize: vocabSize,
         currentEmbeddingFingerprint: currentFingerprint,
-        initialLock: initialLock,
+        initialLock: resolvedInitialLock,
         deferIndexWarmup: config.deferIndexWarmup,
       );
     } catch (_) {
@@ -1067,6 +1076,16 @@ class RagEngine {
   /// 4. Re-initializes the database and service
   Future<void> clearAllData() async {
     debugPrint('[RagEngine] clearAllData: Starting...');
+    // A deferred warmup may still be reading from SQLite. Let it leave the
+    // shared database before closing the pool and deleting its files.
+    try {
+      await _ragService.warmupFuture;
+    } catch (error) {
+      debugPrint(
+        '[RagEngine] clearAllData: Previous warmup failed; continuing reset: $error',
+      );
+    }
+
     // 1. Close DB pool
     debugPrint('[RagEngine] clearAllData: Closing DB pool...');
     await closeDbPool();
@@ -1107,7 +1126,17 @@ class RagEngine {
 
     // 5. Re-initialize service
     debugPrint('[RagEngine] clearAllData: Re-initializing service...');
-    await _ragService.init(deferIndexWarmup: _deferIndexWarmup);
+    RagEmbeddingFingerprintLock? resetLock;
+    await _ragService.initForEngine(
+      // A destructive reset is complete only when the replacement indexes are
+      // ready. Returning with another background warmup would let an immediate
+      // ingest race the same database that clearAllData just recreated.
+      deferIndexWarmup: false,
+      afterDatabaseInitialized: () async {
+        resetLock = await _resolveFingerprintGate(currentEmbeddingFingerprint);
+      },
+    );
+    _fingerprintLock = resetLock;
     _collectionServices
       ..clear()
       ..[SourceRagService.defaultCollectionId] = _ragService;
