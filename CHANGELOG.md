@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.21.0-dev.12
+* **Initialization reliability**:
+  - Serialized embedding fingerprint initialization ahead of deferred BM25/HNSW warmup, preventing fresh-database SQLite lock contention.
+  - Made `clearAllData()` wait for active warmup and complete replacement index initialization before immediate re-ingest.
+
 ## 0.21.0-dev.11
 * **Model Pack onboarding**:
   - Made the immutable MiniLM Model Pack `setup` -> `--check` -> manifest initialization flow the recommended install-to-first-search path.
