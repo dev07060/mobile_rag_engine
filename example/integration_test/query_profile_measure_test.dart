@@ -15,7 +15,6 @@ import 'package:mobile_rag_engine_example/profiling/query_profiler.dart';
 import 'package:mobile_rag_engine_example/profiling/query_profile_report.dart';
 import 'package:mobile_rag_engine_example/profiling/profile_export.dart';
 import 'package:mobile_rag_engine_example/profiling/rss_sampler.dart';
-import 'package:mobile_rag_engine_example/profiling/vabq_measurement_config.dart';
 
 // On-device RAG query profiler — P3 (LOC-68) measurement + P4 (LOC-69) export.
 //
@@ -34,14 +33,7 @@ import 'package:mobile_rag_engine_example/profiling/vabq_measurement_config.dart
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  const docsPerCollection = int.fromEnvironment(
-    'DOCS_PER_COLLECTION',
-    defaultValue: 500,
-  );
-  const vabqProfileWire = String.fromEnvironment(
-    'VABQ_PROFILE',
-    defaultValue: 'none',
-  );
+  const measuredDocs = 500; // representative; raise for scan-bound runs
   const warmup = 5;
   const measured = 30;
   const topK = 10;
@@ -53,16 +45,11 @@ void main() {
     'profiler: pure_cold / pure_warm / switching_cold x 2 lanes',
     () async {
       _assertProfileMode();
-      final measurement = VabqMeasurementConfig.fromWire(
-        profileWire: vabqProfileWire,
-        docsPerCollection: docsPerCollection,
-      );
 
       // Fresh DB without clearAllData: delete the SQLite files BEFORE
       // initialize so the engine starts clean and nothing races the seed.
       final docsDir = await getApplicationDocumentsDirectory();
-      final dbName = 'profile_${measurement.profileWire}.sqlite';
-      final dbStem = '${docsDir.path}/$dbName';
+      final dbStem = '${docsDir.path}/profile.sqlite';
       for (final p in [
         dbStem,
         '$dbStem-wal',
@@ -76,17 +63,9 @@ void main() {
       await MobileRag.initialize(
         tokenizerAsset: 'assets/tokenizer.json',
         modelAsset: 'assets/model.onnx',
-        vabqProfile: measurement.vabqProfile,
-        databaseName: dbName,
+        databaseName: 'profile.sqlite',
         deferIndexWarmup: true,
       );
-
-      // `deferIndexWarmup` lets the empty default collection rebuild in the
-      // background. Wait for that one-time task before initializing profile_a
-      // or profile_b so their collection setup cannot race the same SQLite DB.
-      // The measured collections are still made cold below by removing their
-      // own on-disk indexes after seeding.
-      await MobileRag.instance.warmupFuture;
 
       final nativeInfo = runtime_info.nativeRuntimeInfo();
       verifyNativeRuntimeExpectations(
@@ -96,13 +75,9 @@ void main() {
         expectedRustFeatures: expectedRustFeatures,
       );
 
-      final ids = await QueryFixture.seed(
-        docsPerCollection: measurement.docsPerCollection,
-      );
-      expect(
-          ids[QueryFixture.collectionA]!.length, measurement.docsPerCollection);
-      expect(
-          ids[QueryFixture.collectionB]!.length, measurement.docsPerCollection);
+      final ids = await QueryFixture.seed(docsPerCollection: measuredDocs);
+      expect(ids[QueryFixture.collectionA]!.length, measuredDocs);
+      expect(ids[QueryFixture.collectionB]!.length, measuredDocs);
 
       final profiler = QueryProfiler(dbPath: MobileRag.instance.dbPath);
       final q = QueryFixture.unfilteredQueries;
@@ -118,7 +93,7 @@ void main() {
         'os': Platform.operatingSystem,
         'os_version': Platform.operatingSystemVersion,
         // Device model + charging state: document manually in PR-P4.md.
-        ...measurement.toJson(),
+        'docs_per_collection': measuredDocs,
         'top_k': topK,
         'vector_weight': profiler.vectorWeight,
         'bm25_weight': profiler.bm25Weight,
@@ -127,7 +102,6 @@ void main() {
         // loads A from disk (pure_cold's activate re-saved it). Both are genuine
         // cold costs; the switch is the realistic production figure.
         'cold_note': 'pure_cold=rebuild-from-db; switching_cold=load-from-disk',
-        'default_warmup': 'awaited_before_collection_seed',
       };
 
       // Per-collection index files survive across runs; delete them so the first
@@ -277,14 +251,7 @@ void main() {
     },
     // Seeding 2x500 real ONNX embeddings + the measured loops far exceed the
     // default 30s per-test timeout; give it generous headroom.
-    timeout: const Timeout(
-      Duration(
-        minutes: int.fromEnvironment(
-          'MEASUREMENT_TIMEOUT_MINUTES',
-          defaultValue: 15,
-        ),
-      ),
-    ),
+    timeout: const Timeout(Duration(minutes: 15)),
     // `flutter test` is always debug -> fallback backend. Skip there so an
     // invalid baseline is never produced; runs only under flutter drive --profile.
     skip: kDebugMode

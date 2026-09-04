@@ -47,9 +47,7 @@ fn bench_cosine(c: &mut Criterion) {
         let qn = bench_api::l2_norm_f32(&q);
         g.throughput(Throughput::Elements(dim as u64));
         g.bench_with_input(BenchmarkId::from_parameter(dim), &dim, |b, _| {
-            b.iter(|| {
-                bench_api::cosine_with_query_norm_f32(black_box(&q), black_box(qn), black_box(&t))
-            })
+            b.iter(|| bench_api::cosine_with_query_norm_f32(black_box(&q), black_box(qn), black_box(&t)))
         });
     }
     g.finish();
@@ -151,8 +149,7 @@ fn bench_scan_i8(c: &mut Criterion) {
         b.iter(|| {
             let mut best = f32::MIN;
             for blob in &blobs {
-                let s =
-                    bench_api::cosine_with_query_norm_i8_blob(black_box(&qi), qn, black_box(blob));
+                let s = bench_api::cosine_with_query_norm_i8_blob(black_box(&qi), qn, black_box(blob));
                 if s > best {
                     best = s;
                 }
@@ -171,141 +168,6 @@ criterion_group! {
         .sample_size(30)
         .warm_up_time(Duration::from_millis(500))
         .measurement_time(Duration::from_secs(2));
-    targets = bench_cosine, bench_dot, bench_decode, bench_scan, bench_cosine_i8, bench_scan_i8,
-              bench_scan_q8_0, bench_scan_vabq, bench_vabq_native
+    targets = bench_cosine, bench_dot, bench_decode, bench_scan, bench_cosine_i8, bench_scan_i8
 }
 criterion_main!(benches);
-
-// ── Q8_0 blockwise exact-scan benchmark ─────────────────────────────────────
-// Measures native Rust throughput for the Q8_0 block-packed format (36-byte blocks:
-// 4-byte f32 scale + 32-byte i8 values), which is the current production hot path.
-#[cfg(feature = "vector_quant_i8")]
-fn bench_scan_q8_0(c: &mut Criterion) {
-    use bench_api::{cosine_similarity_q8, l2_norm_i8, quantize_f32_to_i8, QueryQ8};
-
-    let q_f32 = pseudo_vec(SCAN_DIM, 1);
-    let (q_i8, _) = quantize_f32_to_i8(&q_f32);
-    let q_norm = l2_norm_i8(&q_i8);
-    let query_q8 = QueryQ8::new(&q_f32);
-
-    // Build packed Q8_0 blobs (36 bytes per block: 4-byte scale + 32 i8 values)
-    let blobs: Vec<Vec<u8>> = (0..SCAN_N)
-        .map(|i| {
-            let v = pseudo_vec(SCAN_DIM, 100 + i as u32);
-            let (blocks, scales) = bench_api::quantize_f32_to_i8_blockwise(&v);
-            let n_blocks = (SCAN_DIM + 31) / 32;
-            let mut blob = Vec::with_capacity(n_blocks * 36);
-            for b in 0..n_blocks {
-                let start = b * 32;
-                let end = (start + 32).min(blocks.len());
-                blob.extend_from_slice(&scales[b].to_le_bytes());
-                for i in start..end {
-                    blob.push(blocks[i] as u8);
-                }
-                // Pad to 32 bytes if last block is partial
-                for _ in (end - start)..32 {
-                    blob.push(0u8);
-                }
-            }
-            blob
-        })
-        .collect();
-
-    let mut g = c.benchmark_group("exact_scan_q8_0_blockwise");
-    g.throughput(criterion::Throughput::Elements(SCAN_N as u64));
-    g.bench_function(
-        criterion::BenchmarkId::new("cosine_similarity_q8", SCAN_N),
-        |b| {
-            b.iter(|| {
-                let mut best = f32::MIN;
-                for blob in &blobs {
-                    let s = cosine_similarity_q8(
-                        criterion::black_box(&query_q8),
-                        criterion::black_box(blob),
-                        &q_i8,
-                        q_norm,
-                    );
-                    if s > best {
-                        best = s;
-                    }
-                }
-                criterion::black_box(best)
-            })
-        },
-    );
-    g.finish();
-}
-#[cfg(not(feature = "vector_quant_i8"))]
-fn bench_scan_q8_0(_c: &mut Criterion) {}
-
-// ── VABQ scan benchmark (legacy blob path) ───────────────────────────────────
-// Uses cosine_similarity_q8 with the legacy 768-byte uniform-quantized blob
-// to establish the lower-bound latency when VABQ falls back to the legacy path.
-// This validates that the fallback gate does not regress existing performance.
-#[cfg(feature = "vector_quant_i8")]
-fn bench_scan_vabq(c: &mut Criterion) {
-    use bench_api::{
-        cosine_similarity_q8, i8_blob_from_slice, l2_norm_i8, quantize_f32_to_i8, QueryQ8,
-    };
-
-    let q_f32 = pseudo_vec(SCAN_DIM, 1);
-    let (q_i8, _) = quantize_f32_to_i8(&q_f32);
-    let q_norm = l2_norm_i8(&q_i8);
-    let query_q8 = QueryQ8::new(&q_f32);
-
-    // Legacy uniform blobs (768 bytes = 768 i8 values cast to u8)
-    let legacy_blobs: Vec<Vec<u8>> = (0..SCAN_N)
-        .map(|i| {
-            let (vi, _) = quantize_f32_to_i8(&pseudo_vec(SCAN_DIM, 100 + i as u32));
-            i8_blob_from_slice(&vi)
-        })
-        .collect();
-
-    let mut g = c.benchmark_group("exact_scan_vabq_legacy_fallback");
-    g.throughput(criterion::Throughput::Elements(SCAN_N as u64));
-    g.bench_function(
-        criterion::BenchmarkId::new("cosine_legacy_blob", SCAN_N),
-        |b| {
-            b.iter(|| {
-                let mut best = f32::MIN;
-                for blob in &legacy_blobs {
-                    let s = cosine_similarity_q8(
-                        criterion::black_box(&query_q8),
-                        criterion::black_box(blob),
-                        &q_i8,
-                        q_norm,
-                    );
-                    if s > best {
-                        best = s;
-                    }
-                }
-                criterion::black_box(best)
-            })
-        },
-    );
-    g.finish();
-}
-#[cfg(not(feature = "vector_quant_i8"))]
-fn bench_scan_vabq(_c: &mut Criterion) {}
-
-#[cfg(feature = "vector_quant_i8")]
-fn bench_vabq_native(c: &mut Criterion) {
-    use bench_api::{cosine_similarity_vabq, quantize_f32_to_vabq, QueryVABQ};
-
-    let mut g = c.benchmark_group("vabq_native_cosine");
-    for &dim in &[384, 768, 1024] {
-        let q_f32 = pseudo_vec(dim, 1);
-        let t_f32 = pseudo_vec(dim, 2);
-
-        let query_vabq = QueryVABQ::new(&q_f32);
-        let (packed_blob_b, _) = quantize_f32_to_vabq(&t_f32);
-
-        g.throughput(Throughput::Elements(dim as u64));
-        g.bench_with_input(BenchmarkId::from_parameter(dim), &dim, |b, _| {
-            b.iter(|| cosine_similarity_vabq(black_box(&query_vabq), black_box(&packed_blob_b)))
-        });
-    }
-    g.finish();
-}
-#[cfg(not(feature = "vector_quant_i8"))]
-fn bench_vabq_native(_c: &mut Criterion) {}

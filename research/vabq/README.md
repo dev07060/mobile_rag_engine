@@ -1,8 +1,13 @@
 # VABQ Research
 
-This directory contains all code for the **Variance-aware Adaptive Block Quantization (VABQ)** research simulation, supporting the academic paper:
+This directory contains the experimental **Variance-aware Adaptive Block
+Quantization (VABQ)** research code. VABQ remains an explicit opt-in; Q8_0 is
+the supported public default.
 
-> **"VABQ: Variance-aware Adaptive Block Quantization for Memory-Efficient On-Device RAG"**
+The current checkpoint does not establish a repeatable retrieval-quality,
+latency, or RSS advantage over Q8_0. See
+[`docs/reports/2026-08-09-onboarding-vs-vabq-decision.md`](../../docs/reports/2026-08-09-onboarding-vs-vabq-decision.md)
+for the measured boundary and product decision.
 
 ---
 
@@ -17,8 +22,8 @@ research/vabq/
 ├── plot_results.py         ← Step 4: Publication-quality plot generator
 ├── run_pipeline.py         ← 🚀 Master pipeline runner (runs all steps)
 ├── test_quantizers.py      ← ✅ Unit tests for mathematical correctness
-├── variance_maps/          ← Output: pre-computed variance maps (JSON + .npy)
-└── results/                ← Output: eval_results.json + plots/
+├── variance_maps/          ← Generated locally: variance maps (JSON + .npy)
+└── results/                ← Generated locally: eval_results.json + plots/
 ```
 
 ---
@@ -36,7 +41,7 @@ cd /path/to/mobile_rag_engine
 #         research/vabq/results/plots/*.pdf
 ```
 
-### Option B: Real MSMARCO Data (Recommended for paper)
+### Option B: Real MSMARCO Data
 ```bash
 # Small scale (20k vectors, all-MiniLM)
 .venv/bin/python research/vabq/run_pipeline.py \
@@ -44,7 +49,7 @@ cd /path/to/mobile_rag_engine
     --model sentence-transformers/all-MiniLM-L6-v2 \
     --n_db 20000
 
-# Large scale (100k vectors, BGE-M3, for paper submission)
+# Larger exploratory run (100k vectors, BGE-M3)
 .venv/bin/python research/vabq/run_pipeline.py \
     --mode msmarco \
     --model BAAI/bge-m3 \
@@ -62,15 +67,10 @@ VABQ observes that **not all embedding dimensions carry equal semantic informati
 1. **High-variance dimensions** (covering 75% of total variance) are quantized to **INT8** with fine-grained block size 16.
 2. **Low-variance dimensions** are quantized to **INT4** with coarse block size 64.
 
-This dual-precision strategy achieves significantly better **recall vs. storage tradeoff** compared to uniform Q8_0 and Product Quantization.
-
-| Method           | Bytes/Vec (384-dim) | Expected Recall@10 |
-|:---               |:---:                |:---:               |
-| F32 (Exact)       | 1536 B              | 1.000              |
-| Uniform Q8        | 384 B               | ~0.85              |
-| Q8_0 (block=32)   | 432 B               | ~0.92              |
-| PQ (M=16)         | 16 B                | ~0.80              |
-| **VABQ (ours)**   | **280–340 B**       | **~0.96–0.98**     |
+This dual-precision strategy is being evaluated as a storage tradeoff. The
+checked-in research code must not be treated as proof that VABQ outperforms
+Q8_0. Reproduce results against the same model, corpus, byte budget, binary,
+and device before drawing a quality or performance conclusion.
 
 ---
 
@@ -82,10 +82,13 @@ This dual-precision strategy achieves significantly better **recall vs. storage 
 
 ---
 
-## 📊 Paper Figures Generated
+## 📊 Generated Figures
 
 - `fig1_pareto_curve.pdf` — Memory vs. Recall@10 Pareto curve
 - `fig2_latency_vs_recall.pdf` — Latency vs. Recall scatterplot
 - `fig3_compression_ratio.pdf` — Bytes/vector bar chart
 - `fig4_recall_distribution.pdf` — Recall distribution per method
 - `fig0_combined.pdf` — Combined 2×2 figure for paper appendix
+
+Generated variance maps, raw result JSON, and plot binaries are intentionally
+excluded from the release branch. Run the pipeline to reproduce them locally.

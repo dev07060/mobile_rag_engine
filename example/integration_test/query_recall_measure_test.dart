@@ -13,16 +13,9 @@ import 'package:mobile_rag_engine_example/profiling/recall_db.dart';
 import 'package:mobile_rag_engine_example/profiling/recall_math.dart';
 import 'package:mobile_rag_engine_example/profiling/recall_report.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:mobile_rag_engine_example/profiling/vabq_measurement_config.dart';
 
-const _docsPerCollection = int.fromEnvironment(
-  'DOCS_PER_COLLECTION',
-  defaultValue: 500,
-);
-const _vabqProfileWire = String.fromEnvironment(
-  'VABQ_PROFILE',
-  defaultValue: 'none',
-);
+const _docs = 500;
+const _dbName = 'recall_measure.sqlite';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -31,59 +24,30 @@ void main() {
     'e2e hybrid recall@10: GT(f32) vs shipped i8-HNSW+BM25 RRF',
     () async {
       _assertProfileMode();
-      final measurement = VabqMeasurementConfig.fromWire(
-        profileWire: _vabqProfileWire,
-        docsPerCollection: _docsPerCollection,
-      );
 
       final docsDir = await getApplicationDocumentsDirectory();
-      final dbName = 'recall_${measurement.profileWire}.sqlite';
-      await _deleteDbFiles('${docsDir.path}/$dbName');
+      await _deleteDbFiles('${docsDir.path}/$_dbName');
 
       await MobileRag.initialize(
         tokenizerAsset: 'assets/tokenizer.json',
         modelAsset: 'assets/model.onnx',
-        vabqProfile: measurement.vabqProfile,
-        databaseName: dbName,
+        databaseName: _dbName,
         deferIndexWarmup: true,
       );
-      await MobileRag.instance.warmupFuture;
-      final seeded = await QueryFixture.seed(
-        docsPerCollection: measurement.docsPerCollection,
-      );
-      expect(
-        seeded[QueryFixture.collectionA],
-        hasLength(measurement.docsPerCollection),
-      );
-      expect(
-        seeded[QueryFixture.collectionB],
-        hasLength(measurement.docsPerCollection),
-      );
+      final seeded = await QueryFixture.seed(docsPerCollection: _docs);
+      expect(seeded[QueryFixture.collectionA], hasLength(_docs));
+      expect(seeded[QueryFixture.collectionB], hasLength(_docs));
 
       const collection = QueryFixture.collectionA;
       final profiler = QueryProfiler(dbPath: MobileRag.instance.dbPath);
       await profiler.deleteOnDiskIndex(collection);
       await profiler.activateOnly(collection);
 
-      // Production SQLite stores quantized Q8_0/VABQ blobs. It is only used
-      // here to map the deterministic fixture source IDs to production chunk
-      // IDs; f32 ground truth stays entirely in this test fixture.
-      final chunkIdsBySource = fetchChunkIdsBySource(
+      final corpus = fetchChunkEmbeddingsF32(
         dbPath: MobileRag.instance.dbPath,
         collectionId: collection,
       );
-      final sourceIds = seeded[collection]!;
-      final docs = QueryFixture.docs(collection, measurement.docsPerCollection);
-      expect(chunkIdsBySource.length, measurement.docsPerCollection);
-      expect(sourceIds, hasLength(docs.length));
-
-      final corpus = <int, List<double>>{};
-      for (var i = 0; i < docs.length; i++) {
-        final chunkId = chunkIdsBySource[sourceIds[i]];
-        expect(chunkId, isNotNull,
-            reason: 'missing chunk for source ${sourceIds[i]}');
-        corpus[chunkId!] = await EmbeddingService.embed(docs[i]);
-      }
+      expect(corpus.length, _docs);
       expect(corpus.values.first.length, greaterThan(0));
 
       const k = 10;
@@ -135,7 +99,7 @@ void main() {
         meta: {
           'k': k,
           'collection': collection,
-          ...measurement.toJson(),
+          'docs_per_collection': _docs,
           'query_count': queries.length,
           'build_mode':
               kReleaseMode ? 'release' : (kProfileMode ? 'profile' : 'debug'),
@@ -143,8 +107,7 @@ void main() {
           'embedding_dim': corpus.values.first.length,
           'os': Platform.operatingSystem,
           'os_version': Platform.operatingSystemVersion,
-          'gt': 'test_fixture_reembedded_f32_brute_force_cosine',
-          'default_warmup': 'awaited_before_collection_seed',
+          'gt': 'dart_f32_brute_force_cosine',
           'note':
               'recall_vectoronly isolates i8-HNSW graph+quant error vs f32 GT; '
                   'recall_hybrid reflects BM25 RRF reorder vs pure-vector GT.',
@@ -157,14 +120,7 @@ void main() {
       print('RECALL_MEAN vectoronly=${report.meanVectorOnly} '
           'hybrid=${report.meanHybrid}');
     },
-    timeout: const Timeout(
-      Duration(
-        minutes: int.fromEnvironment(
-          'MEASUREMENT_TIMEOUT_MINUTES',
-          defaultValue: 15,
-        ),
-      ),
-    ),
+    timeout: const Timeout(Duration(minutes: 15)),
     skip: kDebugMode
         ? 'Measurement requires flutter drive --profile; flutter test is debug.'
         : false,
