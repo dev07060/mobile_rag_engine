@@ -1,9 +1,41 @@
 # Changelog
 
+## 0.21.0-dev.12
+* **Initialization reliability**:
+  - Serialized embedding fingerprint initialization ahead of deferred BM25/HNSW warmup, preventing fresh-database SQLite lock contention.
+  - Made `clearAllData()` wait for active warmup and complete replacement index initialization before immediate re-ingest.
+
+## 0.21.0-dev.11
+* **Model Pack onboarding**:
+  - Made the immutable MiniLM Model Pack `setup` -> `--check` -> manifest initialization flow the recommended install-to-first-search path.
+* **Storage contract**:
+  - Kept Q8_0 as the public default and VABQ as an explicit advanced research opt-in, without making speed, RSS, or retrieval-quality claims for VABQ.
+* **Native compatibility**:
+  - Aligned exactly with hosted `rag_engine_flutter 0.20.0-dev.11` and `flutter_rust_bridge 2.11.1`.
+* **macOS qualification boundary**:
+  - A fresh macOS consumer completed Model Pack initialization and first search in profile mode plus a separate universal release build with this root as a clean path package and the native companion hosted. This is not a fully hosted root-package proof until this version is published and retested from pub.dev.
+
+## 0.21.0-dev.5
+* **Bug Fix**: Required `rag_engine_flutter: ^0.20.0-dev.5` fixing HNSW Phase 2 binary offset calculation, preventing search panics.
+
+## 0.21.0-dev.4
+* **Bug Fix**: Required `rag_engine_flutter: ^0.20.0-dev.5` fixing HNSW index loading (buffer size 14 -> 18).
+
+## 0.21.0-dev.3
+* **Bug Fix**: Required `rag_engine_flutter: ^0.20.0-dev.5` fixing MMAP data reading and false 0.0 similarities in linear search fallback.
+
+## 0.21.0-dev.2
+* **Bug Fix**: Required `rag_engine_flutter: ^0.20.0-dev.5` which fixes a critical HNSW index rebuilding bug where quantized embeddings were not unpacked, causing a fallback to linear scanning.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## 0.21.0-dev.1
+* **VABQ Research Engine**:
+  - Added experimental Variance-aware Adaptive Block Quantization (VABQ) research support.
+  - VABQ is an explicit advanced opt-in; normal initialization continues to use Q8_0 storage by default. This research entry does not make general speed, memory, or retrieval-quality claims relative to Q8_0.
 
 ## 0.20.0
 * **Block-wise Quantization**:

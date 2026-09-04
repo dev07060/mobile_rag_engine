@@ -27,9 +27,7 @@ use crate::api::vector_math::{
     l2_norm_f32,
 };
 #[cfg(feature = "vector_quant_i8")]
-use crate::api::vector_quant::{
-    l2_norm_i8, quantize_f32_to_i8, quantize_f32_to_u8_blob, QueryQ8, cosine_similarity_q8,
-};
+use crate::api::vector_quant::{quantize_f32_for_active_profile, score_persisted_quantized_blob};
 use flutter_rust_bridge::frb;
 use log::{debug, error, info, warn};
 use rusqlite::{params, Connection};
@@ -140,7 +138,8 @@ pub fn init_db() -> anyhow::Result<()> {
             if embedding.is_empty() {
                 continue;
             }
-            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&embedding);
+            let (embedding_i8_bytes, embedding_scale) = quantize_f32_for_active_profile(&embedding)
+                .map_err(|error| anyhow::anyhow!(error.to_string()))?;
             conn.execute(
                 "UPDATE docs SET embedding_i8 = ?1, embedding_scale = ?2 WHERE id = ?3",
                 params![embedding_i8_bytes, embedding_scale, id],
@@ -284,7 +283,8 @@ pub fn add_document(content: String, embedding: Vec<f32>) -> anyhow::Result<AddD
 
     #[cfg(feature = "vector_quant_i8")]
     {
-        let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&embedding);
+        let (embedding_i8_bytes, embedding_scale) = quantize_f32_for_active_profile(&embedding)
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
 
         if has_embedding_i8_column && has_embedding_scale_column {
             conn.execute(
@@ -402,13 +402,6 @@ fn search_with_linear_scan(query_embedding: Vec<f32>, top_k: u32) -> anyhow::Res
     let query_norm = l2_norm_f32(&query_embedding);
     let mut candidates: Vec<(f64, String)> = Vec::new();
 
-    #[cfg(feature = "vector_quant_i8")]
-    let (query_i8, _query_i8_scale) = quantize_f32_to_i8(&query_embedding);
-    #[cfg(feature = "vector_quant_i8")]
-    let query_i8_norm = l2_norm_i8(&query_i8);
-    #[cfg(feature = "vector_quant_i8")]
-    let query_q8 = QueryQ8::new(&query_embedding);
-
     let mut stmt = match conn.prepare("SELECT content, embedding, embedding_i8 FROM docs") {
         Ok(stmt) => stmt,
         Err(_) => conn.prepare("SELECT content, embedding, NULL AS embedding_i8 FROM docs")?,
@@ -428,8 +421,10 @@ fn search_with_linear_scan(query_embedding: Vec<f32>, top_k: u32) -> anyhow::Res
 
         #[cfg(feature = "vector_quant_i8")]
         let similarity = if let Some(qblob) = embedding_i8_blob.as_deref() {
-            if (qblob.len() == query_i8.len() || qblob.len() % 36 == 0) && query_i8_norm > 0.0 {
-                cosine_similarity_q8(&query_q8, qblob, &query_i8, query_i8_norm)
+            if let Some(similarity) = score_persisted_quantized_blob(&query_embedding, qblob)
+                .map_err(|error| anyhow::anyhow!(error.to_string()))?
+            {
+                similarity
             } else if let Some(embedding_vec) = decode_f32_embedding(&embedding_blob) {
                 if embedding_vec.len() != query_embedding.len() {
                     continue;

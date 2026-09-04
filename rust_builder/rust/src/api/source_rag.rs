@@ -22,7 +22,7 @@ use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
 use crate::api::hnsw_index::{
     build_hnsw_index, build_hnsw_index_streaming, clear_hnsw_index, is_hnsw_index_loaded,
-    load_hnsw_index, save_hnsw_index, search_hnsw,
+    load_hnsw_index, loaded_hnsw_node_count, save_hnsw_index, search_hnsw,
 };
 use crate::api::hybrid_search::{search_hybrid_meta_inner, RrfConfig, SearchFilter};
 use crate::api::ingest_metrics::{
@@ -37,9 +37,7 @@ use crate::api::vector_math::{
     cosine_with_query_norm_f32, decode_f32_embedding, decode_f32_embedding_or_warn, l2_norm_f32,
 };
 #[cfg(feature = "vector_quant_i8")]
-use crate::api::vector_quant::{
-    l2_norm_i8, quantize_f32_to_i8, quantize_f32_to_u8_blob, QueryQ8, cosine_similarity_q8,
-};
+use crate::api::vector_quant::{quantize_f32_for_active_profile, score_persisted_quantized_blob};
 use crate::frb_generated::RustAutoOpaqueMoi as RustAutoOpaque;
 use flutter_rust_bridge::frb;
 use log::{debug, info};
@@ -229,6 +227,60 @@ fn mark_collection_hnsw_clean(
     Ok(())
 }
 
+fn mark_collection_hnsw_failed(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+    error: &str,
+) -> Result<(), RagError> {
+    ensure_collection_row(conn, collection_id)?;
+    conn.execute(
+        "UPDATE collection_index_state
+         SET hnsw_dirty = 1,
+             last_error = ?2
+         WHERE collection_id = ?1",
+        params![collection_id, error],
+    )
+    .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    Ok(())
+}
+
+fn eligible_hnsw_point_count(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+) -> Result<usize, RagError> {
+    conn.query_row(
+        "SELECT COUNT(*)
+         FROM chunks c
+         JOIN sources s ON s.id = c.source_id
+         WHERE c.collection_id = ?1
+           AND COALESCE(s.status, 'completed') = 'completed'",
+        params![collection_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|count| count.max(0) as usize)
+    .map_err(|e| RagError::DatabaseError(e.to_string()))
+}
+
+fn loaded_hnsw_has_db_parity(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+) -> Result<bool, RagError> {
+    let expected = eligible_hnsw_point_count(conn, collection_id)?;
+    let actual = loaded_hnsw_node_count();
+    if actual == Some(expected) {
+        return Ok(true);
+    }
+
+    let error = format!(
+        "HNSW cache parity mismatch for collection {collection_id}: db_eligible={expected}, hnsw_nodes={}",
+        actual.map_or_else(|| "unloaded".to_string(), |count| count.to_string())
+    );
+    clear_hnsw_index();
+    mark_collection_hnsw_failed(conn, collection_id, &error)?;
+    log::warn!("[hnsw] {error}");
+    Ok(false)
+}
+
 fn mark_collection_bm25_clean(
     conn: &rusqlite::Connection,
     collection_id: &str,
@@ -402,6 +454,13 @@ pub fn init_source_db() -> Result<(), RagError> {
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
     }
 
+    let has_mmap_id: bool = conn.prepare("SELECT mmap_id FROM chunks LIMIT 1").is_ok();
+    if !has_mmap_id {
+        info!("[init_source_db] Migrating: adding mmap_id to chunks");
+        conn.execute("ALTER TABLE chunks ADD COLUMN mmap_id INTEGER", [])
+            .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    }
+
     #[cfg(feature = "vector_quant_i8")]
     {
         let mut stmt = conn.prepare(
@@ -421,7 +480,8 @@ pub fn init_source_db() -> Result<(), RagError> {
             if embedding.is_empty() {
                 continue;
             }
-            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&embedding);
+            let (embedding_i8_bytes, embedding_scale) =
+                quantize_f32_for_active_profile(&embedding)?;
             conn.execute(
                 "UPDATE chunks SET embedding_i8 = ?1, embedding_scale = ?2 WHERE id = ?3",
                 params![embedding_i8_bytes, embedding_scale, id],
@@ -783,12 +843,27 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
 
         #[cfg(feature = "vector_quant_i8")]
         {
-            let (embedding_i8_bytes, embedding_scale) = quantize_f32_to_u8_blob(&chunk.embedding);
+            let (embedding_i8_bytes, embedding_scale) =
+                quantize_f32_for_active_profile(&chunk.embedding)?;
+
+            // Append to MMAP_STORE
+            let mmap_id = {
+                let mut store = crate::api::mmap_store::MMAP_STORE.write().unwrap();
+                let Some(store) = store.as_mut() else {
+                    return Err(RagError::DatabaseError(
+                        "MMAP vector store is not initialized".to_string(),
+                    ));
+                };
+                store
+                    .append(&embedding_i8_bytes)
+                    .map_err(|error| RagError::DatabaseError(error.to_string()))?
+            };
+            let empty_blob: Vec<u8> = Vec::new();
 
             if has_chunk_embedding_i8 && has_chunk_embedding_scale {
                 tx.execute(
-                    "INSERT INTO chunks (source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding, embedding_i8, embedding_scale)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    "INSERT INTO chunks (source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding, embedding_i8, embedding_scale, mmap_id)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                     params![
                         source_id,
                         source_collection_id,
@@ -797,16 +872,17 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
                         chunk.start_pos,
                         chunk.end_pos,
                         chunk.chunk_type,
-                        embedding_bytes,
-                        embedding_i8_bytes,
-                        embedding_scale
+                        empty_blob,
+                        empty_blob, // We can also skip storing it in SQLite since it's in mmap
+                        embedding_scale,
+                        mmap_id as i64
                     ],
                 )
                 .map_err(|e| RagError::DatabaseError(e.to_string()))?;
             } else {
                 tx.execute(
-                    "INSERT INTO chunks (source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    "INSERT INTO chunks (source_id, collection_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding, mmap_id)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     params![
                         source_id,
                         source_collection_id,
@@ -815,7 +891,8 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
                         chunk.start_pos,
                         chunk.end_pos,
                         chunk.chunk_type,
-                        embedding_bytes
+                        empty_blob,
+                        mmap_id as i64
                     ],
                 )
                 .map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -841,6 +918,22 @@ pub fn add_chunks(source_id: i64, chunks: Vec<ChunkData>) -> Result<i32, RagErro
             )
             .map_err(|e| RagError::DatabaseError(e.to_string()))?;
         }
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    {
+        // Make every MMAP record durable before its SQLite reference becomes
+        // visible. A crash may leave an unreferenced tail record, but never a
+        // committed chunk whose mmap_id points to unwritten bytes.
+        let store = crate::api::mmap_store::MMAP_STORE.read().unwrap();
+        let Some(store) = store.as_ref() else {
+            return Err(RagError::DatabaseError(
+                "MMAP vector store is not initialized".to_string(),
+            ));
+        };
+        store
+            .flush()
+            .map_err(|error| RagError::DatabaseError(error.to_string()))?;
     }
 
     tx.commit()
@@ -872,18 +965,7 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     ensure_collection_row(&conn, &collection_id)?;
 
-    let point_count_hint: usize = conn
-        .query_row(
-            "SELECT COUNT(*)
-             FROM chunks c
-             JOIN sources s ON s.id = c.source_id
-             WHERE c.collection_id = ?1
-               AND COALESCE(s.status, 'completed') = 'completed'",
-            params![&collection_id],
-            |row| row.get::<_, i64>(0),
-        )
-        .map(|count| count.max(0) as usize)
-        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let point_count_hint = eligible_hnsw_point_count(&conn, &collection_id)?;
 
     if point_count_hint == 0 {
         clear_hnsw_index();
@@ -900,7 +982,7 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
         .is_ok();
     let mut stmt = if has_chunk_embedding_i8 && has_chunk_embedding_scale {
         conn.prepare(
-            "SELECT c.id, c.embedding, c.embedding_i8, c.embedding_scale
+            "SELECT c.id, c.embedding, c.embedding_i8, c.embedding_scale, c.mmap_id
              FROM chunks c
              JOIN sources s ON s.id = c.source_id
              WHERE c.collection_id = ?1
@@ -908,7 +990,7 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
         )
     } else {
         conn.prepare(
-            "SELECT c.id, c.embedding, NULL AS embedding_i8, NULL AS embedding_scale
+            "SELECT c.id, c.embedding, NULL AS embedding_i8, NULL AS embedding_scale, c.mmap_id
              FROM chunks c
              JOIN sources s ON s.id = c.source_id
              WHERE c.collection_id = ?1
@@ -921,25 +1003,81 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
         .query_map(params![&collection_id], |row| {
             let id: i64 = row.get(0)?;
             let embedding_blob: Vec<u8> = row.get(1)?;
-            let embedding_i8_blob: Option<Vec<u8>> = row.get(2)?;
+            let mut embedding_i8_blob: Option<Vec<u8>> = row.get(2)?;
             let embedding_scale: Option<f32> = row.get(3)?;
+            let mmap_id: Option<i64> = row.get(4)?;
+
+            // When vector_quant_i8 is active, the embedding column in SQLite is
+            // intentionally empty; the actual quantized data lives in MMAP_STORE.
+            // Retrieve it so we can decode back to f32 for HNSW construction.
+            if let Some(mid) = mmap_id {
+                if mid > 0 && embedding_i8_blob.as_ref().map_or(true, |b| b.is_empty()) {
+                    let store = crate::api::mmap_store::MMAP_STORE.read().unwrap();
+                    if let Some(s) = store.as_ref() {
+                        if let Some(data) = s.get(mid as usize) {
+                            embedding_i8_blob = Some(data.to_vec());
+                        }
+                    }
+                }
+            }
 
             // Build the HNSW graph using original high-precision f32 embeddings
             // to prevent the Compound Distortion Loop and maintain optimal recall.
-            let _ = (embedding_i8_blob, embedding_scale);
-            let embedding = decode_f32_embedding_or_warn(&embedding_blob, id);
+            let mut embedding = decode_f32_embedding_or_warn(&embedding_blob, id);
+
+            #[cfg(feature = "vector_quant_i8")]
+            {
+                if embedding.is_empty() {
+                    if let Some(packed_blob) = embedding_i8_blob {
+                        if let Some(decoded) =
+                            crate::api::vector_quant::decode_packed_blob_to_f32(&packed_blob)
+                        {
+                            embedding = decoded;
+                        } else {
+                            log::warn!("Failed to decode packed i8 blob for row id={}", id);
+                        }
+                    }
+                }
+            }
+
+            let _ = embedding_scale;
+
             Ok((id, embedding))
         })
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    let mut points = Vec::with_capacity(point_count_hint);
+    let mut decode_errors = Vec::new();
+    for row in rows {
+        match row {
+            Ok((id, embedding)) if !embedding.is_empty() => points.push((id, embedding)),
+            Ok((id, _)) => decode_errors.push(format!(
+                "chunk {id}: missing or invalid persisted embedding"
+            )),
+            Err(error) => decode_errors.push(format!("chunk row read failed: {error}")),
+        }
+    }
+    if !decode_errors.is_empty() {
+        let error = format!(
+            "HNSW rebuild rejected {} row(s) for collection {}: {}",
+            decode_errors.len(),
+            collection_id,
+            decode_errors
+                .into_iter()
+                .take(8)
+                .collect::<Vec<_>>()
+                .join("; ")
+        );
+        clear_hnsw_index();
+        mark_collection_hnsw_failed(&conn, &collection_id, &error)?;
+        return Err(RagError::InvalidInput(error));
+    }
 
     let inserted = if hnsw_streaming_rebuild_enabled() {
         info!(
             "[rebuild_chunk_hnsw] Using streaming rebuild path for target_os={}",
             std::env::consts::OS
         );
-        let points = rows
-            .filter_map(|row| row.ok())
-            .filter(|(_, embedding)| !embedding.is_empty());
         build_hnsw_index_streaming(point_count_hint, points)
             .map_err(|e| RagError::InternalError(e.to_string()))?
     } else {
@@ -947,14 +1085,20 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
             "[rebuild_chunk_hnsw] Using collect rebuild path for target_os={}",
             std::env::consts::OS
         );
-        let points: Vec<(i64, Vec<f32>)> = rows
-            .filter_map(|row| row.ok())
-            .filter(|(_, embedding)| !embedding.is_empty())
-            .collect();
         let inserted = points.len();
         build_hnsw_index(points).map_err(|e| RagError::InternalError(e.to_string()))?;
         inserted
     };
+
+    if inserted != point_count_hint {
+        let error = format!(
+            "HNSW rebuild parity mismatch for collection {}: eligible={}, inserted={}",
+            collection_id, point_count_hint, inserted
+        );
+        clear_hnsw_index();
+        mark_collection_hnsw_failed(&conn, &collection_id, &error)?;
+        return Err(RagError::InvalidInput(error));
+    }
 
     if inserted == 0 {
         clear_hnsw_index();
@@ -1061,9 +1205,12 @@ pub fn load_collection_hnsw_index(
         }
     };
     if loaded {
-        set_active_hnsw_collection(&collection_id);
         let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
-        let _ = mark_collection_hnsw_clean(&conn, &collection_id);
+        if !loaded_hnsw_has_db_parity(&conn, &collection_id)? {
+            return Ok(false);
+        }
+        set_active_hnsw_collection(&collection_id);
+        mark_collection_hnsw_clean(&conn, &collection_id)?;
     }
     Ok(loaded)
 }
@@ -1094,7 +1241,15 @@ fn activate_collection_for_hybrid_search_inner(
         rebuild_chunk_bm25_index_for_collection(collection_id.clone())?;
     }
 
-    if !is_hnsw_index_loaded() || !is_active_hnsw_collection(&collection_id) {
+    let active_cache_is_valid =
+        if is_hnsw_index_loaded() && is_active_hnsw_collection(&collection_id) {
+            loaded_hnsw_has_db_parity(&conn, &collection_id)?
+        } else {
+            false
+        };
+
+    if !active_cache_is_valid {
+        clear_hnsw_index();
         let load_start = Instant::now();
         let load_result = load_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()));
         let loaded = match load_result {
@@ -1107,9 +1262,9 @@ fn activate_collection_for_hybrid_search_inner(
                 return Err(err);
             }
         };
-        if loaded {
+        if loaded && loaded_hnsw_has_db_parity(&conn, &collection_id)? {
             set_active_hnsw_collection(&collection_id);
-            let _ = mark_collection_hnsw_clean(&conn, &collection_id);
+            mark_collection_hnsw_clean(&conn, &collection_id)?;
         } else {
             rebuild_chunk_hnsw_index_for_collection(collection_id.clone())?;
             let save_start = Instant::now();
@@ -1117,6 +1272,13 @@ fn activate_collection_for_hybrid_search_inner(
                 save_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()));
             activation_metrics::record_hnsw_save_nanos(elapsed_nanos_u64(save_start));
             save_result?;
+            if !loaded_hnsw_has_db_parity(&conn, &collection_id)? {
+                return Err(RagError::InvalidInput(format!(
+                    "HNSW cache parity failed after rebuilding collection {collection_id}"
+                )));
+            }
+            set_active_hnsw_collection(&collection_id);
+            mark_collection_hnsw_clean(&conn, &collection_id)?;
         }
     }
 
@@ -2311,7 +2473,7 @@ pub fn search_chunks_in_collection(
     }
 
     if !is_hnsw_index_loaded() {
-        debug!("[search_chunks] Falling back to linear scan");
+        debug!("[search_chunks] Falling back to linear scan (rebuild failed or yielded no points)");
         return search_chunks_linear_in_collection(&collection_id, query_embedding, top_k);
     }
 
@@ -2357,16 +2519,11 @@ fn search_chunks_linear_in_collection(
     top_k: u32,
 ) -> Result<Vec<ChunkSearchResult>, RagError> {
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
     let query_norm = l2_norm_f32(&query_embedding);
-    #[cfg(feature = "vector_quant_i8")]
-    let (query_i8, _query_i8_scale) = quantize_f32_to_i8(&query_embedding);
-    #[cfg(feature = "vector_quant_i8")]
-    let query_i8_norm = l2_norm_i8(&query_i8);
-    #[cfg(feature = "vector_quant_i8")]
-    let query_q8 = QueryQ8::new(&query_embedding);
 
     let mut stmt = match conn.prepare(
-        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, c.embedding_i8, s.metadata
+        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, c.embedding_i8, s.metadata, c.mmap_id
          FROM chunks c
          JOIN sources s ON c.source_id = s.id
          WHERE c.collection_id = ?1
@@ -2375,7 +2532,7 @@ fn search_chunks_linear_in_collection(
         Ok(stmt) => stmt,
         Err(_) => conn
             .prepare(
-                "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, NULL AS embedding_i8, s.metadata
+                "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, NULL AS embedding_i8, s.metadata, c.mmap_id
                  FROM chunks c
                  JOIN sources s ON c.source_id = s.id
                  WHERE c.collection_id = ?1
@@ -2383,8 +2540,6 @@ fn search_chunks_linear_in_collection(
             )
             .map_err(|e| RagError::DatabaseError(e.to_string()))?,
     };
-
-    let mut candidates: Vec<(f64, i64, i64, i32, String, String, Option<String>)> = Vec::new();
 
     let rows = stmt
         .query_map(params![collection_id], |row| {
@@ -2397,9 +2552,12 @@ fn search_chunks_linear_in_collection(
                 row.get::<_, Vec<u8>>(5)?,
                 row.get::<_, Option<Vec<u8>>>(6)?,
                 row.get(7)?,
+                row.get::<_, Option<i64>>(8).unwrap_or(None),
             ))
         })
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+
+    let mut candidates = Vec::new();
 
     for row in rows {
         let (
@@ -2411,6 +2569,7 @@ fn search_chunks_linear_in_collection(
             embedding_blob,
             embedding_i8_blob,
             metadata,
+            mmap_id,
         ): (
             i64,
             i64,
@@ -2420,14 +2579,37 @@ fn search_chunks_linear_in_collection(
             Vec<u8>,
             Option<Vec<u8>>,
             Option<String>,
+            Option<i64>,
         ) = row.map_err(|e| RagError::DatabaseError(e.to_string()))?;
-        #[cfg(not(feature = "vector_quant_i8"))]
-        let _ = &embedding_i8_blob;
 
         #[cfg(feature = "vector_quant_i8")]
-        let similarity = if let Some(qblob) = embedding_i8_blob.as_deref() {
-            if (qblob.len() == query_i8.len() || qblob.len() % 36 == 0) && query_i8_norm > 0.0 {
-                cosine_similarity_q8(&query_q8, qblob, &query_i8, query_i8_norm) as f64
+        let mut sim_opt = None;
+
+        #[cfg(feature = "vector_quant_i8")]
+        if let Some(mid) = mmap_id {
+            if mid > 0 && embedding_i8_blob.as_ref().map_or(true, |b| b.is_empty()) {
+                let store = crate::api::mmap_store::MMAP_STORE.read().unwrap();
+                if let Some(s) = store.as_ref() {
+                    if let Some(data) = s.get(mid as usize) {
+                        let qblob = data;
+                        sim_opt =
+                            score_persisted_quantized_blob(&query_embedding, qblob)?.map(f64::from);
+                    }
+                }
+            }
+        }
+
+        #[cfg(not(feature = "vector_quant_i8"))]
+        let _ = &embedding_i8_blob;
+        #[cfg(not(feature = "vector_quant_i8"))]
+        let _ = &mmap_id;
+
+        #[cfg(feature = "vector_quant_i8")]
+        let similarity = if let Some(sim) = sim_opt {
+            sim
+        } else if let Some(qblob) = embedding_i8_blob.as_deref() {
+            if let Some(sim) = score_persisted_quantized_blob(&query_embedding, qblob)? {
+                sim as f64
             } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
                 if embedding.len() != query_embedding.len() {
                     continue;
@@ -2485,10 +2667,6 @@ fn search_chunks_linear_in_collection(
         .collect())
 }
 
-/// Benchmark-only entrypoint for deterministic linear scan measurement.
-///
-/// This bypasses HNSW activation/rebuild and executes the exact
-/// chunk linear-scan path directly for the given collection.
 pub fn benchmark_search_chunks_linear_in_collection(
     collection_id: String,
     query_embedding: Vec<f32>,
@@ -2537,8 +2715,8 @@ pub fn get_adjacent_chunks(
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
     let mut stmt = conn.prepare(
-        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), s.metadata 
-         FROM chunks c 
+        "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), s.metadata
+         FROM chunks c
          LEFT JOIN sources s ON c.source_id = s.id
          WHERE c.source_id = ?1 AND c.chunk_index >= ?2 AND c.chunk_index <= ?3 ORDER BY c.chunk_index"
     ).map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -2794,6 +2972,10 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Mutex, OnceLock};
+    use std::{
+        fs::OpenOptions,
+        io::{Seek, SeekFrom, Write},
+    };
     use tokenizers::models::wordlevel::WordLevel;
     use tokenizers::pre_tokenizers::whitespace::Whitespace;
     use tokenizers::processors::bert::BertProcessing;
@@ -2847,6 +3029,93 @@ mod tests {
             "linux", false
         ));
         assert!(hnsw_streaming_rebuild_enabled_for_target_os("ios", true));
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    #[test]
+    fn add_chunks_fails_instead_of_storing_unreadable_mmap_reference() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_add_chunks_requires_mmap_store.db");
+        let source = add_source(
+            "source content".to_string(),
+            None,
+            Some("source".to_string()),
+        )
+        .unwrap();
+
+        let previous_store = {
+            let mut store = crate::api::mmap_store::MMAP_STORE.write().unwrap();
+            store.take()
+        };
+
+        let result = add_chunks(
+            source.source_id,
+            vec![ChunkData {
+                content: "chunk".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 5,
+                chunk_type: "general".to_string(),
+                embedding: vec![0.0; 384],
+            }],
+        );
+
+        {
+            let mut store = crate::api::mmap_store::MMAP_STORE.write().unwrap();
+            *store = previous_store;
+        }
+
+        assert!(result.is_err());
+        let conn = get_connection().unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM chunks", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+
+        teardown_test_db(db_path);
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    #[test]
+    fn add_chunks_rolls_back_when_mmap_append_fails() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(
+            Some("allMiniLmL6V2".to_string()),
+            384,
+        )
+        .unwrap();
+        let db_path = setup_test_db("test_add_chunks_mmap_append_failure.db");
+        let source = add_source(
+            "source content".to_string(),
+            None,
+            Some("source".to_string()),
+        )
+        .unwrap();
+        crate::api::mmap_store::fail_next_append_for_test();
+
+        let error = add_chunks(
+            source.source_id,
+            vec![ChunkData {
+                content: "chunk".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 5,
+                chunk_type: "general".to_string(),
+                embedding: vec![0.25; 384],
+            }],
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("injected mmap append failure"));
+        let conn = get_connection().unwrap();
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM chunks", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        teardown_test_db(db_path);
     }
 
     fn test_search_meta_hook_collection() -> &'static Mutex<Option<String>> {
@@ -2947,6 +3216,228 @@ mod tests {
         db_path
     }
 
+    #[cfg(feature = "vector_quant_i8")]
+    fn q8_0_768_tag_collision_fixture() -> Vec<u8> {
+        let mut blob = Vec::with_capacity(24 * 36);
+        for block_idx in 0..24 {
+            let scale = if block_idx == 0 {
+                f32::from_bits(0x3f80_0002)
+            } else {
+                0.5
+            };
+            blob.extend_from_slice(&scale.to_le_bytes());
+            for lane in 0..32 {
+                blob.push(((block_idx * 32 + lane) as i8).wrapping_sub(96) as u8);
+            }
+        }
+        assert_eq!(blob.len(), 864);
+        assert_eq!(blob[0], 0x02);
+        blob
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    #[test]
+    fn rebuild_keeps_q8_tag_collision_in_db_vec_and_hnsw_parity() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_rebuild_rejects_q8_tag_collision.db");
+        let collection = "q8-tag-collision".to_string();
+        let source =
+            add_source_in_collection(collection.clone(), "source".to_string(), None, None).unwrap();
+        update_source_status(source.source_id, "completed".to_string()).unwrap();
+        add_chunks(
+            source.source_id,
+            vec![ChunkData {
+                content: "collision chunk".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 15,
+                chunk_type: "text".to_string(),
+                embedding: vec![0.25; 768],
+            }],
+        )
+        .unwrap();
+
+        let conn = get_connection().unwrap();
+        let chunk_id: i64 = conn
+            .query_row(
+                "SELECT id FROM chunks WHERE source_id = ?1",
+                params![source.source_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        conn.execute(
+            "UPDATE chunks SET embedding_i8 = ?1, mmap_id = NULL WHERE id = ?2",
+            params![q8_0_768_tag_collision_fixture(), chunk_id],
+        )
+        .unwrap();
+
+        rebuild_chunk_hnsw_index_for_collection(collection.clone()).unwrap();
+        let base_path = db_path
+            .with_extension("q8-tag-collision")
+            .to_string_lossy()
+            .into_owned();
+        save_collection_hnsw_index(collection.clone(), base_path.clone()).unwrap();
+        assert_eq!(loaded_hnsw_node_count(), Some(1));
+
+        clear_hnsw_index();
+        assert!(load_collection_hnsw_index(collection.clone(), base_path).unwrap());
+        assert_eq!(loaded_hnsw_node_count(), Some(1));
+        let (dirty, last_error): (i64, Option<String>) = conn
+            .query_row(
+                "SELECT hnsw_dirty, last_error FROM collection_index_state WHERE collection_id = ?1",
+                params![collection],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(dirty, 0);
+        assert!(last_error.is_none());
+
+        teardown_test_db(db_path);
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    #[test]
+    fn rebuild_propagates_malformed_persisted_row_and_keeps_hnsw_dirty() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_rebuild_rejects_malformed_persisted_blob.db");
+        let collection = "malformed-persisted-blob".to_string();
+        let source =
+            add_source_in_collection(collection.clone(), "source".to_string(), None, None).unwrap();
+        update_source_status(source.source_id, "completed".to_string()).unwrap();
+        add_chunks(
+            source.source_id,
+            vec![ChunkData {
+                content: "bad chunk".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 9,
+                chunk_type: "text".to_string(),
+                embedding: vec![0.25; 768],
+            }],
+        )
+        .unwrap();
+
+        let conn = get_connection().unwrap();
+        let chunk_id: i64 = conn
+            .query_row(
+                "SELECT id FROM chunks WHERE source_id = ?1",
+                params![source.source_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        conn.execute(
+            "UPDATE chunks SET embedding_i8 = ?1, mmap_id = NULL WHERE id = ?2",
+            params![
+                {
+                    let mut malformed = vec![0u8; 789];
+                    malformed[..5].copy_from_slice(&[0x02, 0x01, 0x00, 0x03, 0xff]);
+                    malformed
+                },
+                chunk_id
+            ],
+        )
+        .unwrap();
+
+        let error = rebuild_chunk_hnsw_index_for_collection(collection.clone()).unwrap_err();
+        assert!(error.to_string().contains(&chunk_id.to_string()));
+        let (dirty, last_error): (i64, Option<String>) = conn
+            .query_row(
+                "SELECT hnsw_dirty, last_error FROM collection_index_state WHERE collection_id = ?1",
+                params![collection],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(dirty, 1);
+        assert!(last_error
+            .unwrap_or_default()
+            .contains(&chunk_id.to_string()));
+
+        teardown_test_db(db_path);
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    #[test]
+    fn load_rejects_persisted_hnsw_when_node_count_is_not_db_parity() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_load_rejects_incomplete_hnsw_cache.db");
+        let collection = "cache-parity".to_string();
+        let source =
+            add_source_in_collection(collection.clone(), "source".to_string(), None, None).unwrap();
+        update_source_status(source.source_id, "completed".to_string()).unwrap();
+        add_chunks(
+            source.source_id,
+            (0..2)
+                .map(|index| ChunkData {
+                    content: format!("chunk {index}"),
+                    chunk_index: index,
+                    start_pos: index * 8,
+                    end_pos: index * 8 + 7,
+                    chunk_type: "text".to_string(),
+                    embedding: vec![index as f32 + 0.25; 768],
+                })
+                .collect(),
+        )
+        .unwrap();
+        rebuild_chunk_hnsw_index_for_collection(collection.clone()).unwrap();
+
+        let base_path = db_path
+            .with_extension("cache-parity")
+            .to_string_lossy()
+            .into_owned();
+        save_collection_hnsw_index(collection.clone(), base_path.clone()).unwrap();
+        let conn = get_connection().unwrap();
+        let db_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM chunks WHERE collection_id = ?1",
+                params![collection],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let mmap_ids = conn
+            .prepare("SELECT mmap_id FROM chunks WHERE collection_id = ?1 ORDER BY id")
+            .unwrap()
+            .query_map(params![collection], |row| row.get::<_, i64>(0))
+            .unwrap()
+            .map(|row| row.unwrap())
+            .collect::<Vec<_>>();
+        let store = crate::api::mmap_store::MMAP_STORE.read().unwrap();
+        assert!(mmap_ids.iter().all(|mmap_id| store
+            .as_ref()
+            .and_then(|store| store.get(*mmap_id as usize))
+            .is_some()));
+        assert_eq!(db_count as usize, mmap_ids.len());
+        assert_eq!(loaded_hnsw_node_count(), Some(db_count as usize));
+        drop(store);
+        clear_hnsw_index();
+
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(format!("{base_path}.hnsw"))
+            .unwrap();
+        // HNSW header: magic(4), version(1), entry point(4), max layer(1), node count(u32 LE).
+        file.seek(SeekFrom::Start(10)).unwrap();
+        file.write_all(&1u32.to_le_bytes()).unwrap();
+        file.flush().unwrap();
+
+        assert!(!load_collection_hnsw_index(collection.clone(), base_path).unwrap());
+        let conn = get_connection().unwrap();
+        let (dirty, last_error): (i64, Option<String>) = conn
+            .query_row(
+                "SELECT hnsw_dirty, last_error FROM collection_index_state WHERE collection_id = ?1",
+                params![collection],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(dirty, 1);
+        assert!(last_error.unwrap_or_default().contains("parity"));
+
+        teardown_test_db(db_path);
+    }
+
     fn teardown_test_db(db_path: PathBuf) {
         clear_search_meta_hook();
         clear_handle_hydration_hook();
@@ -2955,6 +3446,167 @@ mod tests {
         bm25_clear_index();
         close_db_pool();
         let _ = std::fs::remove_file(db_path);
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    #[test]
+    fn vabq_mmap_delete_reingest_reopen_and_filtered_parity() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(
+            Some("allMiniLmL6V2".to_string()),
+            384,
+        )
+        .unwrap();
+        let db_path = setup_test_db("test_vabq_mmap_delete_reingest_reopen.db");
+        let collection = "vabq-lifecycle".to_string();
+        let query = {
+            let mut vector = vec![0.0f32; 384];
+            vector[0] = 1.0;
+            vector
+        };
+
+        let original = add_source_in_collection(
+            collection.clone(),
+            "original source".to_string(),
+            None,
+            Some("original".to_string()),
+        )
+        .unwrap();
+        update_source_status(original.source_id, "completed".to_string()).unwrap();
+        add_chunks(
+            original.source_id,
+            vec![ChunkData {
+                content: "obsolete VABQ chunk".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 19,
+                chunk_type: "text".to_string(),
+                embedding: query.clone(),
+            }],
+        )
+        .unwrap();
+        let conn = get_connection().unwrap();
+        let old_mmap_id: i64 = conn
+            .query_row(
+                "SELECT mmap_id FROM chunks WHERE source_id = ?1",
+                params![original.source_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            search_chunks_in_collection(collection.clone(), query.clone(), 1).unwrap()[0].source_id,
+            original.source_id
+        );
+
+        delete_source_in_collection(collection.clone(), original.source_id).unwrap();
+        let replacement = add_source_in_collection(
+            collection.clone(),
+            "replacement source".to_string(),
+            None,
+            Some("replacement".to_string()),
+        )
+        .unwrap();
+        update_source_status(replacement.source_id, "completed".to_string()).unwrap();
+        let mut second = query.clone();
+        second[1] = 0.35;
+        let mut third = query.clone();
+        third[2] = 0.2;
+        add_chunks(
+            replacement.source_id,
+            vec![
+                ChunkData {
+                    content: "replacement nearest".to_string(),
+                    chunk_index: 0,
+                    start_pos: 0,
+                    end_pos: 19,
+                    chunk_type: "text".to_string(),
+                    embedding: query.clone(),
+                },
+                ChunkData {
+                    content: "replacement second".to_string(),
+                    chunk_index: 1,
+                    start_pos: 20,
+                    end_pos: 38,
+                    chunk_type: "text".to_string(),
+                    embedding: second,
+                },
+                ChunkData {
+                    content: "replacement third".to_string(),
+                    chunk_index: 2,
+                    start_pos: 39,
+                    end_pos: 56,
+                    chunk_type: "text".to_string(),
+                    embedding: third,
+                },
+            ],
+        )
+        .unwrap();
+        let new_mmap_id: i64 = conn
+            .query_row(
+                "SELECT mmap_id FROM chunks WHERE source_id = ?1 AND chunk_index = 0",
+                params![replacement.source_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_ne!(old_mmap_id, new_mmap_id);
+
+        // Reopen both persistence layers. The vector store must recover all
+        // referenced records and must not resurrect the deleted SQLite row.
+        clear_hnsw_index();
+        close_db_pool();
+        crate::api::mmap_store::MMAP_STORE.write().unwrap().take();
+        init_db_pool(db_path.to_str().unwrap().to_string(), 4).unwrap();
+        init_source_db().unwrap();
+
+        let unfiltered = search_chunks_in_collection(collection.clone(), query.clone(), 3).unwrap();
+        let unfiltered_ids: Vec<i64> = unfiltered.iter().map(|hit| hit.chunk_id).collect();
+        assert!(unfiltered
+            .iter()
+            .all(|hit| hit.source_id == replacement.source_id));
+        assert!(unfiltered
+            .iter()
+            .all(|hit| hit.content != "obsolete VABQ chunk"));
+
+        let filtered = search_hybrid_meta_inner(
+            "vector-only".to_string(),
+            &query,
+            3,
+            Some(RrfConfig {
+                k: 60,
+                vector_weight: 1.0,
+                bm25_weight: 0.0,
+            }),
+            Some(SearchFilter {
+                source_ids: Some(vec![replacement.source_id]),
+                metadata_like: None,
+                collection_id: Some(collection.clone()),
+            }),
+        )
+        .unwrap();
+        let filtered_ids: Vec<i64> = filtered.iter().map(|hit| hit.doc_id).collect();
+        assert_eq!(filtered_ids, unfiltered_ids);
+
+        let conn = get_connection().unwrap();
+        let reopened_mmap_id: i64 = conn
+            .query_row(
+                "SELECT mmap_id FROM chunks WHERE source_id = ?1 AND chunk_index = 0",
+                params![replacement.source_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(reopened_mmap_id, new_mmap_id);
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM chunks WHERE content = 'obsolete VABQ chunk'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+            0
+        );
+
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        teardown_test_db(db_path);
     }
 
     fn fetch_chunk_rows(collection_id: &str) -> Vec<(i64, i64, i32, String)> {

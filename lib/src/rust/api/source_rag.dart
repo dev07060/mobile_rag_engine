@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accept_chunk`, `activate_collection_for_hybrid_search_inner`, `allowed_chunk_ids`, `assemble_context_internal`, `build_prompt_text`, `build_search_hit_meta`, `count_tokens`, `decode_structured_chunk_type`, `diversify_sources`, `elapsed_nanos_u64`, `ensure_collection_row`, `ensure_fresh_with_conn`, `ensure_generation_unchanged_with_conn`, `extract_significant_query_terms`, `fetch_adjacent_hit_meta`, `fetch_stored_chunk_types`, `filter_to_most_relevant_source`, `get_collection_data_generation`, `hash_content`, `hydrate_chunk_previews`, `hydrate_chunk_search_results`, `hydrate_rows_for_assembly`, `is_active_bm25_collection`, `is_active_hnsw_collection`, `mark_collection_bm25_clean`, `mark_collection_data_changed`, `mark_collection_dirty`, `mark_collection_hnsw_clean`, `new`, `normalize_collection_id`, `order_chronologically`, `partition_by_cache`, `populate_cache`, `rebuild_chunk_bm25_index_for_collection_inner`, `rebuild_chunk_hnsw_index_for_collection_inner`, `render_candidate_with_headers`, `render_candidate_without_headers`, `render_chunk`, `render_context_text`, `render_source_block`, `resolve_system_instruction`, `resolved_chunk_ids`, `run_handle_assemble_test_hook`, `run_handle_hydration_test_hook`, `run_search_meta_test_hook`, `search_chunks_linear_in_collection`, `search_meta_hybrid_once`, `set_active_bm25_collection`, `set_active_hnsw_collection`, `truncate_utf8_bytes`, `try_add_chunk`, `utf8_string_from_blob_prefix`, `validate_requested_chunk_ids`
+// These functions are ignored because they are not marked as `pub`: `accept_chunk`, `activate_collection_for_hybrid_search_inner`, `allowed_chunk_ids`, `assemble_context_internal`, `build_prompt_text`, `build_search_hit_meta`, `count_tokens`, `decode_structured_chunk_type`, `diversify_sources`, `elapsed_nanos_u64`, `eligible_hnsw_point_count`, `ensure_collection_row`, `ensure_fresh_with_conn`, `ensure_generation_unchanged_with_conn`, `extract_significant_query_terms`, `fetch_adjacent_hit_meta`, `fetch_stored_chunk_types`, `filter_to_most_relevant_source`, `get_collection_data_generation`, `hash_content`, `hnsw_streaming_rebuild_enabled_for_target_os`, `hnsw_streaming_rebuild_enabled`, `hydrate_chunk_previews`, `hydrate_chunk_search_results`, `hydrate_rows_for_assembly`, `is_active_bm25_collection`, `is_active_hnsw_collection`, `loaded_hnsw_has_db_parity`, `mark_collection_bm25_clean`, `mark_collection_data_changed`, `mark_collection_dirty`, `mark_collection_hnsw_clean`, `mark_collection_hnsw_failed`, `new`, `normalize_collection_id`, `order_chronologically`, `partition_by_cache`, `populate_cache`, `rebuild_chunk_bm25_index_for_collection_inner`, `rebuild_chunk_hnsw_index_for_collection_inner`, `render_candidate_with_headers`, `render_candidate_without_headers`, `render_chunk`, `render_context_text`, `render_source_block`, `resolve_system_instruction`, `resolved_chunk_ids`, `run_handle_assemble_test_hook`, `run_handle_hydration_test_hook`, `run_search_meta_test_hook`, `search_chunks_linear_in_collection`, `search_meta_hybrid_once`, `set_active_bm25_collection`, `set_active_hnsw_collection`, `truncate_utf8_bytes`, `try_add_chunk`, `utf8_string_from_blob_prefix`, `validate_requested_chunk_ids`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AssemblyBuildResult`, `HydratedChunkRow`, `RenderedSelectionState`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
@@ -16,36 +16,46 @@ Future<void> initSourceDb() =>
     RustLib.instance.api.crateApiSourceRagInitSourceDb();
 
 /// Add a source document (chunks added separately via add_chunks).
-Future<AddSourceResult> addSource(
-        {required String content, String? metadata, String? name}) =>
-    RustLib.instance.api.crateApiSourceRagAddSource(
-        content: content, metadata: metadata, name: name);
+Future<AddSourceResult> addSource({
+  required String content,
+  String? metadata,
+  String? name,
+}) => RustLib.instance.api.crateApiSourceRagAddSource(
+  content: content,
+  metadata: metadata,
+  name: name,
+);
 
 /// Add a source document to a specific collection (chunks added separately via add_chunks).
-Future<AddSourceResult> addSourceInCollection(
-        {required String collectionId,
-        required String content,
-        String? metadata,
-        String? name}) =>
-    RustLib.instance.api.crateApiSourceRagAddSourceInCollection(
-        collectionId: collectionId,
-        content: content,
-        metadata: metadata,
-        name: name);
+Future<AddSourceResult> addSourceInCollection({
+  required String collectionId,
+  required String content,
+  String? metadata,
+  String? name,
+}) => RustLib.instance.api.crateApiSourceRagAddSourceInCollection(
+  collectionId: collectionId,
+  content: content,
+  metadata: metadata,
+  name: name,
+);
 
 /// Update processing status of a source (e.g., 'pending', 'processing', 'completed', 'failed').
-Future<void> updateSourceStatus(
-        {required PlatformInt64 sourceId, required String status}) =>
-    RustLib.instance.api.crateApiSourceRagUpdateSourceStatus(
-        sourceId: sourceId, status: status);
+Future<void> updateSourceStatus({
+  required PlatformInt64 sourceId,
+  required String status,
+}) => RustLib.instance.api.crateApiSourceRagUpdateSourceStatus(
+  sourceId: sourceId,
+  status: status,
+);
 
 /// Claim a source for ingestion by atomically transitioning status to `processing`.
 ///
 /// Returns true when claimed successfully. Only `pending` and `failed` sources
 /// can be claimed. Sources already in `processing`/`completed` return false.
 Future<bool> claimSourceForIngestion({required PlatformInt64 sourceId}) =>
-    RustLib.instance.api
-        .crateApiSourceRagClaimSourceForIngestion(sourceId: sourceId);
+    RustLib.instance.api.crateApiSourceRagClaimSourceForIngestion(
+      sourceId: sourceId,
+    );
 
 /// Get status of a source.
 ///
@@ -62,115 +72,135 @@ Future<int> clearSourceChunks({required PlatformInt64 sourceId}) =>
 Future<List<SourceEntry>> listSources() =>
     RustLib.instance.api.crateApiSourceRagListSources();
 
-Future<List<SourceEntry>> listSourcesInCollection(
-        {required String collectionId}) =>
-    RustLib.instance.api
-        .crateApiSourceRagListSourcesInCollection(collectionId: collectionId);
+Future<List<SourceEntry>> listSourcesInCollection({
+  required String collectionId,
+}) => RustLib.instance.api.crateApiSourceRagListSourcesInCollection(
+  collectionId: collectionId,
+);
 
 /// Add chunks for a source (uses transaction for atomicity).
-Future<int> addChunks(
-        {required PlatformInt64 sourceId, required List<ChunkData> chunks}) =>
-    RustLib.instance.api
-        .crateApiSourceRagAddChunks(sourceId: sourceId, chunks: chunks);
+Future<int> addChunks({
+  required PlatformInt64 sourceId,
+  required List<ChunkData> chunks,
+}) => RustLib.instance.api.crateApiSourceRagAddChunks(
+  sourceId: sourceId,
+  chunks: chunks,
+);
 
 /// Rebuild HNSW index from chunks table.
 Future<void> rebuildChunkHnswIndex() =>
     RustLib.instance.api.crateApiSourceRagRebuildChunkHnswIndex();
 
 /// Rebuild HNSW index from chunks table for a specific collection.
-Future<void> rebuildChunkHnswIndexForCollection(
-        {required String collectionId}) =>
-    RustLib.instance.api.crateApiSourceRagRebuildChunkHnswIndexForCollection(
-        collectionId: collectionId);
+Future<void> rebuildChunkHnswIndexForCollection({
+  required String collectionId,
+}) => RustLib.instance.api.crateApiSourceRagRebuildChunkHnswIndexForCollection(
+  collectionId: collectionId,
+);
 
 /// Rebuild BM25 index from chunks table.
 Future<void> rebuildChunkBm25Index() =>
     RustLib.instance.api.crateApiSourceRagRebuildChunkBm25Index();
 
 /// Rebuild BM25 index from chunks table for a specific collection.
-Future<void> rebuildChunkBm25IndexForCollection(
-        {required String collectionId}) =>
-    RustLib.instance.api.crateApiSourceRagRebuildChunkBm25IndexForCollection(
-        collectionId: collectionId);
+Future<void> rebuildChunkBm25IndexForCollection({
+  required String collectionId,
+}) => RustLib.instance.api.crateApiSourceRagRebuildChunkBm25IndexForCollection(
+  collectionId: collectionId,
+);
 
 /// Check if BM25 index is loaded for chunks.
 Future<bool> isChunkBm25IndexLoaded() =>
     RustLib.instance.api.crateApiSourceRagIsChunkBm25IndexLoaded();
 
 /// Save currently loaded HNSW index for a collection.
-Future<void> saveCollectionHnswIndex(
-        {required String collectionId, required String basePath}) =>
-    RustLib.instance.api.crateApiSourceRagSaveCollectionHnswIndex(
-        collectionId: collectionId, basePath: basePath);
+Future<void> saveCollectionHnswIndex({
+  required String collectionId,
+  required String basePath,
+}) => RustLib.instance.api.crateApiSourceRagSaveCollectionHnswIndex(
+  collectionId: collectionId,
+  basePath: basePath,
+);
 
 /// Load HNSW index from disk and mark the collection as active.
-Future<bool> loadCollectionHnswIndex(
-        {required String collectionId, required String basePath}) =>
-    RustLib.instance.api.crateApiSourceRagLoadCollectionHnswIndex(
-        collectionId: collectionId, basePath: basePath);
+Future<bool> loadCollectionHnswIndex({
+  required String collectionId,
+  required String basePath,
+}) => RustLib.instance.api.crateApiSourceRagLoadCollectionHnswIndex(
+  collectionId: collectionId,
+  basePath: basePath,
+);
 
 /// Ensure the in-memory hybrid search indexes are switched to the target collection.
 ///
 /// BM25 is rebuilt for the collection when not active, and HNSW is loaded (or rebuilt)
 /// from the collection-specific path as needed.
-Future<void> activateCollectionForHybridSearch(
-        {required String collectionId, required String basePath}) =>
-    RustLib.instance.api.crateApiSourceRagActivateCollectionForHybridSearch(
-        collectionId: collectionId, basePath: basePath);
+Future<void> activateCollectionForHybridSearch({
+  required String collectionId,
+  required String basePath,
+}) => RustLib.instance.api.crateApiSourceRagActivateCollectionForHybridSearch(
+  collectionId: collectionId,
+  basePath: basePath,
+);
 
-Future<SearchHandle> searchMetaHybrid(
-        {required String collectionId,
-        required String queryText,
-        required List<double> queryEmbedding,
-        required SearchMetaHybridOptions options}) =>
-    RustLib.instance.api.crateApiSourceRagSearchMetaHybrid(
-        collectionId: collectionId,
-        queryText: queryText,
-        queryEmbedding: queryEmbedding,
-        options: options);
+Future<SearchHandle> searchMetaHybrid({
+  required String collectionId,
+  required String queryText,
+  required List<double> queryEmbedding,
+  required SearchMetaHybridOptions options,
+}) => RustLib.instance.api.crateApiSourceRagSearchMetaHybrid(
+  collectionId: collectionId,
+  queryText: queryText,
+  queryEmbedding: queryEmbedding,
+  options: options,
+);
 
-Future<int> deriveContextBudgetForPromptV2(
-        {required int fullPromptBudget,
-        required String query,
-        String? systemInstruction,
-        required bool useStrictMode,
-        required int safetyMarginTokens,
-        int? fixedPromptOverheadTokens}) =>
-    RustLib.instance.api.crateApiSourceRagDeriveContextBudgetForPromptV2(
-        fullPromptBudget: fullPromptBudget,
-        query: query,
-        systemInstruction: systemInstruction,
-        useStrictMode: useStrictMode,
-        safetyMarginTokens: safetyMarginTokens,
-        fixedPromptOverheadTokens: fixedPromptOverheadTokens);
+Future<int> deriveContextBudgetForPromptV2({
+  required int fullPromptBudget,
+  required String query,
+  String? systemInstruction,
+  required bool useStrictMode,
+  required int safetyMarginTokens,
+  int? fixedPromptOverheadTokens,
+}) => RustLib.instance.api.crateApiSourceRagDeriveContextBudgetForPromptV2(
+  fullPromptBudget: fullPromptBudget,
+  query: query,
+  systemInstruction: systemInstruction,
+  useStrictMode: useStrictMode,
+  safetyMarginTokens: safetyMarginTokens,
+  fixedPromptOverheadTokens: fixedPromptOverheadTokens,
+);
 
 /// Search chunks by embedding similarity.
-Future<List<ChunkSearchResult>> searchChunks(
-        {required List<double> queryEmbedding, required int topK}) =>
-    RustLib.instance.api.crateApiSourceRagSearchChunks(
-        queryEmbedding: queryEmbedding, topK: topK);
+Future<List<ChunkSearchResult>> searchChunks({
+  required List<double> queryEmbedding,
+  required int topK,
+}) => RustLib.instance.api.crateApiSourceRagSearchChunks(
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
 
 /// Search chunks by embedding similarity in a specific collection.
-Future<List<ChunkSearchResult>> searchChunksInCollection(
-        {required String collectionId,
-        required List<double> queryEmbedding,
-        required int topK}) =>
-    RustLib.instance.api.crateApiSourceRagSearchChunksInCollection(
-        collectionId: collectionId, queryEmbedding: queryEmbedding, topK: topK);
+Future<List<ChunkSearchResult>> searchChunksInCollection({
+  required String collectionId,
+  required List<double> queryEmbedding,
+  required int topK,
+}) => RustLib.instance.api.crateApiSourceRagSearchChunksInCollection(
+  collectionId: collectionId,
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
 
-/// Benchmark-only entrypoint for deterministic linear scan measurement.
-///
-/// This bypasses HNSW activation/rebuild and executes the exact
-/// chunk linear-scan path directly for the given collection.
-Future<List<ChunkSearchResult>> benchmarkSearchChunksLinearInCollection(
-        {required String collectionId,
-        required List<double> queryEmbedding,
-        required int topK}) =>
-    RustLib.instance.api
-        .crateApiSourceRagBenchmarkSearchChunksLinearInCollection(
-            collectionId: collectionId,
-            queryEmbedding: queryEmbedding,
-            topK: topK);
+Future<List<ChunkSearchResult>> benchmarkSearchChunksLinearInCollection({
+  required String collectionId,
+  required List<double> queryEmbedding,
+  required int topK,
+}) => RustLib.instance.api
+    .crateApiSourceRagBenchmarkSearchChunksLinearInCollection(
+      collectionId: collectionId,
+      queryEmbedding: queryEmbedding,
+      topK: topK,
+    );
 
 /// Get source document by ID.
 Future<String?> getSource({required PlatformInt64 sourceId}) =>
@@ -181,60 +211,76 @@ Future<List<String>> getSourceChunks({required PlatformInt64 sourceId}) =>
     RustLib.instance.api.crateApiSourceRagGetSourceChunks(sourceId: sourceId);
 
 /// Get adjacent chunks by source_id and chunk_index range.
-Future<List<ChunkSearchResult>> getAdjacentChunks(
-        {required PlatformInt64 sourceId,
-        required int minIndex,
-        required int maxIndex}) =>
-    RustLib.instance.api.crateApiSourceRagGetAdjacentChunks(
-        sourceId: sourceId, minIndex: minIndex, maxIndex: maxIndex);
+Future<List<ChunkSearchResult>> getAdjacentChunks({
+  required PlatformInt64 sourceId,
+  required int minIndex,
+  required int maxIndex,
+}) => RustLib.instance.api.crateApiSourceRagGetAdjacentChunks(
+  sourceId: sourceId,
+  minIndex: minIndex,
+  maxIndex: maxIndex,
+);
 
 /// Delete a source and all its chunks.
 Future<void> deleteSource({required PlatformInt64 sourceId}) =>
     RustLib.instance.api.crateApiSourceRagDeleteSource(sourceId: sourceId);
 
 /// Delete a source and all its chunks in a specific collection.
-Future<void> deleteSourceInCollection(
-        {required String collectionId, required PlatformInt64 sourceId}) =>
-    RustLib.instance.api.crateApiSourceRagDeleteSourceInCollection(
-        collectionId: collectionId, sourceId: sourceId);
+Future<void> deleteSourceInCollection({
+  required String collectionId,
+  required PlatformInt64 sourceId,
+}) => RustLib.instance.api.crateApiSourceRagDeleteSourceInCollection(
+  collectionId: collectionId,
+  sourceId: sourceId,
+);
 
 /// Get the number of chunks for a specific source.
-Future<int> getSourceChunkCount({required PlatformInt64 sourceId}) =>
-    RustLib.instance.api
-        .crateApiSourceRagGetSourceChunkCount(sourceId: sourceId);
+Future<int> getSourceChunkCount({required PlatformInt64 sourceId}) => RustLib
+    .instance
+    .api
+    .crateApiSourceRagGetSourceChunkCount(sourceId: sourceId);
 
 Future<SourceStats> getSourceStats() =>
     RustLib.instance.api.crateApiSourceRagGetSourceStats();
 
-Future<SourceStats> getSourceStatsInCollection(
-        {required String collectionId}) =>
-    RustLib.instance.api.crateApiSourceRagGetSourceStatsInCollection(
-        collectionId: collectionId);
+Future<SourceStats> getSourceStatsInCollection({
+  required String collectionId,
+}) => RustLib.instance.api.crateApiSourceRagGetSourceStatsInCollection(
+  collectionId: collectionId,
+);
 
 /// Get all chunk IDs and contents for re-embedding.
 Future<List<ChunkForReembedding>> getAllChunkIdsAndContents() =>
     RustLib.instance.api.crateApiSourceRagGetAllChunkIdsAndContents();
 
-Future<List<ChunkForReembedding>> getAllChunkIdsAndContentsInCollection(
-        {required String collectionId}) =>
+Future<List<ChunkForReembedding>> getAllChunkIdsAndContentsInCollection({
+  required String collectionId,
+}) =>
     RustLib.instance.api.crateApiSourceRagGetAllChunkIdsAndContentsInCollection(
-        collectionId: collectionId);
+      collectionId: collectionId,
+    );
 
 /// Update embedding for a single chunk.
-Future<void> updateChunkEmbedding(
-        {required PlatformInt64 chunkId, required List<double> embedding}) =>
-    RustLib.instance.api.crateApiSourceRagUpdateChunkEmbedding(
-        chunkId: chunkId, embedding: embedding);
+Future<void> updateChunkEmbedding({
+  required PlatformInt64 chunkId,
+  required List<double> embedding,
+}) => RustLib.instance.api.crateApiSourceRagUpdateChunkEmbedding(
+  chunkId: chunkId,
+  embedding: embedding,
+);
 
 /// Stream the next batch of chunks that still carry a non-matching fingerprint.
 ///
 /// Used by the reembed flow to walk the corpus incrementally without holding
 /// the entire chunk set in Dart memory. The batch is ordered by `id` so a
 /// caller that crashes between batches can resume deterministically.
-Future<List<ChunkForReembedding>> listChunksNeedingReembed(
-        {required String targetFingerprint, required PlatformInt64 limit}) =>
-    RustLib.instance.api.crateApiSourceRagListChunksNeedingReembed(
-        targetFingerprint: targetFingerprint, limit: limit);
+Future<List<ChunkForReembedding>> listChunksNeedingReembed({
+  required String targetFingerprint,
+  required PlatformInt64 limit,
+}) => RustLib.instance.api.crateApiSourceRagListChunksNeedingReembed(
+  targetFingerprint: targetFingerprint,
+  limit: limit,
+);
 
 /// Atomically replace a chunk's embedding and tag it with `target_fingerprint`.
 ///
@@ -242,25 +288,29 @@ Future<List<ChunkForReembedding>> listChunksNeedingReembed(
 /// new embedding bytes but the old fingerprint marker (or vice versa). Marks
 /// the chunk's collection as dirty so the next HNSW rebuild picks up the new
 /// vector.
-Future<void> updateChunkReembedded(
-        {required PlatformInt64 chunkId,
-        required List<double> embedding,
-        required String targetFingerprint}) =>
-    RustLib.instance.api.crateApiSourceRagUpdateChunkReembedded(
-        chunkId: chunkId,
-        embedding: embedding,
-        targetFingerprint: targetFingerprint);
+Future<void> updateChunkReembedded({
+  required PlatformInt64 chunkId,
+  required List<double> embedding,
+  required String targetFingerprint,
+}) => RustLib.instance.api.crateApiSourceRagUpdateChunkReembedded(
+  chunkId: chunkId,
+  embedding: embedding,
+  targetFingerprint: targetFingerprint,
+);
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<SearchHandle>>
 abstract class SearchHandle implements RustOpaqueInterface {
-  Future<AssembledContextV2> assembleContext(
-      {required AssembleContextOptions options});
+  Future<AssembledContextV2> assembleContext({
+    required AssembleContextOptions options,
+  });
 
   @override
   Future<void> dispose();
 
-  Future<List<ChunkExcerptResult>> getChunkExcerpts(
-      {required Int64List chunkIds, required int maxBytes});
+  Future<List<ChunkExcerptResult>> getChunkExcerpts({
+    required Int64List chunkIds,
+    required int maxBytes,
+  });
 
   Future<List<SearchHitMeta>> hitMeta();
 
@@ -446,10 +496,7 @@ class ChunkForReembedding {
   final PlatformInt64 chunkId;
   final String content;
 
-  const ChunkForReembedding({
-    required this.chunkId,
-    required this.content,
-  });
+  const ChunkForReembedding({required this.chunkId, required this.content});
 
   @override
   int get hashCode => chunkId.hashCode ^ content.hashCode;
@@ -506,12 +553,7 @@ class ChunkSearchResult {
           metadata == other.metadata;
 }
 
-enum ContextAssemblyStrategy {
-  relevanceFirst,
-  diverseSources,
-  chronological,
-  ;
-}
+enum ContextAssemblyStrategy { relevanceFirst, diverseSources, chronological }
 
 class SearchHitMeta {
   final PlatformInt64 chunkId;
@@ -630,10 +672,7 @@ class SourceStats {
   final PlatformInt64 sourceCount;
   final PlatformInt64 chunkCount;
 
-  const SourceStats({
-    required this.sourceCount,
-    required this.chunkCount,
-  });
+  const SourceStats({required this.sourceCount, required this.chunkCount});
 
   @override
   int get hashCode => sourceCount.hashCode ^ chunkCount.hashCode;

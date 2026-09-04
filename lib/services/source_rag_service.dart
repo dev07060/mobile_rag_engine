@@ -412,7 +412,23 @@ class SourceRagService {
   }
 
   /// Initialize the source database.
-  Future<void> init({bool deferIndexWarmup = false}) async {
+  Future<void> init({bool deferIndexWarmup = false}) =>
+      _init(deferIndexWarmup: deferIndexWarmup);
+
+  /// Package-internal initialization used by `RagEngine` when database boot
+  /// work must finish before BM25/HNSW warmup is scheduled.
+  Future<void> initForEngine({
+    required bool deferIndexWarmup,
+    required Future<void> Function() afterDatabaseInitialized,
+  }) => _init(
+    deferIndexWarmup: deferIndexWarmup,
+    afterDatabaseInitialized: afterDatabaseInitialized,
+  );
+
+  Future<void> _init({
+    required bool deferIndexWarmup,
+    Future<void> Function()? afterDatabaseInitialized,
+  }) async {
     try {
       debugPrint('[SourceRagService] init: Starting...');
 
@@ -452,6 +468,12 @@ class SourceRagService {
           _dirtyVersion++;
         }
       }
+
+      // Database-dependent boot checks must complete before deferred warmup is
+      // scheduled. Otherwise the background BM25/HNSW reads can contend with
+      // initialization writes (for example the embedding fingerprint baseline)
+      // and fail a fresh boot with SQLITE_BUSY / "database is locked".
+      await afterDatabaseInitialized?.call();
 
       // 5. Load or rebuild indexes.
       final warmup = _enqueueIndexTask(_runIndexWarmup);

@@ -744,8 +744,7 @@ pub fn semantic_chunk_with_overlap(
     };
 
     if count_traffic {
-        LEGACY_CHUNKER_CHUNKS_OUT
-            .record(result.iter().map(|c| c.content.len() as u64).sum());
+        LEGACY_CHUNKER_CHUNKS_OUT.record(result.iter().map(|c| c.content.len() as u64).sum());
     }
     result
 }
@@ -1090,8 +1089,7 @@ pub fn markdown_chunk(text: String, max_chars: i32) -> Vec<StructuredChunk> {
     }
 
     if count_traffic {
-        LEGACY_CHUNKER_CHUNKS_OUT
-            .record(chunks.iter().map(|c| c.content.len() as u64).sum());
+        LEGACY_CHUNKER_CHUNKS_OUT.record(chunks.iter().map(|c| c.content.len() as u64).sum());
     }
     chunks
 }

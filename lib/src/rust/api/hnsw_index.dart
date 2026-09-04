@@ -6,60 +6,45 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `build_hnsw_index_streaming`, `hnsw_build_params`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `fmt`
 
-/// Build HNSW index from embedding points.
-///
-/// Parameters are tuned for optimal recall vs speed tradeoff:
-/// - M (max connections per node): 16-24 based on dataset size
-/// - M0 (layer 0 connections): 2*M for better recall
-/// - efConstruction: 100-200 based on dataset size
-Future<void> buildHnswIndex(
-        {required List<(PlatformInt64, Float32List)> points}) =>
-    RustLib.instance.api.crateApiHnswIndexBuildHnswIndex(points: points);
+Future<void> buildHnswIndex({
+  required List<(PlatformInt64, Float32List)> points,
+}) => RustLib.instance.api.crateApiHnswIndexBuildHnswIndex(points: points);
 
-/// Save HNSW index to disk using hnsw_rs persistence.
-///
-/// This saves the full graph and data to a directory specified by [base_path].
+/// Save HNSW index to disk.
 Future<void> saveHnswIndex({required String basePath}) =>
     RustLib.instance.api.crateApiHnswIndexSaveHnswIndex(basePath: basePath);
 
 /// Load HNSW index from disk.
-///
-/// Returns true if the index was successfully loaded into memory.
 Future<bool> loadHnswIndex({required String basePath}) =>
     RustLib.instance.api.crateApiHnswIndexLoadHnswIndex(basePath: basePath);
 
-/// Search in HNSW index.
-///
-/// Owned-vector entrypoint kept stable for the flutter_rust_bridge surface;
-/// delegates to the slice-based implementation so internal Rust callers can
-/// avoid `Vec<f32>` allocations on hot paths.
-///
-/// ef_search parameter controls accuracy vs speed:
-/// - Higher ef_search = better recall but slower
-/// - Lower ef_search = faster but may miss relevant results
-///
-/// Current tuning targets ~95% recall for most use cases.
-Future<List<HnswSearchResult>> searchHnsw(
-        {required List<double> queryEmbedding, required BigInt topK}) =>
-    RustLib.instance.api.crateApiHnswIndexSearchHnsw(
-        queryEmbedding: queryEmbedding, topK: topK);
+Future<List<HnswSearchResult>> searchHnsw({
+  required List<double> queryEmbedding,
+  required BigInt topK,
+}) => RustLib.instance.api.crateApiHnswIndexSearchHnsw(
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
 
-/// Slice-based variant of [`search_hnsw`]. Internal Rust callers should
-/// prefer this entrypoint when the query embedding is already held by
-/// reference (e.g. inside `std::thread::scope` closures or retry loops)
-/// so the vector does not need to be cloned per call.
-Future<List<HnswSearchResult>> searchHnswSlice(
-        {required List<double> queryEmbedding, required BigInt topK}) =>
-    RustLib.instance.api.crateApiHnswIndexSearchHnswSlice(
-        queryEmbedding: queryEmbedding, topK: topK);
+Future<List<HnswSearchResult>> searchHnswSlice({
+  required List<double> queryEmbedding,
+  required BigInt topK,
+}) => RustLib.instance.api.crateApiHnswIndexSearchHnswSlice(
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+);
 
-/// Check if HNSW index is loaded.
 Future<bool> isHnswIndexLoaded() =>
     RustLib.instance.api.crateApiHnswIndexIsHnswIndexLoaded();
 
-/// Clear HNSW index from memory.
+/// Number of nodes in the currently loaded persisted HNSW index. Callers use
+/// this to reject a cache whose header does not cover every eligible DB row.
+Future<BigInt?> loadedHnswNodeCount() =>
+    RustLib.instance.api.crateApiHnswIndexLoadedHnswNodeCount();
+
 Future<void> clearHnswIndex() =>
     RustLib.instance.api.crateApiHnswIndexClearHnswIndex();
 
@@ -76,10 +61,13 @@ class EmbeddingPoint {
   });
 
   // HINT: Make it `#[frb(sync)]` to let it become the default constructor of Dart class.
-  static Future<EmbeddingPoint> newInstance(
-          {required PlatformInt64 id, required List<double> embedding}) =>
-      RustLib.instance.api
-          .crateApiHnswIndexEmbeddingPointNew(id: id, embedding: embedding);
+  static Future<EmbeddingPoint> newInstance({
+    required PlatformInt64 id,
+    required List<double> embedding,
+  }) => RustLib.instance.api.crateApiHnswIndexEmbeddingPointNew(
+    id: id,
+    embedding: embedding,
+  );
 
   @override
   int get hashCode => id.hashCode ^ embedding.hashCode ^ norm.hashCode;
@@ -99,10 +87,7 @@ class HnswSearchResult {
   final PlatformInt64 id;
   final double distance;
 
-  const HnswSearchResult({
-    required this.id,
-    required this.distance,
-  });
+  const HnswSearchResult({required this.id, required this.distance});
 
   @override
   int get hashCode => id.hashCode ^ distance.hashCode;

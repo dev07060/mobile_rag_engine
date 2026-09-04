@@ -16,7 +16,7 @@
 //
 //! Hybrid Search: Vector + Keyword with Reciprocal Rank Fusion.
 
-use log::{debug, info};
+use log::{debug, error, info};
 use std::collections::{HashMap, HashSet};
 
 use crate::api::bm25_search::{bm25_search, bm25_search_scoped_tokens, tokenize_for_bm25};
@@ -26,7 +26,7 @@ use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw_slice, HnswSearch
 use crate::api::query_metrics::record_hybrid_result_content_read;
 use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
-use crate::api::vector_quant::{l2_norm_i8, quantize_f32_to_i8, QueryQ8, cosine_similarity_q8};
+use crate::api::vector_quant::score_persisted_quantized_blob;
 
 #[derive(Debug, Clone)]
 pub struct SearchFilter {
@@ -226,93 +226,133 @@ fn compute_hybrid_rrf_scores(
             let need_bm25 = config.bm25_weight != 0.0 && !query_tokens.is_empty();
 
             // Fetch ALL chunks for this scoped set for exact vector scoring.
-            let query_with_i8 = format!(
-                "SELECT c.id, c.embedding, {}
+            let query_full = format!(
+                "SELECT c.id, c.embedding, c.mmap_id, c.embedding_i8
                      FROM chunks c
                      LEFT JOIN sources s ON c.source_id = s.id
                      WHERE {}",
-                "c.embedding_i8",
                 exact_conditions.join(" AND ")
             );
-            let query_without_i8 = format!(
-                "SELECT c.id, c.embedding, {}
+            let query_no_mmap = format!(
+                "SELECT c.id, c.embedding, NULL AS mmap_id, c.embedding_i8
                      FROM chunks c
                      LEFT JOIN sources s ON c.source_id = s.id
                      WHERE {}",
-                "NULL AS embedding_i8",
+                exact_conditions.join(" AND ")
+            );
+            let query_no_i8 = format!(
+                "SELECT c.id, c.embedding, c.mmap_id, NULL AS embedding_i8
+                     FROM chunks c
+                     LEFT JOIN sources s ON c.source_id = s.id
+                     WHERE {}",
+                exact_conditions.join(" AND ")
+            );
+            let query_minimal = format!(
+                "SELECT c.id, c.embedding, NULL AS mmap_id, NULL AS embedding_i8
+                     FROM chunks c
+                     LEFT JOIN sources s ON c.source_id = s.id
+                     WHERE {}",
                 exact_conditions.join(" AND ")
             );
 
-            let mut stmt = match conn.prepare(&query_with_i8) {
-                Ok(stmt) => stmt,
-                Err(_) => conn
-                    .prepare(&query_without_i8)
-                    .map_err(|e| RagError::DatabaseError(e.to_string()))?,
-            };
+            let mut stmt = conn
+                .prepare(&query_full)
+                .or_else(|_| conn.prepare(&query_no_mmap))
+                .or_else(|_| conn.prepare(&query_no_i8))
+                .or_else(|_| conn.prepare(&query_minimal))
+                .map_err(|e| RagError::DatabaseError(e.to_string()))?;
             let chunk_iter = stmt
                 .query_map([], |row| {
                     Ok((
                         row.get::<_, i64>(0)?,
                         row.get::<_, Vec<u8>>(1)?,
-                        row.get::<_, Option<Vec<u8>>>(2)?,
+                        row.get::<_, Option<i64>>(2)?,
+                        row.get::<_, Option<Vec<u8>>>(3)?,
                     ))
                 })
                 .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
             let query_norm = l2_norm_f32(query_embedding);
-            #[cfg(feature = "vector_quant_i8")]
-            let (query_i8, _query_i8_scale) = quantize_f32_to_i8(query_embedding);
-            #[cfg(feature = "vector_quant_i8")]
-            let query_i8_norm = l2_norm_i8(&query_i8);
-            #[cfg(feature = "vector_quant_i8")]
-            let query_q8 = QueryQ8::new(query_embedding);
-
             let mut scoped_doc_ids = Vec::new();
 
             // Replace global candidate sets with scoped exact scan results.
             vector_results.clear();
             bm25_results.clear();
 
+            // Lock MMAP store outside the loop for fast access
+            #[cfg(feature = "vector_quant_i8")]
+            let mmap_store = crate::api::mmap_store::MMAP_STORE.read().unwrap();
+
             for row in chunk_iter {
-                if let Ok((id, embedding_blob, embedding_i8_blob)) = row {
-                    #[cfg(not(feature = "vector_quant_i8"))]
-                    let _ = &embedding_i8_blob;
-                    #[cfg(feature = "vector_quant_i8")]
-                    let sim = if let Some(qblob) = embedding_i8_blob.as_deref() {
-                        if (qblob.len() == query_i8.len() || qblob.len() % 36 == 0) && query_i8_norm > 0.0 {
-                            cosine_similarity_q8(&query_q8, qblob, &query_i8, query_i8_norm)
-                        } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
+                match row {
+                    Ok((id, embedding_blob, mmap_id, embedding_i8_blob)) => {
+                        #[cfg(not(feature = "vector_quant_i8"))]
+                        let _ = (&mmap_id, &embedding_i8_blob);
+                        #[cfg(feature = "vector_quant_i8")]
+                        let sim = {
+                            let mut qblob_ref: Option<&[u8]> = None;
+
+                            // Priority 1: Check MMAP store
+                            if let Some(mid) = mmap_id {
+                                if let Some(s) = mmap_store.as_ref() {
+                                    qblob_ref = s.get(mid as usize);
+                                }
+                            }
+
+                            // Priority 2: Fallback to SQLite embedding_i8 column
+                            if qblob_ref.is_none() {
+                                qblob_ref = embedding_i8_blob.as_deref();
+                            }
+
+                            if let Some(qblob) = qblob_ref {
+                                match score_persisted_quantized_blob(query_embedding, qblob)? {
+                                    Some(score) => score,
+                                    None => {
+                                        if let Some(embedding) =
+                                            decode_f32_embedding(&embedding_blob)
+                                        {
+                                            if embedding.len() != query_embedding.len() {
+                                                continue;
+                                            }
+                                            cosine_with_query_norm_f32(
+                                                query_embedding,
+                                                query_norm,
+                                                &embedding,
+                                            )
+                                        } else {
+                                            continue;
+                                        }
+                                    }
+                                }
+                            } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
+                                if embedding.len() != query_embedding.len() {
+                                    continue;
+                                }
+                                cosine_with_query_norm_f32(query_embedding, query_norm, &embedding)
+                            } else {
+                                continue;
+                            }
+                        };
+
+                        #[cfg(not(feature = "vector_quant_i8"))]
+                        let sim = if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
                             if embedding.len() != query_embedding.len() {
                                 continue;
                             }
                             cosine_with_query_norm_f32(query_embedding, query_norm, &embedding)
                         } else {
                             continue;
-                        }
-                    } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
-                        if embedding.len() != query_embedding.len() {
-                            continue;
-                        }
-                        cosine_with_query_norm_f32(query_embedding, query_norm, &embedding)
-                    } else {
-                        continue;
-                    };
+                        };
 
-                    #[cfg(not(feature = "vector_quant_i8"))]
-                    let sim = if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
-                        if embedding.len() != query_embedding.len() {
-                            continue;
-                        }
-                        cosine_with_query_norm_f32(query_embedding, query_norm, &embedding)
-                    } else {
-                        continue;
-                    };
-
-                    vector_results.push(HnswSearchResult {
-                        id,
-                        distance: (1.0 - sim) as f32, // lower is better
-                    });
-                    scoped_doc_ids.push(id);
+                        vector_results.push(HnswSearchResult {
+                            id,
+                            distance: (1.0 - sim) as f32, // lower is better
+                        });
+                        scoped_doc_ids.push(id);
+                    }
+                    Err(e) => {
+                        error!("[hybrid] Error parsing row during exact scan: {:?}", e);
+                    }
                 }
             }
 
@@ -881,6 +921,74 @@ mod tests {
             "Scoped BM25 should not tokenize chunk bodies at query time"
         );
 
+        close_db_pool();
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    #[test]
+    fn scoped_exact_scan_ranks_vabq_blob_by_vabq_similarity() {
+        use crate::api::vector_quant::{configure_active_vabq_profile, quantize_f32_to_vabq};
+
+        configure_active_vabq_profile(Some("allMiniLmL6V2".to_string()), 384).unwrap();
+
+        let db_path = std::env::temp_dir().join("test_hybrid_vabq_exact_scan.db");
+        let _ = std::fs::remove_file(&db_path);
+
+        init_db_pool(db_path.to_str().unwrap().to_string(), 1).unwrap();
+        init_source_db().unwrap();
+        clear_hnsw_index();
+        bm25_clear_index();
+
+        let mut query = vec![0.0f32; 384];
+        query[0] = 1.0;
+        let near = query.clone();
+        let far: Vec<f32> = query.iter().map(|value| -*value).collect();
+        let (near_blob, _) = quantize_f32_to_vabq(&near);
+        let (far_blob, _) = quantize_f32_to_vabq(&far);
+
+        {
+            let conn = get_connection().unwrap();
+            conn.execute(
+                "INSERT INTO sources (id, content, content_hash, metadata, name, status)
+                 VALUES (1, 'vabq source', 'h_vabq', NULL, 'vabq', 'completed')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO chunks (id, source_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding, embedding_i8, embedding_scale)
+                 VALUES (?1, 1, 0, 'far', 0, 3, 'general', ?2, ?3, 1.0)",
+                params![101_i64, Vec::<u8>::new(), far_blob],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO chunks (id, source_id, chunk_index, content, start_pos, end_pos, chunk_type, embedding, embedding_i8, embedding_scale)
+                 VALUES (?1, 1, 1, 'near', 4, 8, 'general', ?2, ?3, 1.0)",
+                params![202_i64, Vec::<u8>::new(), near_blob],
+            )
+            .unwrap();
+        }
+
+        let results = search_hybrid(
+            "".to_string(),
+            query,
+            1,
+            Some(RrfConfig {
+                k: 60,
+                vector_weight: 1.0,
+                bm25_weight: 0.0,
+            }),
+            Some(SearchFilter {
+                source_ids: Some(vec![1]),
+                metadata_like: None,
+                collection_id: None,
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(results.first().map(|result| result.doc_id), Some(202));
+
+        configure_active_vabq_profile(None, 0).unwrap();
         close_db_pool();
         let _ = std::fs::remove_file(db_path);
     }

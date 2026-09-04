@@ -239,7 +239,7 @@ class _RenderedSelectionState {
     buffer.write('<document id="$sourceId">\n');
 
     final firstChunk = chunks.first;
-    if (firstChunk.metadata != null) {
+    if (firstChunk.metadata != null && firstChunk.metadata!.length <= 1000) {
       buffer.write('  <metadata>${firstChunk.metadata}</metadata>\n');
     }
 

@@ -146,7 +146,7 @@ packages:
     source: hosted
     version: "3.1.2"
   crypto:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: crypto
       sha256: c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf
@@ -484,10 +484,10 @@ packages:
     dependency: "direct main"
     description:
       name: rag_engine_flutter
-      sha256: f4f3622f68fc741278365b1fd48eaa017362292d4abb23f05de17a2c40365d77
+      sha256: a76a54423aedbe4940bb823b25f0c0c43feb1c543035edc14e0042707c06698b
       url: "https://pub.dev"
     source: hosted
-    version: "0.19.2"
+    version: "0.20.0-dev.11"
   shelf:
     dependency: transitive
     description:

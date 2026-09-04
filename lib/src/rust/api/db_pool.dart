@@ -23,12 +23,16 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 /// - 256MB mmap: Memory-mapped I/O for large databases
 ///
 /// # Example
-/// ```rust
-/// init_db_pool("/path/to/rag.sqlite", 4)?;
+/// ```rust,no_run
+/// use rag_engine_flutter::api::db_pool::init_db_pool;
+///
+/// init_db_pool("/path/to/rag.sqlite".to_string(), 4).unwrap();
 /// ```
 Future<void> initDbPool({required String dbPath, required int maxSize}) =>
-    RustLib.instance.api
-        .crateApiDbPoolInitDbPool(dbPath: dbPath, maxSize: maxSize);
+    RustLib.instance.api.crateApiDbPoolInitDbPool(
+      dbPath: dbPath,
+      maxSize: maxSize,
+    );
 
 /// Check if the connection pool is initialized.
 Future<bool> isPoolInitialized() =>

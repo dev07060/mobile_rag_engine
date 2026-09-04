@@ -535,7 +535,8 @@ pub fn extract_text_from_pdf(file_bytes: Vec<u8>) -> Result<String> {
                 // record the page number for the caller-visible summary.
                 log::warn!(
                     "PDF page {} extraction failed, skipping: {}",
-                    page_num, reason,
+                    page_num,
+                    reason,
                 );
                 pages.push(String::new());
                 failed_pages.push(page_num);
@@ -554,7 +555,8 @@ pub fn extract_text_from_pdf(file_bytes: Vec<u8>) -> Result<String> {
     if !failed_pages.is_empty() {
         log::warn!(
             "PDF extraction recovered after skipping {} failed page(s): {:?}",
-            failed_pages.len(), failed_pages,
+            failed_pages.len(),
+            failed_pages,
         );
     }
 
@@ -800,7 +802,11 @@ mod tests {
         let bytes = load_fixture("example/assets/sample_data/sample_eng.pdf");
         let out = extract_text_from_pdf(bytes).expect("sample_eng extract");
         // Use a stable phrase from the document header (IFRS 17 standard).
-        assert!(out.contains("Insurance Contracts"), "head: {}", &out[..200.min(out.len())]);
+        assert!(
+            out.contains("Insurance Contracts"),
+            "head: {}",
+            &out[..200.min(out.len())]
+        );
         // Paragraph breaks from PR A must still be preserved on this path.
         assert!(out.contains("\n\n"));
     }
@@ -837,7 +843,9 @@ mod tests {
             assert!(
                 paragraph_breaks >= floor.min_paragraph_breaks,
                 "{}: {} paragraph breaks, expected >= {} (lost paragraph structure?)",
-                fixture.label, paragraph_breaks, floor.min_paragraph_breaks,
+                fixture.label,
+                paragraph_breaks,
+                floor.min_paragraph_breaks,
             );
 
             if floor.min_hangul > 0 {
@@ -845,7 +853,9 @@ mod tests {
                 assert!(
                     hangul >= floor.min_hangul,
                     "{}: {} Hangul syllables, expected >= {} (CJK extraction regression?)",
-                    fixture.label, hangul, floor.min_hangul,
+                    fixture.label,
+                    hangul,
+                    floor.min_hangul,
                 );
             }
 
@@ -853,7 +863,8 @@ mod tests {
                 assert!(
                     out.contains(needle),
                     "{}: extracted text missing required substring {:?}",
-                    fixture.label, needle,
+                    fixture.label,
+                    needle,
                 );
             }
         }
@@ -977,7 +988,11 @@ mod tests {
         assert!(out.contains("pretraining"));
         assert!(out.contains("training loop"));
         assert!(out.contains("training data"));
-        assert!(!out.contains("traing"), "training must not be corrupted: {}", out);
+        assert!(
+            !out.contains("traing"),
+            "training must not be corrupted: {}",
+            out
+        );
     }
 
     #[test]
@@ -1023,8 +1038,16 @@ mod tests {
         }
         // Insert 10 L>=3 doubles scattered through the page.
         for word in [
-            "국토부", "외교부", "법무부", "통일부", "행안부", "산업부", "환경부",
-            "고용부", "복지부", "여가부",
+            "국토부",
+            "외교부",
+            "법무부",
+            "통일부",
+            "행안부",
+            "산업부",
+            "환경부",
+            "고용부",
+            "복지부",
+            "여가부",
         ] {
             page.push(' ');
             page.push_str(word);
@@ -1032,11 +1055,23 @@ mod tests {
         }
         let out = dedup_adjacent_repeats(&page);
         for word in [
-            "국토부", "외교부", "법무부", "통일부", "행안부", "산업부", "환경부",
-            "고용부", "복지부", "여가부",
+            "국토부",
+            "외교부",
+            "법무부",
+            "통일부",
+            "행안부",
+            "산업부",
+            "환경부",
+            "고용부",
+            "복지부",
+            "여가부",
         ] {
             let doubled = format!("{word}{word}");
-            assert!(!out.contains(&doubled), "doubled token {} should be collapsed", doubled);
+            assert!(
+                !out.contains(&doubled),
+                "doubled token {} should be collapsed",
+                doubled
+            );
             assert!(out.contains(word), "single copy of {} should remain", word);
         }
     }
@@ -1084,9 +1119,7 @@ mod tests {
         // End-to-end: dedup is applied during join_pages, after page-number
         // removal and before cross-page hyphenation/CJK fold. L=3+ double
         // collapses; L=2 ("독일독일") survives by design.
-        let pages = vec![
-            "독일독일 한국청년한국청년기업가정신재단기업가정신재단".to_string(),
-        ];
+        let pages = vec!["독일독일 한국청년한국청년기업가정신재단기업가정신재단".to_string()];
         let joined = join_pages(pages);
         assert_eq!(joined, "독일독일 한국청년기업가정신재단");
     }
@@ -1224,7 +1257,10 @@ mod tests {
         let pages = vec!["심층 시장 조사 보고서\n\n문제 정의: 무엇을 풀려는가".to_string()];
         let result = join_pages(pages);
         assert!(!result.contains("보고서문제"));
-        assert_eq!(result, "심층 시장 조사 보고서\n\n문제 정의: 무엇을 풀려는가");
+        assert_eq!(
+            result,
+            "심층 시장 조사 보고서\n\n문제 정의: 무엇을 풀려는가"
+        );
     }
 
     #[test]
@@ -1252,11 +1288,20 @@ mod tests {
         // Marker kept: at least one page parsed (readable but text-less → the
         // scanned/image-only signature OCR can recover), even alongside
         // failures. Covers Finding #1: a scanned PDF with a stray corrupt page.
-        assert!(should_include_scanned_marker(1, 0), "single-page pure scanned");
-        assert!(should_include_scanned_marker(5, 0), "multi-page pure scanned");
+        assert!(
+            should_include_scanned_marker(1, 0),
+            "single-page pure scanned"
+        );
+        assert!(
+            should_include_scanned_marker(5, 0),
+            "multi-page pure scanned"
+        );
         assert!(should_include_scanned_marker(5, 1), "mixed: 1 of 5 failed");
         assert!(should_include_scanned_marker(5, 4), "mixed: 4 of 5 failed");
-        assert!(should_include_scanned_marker(2, 1), "boundary: 1 of 2 failed");
+        assert!(
+            should_include_scanned_marker(2, 1),
+            "boundary: 1 of 2 failed"
+        );
         assert!(
             should_include_scanned_marker(0, 0),
             "degenerate zero-page doc preserves prior scanned behavior"
@@ -1615,11 +1660,7 @@ mod tests {
         let bytes = match std::fs::read(&path) {
             Ok(b) => b,
             Err(e) => {
-                return ExtractSummary::empty(
-                    fixture,
-                    "ERR",
-                    Some(format!("read error: {}", e)),
-                );
+                return ExtractSummary::empty(fixture, "ERR", Some(format!("read error: {}", e)));
             }
         };
 
@@ -1932,7 +1973,10 @@ mod tests {
 
     fn print_top_long_runs(label: &str, fixture_rel: &str, k: usize) {
         let Some(bytes) = try_load_fixture(fixture_rel) else {
-            println!("--- top {} Hangul runs in {}: SKIP missing fixture ---", k, label);
+            println!(
+                "--- top {} Hangul runs in {}: SKIP missing fixture ---",
+                k, label
+            );
             return;
         };
         let joined = match extract_text_from_pdf(bytes) {
@@ -2050,14 +2094,29 @@ mod tests {
         // PDFs so we can judge whether the recent count-gate is catching
         // real PDF artifacts or false-positive equation noise.
         let picks: &[(&str, &str)] = &[
-            ("arxiv_2005_11401", "example/assets/sample_data/2005.11401v4.pdf"),
-            ("arxiv_2205_14135", "example/assets/sample_data/2205.14135v2.pdf"),
-            ("arxiv_2509_01092", "example/assets/sample_data/2509.01092v2.pdf"),
-            ("arxiv_2603_18196", "example/assets/sample_data/2603.18196v1.pdf"),
+            (
+                "arxiv_2005_11401",
+                "example/assets/sample_data/2005.11401v4.pdf",
+            ),
+            (
+                "arxiv_2205_14135",
+                "example/assets/sample_data/2205.14135v2.pdf",
+            ),
+            (
+                "arxiv_2509_01092",
+                "example/assets/sample_data/2509.01092v2.pdf",
+            ),
+            (
+                "arxiv_2603_18196",
+                "example/assets/sample_data/2603.18196v1.pdf",
+            ),
         ];
         for (label, rel) in picks {
             let Some(bytes) = try_load_fixture(rel) else {
-                println!("\n=== arxiv dedup-match samples: {} SKIP missing fixture ===", label);
+                println!(
+                    "\n=== arxiv dedup-match samples: {} SKIP missing fixture ===",
+                    label
+                );
                 continue;
             };
             let pages = pdf_extract::extract_text_from_mem_by_pages(&bytes).unwrap();
@@ -2067,21 +2126,33 @@ mod tests {
                 let page = normalize_extracted_text(raw_page);
                 let page = remove_trailing_page_number(&page);
                 let total = page.chars().count();
-                if total == 0 { continue; }
+                if total == 0 {
+                    continue;
+                }
                 let (matches, removed) = find_adjacent_repeats(&page);
                 let density = removed as f64 / total as f64;
                 let density_fires = density >= DEDUP_DENSITY_TRIGGER;
                 let count_fires = matches.len() >= DEDUP_MIN_MATCHES_TRIGGER;
-                if !density_fires && !count_fires { continue; }
+                if !density_fires && !count_fires {
+                    continue;
+                }
                 println!(
                     "  page[{:3}] chars={:>5} matches={:>3} dup={:>3} density={:.3} {}",
-                    idx, total, matches.len(), removed, density,
-                    if density_fires { "DENSITY" } else { "COUNT-ONLY" }
+                    idx,
+                    total,
+                    matches.len(),
+                    removed,
+                    density,
+                    if density_fires {
+                        "DENSITY"
+                    } else {
+                        "COUNT-ONLY"
+                    }
                 );
                 let chars: Vec<char> = page.chars().collect();
                 for (start, len) in matches.iter().take(8) {
                     let lo = start.saturating_sub(8);
-                    let hi = (start + 2*len + 8).min(chars.len());
+                    let hi = (start + 2 * len + 8).min(chars.len());
                     let ctx: String = chars[lo..hi].iter().collect();
                     let unit: String = chars[*start..*start + *len].iter().collect();
                     println!("    L={:2}  unit={:?}  ctx=…{}…", len, unit, ctx);
@@ -2110,19 +2181,29 @@ mod tests {
             };
             let pages = pdf_extract::extract_text_from_mem_by_pages(&bytes).unwrap();
 
-            println!("\n=== density per page: {} (trigger >= {:.2}) ===", label, DEDUP_DENSITY_TRIGGER);
+            println!(
+                "\n=== density per page: {} (trigger >= {:.2}) ===",
+                label, DEDUP_DENSITY_TRIGGER
+            );
             for (idx, raw_page) in pages.iter().enumerate() {
                 let page = normalize_extracted_text(raw_page);
                 let page = remove_trailing_page_number(&page);
                 let total = page.chars().count();
-                if total == 0 { continue; }
+                if total == 0 {
+                    continue;
+                }
                 let (matches, removed) = find_adjacent_repeats(&page);
                 let density = removed as f64 / total as f64;
                 let fired = density >= DEDUP_DENSITY_TRIGGER;
                 let marker = if fired { "FIRED" } else { "skip " };
                 println!(
                     "  page[{:3}] chars={:>5} dup_chars={:>4} density={:.3} matches={:>3} {}",
-                    idx, total, removed, density, matches.len(), marker
+                    idx,
+                    total,
+                    removed,
+                    density,
+                    matches.len(),
+                    marker
                 );
             }
         }
@@ -2172,7 +2253,10 @@ mod tests {
                 "kor_ins_20200101",
                 "example/assets/sample_data/20200101_10108_1.pdf",
             ),
-            ("kor_drone_2021", "example/assets/sample_data/2021-국방드론.pdf"),
+            (
+                "kor_drone_2021",
+                "example/assets/sample_data/2021-국방드론.pdf",
+            ),
         ];
 
         let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -2184,7 +2268,12 @@ mod tests {
             "label", "text", "chunks", "mean", "min", "max", "cjk_ch"
         );
         for (label, fixture_rel) in fixtures {
-            let path = manifest.parent().unwrap().parent().unwrap().join(fixture_rel);
+            let path = manifest
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join(fixture_rel);
             let bytes = match std::fs::read(&path) {
                 Ok(b) => b,
                 Err(e) => {
@@ -2203,7 +2292,11 @@ mod tests {
             let sizes: Vec<usize> = chunks.iter().map(|c| c.content.chars().count()).collect();
             let total_chars = text.chars().count();
             let n = sizes.len();
-            let mean = if n == 0 { 0 } else { sizes.iter().sum::<usize>() / n };
+            let mean = if n == 0 {
+                0
+            } else {
+                sizes.iter().sum::<usize>() / n
+            };
             let min = sizes.iter().copied().min().unwrap_or(0);
             let max = sizes.iter().copied().max().unwrap_or(0);
             let cjk_chunks = chunks

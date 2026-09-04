@@ -11,6 +11,9 @@
 library;
 
 import '../src/internal/defaults.dart';
+import '../src/internal/embedding_fingerprint.dart';
+
+export '../src/internal/embedding_fingerprint.dart' show VabqProfile;
 
 /// Thread usage level for ONNX runtime.
 ///
@@ -31,6 +34,22 @@ class RagConfig {
   ///
   /// Example: `'assets/model.onnx'`
   final String modelAsset;
+
+  /// Already verified file paths produced by a Model Pack resolver.
+  ///
+  /// When present, [RagEngine] reuses these files instead of loading assets a
+  /// second time. Legacy [tokenizerAsset]/[modelAsset] callers remain unchanged.
+  final String? preparedTokenizerPath;
+  final String? preparedModelPath;
+
+  /// Expected output dimension of a verified model pack, if one was used.
+  final int? expectedEmbeddingDimension;
+
+  /// Explicit VABQ variance-profile selection for this embedding model.
+  ///
+  /// Defaults to [VabqProfile.none], which preserves Q8_0 storage. The engine
+  /// never guesses this value from [modelAsset] or from output dimension.
+  final VabqProfile vabqProfile;
 
   /// Name of the SQLite database file.
   ///
@@ -74,6 +93,10 @@ class RagConfig {
   const RagConfig({
     required this.tokenizerAsset,
     required this.modelAsset,
+    this.preparedTokenizerPath,
+    this.preparedModelPath,
+    this.expectedEmbeddingDimension,
+    this.vabqProfile = VabqProfile.none,
     this.databaseName,
     this.maxChunkChars = kDefaultMaxChunkChars,
     this.overlapChars = kDefaultOverlapChars,
@@ -98,6 +121,7 @@ class RagConfig {
   factory RagConfig.fromAssets({
     required String tokenizerAsset,
     required String modelAsset,
+    VabqProfile vabqProfile = VabqProfile.none,
     String? databaseName,
     int maxChunkChars = kDefaultMaxChunkChars,
     int overlapChars = kDefaultOverlapChars,
@@ -107,11 +131,38 @@ class RagConfig {
   }) => RagConfig(
     tokenizerAsset: tokenizerAsset,
     modelAsset: modelAsset,
+    vabqProfile: vabqProfile,
     databaseName: databaseName,
     maxChunkChars: maxChunkChars,
     overlapChars: overlapChars,
     embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
     threadLevel: threadLevel,
+    deferIndexWarmup: deferIndexWarmup,
+  );
+
+  /// Configuration for files already verified by [RagModelPackResolver].
+  factory RagConfig.fromPreparedFiles({
+    required String tokenizerPath,
+    required String modelPath,
+    required int expectedEmbeddingDimension,
+    String? databaseName,
+    int maxChunkChars = kDefaultMaxChunkChars,
+    int overlapChars = kDefaultOverlapChars,
+    int? embeddingIntraOpNumThreads,
+    ThreadUseLevel? threadLevel,
+    bool deferIndexWarmup = false,
+  }) => RagConfig(
+    tokenizerAsset: '',
+    modelAsset: '',
+    preparedTokenizerPath: tokenizerPath,
+    preparedModelPath: modelPath,
+    expectedEmbeddingDimension: expectedEmbeddingDimension,
+    databaseName: databaseName,
+    maxChunkChars: maxChunkChars,
+    overlapChars: overlapChars,
+    embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
+    threadLevel: threadLevel,
+    vabqProfile: VabqProfile.none,
     deferIndexWarmup: deferIndexWarmup,
   );
 }

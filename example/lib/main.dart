@@ -171,9 +171,7 @@ class _MyAppState extends State<MyApp> {
                       isLoading: _controller.isLoading,
                       isReady: _controller.isReady,
                     ),
-
                     const SizedBox(height: 24),
-
                     CollectionSection(
                       collectionController: _controller.collectionController,
                       activeCollectionId: _controller.activeCollectionId,
@@ -187,9 +185,7 @@ class _MyAppState extends State<MyApp> {
                       onWaitWarmup: _controller.waitWarmup,
                       onRebuild: _controller.rebuildActive,
                     ),
-
                     const SizedBox(height: 12),
-
                     DocumentSection(
                       docController: _controller.docController,
                       isReady: _controller.isReady,
@@ -197,9 +193,7 @@ class _MyAppState extends State<MyApp> {
                       onSave: _controller.saveDocument,
                       onImport: _controller.importAndEmbedDocument,
                     ),
-
                     const Divider(height: 40),
-
                     SearchSection(
                       queryController: _controller.queryController,
                       activeCollectionId: _controller.activeCollectionId,
@@ -213,9 +207,7 @@ class _MyAppState extends State<MyApp> {
                       onSourceFilterChanged: _controller.setSelectedSourceId,
                       onSearch: _controller.searchDocuments,
                     ),
-
                     const Divider(height: 40),
-
                     SourceListSection(
                       activeCollectionId: _controller.activeCollectionId,
                       sources: _controller.sources,

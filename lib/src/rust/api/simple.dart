@@ -9,3 +9,11 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 /// Simple greeting function for FRB demo.
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);
+
+/// Runs a micro-benchmark for VABQ similarity computation on the device.
+/// Returns the average nanoseconds per computation.
+BigInt benchmarkVabqDevice({required BigInt dim, required int iterations}) =>
+    RustLib.instance.api.crateApiSimpleBenchmarkVabqDevice(
+      dim: dim,
+      iterations: iterations,
+    );

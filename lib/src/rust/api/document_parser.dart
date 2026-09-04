@@ -22,30 +22,35 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 /// scanned/image-only PDFs as a vector of empty strings (no error), so
 /// without this guard a 0-chunk source would be silently indexed and the
 /// user would see an "ingested but unsearchable" mystery.
-Future<String> extractTextFromPdf({required List<int> fileBytes}) =>
-    RustLib.instance.api
-        .crateApiDocumentParserExtractTextFromPdf(fileBytes: fileBytes);
+Future<String> extractTextFromPdf({required List<int> fileBytes}) => RustLib
+    .instance
+    .api
+    .crateApiDocumentParserExtractTextFromPdf(fileBytes: fileBytes);
 
 /// Extract text content from a DOCX file (bytes)
-Future<String> extractTextFromDocx({required List<int> fileBytes}) =>
-    RustLib.instance.api
-        .crateApiDocumentParserExtractTextFromDocx(fileBytes: fileBytes);
+Future<String> extractTextFromDocx({required List<int> fileBytes}) => RustLib
+    .instance
+    .api
+    .crateApiDocumentParserExtractTextFromDocx(fileBytes: fileBytes);
 
 /// Auto-detect document type and extract text
 /// Uses magic bytes to determine file format
 Future<String> extractTextFromDocument({required List<int> fileBytes}) =>
-    RustLib.instance.api
-        .crateApiDocumentParserExtractTextFromDocument(fileBytes: fileBytes);
+    RustLib.instance.api.crateApiDocumentParserExtractTextFromDocument(
+      fileBytes: fileBytes,
+    );
 
 /// Decode UTF-8 text bytes without altering content semantics.
-Future<String> extractTextFromUtf8({required List<int> fileBytes}) =>
-    RustLib.instance.api
-        .crateApiDocumentParserExtractTextFromUtf8(fileBytes: fileBytes);
+Future<String> extractTextFromUtf8({required List<int> fileBytes}) => RustLib
+    .instance
+    .api
+    .crateApiDocumentParserExtractTextFromUtf8(fileBytes: fileBytes);
 
 /// Read a file and extract text according to extension / magic bytes.
 ///
 /// Text-like files (`.txt`, `.md`, `.markdown`) are decoded as UTF-8.
 /// Binary document types fall back to the existing document extractor.
-Future<String> extractTextFromFile({required String filePath}) =>
-    RustLib.instance.api
-        .crateApiDocumentParserExtractTextFromFile(filePath: filePath);
+Future<String> extractTextFromFile({required String filePath}) => RustLib
+    .instance
+    .api
+    .crateApiDocumentParserExtractTextFromFile(filePath: filePath);

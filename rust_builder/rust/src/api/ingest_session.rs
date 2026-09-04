@@ -196,10 +196,7 @@ impl IngestSession {
     ///
     /// Validation is performed *before* draining in_flight so a malformed
     /// embedding payload does not lose chunk content.
-    pub fn commit_embeddings(
-        &mut self,
-        embeddings: Vec<ChunkEmbedding>,
-    ) -> Result<i32, RagError> {
+    pub fn commit_embeddings(&mut self, embeddings: Vec<ChunkEmbedding>) -> Result<i32, RagError> {
         self.ensure_active()?;
         // 4 bytes per f32 dim; gives the embedding vector traffic for the
         // Dart→Rust direction (separate from the text-body counters).
@@ -468,8 +465,7 @@ fn prepare_source_ingestion_inner(
     // so a session-path run does not double-charge legacy counters.
     let _legacy_guard = LegacyCountingGuard::enter();
 
-    let add_result =
-        add_source_in_collection(collection_id, content.clone(), metadata, name)?;
+    let add_result = add_source_in_collection(collection_id, content.clone(), metadata, name)?;
     let source_id = add_result.source_id;
 
     // Mirror source_rag_service.dart::addSourceWithChunking exact order:
@@ -1285,7 +1281,9 @@ mod tests {
         let md_session_opaque = md_prepared.session.unwrap();
         {
             let mut session = md_session_opaque.blocking_write();
-            let batch = session.take_embedding_batch(md_prepared.total_chunks).unwrap();
+            let batch = session
+                .take_embedding_batch(md_prepared.total_chunks)
+                .unwrap();
             let has_header_path = batch
                 .iter()
                 .any(|req| req.embedding_text.starts_with("Header Path: "));
@@ -1342,7 +1340,7 @@ mod tests {
     fn test_prepare_from_file_does_not_record_session_prepare_content() {
         // Regression guard: from_file must not record the body bytes into
         // SESSION_PREPARE_CONTENT_IN, because the body never crossed FFI.
-        use crate::api::ingest_metrics::{reset_ingest_traffic_stats, ingest_traffic_stats};
+        use crate::api::ingest_metrics::{ingest_traffic_stats, reset_ingest_traffic_stats};
 
         let _guard = test_guard();
         let db_path = setup_test_db("test_ingest_prepare_from_file_counter.db");
@@ -1385,7 +1383,7 @@ mod tests {
     fn test_prepare_from_utf8_records_bytes_len_into_counter() {
         // Regression guard: from_utf8 must credit its byte payload to
         // SESSION_PREPARE_CONTENT_IN (and exactly once).
-        use crate::api::ingest_metrics::{reset_ingest_traffic_stats, ingest_traffic_stats};
+        use crate::api::ingest_metrics::{ingest_traffic_stats, reset_ingest_traffic_stats};
 
         let _guard = test_guard();
         let db_path = setup_test_db("test_ingest_prepare_from_utf8_counter.db");

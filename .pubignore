@@ -77,3 +77,18 @@ example/lib/*_runner.dart
 example/lib/*_smoke.dart
 example/lib/profiling/
 example/test/profiling/
+
+# Research & Benchmarks (local only)
+research/
+results_*/
+variance_maps/
+scratch/
+rewrite_custom_hnsw*.py
+latency_benchmark_*.png
+vabq_latency_bar_updated.png
+flutter_*.log
+
+# Hidden tools
+.playwright-cli/
+.playwright-mcp/
+.ruby-lsp/

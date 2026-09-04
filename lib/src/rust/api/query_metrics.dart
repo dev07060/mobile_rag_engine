@@ -58,27 +58,21 @@ class QueryContentReadStats {
 
   /// Materialized result bytes only — see [`Self::rows_total`].
   Future<BigInt> contentBytesTotal() => RustLib.instance.api
-          .crateApiQueryMetricsQueryContentReadStatsContentBytesTotal(
-        that: this,
-      );
+      .crateApiQueryMetricsQueryContentReadStatsContentBytesTotal(that: this);
 
   Future<BigInt> hydrationContentBytesTotal() => RustLib.instance.api
-          .crateApiQueryMetricsQueryContentReadStatsHydrationContentBytesTotal(
+      .crateApiQueryMetricsQueryContentReadStatsHydrationContentBytesTotal(
         that: this,
       );
 
   Future<BigInt> hydrationRowsTotal() => RustLib.instance.api
-          .crateApiQueryMetricsQueryContentReadStatsHydrationRowsTotal(
-        that: this,
-      );
+      .crateApiQueryMetricsQueryContentReadStatsHydrationRowsTotal(that: this);
 
   /// Materialized result reads only — does NOT include the scoped exact-scan
   /// backend counter, which measures rows scanned during search rather than
   /// rows surfaced as results.
-  Future<BigInt> rowsTotal() =>
-      RustLib.instance.api.crateApiQueryMetricsQueryContentReadStatsRowsTotal(
-        that: this,
-      );
+  Future<BigInt> rowsTotal() => RustLib.instance.api
+      .crateApiQueryMetricsQueryContentReadStatsRowsTotal(that: this);
 
   @override
   int get hashCode =>

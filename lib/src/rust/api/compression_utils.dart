@@ -17,23 +17,31 @@ Future<BigInt> sentenceHash({required String sentence}) => RustLib.instance.api
     .crateApiCompressionUtilsSentenceHash(sentence: sentence);
 
 /// Compress text with deduplication and truncation.
-Future<CompressedText> compressText(
-        {required String text,
-        required int maxChars,
-        required CompressionOptions options}) =>
-    RustLib.instance.api.crateApiCompressionUtilsCompressText(
-        text: text, maxChars: maxChars, options: options);
+Future<CompressedText> compressText({
+  required String text,
+  required int maxChars,
+  required CompressionOptions options,
+}) => RustLib.instance.api.crateApiCompressionUtilsCompressText(
+  text: text,
+  maxChars: maxChars,
+  options: options,
+);
 
 /// Quick compress with default options.
 Future<String> compressTextSimple({required String text, required int level}) =>
-    RustLib.instance.api
-        .crateApiCompressionUtilsCompressTextSimple(text: text, level: level);
+    RustLib.instance.api.crateApiCompressionUtilsCompressTextSimple(
+      text: text,
+      level: level,
+    );
 
 /// Check if text needs compression based on token estimate.
-Future<bool> shouldCompress(
-        {required String text, required int tokenThreshold}) =>
-    RustLib.instance.api.crateApiCompressionUtilsShouldCompress(
-        text: text, tokenThreshold: tokenThreshold);
+Future<bool> shouldCompress({
+  required String text,
+  required int tokenThreshold,
+}) => RustLib.instance.api.crateApiCompressionUtilsShouldCompress(
+  text: text,
+  tokenThreshold: tokenThreshold,
+);
 
 class CompressedText {
   final String text;

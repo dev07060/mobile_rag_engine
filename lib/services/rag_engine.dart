@@ -44,7 +44,8 @@ import '../src/rust/api/source_rag.dart'
         AssembledContextV2;
 import '../src/rust/api/db_pool.dart';
 import '../src/rust/api/error.dart';
-import '../src/rust/api/migration_meta.dart' as migration_meta
+import '../src/rust/api/migration_meta.dart'
+    as migration_meta
     show
         EmbeddingFingerprintGate_Mismatch,
         EmbeddingFingerprintGate_Ok,
@@ -57,11 +58,13 @@ import '../src/rust/api/migration_meta.dart' as migration_meta
         finalizeEmbeddingReembed,
         readMigrationAxes,
         writeEmbeddingFingerprint;
-import '../src/rust/api/source_rag.dart' as rust_rag
+import '../src/rust/api/source_rag.dart'
+    as rust_rag
     show listChunksNeedingReembed, updateChunkReembedded;
 import '../src/internal/defaults.dart';
 import '../src/internal/embedding_fingerprint.dart';
 import '../src/internal/validation.dart';
+import '../model_pack.dart';
 
 export '../src/internal/embedding_fingerprint.dart'
     show
@@ -73,6 +76,7 @@ import 'rag_config.dart';
 import 'source_rag_service.dart';
 import 'context_builder.dart';
 import '../src/rust/api/hybrid_search.dart' as hybrid;
+import '../src/rust/api/vabq_config.dart' as vabq_config;
 import '../src/rust/rust_library_loader.dart';
 
 /// Unified RAG engine with simplified initialization.
@@ -118,14 +122,12 @@ class RagEngine {
     required this.currentEmbeddingFingerprint,
     required RagEmbeddingFingerprintLock? initialLock,
     required bool deferIndexWarmup,
-  })  : _ragService = ragService,
-        _deferIndexWarmup = deferIndexWarmup,
-        _fingerprintLock = initialLock,
-        _collectionServices = {
-          SourceRagService.defaultCollectionId: ragService
-        },
-        _initializedCollections = {SourceRagService.defaultCollectionId},
-        _collectionInitInFlight = {};
+  }) : _ragService = ragService,
+       _deferIndexWarmup = deferIndexWarmup,
+       _fingerprintLock = initialLock,
+       _collectionServices = {SourceRagService.defaultCollectionId: ragService},
+       _initializedCollections = {SourceRagService.defaultCollectionId},
+       _collectionInitInFlight = {};
 
   /// Snapshot of the active embedding fingerprint lock (null when unlocked).
   ///
@@ -290,19 +292,26 @@ class RagEngine {
     // 1. Get app documents directory
     final dir = await getApplicationDocumentsDirectory();
     final dbPath = "${dir.path}/${config.databaseName ?? 'rag.sqlite'}";
-    final tokenizerPath = "${dir.path}/tokenizer.json";
-    final modelPath = "${dir.path}/${config.modelAsset.split('/').last}";
+    final tokenizerPath =
+        config.preparedTokenizerPath ?? "${dir.path}/tokenizer.json";
+    final modelPath =
+        config.preparedModelPath ??
+        "${dir.path}/${config.modelAsset.split('/').last}";
 
     // 2. Copy and initialize tokenizer
     onProgress?.call('Initializing tokenizer...');
-    await _copyAssetToFile(config.tokenizerAsset, tokenizerPath);
+    if (config.preparedTokenizerPath == null) {
+      await _copyAssetToFile(config.tokenizerAsset, tokenizerPath);
+    }
     await initTokenizer(tokenizerPath: tokenizerPath);
     final vocabSize = getVocabSize();
 
     // 3. Prepare ONNX embedding model (Copy logic)
     onProgress?.call('Preparing embedding model...');
     // Copy model asset to file (optimized for memory)
-    await _copyAssetToFile(config.modelAsset, modelPath);
+    if (config.preparedModelPath == null) {
+      await _copyAssetToFile(config.modelAsset, modelPath);
+    }
 
     final normalizedMaxChunkChars = normalizeMaxChunkChars(
       config.maxChunkChars,
@@ -356,56 +365,91 @@ class RagEngine {
     // OrtSessionOptions internally (native objects can't cross isolate
     // boundaries).
     onProgress?.call('Loading embedding model...');
-    await EmbeddingService.init(
-      modelPath: modelPath,
-      intraOpNumThreads: threads,
-    );
-
-    // 4. Initialize database connection pool
-    onProgress?.call('Initializing connection pool...');
-    await initDbPool(dbPath: dbPath, maxSize: 4);
-
-    // 5. Initialize RAG service
-    onProgress?.call('Initializing database...');
-    final ragService = SourceRagService(
-      dbPath: dbPath,
-      modelPath: modelPath,
-      maxChunkChars: normalizedMaxChunkChars,
-      overlapChars: normalizedOverlapChars,
-    );
-    await ragService.init(deferIndexWarmup: config.deferIndexWarmup);
-
-    // 6. Resolve the embedding fingerprint gate. The probe is a single
-    //    one-shot embed used purely to read the model's output dimension;
-    //    the result is discarded. Must happen AFTER migration_meta exists
-    //    (created by ragService.init via init_source_db).
-    onProgress?.call('Validating embedding fingerprint...');
-    final probe = await EmbeddingService.embed(_kFingerprintProbeText);
-    final currentFingerprint = computeEmbeddingFingerprint(
-      modelBasename: embeddingModelBasename(modelPath),
-      dim: probe.length,
-      quant: kDefaultEmbeddingQuant,
-    );
-    final initialLock = await _resolveFingerprintGate(currentFingerprint);
-    if (initialLock != null) {
-      debugPrint(
-        '[RagEngine] Embedding fingerprint mismatch detected: '
-        'stored="${initialLock.stored}", current="$currentFingerprint", '
-        'remaining=${initialLock.remainingChunks}, '
-        'resume=${initialLock.resumeInProgress}. '
-        'Search/ingest will be locked until reembedAll() or clearAndRestart().',
+    var embeddingWorkerInitialized = false;
+    try {
+      await EmbeddingService.init(
+        modelPath: modelPath,
+        intraOpNumThreads: threads,
       );
-    }
+      embeddingWorkerInitialized = true;
 
-    onProgress?.call('Ready!');
-    return RagEngine._(
-      ragService: ragService,
-      dbPath: dbPath,
-      vocabSize: vocabSize,
-      currentEmbeddingFingerprint: currentFingerprint,
-      initialLock: initialLock,
-      deferIndexWarmup: config.deferIndexWarmup,
-    );
+      // 4. Probe the actual model output dimension and configure Rust before
+      // any database or MMAP write can occur. The host explicitly supplies the
+      // variance profile; the filename and dimension are never used to infer it.
+      onProgress?.call('Validating VABQ profile...');
+      final probe = await EmbeddingService.embed(_kFingerprintProbeText);
+      final expectedDimension = config.expectedEmbeddingDimension;
+      if (expectedDimension != null && probe.length != expectedDimension) {
+        RagModelPackManifest.validateExpectedEmbeddingDimension(
+          expectedDimension: expectedDimension,
+          actualDimension: probe.length,
+        );
+      }
+      await vabq_config.configureVabqProfile(
+        profile: config.vabqProfile == VabqProfile.none
+            ? null
+            : vabqProfileWireName(config.vabqProfile),
+        embeddingDimension: probe.length,
+      );
+
+      // 5. Initialize database connection pool
+      onProgress?.call('Initializing connection pool...');
+      await initDbPool(dbPath: dbPath, maxSize: 4);
+
+      final currentFingerprint = computeEmbeddingFingerprint(
+        modelBasename: embeddingModelBasename(modelPath),
+        dim: probe.length,
+        quant: embeddingQuantizationFingerprintAxis(config.vabqProfile),
+      );
+
+      // 6. Initialize the database and resolve the embedding fingerprint before
+      // any deferred BM25/HNSW warmup can contend for the same SQLite database.
+      onProgress?.call('Initializing database...');
+      final ragService = SourceRagService(
+        dbPath: dbPath,
+        modelPath: modelPath,
+        maxChunkChars: normalizedMaxChunkChars,
+        overlapChars: normalizedOverlapChars,
+      );
+      RagEmbeddingFingerprintLock? initialLock;
+      await ragService.initForEngine(
+        deferIndexWarmup: config.deferIndexWarmup,
+        afterDatabaseInitialized: () async {
+          // The fingerprint tables are created by SourceRagService.init, so this
+          // must remain inside its pre-warmup database-ready boundary.
+          onProgress?.call('Validating embedding fingerprint...');
+          initialLock = await _resolveFingerprintGate(currentFingerprint);
+        },
+      );
+
+      // 7. Surface an existing embedding mismatch after the database and index
+      // initialization sequence has been established.
+      final resolvedInitialLock = initialLock;
+      if (resolvedInitialLock != null) {
+        debugPrint(
+          '[RagEngine] Embedding fingerprint mismatch detected: '
+          'stored="${resolvedInitialLock.stored}", current="$currentFingerprint", '
+          'remaining=${resolvedInitialLock.remainingChunks}, '
+          'resume=${resolvedInitialLock.resumeInProgress}. '
+          'Search/ingest will be locked until reembedAll() or clearAndRestart().',
+        );
+      }
+
+      onProgress?.call('Ready!');
+      return RagEngine._(
+        ragService: ragService,
+        dbPath: dbPath,
+        vocabSize: vocabSize,
+        currentEmbeddingFingerprint: currentFingerprint,
+        initialLock: resolvedInitialLock,
+        deferIndexWarmup: config.deferIndexWarmup,
+      );
+    } catch (_) {
+      if (embeddingWorkerInitialized) {
+        await EmbeddingService.disposeAsync();
+      }
+      rethrow;
+    }
   }
 
   /// One-shot probe text used solely to read the model's output dimension.
@@ -427,11 +471,11 @@ class RagEngine {
       case migration_meta.EmbeddingFingerprintGate_Ok():
         return null;
       case migration_meta.EmbeddingFingerprintGate_Mismatch(
-          stored: final stored,
-          current: final current,
-          remainingChunks: final remaining,
-          resumeInProgress: final resume,
-        ):
+        stored: final stored,
+        current: final current,
+        remainingChunks: final remaining,
+        resumeInProgress: final resume,
+      ):
         return RagEmbeddingFingerprintLock(
           stored: stored,
           current: current,
@@ -872,12 +916,11 @@ class RagEngine {
     required int sourceId,
     required int minIndex,
     required int maxIndex,
-  }) =>
-      _ragService.getAdjacentChunks(
-        sourceId: sourceId,
-        minIndex: minIndex,
-        maxIndex: maxIndex,
-      );
+  }) => _ragService.getAdjacentChunks(
+    sourceId: sourceId,
+    minIndex: minIndex,
+    maxIndex: maxIndex,
+  );
 
   /// Get the number of chunks for a specific source.
   ///
@@ -1033,6 +1076,16 @@ class RagEngine {
   /// 4. Re-initializes the database and service
   Future<void> clearAllData() async {
     debugPrint('[RagEngine] clearAllData: Starting...');
+    // A deferred warmup may still be reading from SQLite. Let it leave the
+    // shared database before closing the pool and deleting its files.
+    try {
+      await _ragService.warmupFuture;
+    } catch (error) {
+      debugPrint(
+        '[RagEngine] clearAllData: Previous warmup failed; continuing reset: $error',
+      );
+    }
+
     // 1. Close DB pool
     debugPrint('[RagEngine] clearAllData: Closing DB pool...');
     await closeDbPool();
@@ -1073,7 +1126,17 @@ class RagEngine {
 
     // 5. Re-initialize service
     debugPrint('[RagEngine] clearAllData: Re-initializing service...');
-    await _ragService.init(deferIndexWarmup: _deferIndexWarmup);
+    RagEmbeddingFingerprintLock? resetLock;
+    await _ragService.initForEngine(
+      // A destructive reset is complete only when the replacement indexes are
+      // ready. Returning with another background warmup would let an immediate
+      // ingest race the same database that clearAllData just recreated.
+      deferIndexWarmup: false,
+      afterDatabaseInitialized: () async {
+        resetLock = await _resolveFingerprintGate(currentEmbeddingFingerprint);
+      },
+    );
+    _fingerprintLock = resetLock;
     _collectionServices
       ..clear()
       ..[SourceRagService.defaultCollectionId] = _ragService;
