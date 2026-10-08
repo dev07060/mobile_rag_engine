@@ -1096,16 +1096,6 @@ class SourceRagService {
     // 1. Generate query embedding
     final queryEmbedding = await EmbeddingService.embed(query);
 
-    // DEBUG: Log embedding stats
-    final embNorm = queryEmbedding.fold<double>(0, (sum, v) => sum + v * v);
-    debugPrint('[DEBUG] Query: "$query"');
-    debugPrint(
-      '[DEBUG] Embedding norm: ${embNorm.toStringAsFixed(4)}, dims: ${queryEmbedding.length}',
-    );
-    debugPrint(
-      '[DEBUG] First 5 values: ${queryEmbedding.take(5).map((v) => v.toStringAsFixed(4)).toList()}',
-    );
-
     // 2. Search chunks
     late List<ChunkSearchResult> chunks;
     try {
