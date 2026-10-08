@@ -60,6 +60,12 @@ static CJK_OR_HANGUL_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7A3]"#)
         .expect("valid cjk regex")
 });
+/// Database files whose interrupted ingestions were already recovered by this
+/// process. Recovery runs once per file per process: a later `init_source_db`
+/// on the same pool (e.g. `MobileRagVectorStore.initialize`) may overlap a live
+/// ingestion that legitimately holds `processing`.
+static RECOVERED_DB_PATHS: Lazy<Mutex<HashSet<String>>> =
+    Lazy::new(|| Mutex::new(HashSet::new()));
 
 fn hnsw_streaming_rebuild_enabled_for_target_os(target_os: &str, force_enabled: bool) -> bool {
     force_enabled || target_os == "macos"
@@ -563,9 +569,50 @@ pub fn init_source_db() -> Result<(), RagError> {
     .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
     ensure_collection_row(&conn, DEFAULT_COLLECTION_ID)?;
+    recover_interrupted_ingestions(&conn)?;
 
     info!("[init_source_db] Tables created");
     Ok(())
+}
+
+/// Mark sources left in `processing` by a previous process as `failed`.
+///
+/// A claim lives only as long as the process that took it, so on the first
+/// init of a database file in this process any `processing` row is an orphan
+/// from a crash or kill mid-ingest. Without this, the duplicate check reports
+/// it as "already in progress" forever. `failed` sources are claimable, so
+/// re-adding the same content resumes ingestion.
+fn recover_interrupted_ingestions(conn: &rusqlite::Connection) -> Result<(), RagError> {
+    let db_key = conn.path().unwrap_or_default().to_string();
+    {
+        let mut recovered = RECOVERED_DB_PATHS
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !recovered.insert(db_key) {
+            return Ok(());
+        }
+    }
+    let recovered_count = conn
+        .execute(
+            "UPDATE sources SET status = 'failed' WHERE status = 'processing'",
+            [],
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    if recovered_count > 0 {
+        info!(
+            "[init_source_db] Marked {} interrupted ingestion(s) as failed",
+            recovered_count
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+fn forget_recovered_db_paths_for_test() {
+    RECOVERED_DB_PATHS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clear();
 }
 
 #[derive(Debug, Clone)]
@@ -3755,6 +3802,48 @@ mod tests {
             get_source_status(source.source_id).unwrap(),
             Some("processing".to_string())
         );
+
+        close_db_pool();
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn test_init_recovers_processing_left_by_dead_process() {
+        let _guard = test_guard();
+        let db_path = std::env::temp_dir().join("test_init_recovers_processing.db");
+        let _ = std::fs::remove_file(&db_path);
+        let db_path_str = db_path.to_str().unwrap().to_string();
+
+        init_db_pool(db_path_str.clone(), 1).unwrap();
+        init_source_db().unwrap();
+        let source = add_source(
+            "interrupted ingestion doc".to_string(),
+            None,
+            Some("interrupted".to_string()),
+        )
+        .unwrap();
+        assert!(claim_source_for_ingestion(source.source_id).unwrap());
+
+        // A second init in the same process (e.g. MobileRagVectorStore on the
+        // shared pool) must not steal a live claim.
+        init_source_db().unwrap();
+        assert_eq!(
+            get_source_status(source.source_id).unwrap(),
+            Some("processing".to_string())
+        );
+
+        // Simulate process death and restart.
+        close_db_pool();
+        forget_recovered_db_paths_for_test();
+        init_db_pool(db_path_str, 1).unwrap();
+        init_source_db().unwrap();
+
+        assert_eq!(
+            get_source_status(source.source_id).unwrap(),
+            Some("failed".to_string())
+        );
+        // The recovered source is claimable again, so re-adding it resumes.
+        assert!(claim_source_for_ingestion(source.source_id).unwrap());
 
         close_db_pool();
         let _ = std::fs::remove_file(db_path);
