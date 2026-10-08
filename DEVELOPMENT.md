@@ -53,6 +53,34 @@ flutter pub publish --dry-run
 
 The root package should only bump its `rag_engine_flutter` dependency after the matching native package version is available on pub.dev. This keeps CI and package resolution valid between the two releases.
 
+### Precompiled Binaries
+
+Cargokit downloads a signed, precompiled `rag_engine_flutter` binary when the
+building machine has no `rustup`; with Rust installed it still builds from
+source. Binaries are published to the GitHub release `precompiled_<crate hash>`
+by `.github/workflows/precompile_binaries.yml`, where the crate hash covers
+`rust_builder/rust/src/**/*.rs`, `Cargo.toml`, `Cargo.lock`, `build.rs` and
+`cargokit.yaml`. Supported targets: Android (arm64-v8a, armeabi-v7a, x86_64,
+x86), iOS (device and simulator) and macOS (arm64, x86_64).
+
+One-time setup (keep the private key out of the repository and chat logs):
+
+```bash
+cd rust_builder/cargokit/build_tool
+dart pub get
+dart run build_tool gen-key
+```
+
+Store the private key as the repository secret
+`RAG_ENGINE_PRECOMPILE_PRIVATE_KEY`, and put the public key in
+`rust_builder/rust/cargokit.yaml` under `precompiled_binaries.public_key`.
+
+Before publishing `rag_engine_flutter`, run **Actions > Precompile Binaries >
+Run workflow** on the exact commit being published. The `No-Rust Build` jobs
+must pass: they build the example app for Android, iOS and macOS with Rust
+removed, so they can only succeed with the uploaded binaries. The workflow also
+runs on pushes to `main` that change the crate.
+
 ### Public Documentation Guard
 
 README and other public-facing documentation changes should be reviewed as their own release scope. Do not fold incidental README rewrites into a publish commit unless the release explicitly includes public documentation updates.

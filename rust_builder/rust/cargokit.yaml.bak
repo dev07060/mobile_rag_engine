@@ -1,6 +1,0 @@
-# Cargokit configuration for precompiled binaries
-# Generated for mobile_rag_engine package
-
-precompiled_binaries:
-  url_prefix: "https://github.com/dev07060/mobile_rag_engine/releases/download/"
-  public_key: "67c2af18a017c6d5091f678313b40270308746b5a7411e579b598e623eb8716f"
