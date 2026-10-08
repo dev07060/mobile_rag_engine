@@ -7,7 +7,14 @@ Get started with `mobile_rag_engine` in 5 minutes.
 ## Prerequisites
 
 - Flutter 3.9+
-- iOS 16.0+ / Android API 21+ / macOS 14.0+ / Windows 10+ / Linux
+- iOS 16.0+ / Android API 21+ / macOS 14.0+ (Windows and Linux are not
+  supported yet)
+- Rust stable installed with [rustup](https://rustup.rs/). The published
+  packages do not include pre-compiled binaries yet, so Cargokit compiles the
+  Rust core during your first `flutter build` and adds the Rust targets it
+  needs through `rustup`. iOS/macOS builds also need Xcode; Android builds
+  need the Android SDK (Cargokit installs a missing NDK with the SDK's
+  `cmdline-tools`).
 
 ---
 
@@ -33,8 +40,8 @@ Run from your project root:
 mkdir -p assets && cd assets
 
 # all-MiniLM-L6-v2 (INT8 quantized for ARM64, ~23MB)
-curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx"
-curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json"
+curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/onnx/model_qint8_arm64.onnx"
+curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer.json"
 ```
 
 > Need multilingual support (Korean, CJK)? See [Model Setup Guide](model_setup.md) for BGE-m3.
