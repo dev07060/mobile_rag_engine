@@ -371,6 +371,9 @@ mod tests {
         assert!((from_slice - from_blob).abs() < 1e-6);
     }
 
+    // Only the legacy uniform format matches the two-step pipeline; with
+    // `vector_quant_i8` the direct blob is block-wise Q8_0 by design.
+    #[cfg(not(feature = "vector_quant_i8"))]
     #[test]
     fn quantize_f32_to_u8_blob_matches_two_step_pipeline() {
         // The direct blob path skips an intermediate Vec<i8>; the
@@ -657,6 +660,10 @@ mod tests {
 
     #[test]
     fn test_blockwise_cosine_similarity() {
+        // Imported here because the module-level import only exists without
+        // `vector_quant_i8`; the shipped feature set must compile this test too.
+        use crate::api::vector_math::{cosine_with_query_norm_f32, l2_norm_f32};
+
         // Create two 768-dim vectors with different patterns and outliers
         let mut a = vec![0.0f32; 768];
         let mut b = vec![0.0f32; 768];

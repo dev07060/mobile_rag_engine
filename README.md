@@ -10,7 +10,7 @@ round-trip for retrieval.
 ![pub package](https://img.shields.io/pub/v/mobile_rag_engine)
 ![flutter](https://img.shields.io/badge/Flutter-3.9%2B-blue)
 ![rust](https://img.shields.io/badge/Core-Rust-orange)
-![platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
+![platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS-lightgrey)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Use it when you need a **Flutter local RAG engine** for private notes, document
@@ -21,11 +21,22 @@ stay on the device.
 
 ## Why this package?
 
-### No Rust Installation Required
+### Native Core Built by Cargokit
 
-**You do NOT need to install Rust, Cargo, or Android NDK.**
+The Rust core (`rag_engine_flutter`) is compiled from source by
+[Cargokit](https://github.com/irondash/cargokit) during your first
+`flutter build`. Published packages do **not** include pre-compiled binaries
+yet, so a Rust toolchain is required today:
 
-This package includes **pre-compiled binaries** for iOS, Android, macOS, Windows, and Linux. Just `pub add` and run.
+- Install Rust with [rustup](https://rustup.rs/) (stable). Cargokit adds the
+  Rust targets it needs through `rustup`.
+- iOS/macOS builds need Xcode. Android builds need the Android SDK; if the
+  NDK version your project requests is missing, Cargokit installs it with the
+  SDK's `cmdline-tools` (`sdkmanager`).
+- The first build of each platform compiles the Rust crate and takes longer;
+  later builds reuse the cached artifacts.
+
+Pre-compiled binaries are planned; this section will change when they ship.
 
 ### Performance
 
@@ -91,8 +102,10 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 | **iOS** | 16.0+ |
 | **Android** | API 21+ (Android 5.0 Lollipop) |
 | **macOS** | 14.0+ |
-| **Windows** | Windows 10+ (x64) |
-| **Linux** | glibc 2.31+ (x64) |
+| **Build host** | Rust stable via rustup (see [Native Core Built by Cargokit](#native-core-built-by-cargokit)) |
+
+Windows and Linux are not supported yet: the published native package does not
+ship their build configuration.
 
 > ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods iOS builds require static framework linkage (`use_frameworks! :linkage => :static`), and Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
 
@@ -114,8 +127,8 @@ dependencies:
 mkdir -p assets && cd assets
 
 # Download all-MiniLM-L6-v2 model (INT8 quantized for ARM64, ~23MB)
-curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx"
-curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json"
+curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/onnx/model_qint8_arm64.onnx"
+curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer.json"
 ```
 
 > Need multilingual (Korean, CJK, etc.)? See [Model Setup Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md) for BGE-m3 and other model options.
