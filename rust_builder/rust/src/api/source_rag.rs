@@ -2972,10 +2972,6 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Mutex, OnceLock};
-    use std::{
-        fs::OpenOptions,
-        io::{Seek, SeekFrom, Write},
-    };
     use tokenizers::models::wordlevel::WordLevel;
     use tokenizers::pre_tokenizers::whitespace::Whitespace;
     use tokenizers::processors::bert::BertProcessing;
@@ -3413,15 +3409,21 @@ mod tests {
         drop(store);
         clear_hnsw_index();
 
-        let mut file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(format!("{base_path}.hnsw"))
-            .unwrap();
-        // HNSW header: magic(4), version(1), entry point(4), max layer(1), node count(u32 LE).
-        file.seek(SeekFrom::Start(10)).unwrap();
-        file.write_all(&1u32.to_le_bytes()).unwrap();
-        file.flush().unwrap();
+        // Grow the DB after the save so the persisted, structurally valid
+        // index (2 nodes) no longer matches the eligible chunk count (3).
+        // (A tampered header is now rejected earlier by the layout check.)
+        add_chunks(
+            source.source_id,
+            vec![ChunkData {
+                content: "chunk 2".to_string(),
+                chunk_index: 2,
+                start_pos: 16,
+                end_pos: 23,
+                chunk_type: "text".to_string(),
+                embedding: vec![2.25; 768],
+            }],
+        )
+        .unwrap();
 
         assert!(!load_collection_hnsw_index(collection.clone(), base_path).unwrap());
         let conn = get_connection().unwrap();
