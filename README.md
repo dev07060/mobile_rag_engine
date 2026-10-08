@@ -10,7 +10,7 @@ round-trip for retrieval.
 ![pub package](https://img.shields.io/pub/v/mobile_rag_engine)
 ![flutter](https://img.shields.io/badge/Flutter-3.9%2B-blue)
 ![rust](https://img.shields.io/badge/Core-Rust-orange)
-![platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
+![platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS-lightgrey)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Use it when you need a **Flutter local RAG engine** for private notes, document
@@ -21,11 +21,22 @@ stay on the device.
 
 ## Why this package?
 
-### No Rust Installation Required
+### Native Core Built by Cargokit
 
-**You do NOT need to install Rust, Cargo, or Android NDK.**
+The Rust core (`rag_engine_flutter`) is compiled from source by
+[Cargokit](https://github.com/irondash/cargokit) during your first
+`flutter build`. Published packages do **not** include pre-compiled binaries
+yet, so a Rust toolchain is required today:
 
-This package includes **pre-compiled binaries** for iOS, Android, macOS, Windows, and Linux. Just `pub add` and run.
+- Install Rust with [rustup](https://rustup.rs/) (stable). Cargokit adds the
+  Rust targets it needs through `rustup`.
+- iOS/macOS builds need Xcode. Android builds need the Android SDK; if the
+  NDK version your project requests is missing, Cargokit installs it with the
+  SDK's `cmdline-tools` (`sdkmanager`).
+- The first build of each platform compiles the Rust crate and takes longer;
+  later builds reuse the cached artifacts.
+
+Pre-compiled binaries are planned; this section will change when they ship.
 
 ### Performance
 
@@ -91,8 +102,10 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 | **iOS** | 16.0+ |
 | **Android** | API 21+ (Android 5.0 Lollipop) |
 | **macOS** | 14.0+ |
-| **Windows** | Windows 10+ (x64) |
-| **Linux** | glibc 2.31+ (x64) |
+| **Build host** | Rust stable via rustup (see [Native Core Built by Cargokit](#native-core-built-by-cargokit)) |
+
+Windows and Linux are not supported yet: the published native package does not
+ship their build configuration.
 
 > ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods builds on both iOS and macOS require static framework linkage (`use_frameworks! :linkage => :static`); set the host deployment targets to iOS 16.0+ and macOS 14.0+. Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
 
@@ -100,14 +113,53 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 
 ## Installation
 
-### 1. Add the dependency
+There are two install paths. The `setup` command and Model Pack below ship only
+in the `0.21.0` dev line (since `0.21.0-dev.11`); the latest stable, `0.20.0`,
+uses manually downloaded model assets.
+
+| Path | Version | Model setup |
+|:-----|:--------|:------------|
+| **Stable** | `^0.20.0` | Download `model.onnx` + `tokenizer.json` yourself ([Option A](#option-a-stable-020x-manual-model-assets)) |
+| **Preview** | `0.21.0-dev.12` | `dart run mobile_rag_engine:setup` Model Pack ([Option B](#option-b-preview-0210-dev-model-pack)) |
+
+### Option A: Stable (`0.20.x`) manual model assets
 
 ```yaml
 dependencies:
   mobile_rag_engine: ^0.20.0
 ```
 
-### 2. Install the verified Model Pack
+Download the MiniLM model (INT8, ARM64, ~23 MB) and tokenizer at a pinned
+revision:
+
+```bash
+mkdir -p assets && cd assets
+curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/onnx/model_qint8_arm64.onnx"
+curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer.json"
+```
+
+```yaml
+flutter:
+  assets:
+    - assets/model.onnx
+    - assets/tokenizer.json
+```
+
+```dart
+await MobileRag.initialize(
+  tokenizerAsset: 'assets/tokenizer.json',
+  modelAsset: 'assets/model.onnx',
+);
+```
+
+### Option B: Preview (`0.21.0` dev) Model Pack
+
+```yaml
+dependencies:
+  mobile_rag_engine: 0.21.0-dev.12
+```
+
+Install and verify the pinned Model Pack:
 
 ```bash
 dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en
@@ -186,7 +238,12 @@ if (!MobileRag.instance.isIndexReady) {
 }
 ```
 
+On stable `0.20.x`, pass `tokenizerAsset:` and `modelAsset:` instead of
+`modelPack:` ([Option A](#option-a-stable-020x-manual-model-assets)).
+
 ### Storage default and experimental VABQ
+
+> `VabqProfile` exists only in the `0.21.0` dev line; `0.20.x` always uses Q8_0.
 
 The normal public initialization paths use Q8_0 storage by default. VABQ is
 an experimental, advanced opt-in: it is enabled only when you explicitly pass

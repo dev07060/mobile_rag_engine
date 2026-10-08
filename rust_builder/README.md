@@ -22,16 +22,13 @@ dependencies:
 
 ## Requirements
 
-### For development (building from source)
+Published versions do not include pre-compiled binaries yet. Cargokit builds
+the Rust crate from source during `flutter build`, so you need:
 
-If prebuilt binaries are not available for your platform, you need:
-
-- [Rust toolchain](https://rustup.rs/) (stable)
-- Platform-specific build tools (Xcode for iOS/macOS, Android NDK for Android)
-
-### For users (with prebuilt binaries)
-
-No additional requirements - binaries are downloaded automatically.
+- [Rust toolchain](https://rustup.rs/) (stable, installed with rustup; Cargokit
+  adds the required targets)
+- Platform-specific build tools (Xcode for iOS/macOS, Android SDK for Android;
+  Cargokit installs a missing NDK with the SDK's `cmdline-tools`)
 
 ## Supported Platforms
 
@@ -41,10 +38,10 @@ No additional requirements - binaries are downloaded automatically.
 | iOS Simulator | arm64, x86_64 | ✅ |
 | macOS | arm64, x86_64 | ✅ |
 | Android | arm64-v8a, armeabi-v7a, x86 | ✅ |
-| Linux | x86_64 | 🚧 Coming soon |
-| Windows | x86_64 | 🚧 Coming soon |
+| Linux | x86_64 | ❌ Not supported yet |
+| Windows | x86_64 | ❌ Not supported yet |
 
-The published package is intended for iOS, Android, and macOS consumers today. Linux and Windows source configs may exist in the repository while support is being prepared, but they are not part of the supported prebuilt-binary surface yet.
+The published package is intended for iOS, Android, and macOS consumers today. Linux and Windows source configs exist in the repository but are excluded from the published archive.
 
 ## License
 
