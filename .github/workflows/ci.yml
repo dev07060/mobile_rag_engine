@@ -117,6 +117,10 @@ jobs:
       - name: Setup Android SDK (Android only)
         if: matrix.platform == 'android'
         uses: android-actions/setup-android@v3
+        with:
+          # The default also installs the legacy 'tools' package, which
+          # sdkmanager 16.0 on current runners no longer provides.
+          packages: platform-tools
 
       - name: Get package dependencies
         run: flutter pub get

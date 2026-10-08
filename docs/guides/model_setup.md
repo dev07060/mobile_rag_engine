@@ -6,6 +6,11 @@ bundled with the app, and never downloaded at runtime.
 
 ## Recommended: stable MiniLM Model Pack
 
+> The `setup` command and `RagModelPack` ship only in the `0.21.0` dev line
+> (since `0.21.0-dev.11`). On the latest stable, `0.20.x`, follow
+> [Download Instructions](#download-instructions) and initialize with
+> `tokenizerAsset:` / `modelAsset:`.
+
 From your Flutter project, run:
 
 ```bash

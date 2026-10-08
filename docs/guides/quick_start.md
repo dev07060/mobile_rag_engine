@@ -7,7 +7,14 @@ Get started with `mobile_rag_engine` in 5 minutes.
 ## Prerequisites
 
 - Flutter 3.9+
-- iOS 16.0+ / Android API 21+ / macOS 14.0+ / Windows 10+ / Linux
+- iOS 16.0+ / Android API 21+ / macOS 14.0+ (Windows and Linux are not
+  supported yet)
+- Rust stable installed with [rustup](https://rustup.rs/). The published
+  packages do not include pre-compiled binaries yet, so Cargokit compiles the
+  Rust core during your first `flutter build` and adds the Rust targets it
+  needs through `rustup`. iOS/macOS builds also need Xcode; Android builds
+  need the Android SDK (Cargokit installs a missing NDK with the SDK's
+  `cmdline-tools`).
 
 For CocoaPods hosts, set the platform and static framework linkage in the
 generated app's Podfile. Keep the rest of the generated Podfile unchanged:
@@ -38,11 +45,19 @@ For macOS, also set the Runner project's deployment target to 14.0 in Xcode.
 
 ## Step 1: Add Dependency
 
+This guide uses the Model Pack `setup` command, which ships only in the
+`0.21.0` dev line (since `0.21.0-dev.11`):
+
 ```yaml
 # pubspec.yaml
 dependencies:
-  mobile_rag_engine: ^0.20.0
+  mobile_rag_engine: 0.21.0-dev.12
 ```
+
+> On the latest stable, `^0.20.0`, the `setup` command does not exist. Download
+> `model.onnx` and `tokenizer.json` manually (see the
+> [Model Setup Guide](model_setup.md#download-instructions)) and initialize
+> with `tokenizerAsset:` / `modelAsset:` instead of `modelPack:` in Step 3.
 
 ```bash
 flutter pub get
@@ -111,7 +126,9 @@ Future<void> initializeRAG() async {
 
 Model Pack v1 always selects Q8_0 vector storage. VABQ is an experimental,
 advanced opt-in available only through an explicit profile on the custom
-two-asset path; a model name or embedding dimension never enables it.
+two-asset path; a model name or embedding dimension never enables it. On
+`0.20.x`, `modelPack` and `vabqProfile` do not exist: pass `tokenizerAsset` and
+`modelAsset` (both required).
 
 > **Validation behavior (soft + stable):**
 > - `maxChunkChars < 100` is normalized to `100` at runtime.
