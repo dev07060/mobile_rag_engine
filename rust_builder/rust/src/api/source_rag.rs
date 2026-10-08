@@ -37,7 +37,7 @@ use crate::api::vector_math::{
     cosine_with_query_norm_f32, decode_f32_embedding, decode_f32_embedding_or_warn, l2_norm_f32,
 };
 #[cfg(feature = "vector_quant_i8")]
-use crate::api::vector_quant::{quantize_f32_for_active_profile, score_persisted_quantized_blob};
+use crate::api::vector_quant::{quantize_f32_for_active_profile, PreparedPersistedQuery};
 use crate::frb_generated::RustAutoOpaqueMoi as RustAutoOpaque;
 use flutter_rust_bridge::frb;
 use log::{debug, info};
@@ -597,10 +597,11 @@ pub fn add_source_in_collection(
     }
     let collection_id = normalize_collection_id(collection_id);
     info!(
-        "[add_source_in_collection] collection={}, chars={}, name={:?}",
+        "[add_source_in_collection] collection={}, chars={}, has_name={}",
         collection_id,
         content.len(),
-        name
+        // Source names are often user file names; this logs in release builds.
+        name.is_some()
     );
 
     // Preserve global UNIQUE(content_hash) compatibility while scoping dedupe by collection.
@@ -2521,6 +2522,8 @@ fn search_chunks_linear_in_collection(
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
     let query_norm = l2_norm_f32(&query_embedding);
+    #[cfg(feature = "vector_quant_i8")]
+    let prepared_query = PreparedPersistedQuery::new(&query_embedding);
 
     let mut stmt = match conn.prepare(
         "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, c.embedding_i8, s.metadata, c.mmap_id
@@ -2593,7 +2596,7 @@ fn search_chunks_linear_in_collection(
                     if let Some(data) = s.get(mid as usize) {
                         let qblob = data;
                         sim_opt =
-                            score_persisted_quantized_blob(&query_embedding, qblob)?.map(f64::from);
+                            prepared_query.score(qblob)?.map(f64::from);
                     }
                 }
             }
@@ -2608,7 +2611,7 @@ fn search_chunks_linear_in_collection(
         let similarity = if let Some(sim) = sim_opt {
             sim
         } else if let Some(qblob) = embedding_i8_blob.as_deref() {
-            if let Some(sim) = score_persisted_quantized_blob(&query_embedding, qblob)? {
+            if let Some(sim) = prepared_query.score(qblob)? {
                 sim as f64
             } else if let Some(embedding) = decode_f32_embedding(&embedding_blob) {
                 if embedding.len() != query_embedding.len() {
@@ -2850,8 +2853,11 @@ pub fn get_all_chunk_ids_and_contents_in_collection(
 
 /// Update embedding for a single chunk.
 pub fn update_chunk_embedding(chunk_id: i64, embedding: Vec<f32>) -> Result<(), RagError> {
-    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
-    let collection_id: Option<String> = conn
+    let mut conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let collection_id: Option<String> = tx
         .query_row(
             "SELECT collection_id FROM chunks WHERE id = ?1",
             params![chunk_id],
@@ -2862,14 +2868,67 @@ pub fn update_chunk_embedding(chunk_id: i64, embedding: Vec<f32>) -> Result<(), 
     for f in &embedding {
         embedding_bytes.extend_from_slice(&f.to_ne_bytes());
     }
+    let updated = tx
+        .execute(
+            "UPDATE chunks SET embedding = ?1 WHERE id = ?2",
+            params![embedding_bytes, chunk_id],
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    if updated > 0 {
+        replace_persisted_quantized_embedding(&tx, chunk_id, &embedding)?;
+    }
+    if let Some(cid) = collection_id {
+        mark_collection_dirty(&tx, &cid)?;
+    }
+    tx.commit()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    Ok(())
+}
+
+/// Replace the quantized copy of a chunk's embedding after a re-embed.
+///
+/// Exact scans score the quantized vector (the mmap record, then
+/// `embedding_i8`), not the f32 column, so updating only `embedding` would
+/// keep ranking the chunk by its old vector. The new record is appended and
+/// flushed before the row points at it; the old record stays in the
+/// append-only `.vec` file unreferenced.
+#[cfg(feature = "vector_quant_i8")]
+fn replace_persisted_quantized_embedding(
+    conn: &rusqlite::Connection,
+    chunk_id: i64,
+    embedding: &[f32],
+) -> Result<(), RagError> {
+    let (embedding_i8_bytes, embedding_scale) = quantize_f32_for_active_profile(embedding)?;
+    let mmap_id = {
+        let mut store = crate::api::mmap_store::MMAP_STORE.write().unwrap();
+        let Some(store) = store.as_mut() else {
+            return Err(RagError::DatabaseError(
+                "MMAP vector store is not initialized".to_string(),
+            ));
+        };
+        let mmap_id = store
+            .append(&embedding_i8_bytes)
+            .map_err(|error| RagError::DatabaseError(error.to_string()))?;
+        store
+            .flush()
+            .map_err(|error| RagError::DatabaseError(error.to_string()))?;
+        mmap_id
+    };
+    let empty_blob: Vec<u8> = Vec::new();
     conn.execute(
-        "UPDATE chunks SET embedding = ?1 WHERE id = ?2",
-        params![embedding_bytes, chunk_id],
+        "UPDATE chunks SET embedding_i8 = ?1, embedding_scale = ?2, mmap_id = ?3 WHERE id = ?4",
+        params![empty_blob, embedding_scale, mmap_id as i64, chunk_id],
     )
     .map_err(|e| RagError::DatabaseError(e.to_string()))?;
-    if let Some(cid) = collection_id {
-        mark_collection_dirty(&conn, &cid)?;
-    }
+    Ok(())
+}
+
+#[cfg(not(feature = "vector_quant_i8"))]
+fn replace_persisted_quantized_embedding(
+    _conn: &rusqlite::Connection,
+    _chunk_id: i64,
+    _embedding: &[f32],
+) -> Result<(), RagError> {
     Ok(())
 }
 
@@ -2930,8 +2989,11 @@ pub fn update_chunk_reembedded(
             "target_fingerprint must be non-empty".to_string(),
         ));
     }
-    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
-    let collection_id: Option<String> = conn
+    let mut conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let collection_id: Option<String> = tx
         .query_row(
             "SELECT collection_id FROM chunks WHERE id = ?1",
             params![chunk_id],
@@ -2942,7 +3004,7 @@ pub fn update_chunk_reembedded(
     for f in &embedding {
         embedding_bytes.extend_from_slice(&f.to_ne_bytes());
     }
-    let updated = conn
+    let updated = tx
         .execute(
             "UPDATE chunks
              SET embedding = ?1,
@@ -2956,9 +3018,12 @@ pub fn update_chunk_reembedded(
             "no chunk with id={chunk_id} (reembed update was a no-op)"
         )));
     }
+    replace_persisted_quantized_embedding(&tx, chunk_id, &embedding)?;
     if let Some(cid) = collection_id {
-        mark_collection_dirty(&conn, &cid)?;
+        mark_collection_dirty(&tx, &cid)?;
     }
+    tx.commit()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
     Ok(())
 }
 
@@ -3353,6 +3418,81 @@ mod tests {
         assert!(last_error
             .unwrap_or_default()
             .contains(&chunk_id.to_string()));
+
+        teardown_test_db(db_path);
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    #[test]
+    fn reembedded_chunks_are_scored_with_their_new_vectors() {
+        use crate::api::hybrid_search::{search_hybrid, RrfConfig, SearchFilter};
+
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_reembed_refreshes_quantized_vector.db");
+        const DIM: usize = 64;
+        let axis = |i: usize| {
+            let mut v = vec![0.0f32; DIM];
+            v[i] = 1.0;
+            v
+        };
+        let chunk = |index: i32, embedding: Vec<f32>| ChunkData {
+            content: format!("reembed chunk {index}"),
+            chunk_index: index,
+            start_pos: index * 20,
+            end_pos: index * 20 + 15,
+            chunk_type: "text".to_string(),
+            embedding,
+        };
+
+        let source = add_source("reembed source".to_string(), None, None).unwrap();
+        update_source_status(source.source_id, "completed".to_string()).unwrap();
+        add_chunks(source.source_id, vec![chunk(0, axis(0)), chunk(1, axis(1))]).unwrap();
+        let ids: Vec<i64> = get_connection()
+            .unwrap()
+            .prepare("SELECT id FROM chunks WHERE source_id = ?1 ORDER BY chunk_index")
+            .unwrap()
+            .query_map(params![source.source_id], |row| row.get(0))
+            .unwrap()
+            .map(|row| row.unwrap())
+            .collect();
+
+        // Top hit of the exact scans (source-filtered hybrid with vector weight
+        // only, and the collection linear scan) for a query along axis 1.
+        let top_hits = || {
+            let filtered = search_hybrid(
+                "reembed".to_string(),
+                axis(1),
+                1,
+                Some(RrfConfig {
+                    k: 60,
+                    vector_weight: 1.0,
+                    bm25_weight: 0.0,
+                }),
+                Some(SearchFilter {
+                    source_ids: Some(vec![source.source_id]),
+                    metadata_like: None,
+                    collection_id: None,
+                }),
+            )
+            .unwrap()[0]
+                .doc_id;
+            let linear = search_chunks_linear_in_collection(DEFAULT_COLLECTION_ID, axis(1), 1)
+                .unwrap()[0]
+                .chunk_id;
+            (filtered, linear)
+        };
+        assert_eq!(top_hits(), (ids[1], ids[1]));
+
+        // Swap the two vectors through the fingerprint re-embed path.
+        update_chunk_reembedded(ids[0], axis(1), "fp-v2".to_string()).unwrap();
+        update_chunk_reembedded(ids[1], axis(0), "fp-v2".to_string()).unwrap();
+        assert_eq!(top_hits(), (ids[0], ids[0]));
+
+        // And back through the plain update path.
+        update_chunk_embedding(ids[0], axis(0)).unwrap();
+        update_chunk_embedding(ids[1], axis(1)).unwrap();
+        assert_eq!(top_hits(), (ids[1], ids[1]));
 
         teardown_test_db(db_path);
     }

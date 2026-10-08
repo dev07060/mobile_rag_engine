@@ -275,15 +275,20 @@ pub fn cosine_similarity_q8(
     }
 
     // ── Block-wise Q8_0 path ──────────────────────────────────────────────────
-    // Each block is 36 bytes: [f32 scale (4 bytes LE)] + [32x i8 as u8].
+    // Each block is 36 bytes: [f32 scale (4 bytes LE)] + [32x i8 as u8]. When
+    // the dimension is not a multiple of 32, the last block is a partial
+    // `4 + dim % 32` bytes, so the blob length is not a multiple of 36.
     const BLOCK_BYTES: usize = 36;
     const VALS_PER_BLOCK: usize = 32;
 
-    if target_blob.len() % BLOCK_BYTES != 0 || query_q8.blocks.is_empty() {
+    let Some(target_dims) = q8_0_blob_dimension(target_blob) else {
+        return 0.0;
+    };
+    if query_q8.blocks.is_empty() {
         return 0.0;
     }
 
-    let num_blocks = target_blob.len() / BLOCK_BYTES;
+    let num_blocks = (target_dims + VALS_PER_BLOCK - 1) / VALS_PER_BLOCK;
     // Only iterate over blocks present in both query and target
     let n_blocks = num_blocks.min(query_q8.scales.len());
 
@@ -303,8 +308,11 @@ pub fn cosine_similarity_q8(
         ]);
         let query_scale = query_q8.scales[block_idx]; // safe: block_idx < n_blocks <= scales.len()
 
-        // Determine actual block length (handles last partial block in query)
-        let q_end = (q_off + VALS_PER_BLOCK).min(query_q8.blocks.len());
+        // Values present in both blocks (handles a partial last block on
+        // either side, including mismatched dimensions).
+        let q_end = (q_off + VALS_PER_BLOCK)
+            .min(query_q8.blocks.len())
+            .min(target_dims);
         let block_len = q_end - q_off;
 
         // Inner dot product: slice-based iteration — no per-element bounds checks,
@@ -976,90 +984,136 @@ pub(crate) fn active_vabq_query(query_f32: &[f32]) -> Option<QueryVABQ> {
 /// Scores a recognized VABQ blob only when the active host profile, query,
 /// and blob header agree. `Ok(None)` means the blob is not VABQ and callers
 /// may dispatch it to Q8_0; an incompatible VABQ blob is a fail-closed error.
+/// Production scans use `PreparedPersistedQuery`; this one-shot form is kept
+/// for the codec tests.
+#[cfg(test)]
 pub(crate) fn score_vabq_blob_for_active_profile(
     query_f32: &[f32],
     blob: &[u8],
 ) -> Result<Option<f32>, RagError> {
-    let Some(layout) = vabq_blob_layout(blob) else {
-        if has_versioned_vabq_envelope(blob) {
-            return Err(RagError::InvalidInput(
-                "Malformed VABQ header or layout".to_string(),
-            ));
-        }
-        return Ok(None);
-    };
-    let active = active_vabq_profile().ok_or_else(|| {
-        RagError::InvalidInput(
-            "Encountered a VABQ blob while the host selected VabqProfile.none".to_string(),
-        )
-    })?;
-    if active != layout.profile {
-        return Err(RagError::InvalidInput(format!(
-            "Active VABQ profile {:?} does not match blob profile {:?}",
-            active, layout.profile
-        )));
-    }
-    if query_f32.len() != active.dimension() {
-        return Err(RagError::InvalidInput(format!(
-            "Active VABQ profile requires query dimension {}, got {}",
-            active.dimension(),
-            query_f32.len()
-        )));
-    }
-    let query = QueryVABQ::for_profile(query_f32, active);
-    Ok(Some(cosine_similarity_vabq(&query, blob)))
+    PreparedPersistedQuery::new(query_f32).score_vabq(blob)
 }
 
 /// Shared persistence dispatcher for VABQ and Q8_0 blobs. VABQ is attempted
 /// first using the explicit active-profile contract; a recognized but
 /// incompatible VABQ blob returns an error instead of being misread as Q8_0.
+/// One-shot form of `PreparedPersistedQuery::score`, kept for tests.
+#[cfg(test)]
 pub(crate) fn score_persisted_quantized_blob(
     query_f32: &[f32],
     blob: &[u8],
 ) -> Result<Option<f32>, RagError> {
-    if let Some(score) = score_vabq_blob_for_active_profile(query_f32, blob)? {
-        return Ok(Some(score));
-    }
-    if active_vabq_profile().is_some() {
-        return Err(RagError::InvalidInput(
-            "Expected a VABQ blob for the active VABQ profile".to_string(),
-        ));
+    PreparedPersistedQuery::new(query_f32).score(blob)
+}
+
+/// A query prepared once for scoring many persisted blobs in an exact scan.
+///
+/// `score_persisted_quantized_blob` used to re-quantize the query (flat i8,
+/// Q8_0 blocks and, with a VABQ profile, the VABQ query) for every row. This
+/// holds those encodings so a scan pays for them once; `score` applies the
+/// same dispatch and errors per blob.
+pub(crate) struct PreparedPersistedQuery<'a> {
+    query_f32: &'a [f32],
+    active_profile: Option<VabqProfile>,
+    vabq_query: Option<QueryVABQ>,
+    query_q8: QueryQ8,
+    query_i8: Vec<i8>,
+    query_i8_norm: f32,
+}
+
+impl<'a> PreparedPersistedQuery<'a> {
+    pub(crate) fn new(query_f32: &'a [f32]) -> Self {
+        let active_profile = active_vabq_profile();
+        let vabq_query = active_profile
+            .filter(|profile| query_f32.len() == profile.dimension())
+            .map(|profile| QueryVABQ::for_profile(query_f32, profile));
+        let (query_i8, _) = quantize_f32_to_i8(query_f32);
+        let query_i8_norm = l2_norm_i8(&query_i8);
+        Self {
+            query_f32,
+            active_profile,
+            vabq_query,
+            query_q8: QueryQ8::new(query_f32),
+            query_i8,
+            query_i8_norm,
+        }
     }
 
-    let (query_i8, _) = quantize_f32_to_i8(query_f32);
-    let query_i8_norm = l2_norm_i8(&query_i8);
-    if query_i8_norm <= 0.0 || blob.is_empty() {
-        return Ok(None);
+    pub(crate) fn score(&self, blob: &[u8]) -> Result<Option<f32>, RagError> {
+        if let Some(score) = self.score_vabq(blob)? {
+            return Ok(Some(score));
+        }
+        if self.active_profile.is_some() {
+            return Err(RagError::InvalidInput(
+                "Expected a VABQ blob for the active VABQ profile".to_string(),
+            ));
+        }
+
+        if self.query_i8_norm <= 0.0 || blob.is_empty() {
+            return Ok(None);
+        }
+
+        // Q8_0 must be checked before the old flat-i8-with-scale fallback. A
+        // 768-d Q8_0 record is 864 bytes, which used to satisfy `>= dim + 4` and
+        // therefore scored from a shifted slice. Its first scale byte may also be
+        // 0x02, the VABQ tag, so neither tag nor length-prefix heuristics are safe.
+        if q8_0_blob_dimension(blob) == Some(self.query_f32.len()) {
+            return Ok(Some(cosine_similarity_q8(
+                &self.query_q8,
+                blob,
+                &self.query_i8,
+                self.query_i8_norm,
+            )));
+        }
+        if blob.len() == self.query_i8.len() + 4 {
+            return Ok(Some(cosine_with_query_norm_i8_blob(
+                &self.query_i8,
+                self.query_i8_norm,
+                &blob[4..],
+            )));
+        }
+        if blob.len() == self.query_i8.len() {
+            return Ok(Some(cosine_similarity_q8(
+                &self.query_q8,
+                blob,
+                &self.query_i8,
+                self.query_i8_norm,
+            )));
+        }
+        Ok(None)
     }
 
-    // Q8_0 must be checked before the old flat-i8-with-scale fallback. A
-    // 768-d Q8_0 record is 864 bytes, which used to satisfy `>= dim + 4` and
-    // therefore scored from a shifted slice. Its first scale byte may also be
-    // 0x02, the VABQ tag, so neither tag nor length-prefix heuristics are safe.
-    if q8_0_blob_dimension(blob) == Some(query_f32.len()) {
-        return Ok(Some(cosine_similarity_q8(
-            &QueryQ8::new(query_f32),
-            blob,
-            &query_i8,
-            query_i8_norm,
-        )));
+    /// VABQ dispatch: `Ok(None)` for a non-VABQ blob; an incompatible VABQ
+    /// blob is a fail-closed error.
+    fn score_vabq(&self, blob: &[u8]) -> Result<Option<f32>, RagError> {
+        let Some(layout) = vabq_blob_layout(blob) else {
+            if has_versioned_vabq_envelope(blob) {
+                return Err(RagError::InvalidInput(
+                    "Malformed VABQ header or layout".to_string(),
+                ));
+            }
+            return Ok(None);
+        };
+        let active = self.active_profile.ok_or_else(|| {
+            RagError::InvalidInput(
+                "Encountered a VABQ blob while the host selected VabqProfile.none".to_string(),
+            )
+        })?;
+        if active != layout.profile {
+            return Err(RagError::InvalidInput(format!(
+                "Active VABQ profile {:?} does not match blob profile {:?}",
+                active, layout.profile
+            )));
+        }
+        let Some(query) = self.vabq_query.as_ref() else {
+            return Err(RagError::InvalidInput(format!(
+                "Active VABQ profile requires query dimension {}, got {}",
+                active.dimension(),
+                self.query_f32.len()
+            )));
+        };
+        Ok(Some(cosine_similarity_vabq(query, blob)))
     }
-    if blob.len() == query_i8.len() + 4 {
-        return Ok(Some(cosine_with_query_norm_i8_blob(
-            &query_i8,
-            query_i8_norm,
-            &blob[4..],
-        )));
-    }
-    if blob.len() == query_i8.len() {
-        return Ok(Some(cosine_similarity_q8(
-            &QueryQ8::new(query_f32),
-            blob,
-            &query_i8,
-            query_i8_norm,
-        )));
-    }
-    Ok(None)
 }
 
 /// Query representation matching the host-selected persistence format.
@@ -2061,6 +2115,76 @@ mod tests {
             (actual - expected).abs() < 1e-6,
             "actual={actual}, expected={expected}"
         );
+    }
+
+    // Dimensions that are not a multiple of the 32-value block leave a partial
+    // tail block of `4 + dim % 32` bytes. 312 is TinyBERT's hidden size.
+    #[cfg(feature = "vector_quant_i8")]
+    #[test]
+    fn q8_0_scores_partial_tail_blocks() {
+        configure_active_vabq_profile(None, 0).unwrap();
+        for dim in [100usize, 312, 300] {
+            let query = pseudo_vec(dim, 11);
+            let (query_i8, _) = quantize_f32_to_i8(&query);
+            let query_i8_norm = l2_norm_i8(&query_i8);
+            let query_q8 = QueryQ8::new(&query);
+            let active = active_quantized_query(&query).unwrap();
+
+            for seed in [11u32, 12, 13, 14] {
+                let target = pseudo_vec(dim, seed);
+                let (blob, _) = quantize_f32_to_u8_blob(&target);
+                assert_eq!(q8_0_blob_dimension(&blob), Some(dim));
+                let truth = cosine_f64_true(&query, &target) as f32;
+
+                let direct = cosine_similarity_q8(&query_q8, &blob, &query_i8, query_i8_norm);
+                let persisted = score_persisted_quantized_blob(&query, &blob)
+                    .unwrap()
+                    .expect("partial-tail Q8_0 blob must be scored");
+                let hnsw = cosine_similarity_active_quantized(&active, &blob).unwrap();
+
+                for (path, score) in [("direct", direct), ("persisted", persisted), ("hnsw", hnsw)] {
+                    assert!(
+                        (score - truth).abs() < 0.02,
+                        "dim={dim} seed={seed} {path}: score={score}, f32 truth={truth}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    #[test]
+    fn q8_0_mismatched_dimensions_score_zero_without_panicking() {
+        configure_active_vabq_profile(None, 0).unwrap();
+        let query = pseudo_vec(312, 1);
+        let (query_i8, _) = quantize_f32_to_i8(&query);
+        let query_i8_norm = l2_norm_i8(&query_i8);
+        for dim in [300usize, 320, 100] {
+            let (blob, _) = quantize_f32_to_u8_blob(&pseudo_vec(dim, 2));
+            let score = cosine_similarity_q8(&QueryQ8::new(&query), &blob, &query_i8, query_i8_norm);
+            assert!(score.is_finite(), "dim={dim}: {score}");
+        }
+    }
+
+    #[cfg(feature = "vector_quant_i8")]
+    #[test]
+    fn prepared_persisted_query_matches_per_row_scoring() {
+        configure_active_vabq_profile(None, 0).unwrap();
+        for dim in [384usize, 312] {
+            let query = pseudo_vec(dim, 5);
+            let prepared = PreparedPersistedQuery::new(&query);
+            let (q8_blob, _) = quantize_f32_to_u8_blob(&pseudo_vec(dim, 6));
+            let (flat_i8, _) = quantize_f32_to_i8(&pseudo_vec(dim, 7));
+            let flat_blob = i8_blob_from_slice(&flat_i8);
+            let mut scaled_flat = 1.0f32.to_le_bytes().to_vec();
+            scaled_flat.extend_from_slice(&flat_blob);
+
+            for blob in [q8_blob, flat_blob, scaled_flat, vec![1, 2, 3]] {
+                let once = prepared.score(&blob).unwrap();
+                let per_row = score_persisted_quantized_blob(&query, &blob).unwrap();
+                assert_eq!(once, per_row, "dim={dim} len={}", blob.len());
+            }
+        }
     }
 }
 
