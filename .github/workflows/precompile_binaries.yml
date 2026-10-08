@@ -1,0 +1,158 @@
+name: Precompile Binaries
+
+# Builds, signs and uploads rag_engine_flutter binaries to the GitHub release
+# `precompiled_<crate hash>`, then proves an app builds on a machine without
+# Rust. Cargokit downloads these only when rustup is absent, and only for the
+# exact crate hash (src/**/*.rs, Cargo.toml, Cargo.lock, build.rs and
+# cargokit.yaml), so run this on the exact tree before publishing
+# rag_engine_flutter (Actions > Precompile Binaries > Run workflow).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "rust_builder/rust/src/**"
+      - "rust_builder/rust/Cargo.toml"
+      - "rust_builder/rust/Cargo.lock"
+      - "rust_builder/rust/build.rs"
+      - "rust_builder/rust/cargokit.yaml"
+      - ".github/workflows/precompile_binaries.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: precompile-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: "3.38.7"
+  ANDROID_NDK_VERSION: "27.0.12077973"
+  ANDROID_MIN_SDK: "21"
+
+jobs:
+  precompile:
+    name: Precompile (${{ matrix.family }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - family: android
+            os: ubuntu-latest
+            targets: >-
+              --target=aarch64-linux-android
+              --target=armv7-linux-androideabi
+              --target=x86_64-linux-android
+              --target=i686-linux-android
+          - family: apple
+            os: macos-latest
+            targets: >-
+              --target=aarch64-apple-ios
+              --target=aarch64-apple-ios-sim
+              --target=x86_64-apple-ios
+              --target=aarch64-apple-darwin
+              --target=x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+
+      - name: Setup Java (Android only)
+        if: matrix.family == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK (Android only)
+        if: matrix.family == 'android'
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Require signing key
+        env:
+          PRIVATE_KEY: ${{ secrets.RAG_ENGINE_PRECOMPILE_PRIVATE_KEY }}
+        run: |
+          if [ -z "$PRIVATE_KEY" ]; then
+            echo "::error::Secret RAG_ENGINE_PRECOMPILE_PRIVATE_KEY is not set (see DEVELOPMENT.md)."
+            exit 1
+          fi
+
+      - name: Precompile and upload
+        working-directory: rust_builder/cargokit/build_tool
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRIVATE_KEY: ${{ secrets.RAG_ENGINE_PRECOMPILE_PRIVATE_KEY }}
+        run: |
+          dart pub get
+          ANDROID_ARGS=""
+          if [ "${{ matrix.family }}" = "android" ]; then
+            ANDROID_ARGS="--android-sdk-location=$ANDROID_SDK_ROOT --android-ndk-version=$ANDROID_NDK_VERSION --android-min-sdk-version=$ANDROID_MIN_SDK"
+          fi
+          dart run build_tool precompile-binaries -v \
+            --manifest-dir=../../rust \
+            --repository=${{ github.repository }} \
+            ${{ matrix.targets }} \
+            $ANDROID_ARGS
+
+  # Builds the example app with Rust hidden, so the only way the native core
+  # can be linked is through the binaries uploaded above.
+  no-rust-smoke:
+    name: No-Rust Build (${{ matrix.platform }})
+    needs: precompile
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: android
+            os: ubuntu-latest
+            build_command: flutter build apk --debug --target-platform android-arm64
+          - platform: ios
+            os: macos-latest
+            build_command: flutter build ios --simulator --no-codesign
+          - platform: macos
+            os: macos-latest
+            build_command: flutter build macos --debug
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Hide Rust toolchain
+        run: |
+          rm -rf "$HOME/.cargo" "$HOME/.rustup"
+          if command -v rustup >/dev/null 2>&1 || command -v cargo >/dev/null 2>&1; then
+            echo "::error::rustup/cargo still on PATH: $(command -v rustup) $(command -v cargo)"
+            exit 1
+          fi
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Setup Java (Android only)
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK (Android only)
+        if: matrix.platform == 'android'
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Get dependencies
+        run: |
+          flutter pub get
+          cd example && flutter pub get
+
+      # Without rustup, Cargokit can only link a downloaded, signature-checked
+      # binary; a missing or unsigned one fails the build here.
+      - name: Build example without Rust
+        working-directory: example
+        run: ${{ matrix.build_command }}
