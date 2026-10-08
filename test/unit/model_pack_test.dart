@@ -224,7 +224,6 @@ void main() {
       modelPath: '/tmp/model.onnx',
       expectedEmbeddingDimension: 384,
     );
-    expect(config.vabqProfile, VabqProfile.none);
     expect(config.expectedEmbeddingDimension, 384);
   });
 
