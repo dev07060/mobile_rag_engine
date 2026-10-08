@@ -2,8 +2,13 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+import 'package:mobile_rag_engine/src/rust/frb_generated.dart';
 
 void main() {
+  setUpAll(() async {
+    await RustLib.init();
+  });
+
   test('MobileRagVectorStore stores and searches precomputed embeddings',
       () async {
     final dir = await Directory.systemTemp.createTemp(
