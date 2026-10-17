@@ -6,6 +6,5 @@
 build/
 rust/target/
 
-# Unsupported platforms (no pre-compiled binaries)
+# Unsupported platforms (not yet built or tested in CI)
 linux/
-windows/

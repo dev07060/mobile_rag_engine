@@ -2,9 +2,8 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-
 import '../../model_pack.dart';
+import '../internal/storage_directory.dart';
 
 /// File locations produced by resolving a verified bundled model pack.
 class ResolvedRagModelPack {
@@ -20,7 +19,7 @@ class ResolvedRagModelPack {
 }
 
 /// Loads a bundled manifest and artifacts once, verifies them, then writes
-/// them to a digest-namespaced documents directory for the existing ONNX flow.
+/// them to a digest-namespaced storage directory for the existing ONNX flow.
 class RagModelPackResolver {
   const RagModelPackResolver({this.loadAsset, this.documentsDirectory});
 
@@ -53,8 +52,7 @@ class RagModelPackResolver {
       manifest.tokenizerAsset,
     );
 
-    final directory =
-        await (documentsDirectory ?? getApplicationDocumentsDirectory)();
+    final directory = await (documentsDirectory ?? ragStorageDirectory)();
     final packDirectory = Directory(
       '${directory.path}${Platform.pathSeparator}mobile_rag_model_packs'
       '${Platform.pathSeparator}${manifest.modelSha256}-${manifest.tokenizerSha256}',

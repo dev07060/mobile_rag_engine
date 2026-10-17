@@ -53,6 +53,36 @@ jobs:
       - name: Run native-dependent tests
         run: ./scripts/test_ci.sh native
 
+  native_tests_windows:
+    name: Native Tests (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Run native-dependent tests
+        run: ./scripts/test_ci.sh native
+
+      # Windows refuses to delete, truncate, or rename over files that are
+      # still open or memory-mapped, so run the whole Rust suite here rather
+      # than only the filtered subsets in test_ci.sh.
+      - name: Run full Rust test suite
+        run: cargo test --manifest-path rust_builder/rust/Cargo.toml --lib -- --test-threads=1
+
   integration_tests_macos:
     name: Integration Tests (macOS)
     runs-on: macos-latest
@@ -87,6 +117,9 @@ jobs:
           - platform: macos
             os: macos-latest
             build_command: flutter build macos --debug
+          - platform: windows
+            os: windows-latest
+            build_command: flutter build windows --debug
     steps:
       - uses: actions/checkout@v4
 
