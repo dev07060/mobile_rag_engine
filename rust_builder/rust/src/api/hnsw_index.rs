@@ -114,6 +114,11 @@ pub fn save_hnsw_index(base_path: &str) -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // Unmap the previously loaded index before replacing its file: Windows
+    // refuses to rename over a file that still has a live mapping (os error
+    // 5). Searches fall back to the in-memory builder until the reload below.
+    HNSW_INDEX.write().unwrap().take();
+
     let file_path = format!("{}.hnsw", base_path);
     builder.save_to_disk(&file_path)?;
 
@@ -242,4 +247,39 @@ pub fn clear_hnsw_index() {
     let mut builder_guard = HNSW_BUILDER.write().unwrap();
     *builder_guard = None;
     info!("[hnsw] Index cleared");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn points(offset: i64) -> Vec<(i64, Vec<f32>)> {
+        (0..16)
+            .map(|i| {
+                let x = (i as f32 + 1.0) / 16.0;
+                (offset + i, vec![x, 1.0 - x, 0.5, x * x])
+            })
+            .collect()
+    }
+
+    #[test]
+    fn resave_replaces_index_file_while_previous_index_is_loaded() {
+        let dir = tempfile::tempdir().unwrap();
+        let base_path = dir.path().join("resave").to_string_lossy().into_owned();
+        clear_hnsw_index();
+
+        build_hnsw_index(points(0)).unwrap();
+        save_hnsw_index(&base_path).unwrap();
+        assert_eq!(loaded_hnsw_node_count(), Some(16));
+
+        // The first save left the file memory-mapped in HNSW_INDEX. Replacing
+        // it must not fail on platforms that lock mapped files (Windows).
+        let mut grown = points(0);
+        grown.extend(points(100));
+        build_hnsw_index(grown).unwrap();
+        save_hnsw_index(&base_path).unwrap();
+        assert_eq!(loaded_hnsw_node_count(), Some(32));
+
+        clear_hnsw_index();
+    }
 }
