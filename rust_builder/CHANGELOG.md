@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.20.0-dev.12
+* **Windows support (x64)**: The published package now includes the Windows build configuration; Cargokit builds the Rust crate from source with the MSVC toolchain.
+* **Bug Fix**: Re-saving the HNSW index now unmaps the previously loaded index before replacing its file. Windows refuses to rename over a memory-mapped file, so the save failed with "Access is denied" there.
+
 ## 0.20.0-dev.11
 * **Compatibility**: Align the native companion with the committed Flutter Rust Bridge 2.11.1 bindings, including the required content-hash ABI symbol.
 

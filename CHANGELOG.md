@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.21.0-dev.13
+* **Windows support (x64)**:
+  - Requires `rag_engine_flutter 0.20.0-dev.12`, which now ships its Windows build configuration.
+  - On Windows, the database, index files, and copied model assets live in the app support directory (`%APPDATA%\<company>\<app>`) instead of the user's Documents folder. Other platforms are unchanged.
+  - CI builds the example app for Windows and runs the native and full Rust test suites on Windows.
+
 ## 0.21.0-dev.12
 * **Initialization reliability**:
   - Serialized embedding fingerprint initialization ahead of deferred BM25/HNSW warmup, preventing fresh-database SQLite lock contention.

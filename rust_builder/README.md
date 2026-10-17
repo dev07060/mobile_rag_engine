@@ -27,8 +27,9 @@ the Rust crate from source during `flutter build`, so you need:
 
 - [Rust toolchain](https://rustup.rs/) (stable, installed with rustup; Cargokit
   adds the required targets)
-- Platform-specific build tools (Xcode for iOS/macOS, Android SDK for Android;
-  Cargokit installs a missing NDK with the SDK's `cmdline-tools`)
+- Platform-specific build tools (Xcode for iOS/macOS, Android SDK for Android,
+  Visual Studio 2022 with "Desktop development with C++" for Windows; Cargokit
+  installs a missing NDK with the SDK's `cmdline-tools`)
 
 ## Supported Platforms
 
@@ -39,9 +40,9 @@ the Rust crate from source during `flutter build`, so you need:
 | macOS | arm64, x86_64 | ✅ |
 | Android | arm64-v8a, armeabi-v7a, x86 | ✅ |
 | Linux | x86_64 | ❌ Not supported yet |
-| Windows | x86_64 | ❌ Not supported yet |
+| Windows | x86_64 | ✅ |
 
-The published package is intended for iOS, Android, and macOS consumers today. Linux and Windows source configs exist in the repository but are excluded from the published archive.
+The published package supports iOS, Android, macOS, and Windows (x64). The Linux source config exists in the repository but is excluded from the published archive.
 
 ## License
 

@@ -10,7 +10,7 @@ round-trip for retrieval.
 ![pub package](https://img.shields.io/pub/v/mobile_rag_engine)
 ![flutter](https://img.shields.io/badge/Flutter-3.9%2B-blue)
 ![rust](https://img.shields.io/badge/Core-Rust-orange)
-![platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS-lightgrey)
+![platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS%20%7C%20Windows-lightgrey)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Use it when you need a **Flutter local RAG engine** for private notes, document
@@ -32,7 +32,9 @@ yet, so a Rust toolchain is required today:
   Rust targets it needs through `rustup`.
 - iOS/macOS builds need Xcode. Android builds need the Android SDK; if the
   NDK version your project requests is missing, Cargokit installs it with the
-  SDK's `cmdline-tools` (`sdkmanager`).
+  SDK's `cmdline-tools` (`sdkmanager`). Windows builds need Visual Studio 2022
+  with the "Desktop development with C++" workload (the same toolchain Flutter
+  itself requires).
 - The first build of each platform compiles the Rust crate and takes longer;
   later builds reuse the cached artifacts.
 
@@ -102,10 +104,15 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 | **iOS** | 16.0+ |
 | **Android** | API 21+ (Android 5.0 Lollipop) |
 | **macOS** | 14.0+ |
+| **Windows** | Windows 10+ (x64) |
 | **Build host** | Rust stable via rustup (see [Native Core Built by Cargokit](#native-core-built-by-cargokit)) |
 
-Windows and Linux are not supported yet: the published native package does not
-ship their build configuration.
+Linux is not supported yet: the published native package does not ship its
+build configuration. Windows on ARM64 is not supported yet.
+
+On Windows, the engine stores its database, index files, and copied model assets
+in the app support directory (`%APPDATA%\<company>\<app>`) instead of the
+user's Documents folder.
 
 > ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods builds on both iOS and macOS require static framework linkage (`use_frameworks! :linkage => :static`); set the host deployment targets to iOS 16.0+ and macOS 14.0+. Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
 
@@ -120,7 +127,7 @@ uses manually downloaded model assets.
 | Path | Version | Model setup |
 |:-----|:--------|:------------|
 | **Stable** | `^0.20.0` | Download `model.onnx` + `tokenizer.json` yourself ([Option A](#option-a-stable-020x-manual-model-assets)) |
-| **Preview** | `0.21.0-dev.12` | `dart run mobile_rag_engine:setup` Model Pack ([Option B](#option-b-preview-0210-dev-model-pack)) |
+| **Preview** | `0.21.0-dev.13` | `dart run mobile_rag_engine:setup` Model Pack ([Option B](#option-b-preview-0210-dev-model-pack)) |
 
 ### Option A: Stable (`0.20.x`) manual model assets
 
@@ -156,7 +163,7 @@ await MobileRag.initialize(
 
 ```yaml
 dependencies:
-  mobile_rag_engine: 0.21.0-dev.12
+  mobile_rag_engine: 0.21.0-dev.13
 ```
 
 Install and verify the pinned Model Pack:
