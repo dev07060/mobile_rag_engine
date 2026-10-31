@@ -8,6 +8,8 @@ import 'package:mobile_rag_engine/src/rust/api/source_rag.dart' as source_rag;
 import 'package:mobile_rag_engine/src/rust/frb_generated.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import 'native_test_support.dart';
+
 Future<void> _ensureRustLoaded() async {
   if (!RustLib.instance.initialized) {
     await RustLib.init();
@@ -51,7 +53,7 @@ void main() {
           reason: 'last_engine_version must record the build identifier',
         );
       } finally {
-        await dir.delete(recursive: true);
+        await releaseNativeFilesAndDelete(dir);
       }
     },
   );
@@ -106,7 +108,7 @@ void main() {
         expect(axes.embeddingFingerprint, '');
         expect(axes.lastEngineVersion.isNotEmpty, isTrue);
       } finally {
-        await dir.delete(recursive: true);
+        await releaseNativeFilesAndDelete(dir);
       }
     },
   );
@@ -145,7 +147,7 @@ void main() {
         expect(second.lastEngineVersion, first.lastEngineVersion,
             reason: 'binary version did not change between boots');
       } finally {
-        await dir.delete(recursive: true);
+        await releaseNativeFilesAndDelete(dir);
       }
     },
   );
@@ -187,7 +189,7 @@ void main() {
           ),
         );
       } finally {
-        await dir.delete(recursive: true);
+        await releaseNativeFilesAndDelete(dir);
       }
     },
   );

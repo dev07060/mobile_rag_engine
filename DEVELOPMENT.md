@@ -61,7 +61,7 @@ source. Binaries are published to the GitHub release `precompiled_<crate hash>`
 by `.github/workflows/precompile_binaries.yml`, where the crate hash covers
 `rust_builder/rust/src/**/*.rs`, `Cargo.toml`, `Cargo.lock`, `build.rs` and
 `cargokit.yaml`. Supported targets: Android (arm64-v8a, armeabi-v7a, x86_64,
-x86), iOS (device and simulator) and macOS (arm64, x86_64).
+x86), iOS (device and simulator), macOS (arm64, x86_64) and Windows (x64).
 
 One-time setup (keep the private key out of the repository and chat logs):
 

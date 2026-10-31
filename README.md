@@ -10,7 +10,7 @@ round-trip for retrieval.
 ![pub package](https://img.shields.io/pub/v/mobile_rag_engine)
 ![flutter](https://img.shields.io/badge/Flutter-3.9%2B-blue)
 ![rust](https://img.shields.io/badge/Core-Rust-orange)
-![platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS-lightgrey)
+![platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS%20%7C%20Windows-lightgrey)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Use it when you need a **Flutter local RAG engine** for private notes, document
@@ -34,7 +34,8 @@ stay on the device.
 
 Starting with 0.21.0, the Rust core (`rag_engine_flutter`) ships as signed,
 pre-compiled binaries for **Android** (arm64-v8a, armeabi-v7a, x86_64, x86),
-**iOS** (device and simulator), and **macOS** (arm64, x86_64).
+**iOS** (device and simulator), **macOS** (arm64, x86_64), and, from 0.22.0,
+**Windows** (x64).
 [Cargokit](https://github.com/irondash/cargokit) downloads the binary for your
 target during `flutter build`, verifies its signature, and links it, so you do
 not need Rust, Cargo, or `rustup`.
@@ -109,10 +110,14 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 | **iOS** | 16.0+ |
 | **Android** | API 21+ (Android 5.0 Lollipop) |
 | **macOS** | 14.0+ |
+| **Windows** | Windows 10+ (x64), from 0.22.0 |
 | **Build host** | No Rust needed (see [No Rust Toolchain Required](#no-rust-toolchain-required-0210)); network access to `github.com` on the first build |
 
-Windows and Linux are not supported yet: their native build has not been
-verified end to end, even though pub.dev may list them as platforms.
+Windows on ARM64 and Linux are not supported. Windows builds need Visual Studio
+with the "Desktop development with C++" workload, as for any Flutter Windows
+app. On Windows, the engine stores its database, index files, and copied model
+assets in the app support directory (`%APPDATA%\<company>\<app>`) instead of the
+user's (often OneDrive-synced) Documents folder; other platforms are unchanged.
 
 > ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods builds on both iOS and macOS require static framework linkage (`use_frameworks! :linkage => :static`); set the host deployment targets to iOS 16.0+ and macOS 14.0+. Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
 

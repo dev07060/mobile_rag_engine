@@ -43,6 +43,7 @@ import '../src/rust/api/source_rag.dart'
         AssembledContextV2;
 import '../src/rust/api/db_pool.dart';
 import '../src/rust/api/error.dart';
+import '../src/rust/api/hnsw_index.dart' show clearHnswIndex;
 import '../src/rust/api/migration_meta.dart'
     as migration_meta
     show
@@ -1123,6 +1124,9 @@ class RagEngine {
     // 1. Close DB pool
     debugPrint('[RagEngine] clearAllData: Closing DB pool...');
     await closeDbPool();
+    // Unmap the loaded HNSW index too: Windows refuses to delete a file that
+    // is still memory-mapped, so its `.hnsw` would survive the sweep below.
+    await clearHnswIndex();
     debugPrint('[RagEngine] clearAllData: DB pool closed.');
 
     // 2-3. Delete the database and everything derived from it: SQLite

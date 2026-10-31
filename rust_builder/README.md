@@ -49,8 +49,9 @@ That needs:
 | iOS Simulator | arm64, x86_64 | ✅ |
 | macOS | arm64, x86_64 | ✅ |
 | Android | arm64-v8a, armeabi-v7a, x86_64, x86 | ✅ |
+| Windows | x86_64 | ✅ (0.21.0+) |
 
-Windows and Linux are not supported.
+Linux and Windows on ARM64 are not supported.
 
 ## License
 

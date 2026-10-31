@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+* **Windows (x64)**: Declares the Windows plugin platform and publishes `windows/` again. A signed pre-compiled binary for `x86_64-pc-windows-msvc` is built alongside the other targets.
+* **Fix**: `save_hnsw_index` unmaps the previously loaded index before renaming the new file over it. Windows refused to replace a mapped file ("Access is denied").
+
 ## 0.20.0
 * **Pre-compiled binaries**:
   - Signed binaries are published for Android (arm64-v8a, armeabi-v7a, x86_64, x86), iOS (device and simulator) and macOS (arm64, x86_64). Without `rustup` on the build machine, Cargokit downloads and verifies them, so no Rust toolchain is needed. With `rustup` installed, it still builds from source. Earlier versions never shipped binaries.
