@@ -4,6 +4,54 @@ Solutions for common issues when using `mobile_rag_engine`.
 
 ---
 
+## Install and First Build
+
+### `setup` command or `RagModelPack` not found
+
+**Cause:** Your app resolved stable 0.20.x. The Model Pack `setup` command and
+`RagModelPack` exist only in `0.21.0-dev.11` and later, and a caret
+constraint such as `^0.20.0` never selects a `-dev` release.
+
+**Solution:** Either pin the preview exactly
+(`mobile_rag_engine: 0.21.0-dev.12`), or stay on 0.20.x and follow the
+[`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md#installation),
+which downloads the model files manually and initializes with
+`tokenizerAsset` + `modelAsset`.
+
+---
+
+### First build fails in Cargokit / `cargo` or `rustup` not found
+
+**Cause:** Published packages do not include pre-compiled binaries yet.
+Cargokit compiles the Rust core from source during the first
+`flutter build` of each platform, so a Rust toolchain is required.
+
+**Solution:**
+1. Install Rust stable with [rustup](https://rustup.rs/) and open a new
+   terminal so `cargo` and `rustup` are on `PATH`. Cargokit adds the Rust
+   targets it needs through `rustup`.
+2. iOS/macOS: make sure Xcode and its command line tools are installed.
+3. Android: make sure the Android SDK `cmdline-tools` (`sdkmanager`) are
+   installed so Cargokit can install a missing NDK.
+4. Rebuild. The first build of each platform is slow because it compiles the
+   Rust crate; later builds reuse the cached artifacts.
+
+```bash
+rustup default stable
+flutter clean
+flutter pub get
+flutter run
+```
+
+---
+
+### Windows or Linux build fails
+
+Windows and Linux are not supported yet. Their native build has not been
+verified end to end, even though pub.dev may list them as platforms.
+
+---
+
 ## Initialization Errors
 
 ### "Failed to initialize Rust library"
