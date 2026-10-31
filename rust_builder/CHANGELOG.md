@@ -1,7 +1,19 @@
 # Changelog
 
-## Unreleased
-* Forward-ported the 0.19.3 fix: sources left in `processing` by a dead process are marked `failed` on the first `init_source_db` of that database in a new process.
+## 0.20.0
+* **Pre-compiled binaries**:
+  - Signed binaries are published for Android (arm64-v8a, armeabi-v7a, x86_64, x86), iOS (device and simulator) and macOS (arm64, x86_64). Without `rustup` on the build machine, Cargokit downloads and verifies them, so no Rust toolchain is needed. With `rustup` installed, it still builds from source. Earlier versions never shipped binaries.
+  - Windows and Linux are removed from the declared plugin platforms. They were never built or supported.
+* **Correctness**:
+  - Re-embedding now rewrites the quantized mmap copy of each vector instead of leaving the stale one that exact scans and HNSW read.
+  - Embedding dimensions that are not a multiple of 32 no longer score 0.0: the shorter final Q8_0 block is accepted.
+  - A truncated or corrupt `.hnsw` file is rejected at load instead of panicking during search. A zero-length `.vec` file is re-initialized instead of failing every launch.
+  - `close_db_pool` also drops the mmap vector store, so no mapping outlives a deleted database.
+  - Forward-ported the 0.19.3 fix: sources left in `processing` by a dead process are marked `failed` on the first `init_source_db` of that database in a new process.
+* **Performance**:
+  - Exact scans encode the query once per scan instead of once per row.
+  - `tokenize()` no longer deep-clones the tokenizer on every call. One truncating copy is cached per max-length bucket.
+* **Privacy**: `info!` logs no longer include source names or `metadata_like` patterns.
 
 ## 0.20.0-dev.11
 * **Compatibility**: Align the native companion with the committed Flutter Rust Bridge 2.11.1 bindings, including the required content-hash ABI symbol.

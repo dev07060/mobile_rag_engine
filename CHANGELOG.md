@@ -1,7 +1,23 @@
 # Changelog
 
-## Unreleased
-* Forward-ported the 0.20.1 fixes: `search()` no longer prints the query text and query-embedding values via `debugPrint`; interrupted ingestions are recovered by the native companion on startup.
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## 0.21.0
+* **No Rust toolchain required**:
+  - Requires `rag_engine_flutter: 0.20.0`, which ships signed pre-compiled binaries for Android, iOS and macOS. Builds without `rustup` download and verify them instead of compiling Rust. With `rustup` installed, the core is still built from source.
+  - Windows and Linux are not supported.
+* **Breaking**:
+  - Removed `VabqProfile` from the public API: `MobileRag.initialize(vabqProfile:)`, `RagConfig.vabqProfile` and `RagConfig.fromAssets(vabqProfile:)`. Storage is always Q8_0. Only apps that opted into VABQ on a 0.21.0 dev release are affected. Their databases report an embedding-fingerprint mismatch; call `regenerateAllEmbeddings()` or `clearAllData()`.
+* **Model Pack onboarding** (since 0.21.0-dev.11): `dart run mobile_rag_engine:setup` -> `--check` -> `RagModelPack.asset(...)` is the recommended install-to-first-search path.
+  - Cold start no longer re-hashes the model on every launch. A `.verified` marker is written after the pack is verified once.
+* **Fixes**:
+  - `clearAllData()` now deletes the mmap vector store (`.vec`), every HNSW index (including non-default collections), `.dirty` markers and SQLite sidecars. Previously, quantized embeddings could be left on disk, and an old index could be reused against the new database.
+  - Re-embedding, non-multiple-of-32 embedding dimensions, corrupt `.hnsw` and empty `.vec` files are fixed in the native companion (see `rag_engine_flutter` 0.20.0).
+  - Includes the 0.20.1 fixes: `search()` no longer prints the query text and query-embedding values via `debugPrint`, and interrupted ingestions are recovered on startup.
+
 
 ## 0.21.0-dev.12
 * **Initialization reliability**:
@@ -29,11 +45,6 @@
 
 ## 0.21.0-dev.2
 * **Bug Fix**: Required `rag_engine_flutter: ^0.20.0-dev.5` which fixes a critical HNSW index rebuilding bug where quantized embeddings were not unpacked, causing a fallback to linear scanning.
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## 0.21.0-dev.1
 * **VABQ Research Engine**:
