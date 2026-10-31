@@ -152,7 +152,8 @@ jobs:
             echo "- Package: \`mobile_rag_engine ${PACKAGE_VERSION}\` from pub.dev"
             echo "- Result: **${verdict}**"
             if [ -f "$log" ]; then
-              matches=$(grep -E -i "$rust_pattern" "$log" | head -n 5)
+              # `shell: bash` enables pipefail; no match is not an error here.
+              matches=$(grep -E -i "$rust_pattern" "$log" | head -n 5 || true)
               if [ -n "$matches" ]; then
                 echo ""
                 echo '```'
