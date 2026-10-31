@@ -7,7 +7,17 @@ Get started with `mobile_rag_engine` in 5 minutes.
 ## Prerequisites
 
 - Flutter 3.9+
-- iOS 16.0+ / Android API 21+ / macOS 14.0+ / Windows 10+ / Linux
+- iOS 16.0+ / Android API 21+ / macOS 14.0+ (Windows and Linux are not
+  supported yet)
+- Rust stable installed with [rustup](https://rustup.rs/). Published packages
+  do not include pre-compiled binaries yet: Cargokit compiles the Rust core
+  from source on the first `flutter build` of each platform, so that build
+  takes longer.
+
+> This guide covers the `0.21.0-dev` preview line. If you install stable
+> `^0.20.x`, follow the
+> [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md#installation)
+> instead; the `setup` command and `RagModelPack` below do not exist there.
 
 For CocoaPods hosts, set the platform and static framework linkage in the
 generated app's Podfile. Keep the rest of the generated Podfile unchanged:
@@ -41,7 +51,7 @@ For macOS, also set the Runner project's deployment target to 14.0 in Xcode.
 ```yaml
 # pubspec.yaml
 dependencies:
-  mobile_rag_engine: ^0.20.0
+  mobile_rag_engine: 0.21.0-dev.12 # exact pin: ^0.20.0 never selects a -dev release
 ```
 
 ```bash
