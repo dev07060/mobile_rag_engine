@@ -20,37 +20,30 @@ stay on the device.
 > **Retrieval only.** This package finds and assembles the relevant context.
 > Generating an answer with an LLM is your app's separate step.
 
-> **Which version does this README describe?** This README tracks the
-> `0.21.0-dev` preview line on `main`. The current stable release on pub.dev is
-> **0.20.1**; follow its README on
-> [pub.dev](https://pub.dev/packages/mobile_rag_engine/versions/0.20.1) or at the
-> [`v0.20.1` tag](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md)
-> if you install `^0.20.x`. The Model Pack `setup` command and `RagModelPack`
-> shown below exist only in `0.21.0-dev.11` and later.
->
-> Both lines compile the Rust core from source on the first build, so install
-> Rust first (see [Native Core Built by Cargokit](#native-core-built-by-cargokit)).
+> **This README describes 0.21.0.** Still on 0.20.x? It has no Model Pack
+> `setup` command or `RagModelPack`, and it always builds the Rust core from
+> source; follow the
+> [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md)
+> instead.
 
 ---
 
 ## Why this package?
 
-### Native Core Built by Cargokit
+### No Rust Toolchain Required (0.21.0+)
 
-The Rust core (`rag_engine_flutter`) is compiled from source by
-[Cargokit](https://github.com/irondash/cargokit) during your first
-`flutter build`. Published packages do **not** include pre-compiled binaries
-yet, so a Rust toolchain is required today:
+Starting with 0.21.0, the Rust core (`rag_engine_flutter`) ships as signed,
+pre-compiled binaries for **Android** (arm64-v8a, armeabi-v7a, x86_64, x86),
+**iOS** (device and simulator), and **macOS** (arm64, x86_64).
+[Cargokit](https://github.com/irondash/cargokit) downloads the binary for your
+target during `flutter build`, verifies its signature, and links it, so you do
+not need Rust, Cargo, or `rustup`.
 
-- Install Rust with [rustup](https://rustup.rs/) (stable). Cargokit adds the
-  Rust targets it needs through `rustup`.
-- iOS/macOS builds need Xcode. Android builds need the Android SDK; if the
-  NDK version your project requests is missing, Cargokit installs it with the
-  SDK's `cmdline-tools` (`sdkmanager`).
-- The first build of each platform compiles the Rust crate and takes longer;
-  later builds reuse the cached artifacts.
-
-Pre-compiled binaries are planned; this section will change when they ship.
+- The first build of each platform downloads the binary from this repository's
+  GitHub releases, so the build machine needs access to `github.com`.
+- If `rustup` **is** installed, Cargokit builds the Rust core from source
+  instead. That path needs Rust stable, and its first build takes longer.
+- A binary whose signature does not verify is ignored rather than linked.
 
 ### Performance
 
@@ -116,7 +109,7 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 | **iOS** | 16.0+ |
 | **Android** | API 21+ (Android 5.0 Lollipop) |
 | **macOS** | 14.0+ |
-| **Build host** | Rust stable via rustup (see [Native Core Built by Cargokit](#native-core-built-by-cargokit)) |
+| **Build host** | No Rust needed (see [No Rust Toolchain Required](#no-rust-toolchain-required-0210)); network access to `github.com` on the first build |
 
 Windows and Linux are not supported yet: their native build has not been
 verified end to end, even though pub.dev may list them as platforms.
@@ -129,19 +122,10 @@ verified end to end, even though pub.dev may list them as platforms.
 
 ### 1. Add the dependency
 
-Pin the preview version exactly. A caret constraint such as `^0.20.0` never
-selects a `-dev` release, so it resolves to 0.20.1, which does not have the
-`setup` command or `RagModelPack` used below.
-
 ```yaml
 dependencies:
-  mobile_rag_engine: 0.21.0-dev.12
+  mobile_rag_engine: ^0.21.0
 ```
-
-> Staying on stable 0.20.1? Use `mobile_rag_engine: ^0.20.1` and follow the
-> [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md#installation)
-> instead: it downloads the model files manually and initializes with
-> `tokenizerAsset` + `modelAsset`.
 
 ### 2. Install the verified Model Pack
 
@@ -334,23 +318,6 @@ print(travelHits.length);
 
 If you do not specify a collection, the engine uses the default `__default__`
 collection for backward compatibility.
-
-### Storage default and experimental VABQ
-
-Most apps can skip this section. The normal public initialization paths use
-Q8_0 storage by default. VABQ is an experimental, advanced opt-in: it is
-enabled only when you explicitly pass a matching `VabqProfile` to
-`MobileRag.initialize` or `RagConfig`. Model asset names and embedding
-dimensions never select VABQ automatically. Model Pack v1 is fixed to Q8_0 and
-rejects a VABQ profile; use the custom two-asset path for VABQ research.
-
-```dart
-await MobileRag.initialize(
-  tokenizerAsset: 'assets/tokenizer.json',
-  modelAsset: 'assets/model.onnx',
-  vabqProfile: VabqProfile.allMiniLmL6V2, // explicit experimental opt-in
-);
-```
 
 > **Advanced Usage:** For fine-grained control, use the high-level metadata lane (`searchMeta`, `assembleContext`, `hydrateChunks`, `getChunkExcerpts`) and the public API reference. Most apps should stay on the `MobileRag` facade.
 

@@ -9,13 +9,12 @@ Get started with `mobile_rag_engine` in 5 minutes.
 - Flutter 3.9+
 - iOS 16.0+ / Android API 21+ / macOS 14.0+ (Windows and Linux are not
   supported yet)
-- Rust stable installed with [rustup](https://rustup.rs/). Published packages
-  do not include pre-compiled binaries yet: Cargokit compiles the Rust core
-  from source on the first `flutter build` of each platform, so that build
-  takes longer.
+- No Rust toolchain: 0.21.0+ downloads a signed, pre-compiled native core
+  during the first `flutter build` of each platform, so the build machine needs
+  access to `github.com`. If `rustup` is installed, the core is built from
+  source instead.
 
-> This guide covers the `0.21.0-dev` preview line. If you install stable
-> `^0.20.x`, follow the
+> This guide covers 0.21.0 and later. On 0.20.x, follow the
 > [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md#installation)
 > instead; the `setup` command and `RagModelPack` below do not exist there.
 
@@ -51,7 +50,7 @@ For macOS, also set the Runner project's deployment target to 14.0 in Xcode.
 ```yaml
 # pubspec.yaml
 dependencies:
-  mobile_rag_engine: 0.21.0-dev.12 # exact pin: ^0.20.0 never selects a -dev release
+  mobile_rag_engine: ^0.21.0
 ```
 
 ```bash
@@ -119,9 +118,8 @@ Future<void> initializeRAG() async {
 | `deferIndexWarmup` | `false` | If `true`, initialization returns before BM25/HNSW warmup completes |
 | `onProgress` | `null` | Callback for initialization status |
 
-Model Pack v1 always selects Q8_0 vector storage. VABQ is an experimental,
-advanced opt-in available only through an explicit profile on the custom
-two-asset path; a model name or embedding dimension never enables it.
+Vector storage is always Q8_0, for both the Model Pack and the custom
+two-asset path.
 
 > **Validation behavior (soft + stable):**
 > - `maxChunkChars < 100` is normalized to `100` at runtime.
