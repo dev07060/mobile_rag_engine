@@ -71,6 +71,12 @@ jobs:
         with:
           packages: platform-tools
 
+      # Cargokit's precompile-binaries only installs a missing NDK when
+      # CARGOKIT_JAVA_HOME is set, so install the pinned version explicitly.
+      - name: Install Android NDK (Android only)
+        if: matrix.family == 'android'
+        run: sdkmanager --install "ndk;${ANDROID_NDK_VERSION}"
+
       - name: Require signing key
         env:
           PRIVATE_KEY: ${{ secrets.RAG_ENGINE_PRECOMPILE_PRIVATE_KEY }}
