@@ -22,16 +22,24 @@ dependencies:
 
 ## Requirements
 
-### For development (building from source)
+### Pre-compiled binaries (default, 0.20.0+)
 
-If prebuilt binaries are not available for your platform, you need:
+Signed binaries for every supported target are published to this repository's
+GitHub releases. When the build machine has no `rustup`, Cargokit downloads the
+binary for the target, verifies its signature against the public key in
+`rust/cargokit.yaml`, and links it. No Rust toolchain is needed; the first
+build of each platform needs access to `github.com`.
+
+Versions before 0.20.0 did not ship binaries and always build from source.
+
+### Building from source
+
+If `rustup` is installed, Cargokit builds from source instead of downloading.
+That needs:
 
 - [Rust toolchain](https://rustup.rs/) (stable)
-- Platform-specific build tools (Xcode for iOS/macOS, Android NDK for Android)
-
-### For users (with prebuilt binaries)
-
-No additional requirements - binaries are downloaded automatically.
+- Platform-specific build tools (Xcode for iOS/macOS, Android SDK with
+  `cmdline-tools` for Android; Cargokit installs a missing NDK)
 
 ## Supported Platforms
 
@@ -40,11 +48,9 @@ No additional requirements - binaries are downloaded automatically.
 | iOS | arm64 | ✅ |
 | iOS Simulator | arm64, x86_64 | ✅ |
 | macOS | arm64, x86_64 | ✅ |
-| Android | arm64-v8a, armeabi-v7a, x86 | ✅ |
-| Linux | x86_64 | 🚧 Coming soon |
-| Windows | x86_64 | 🚧 Coming soon |
+| Android | arm64-v8a, armeabi-v7a, x86_64, x86 | ✅ |
 
-The published package is intended for iOS, Android, and macOS consumers today. Linux and Windows source configs may exist in the repository while support is being prepared, but they are not part of the supported prebuilt-binary surface yet.
+Windows and Linux are not supported.
 
 ## License
 

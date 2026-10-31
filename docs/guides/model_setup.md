@@ -46,10 +46,8 @@ await MobileRag.initialize(
 
 The sole v1 preset is `stable-minilm-l6-v2-arm64-en`: English, arm64,
 384-dimensional, Apache-2.0 MiniLM at revision
-`1110a243fdf4706b3f48f1d95db1a4f5529b4d41`. Vector storage is fixed to Q8_0;
-it never enables a VABQ profile. Use `--repair` only to replace a file that
-fails its SHA-256/length check. VABQ remains an experimental advanced opt-in on
-the custom two-asset initialization path.
+`1110a243fdf4706b3f48f1d95db1a4f5529b4d41`. Vector storage is Q8_0. Use
+`--repair` only to replace a file that fails its SHA-256/length check.
 
 The first success is adding documents, rebuilding the index, then searching for
 non-empty chunks/context. LLM generation is outside this package step.
