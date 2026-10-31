@@ -7,3 +7,11 @@ cargo:
     extra_flags:
       - --features
       - vector_faer,vector_quant_i8
+
+# Binaries are built and signed by .github/workflows/precompile_binaries.yml and
+# uploaded to the GitHub release `precompiled_<crate hash>`. Cargokit uses them
+# only when rustup is not installed, and ignores any binary whose signature
+# does not verify against this key.
+precompiled_binaries:
+  url_prefix: https://github.com/dev07060/mobile_rag_engine/releases/download/precompiled_
+  public_key: 13123f516240c0f4733240a9837a328981a756fd049f33e162c5b37447b0dcd8
