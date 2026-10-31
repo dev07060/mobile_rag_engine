@@ -45,22 +45,22 @@ impl MmapVectorStore {
             .context("Failed to open vector store file")?;
 
         let mut current_offset = 0;
-        let mut capacity = 0;
-
-        if file_exists {
-            capacity = file.metadata()?.len() as usize;
-            if capacity < HEADER_SIZE {
-                file.set_len(Self::INITIAL_CAPACITY as u64)?;
-                capacity = Self::INITIAL_CAPACITY;
-            }
+        let mut capacity = if file_exists {
+            file.metadata()?.len() as usize
         } else {
+            0
+        };
+        // A missing file, or one too short to hold the header (e.g. left at
+        // zero length by a crash between create and set_len), starts fresh.
+        let needs_init = capacity < HEADER_SIZE;
+        if needs_init {
             file.set_len(Self::INITIAL_CAPACITY as u64)?;
             capacity = Self::INITIAL_CAPACITY;
         }
 
         let mut mmap = unsafe { MmapOptions::new().map_mut(&file)? };
 
-        if !file_exists || capacity <= HEADER_SIZE {
+        if needs_init {
             mmap[0..4].copy_from_slice(MAGIC_HEADER);
             current_offset = HEADER_SIZE;
         } else {
@@ -252,5 +252,98 @@ mod tests {
         assert_eq!(store2.get(id1).unwrap(), vec1.as_slice());
         assert!(store2.get(id2).is_none());
         assert_eq!(store2.current_offset, id2); // correctly truncated before id2
+    }
+
+    #[test]
+    fn test_mmap_vector_store_opens_existing_empty_file() {
+        // A crash between create and set_len, or an external truncate, leaves
+        // a zero-length .vec file; opening it must re-initialize, not fail.
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("empty.vec");
+        File::create(&file_path).unwrap();
+
+        let mut store = MmapVectorStore::new(&file_path).unwrap();
+        let id = store.append(&[7, 7, 7]).unwrap();
+        assert_eq!(id, HEADER_SIZE);
+        drop(store);
+
+        let reopened = MmapVectorStore::new(&file_path).unwrap();
+        assert_eq!(reopened.get(id).unwrap(), &[7, 7, 7]);
+    }
+
+    #[test]
+    fn test_mmap_vector_store_crc_mismatch_stops_recovery_at_bad_record() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("crc.vec");
+
+        let mut store = MmapVectorStore::new(&file_path).unwrap();
+        let id1 = store.append(&[1, 2, 3, 4]).unwrap();
+        let id2 = store.append(&[5, 6, 7, 8]).unwrap();
+        let id3 = store.append(&[9, 9, 9, 9]).unwrap();
+        drop(store);
+
+        // Flip one payload byte of the middle record so its CRC no longer matches.
+        let mut bytes = std::fs::read(&file_path).unwrap();
+        bytes[id2 + 8] ^= 0xFF;
+        std::fs::write(&file_path, &bytes).unwrap();
+
+        let store = MmapVectorStore::new(&file_path).unwrap();
+        assert_eq!(store.get(id1).unwrap(), &[1, 2, 3, 4]);
+        assert!(store.get(id2).is_none());
+        assert!(store.get(id3).is_none());
+        assert_eq!(store.current_offset, id2);
+    }
+
+    #[test]
+    fn test_mmap_vector_store_append_after_reopen_keeps_earlier_records() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("reopen.vec");
+
+        let mut store = MmapVectorStore::new(&file_path).unwrap();
+        let id1 = store.append(&[1; 16]).unwrap();
+        drop(store);
+
+        let mut store = MmapVectorStore::new(&file_path).unwrap();
+        let id2 = store.append(&[2; 16]).unwrap();
+        assert_eq!(id2, id1 + 8 + 16);
+        drop(store);
+
+        let store = MmapVectorStore::new(&file_path).unwrap();
+        assert_eq!(store.get(id1).unwrap(), &[1; 16]);
+        assert_eq!(store.get(id2).unwrap(), &[2; 16]);
+    }
+
+    #[test]
+    fn test_mmap_vector_store_resize_preserves_contents() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("resize_contents.vec");
+
+        let mut store = MmapVectorStore::new(&file_path).unwrap();
+        let records: Vec<Vec<u8>> = (0..5u8).map(|i| vec![i; 400_000]).collect();
+        let ids: Vec<usize> = records.iter().map(|r| store.append(r).unwrap()).collect();
+        assert!(store.capacity > MmapVectorStore::INITIAL_CAPACITY);
+        for (id, record) in ids.iter().zip(&records) {
+            assert_eq!(store.get(*id).unwrap(), record.as_slice());
+        }
+        drop(store);
+
+        let store = MmapVectorStore::new(&file_path).unwrap();
+        for (id, record) in ids.iter().zip(&records) {
+            assert_eq!(store.get(*id).unwrap(), record.as_slice());
+        }
+    }
+
+    #[test]
+    fn test_mmap_vector_store_get_rejects_out_of_range_offsets() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("range.vec");
+
+        let mut store = MmapVectorStore::new(&file_path).unwrap();
+        let id = store.append(&[3, 3, 3]).unwrap();
+        assert!(store.get(store.current_offset).is_none());
+        assert!(store.get(id + 8 + 3).is_none());
+        assert!(store.get(usize::MAX / 2).is_none());
+        // Offset 0 is the magic header, never a record.
+        assert!(store.get(0).is_none());
     }
 }

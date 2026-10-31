@@ -11,9 +11,6 @@
 library;
 
 import '../src/internal/defaults.dart';
-import '../src/internal/embedding_fingerprint.dart';
-
-export '../src/internal/embedding_fingerprint.dart' show VabqProfile;
 
 /// Thread usage level for ONNX runtime.
 ///
@@ -44,12 +41,6 @@ class RagConfig {
 
   /// Expected output dimension of a verified model pack, if one was used.
   final int? expectedEmbeddingDimension;
-
-  /// Explicit VABQ variance-profile selection for this embedding model.
-  ///
-  /// Defaults to [VabqProfile.none], which preserves Q8_0 storage. The engine
-  /// never guesses this value from [modelAsset] or from output dimension.
-  final VabqProfile vabqProfile;
 
   /// Name of the SQLite database file.
   ///
@@ -96,7 +87,6 @@ class RagConfig {
     this.preparedTokenizerPath,
     this.preparedModelPath,
     this.expectedEmbeddingDimension,
-    this.vabqProfile = VabqProfile.none,
     this.databaseName,
     this.maxChunkChars = kDefaultMaxChunkChars,
     this.overlapChars = kDefaultOverlapChars,
@@ -121,7 +111,6 @@ class RagConfig {
   factory RagConfig.fromAssets({
     required String tokenizerAsset,
     required String modelAsset,
-    VabqProfile vabqProfile = VabqProfile.none,
     String? databaseName,
     int maxChunkChars = kDefaultMaxChunkChars,
     int overlapChars = kDefaultOverlapChars,
@@ -131,7 +120,6 @@ class RagConfig {
   }) => RagConfig(
     tokenizerAsset: tokenizerAsset,
     modelAsset: modelAsset,
-    vabqProfile: vabqProfile,
     databaseName: databaseName,
     maxChunkChars: maxChunkChars,
     overlapChars: overlapChars,
@@ -162,7 +150,6 @@ class RagConfig {
     overlapChars: overlapChars,
     embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
     threadLevel: threadLevel,
-    vabqProfile: VabqProfile.none,
     deferIndexWarmup: deferIndexWarmup,
   );
 }

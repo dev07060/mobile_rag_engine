@@ -72,6 +72,10 @@ case "$TARGET" in
         exit 1
       fi
     done
+    echo "[ci] Running the full Rust lib suite on the SHIPPED faer+quant tree"
+    # The filtered runs above skip lifecycle tests (ingest claims, crash
+    # recovery). Tests share SQLite state, so they must run single-threaded.
+    cargo test --manifest-path rust_builder/rust/Cargo.toml --lib --features vector_faer,vector_quant_i8 -- --test-threads=1
     # Compile-check the actual shipped feature combo (faer + i8 quant). A
     # default-feature release build would never cover the backend that ships.
     cargo build --manifest-path rust_builder/rust/Cargo.toml --release --features vector_faer,vector_quant_i8

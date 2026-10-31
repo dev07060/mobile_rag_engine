@@ -186,6 +186,9 @@ pub fn close_db_pool() {
         *pool_guard = None;
         info!("[db_pool] Connection pool closed");
     }
+    // The vector store is opened by init_db_pool next to the database; drop
+    // it (flushing) so no mapping outlives the files clearAllData deletes.
+    crate::api::mmap_store::MMAP_STORE.write().unwrap().take();
 }
 
 #[cfg(test)]
@@ -204,6 +207,18 @@ mod tests {
 
         close_db_pool();
         assert!(!is_pool_initialized());
+    }
+
+    #[test]
+    fn test_close_releases_the_vector_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("release.sqlite");
+        init_db_pool(db_path.to_str().unwrap().to_string(), 2).unwrap();
+        assert!(crate::api::mmap_store::MMAP_STORE.read().unwrap().is_some());
+
+        close_db_pool();
+        // clearAllData deletes the .vec file next; no mapping may outlive it.
+        assert!(crate::api::mmap_store::MMAP_STORE.read().unwrap().is_none());
     }
 
     #[test]

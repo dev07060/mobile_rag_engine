@@ -26,7 +26,7 @@ use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw_slice, HnswSearch
 use crate::api::query_metrics::record_hybrid_result_content_read;
 use crate::api::vector_math::{cosine_with_query_norm_f32, decode_f32_embedding, l2_norm_f32};
 #[cfg(feature = "vector_quant_i8")]
-use crate::api::vector_quant::score_persisted_quantized_blob;
+use crate::api::vector_quant::PreparedPersistedQuery;
 
 #[derive(Debug, Clone)]
 pub struct SearchFilter {
@@ -180,8 +180,10 @@ fn compute_hybrid_rrf_scores(
         if use_exact_source_scan {
             used_exact_source_scan = true;
             info!(
-                    "[hybrid] Scoped exact filter active (source_ids={:?}, metadata_like={:?}), switching to exact scan",
-                    f.source_ids, f.metadata_like
+                    "[hybrid] Scoped exact filter active (source_ids={:?}, metadata_like={}), switching to exact scan",
+                    f.source_ids,
+                    // The pattern is user data and this logs in release builds.
+                    f.metadata_like.is_some()
                 );
 
             let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -273,6 +275,8 @@ fn compute_hybrid_rrf_scores(
                 .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
             let query_norm = l2_norm_f32(query_embedding);
+            #[cfg(feature = "vector_quant_i8")]
+            let prepared_query = PreparedPersistedQuery::new(query_embedding);
             let mut scoped_doc_ids = Vec::new();
 
             // Replace global candidate sets with scoped exact scan results.
@@ -305,7 +309,7 @@ fn compute_hybrid_rrf_scores(
                             }
 
                             if let Some(qblob) = qblob_ref {
-                                match score_persisted_quantized_blob(query_embedding, qblob)? {
+                                match prepared_query.score(qblob)? {
                                     Some(score) => score,
                                     None => {
                                         if let Some(embedding) =

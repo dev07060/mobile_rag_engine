@@ -136,7 +136,6 @@ class MobileRag {
     int overlapChars = kDefaultOverlapChars,
     int? embeddingIntraOpNumThreads,
     ThreadUseLevel? threadLevel,
-    VabqProfile vabqProfile = VabqProfile.none,
     bool deferIndexWarmup = false,
     void Function(String status)? onProgress,
   }) async {
@@ -150,9 +149,6 @@ class MobileRag {
       throw ArgumentError(
         'Specify either modelPack or tokenizerAsset/modelAsset, not both.',
       );
-    }
-    if (modelPack != null && vabqProfile != VabqProfile.none) {
-      throw ArgumentError('Model Pack v1 is fixed to Q8_0 and does not support VABQ profiles.');
     }
     if (modelPack == null && (tokenizerAsset == null || modelAsset == null)) {
       throw ArgumentError(
@@ -182,7 +178,6 @@ class MobileRag {
         overlapChars: overlapChars,
         embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
         threadLevel: threadLevel,
-        vabqProfile: vabqProfile,
         deferIndexWarmup: deferIndexWarmup,
       );
     }

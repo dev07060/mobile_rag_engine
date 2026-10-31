@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+* Forward-ported the 0.19.3 fix: sources left in `processing` by a dead process are marked `failed` on the first `init_source_db` of that database in a new process.
+
 ## 0.20.0-dev.11
 * **Compatibility**: Align the native companion with the committed Flutter Rust Bridge 2.11.1 bindings, including the required content-hash ABI symbol.
 
@@ -19,6 +22,12 @@
 * **VABQ Quantization**:
   - Implemented core VABQ (Variance-aware Adaptive Block Quantization) kernel in Rust (`vector_quant.rs`).
   - Asymmetric precision (INT8 for high-variance blocks, INT4 for low-variance blocks) optimizing for memory while preserving Recall.
+
+## 0.19.3
+* **Ingestion recovery**:
+  - Sources left in `processing` by a process that died mid-ingest are marked `failed` on the first `init_source_db` of that database in a new process. Previously they were reported as "already in progress" forever and could not be re-ingested. Re-adding the same content now resumes ingestion. Later `init_source_db` calls in the same process do not touch live claims.
+* **Tests**:
+  - The lib test suite now compiles and passes with the shipped `vector_faer,vector_quant_i8` features.
 
 ## 0.19.2
 * **Block-wise Quantization**:
