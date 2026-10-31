@@ -218,6 +218,88 @@ void main() {
     },
   );
 
+  group('resolver cold start', () {
+    late Directory documents;
+    late List<String> loaded;
+    late Map<String, Uint8List> assets;
+    final manifest = _fixtureManifest();
+    const pack = RagModelPack.asset('assets/mobile_rag/model-pack.json');
+
+    setUp(() async {
+      documents = await Directory.systemTemp.createTemp('model-pack-cold-');
+      loaded = [];
+      assets = {
+        pack.manifestAsset: Uint8List.fromList(
+          utf8.encode(manifest.toJsonString()),
+        ),
+        manifest.modelAsset: Uint8List.fromList([1, 2, 3]),
+        manifest.tokenizerAsset: Uint8List.fromList([4, 5]),
+      };
+    });
+    tearDown(() => documents.delete(recursive: true));
+
+    RagModelPackResolver resolver() => RagModelPackResolver(
+      documentsDirectory: () async => documents,
+      loadAsset: (path) async {
+        loaded.add(path);
+        return ByteData.sublistView(assets[path]!);
+      },
+    );
+
+    test('reuses a verified install without loading the artifacts', () async {
+      final first = await resolver().resolve(pack);
+      expect(loaded, contains(manifest.modelAsset));
+
+      loaded.clear();
+      final second = await resolver().resolve(pack);
+      expect(loaded, [pack.manifestAsset]);
+      expect(second.modelPath, first.modelPath);
+      expect(second.tokenizerPath, first.tokenizerPath);
+    });
+
+    test(
+      're-verifies and repairs an installed copy of the wrong length',
+      () async {
+        final first = await resolver().resolve(pack);
+        await File(first.modelPath).writeAsBytes([9]);
+
+        loaded.clear();
+        final second = await resolver().resolve(pack);
+        expect(loaded, contains(manifest.modelAsset));
+        expect(await File(second.modelPath).readAsBytes(), [1, 2, 3]);
+      },
+    );
+
+    test('verifies an install left without a marker', () async {
+      final first = await resolver().resolve(pack);
+      final marker = File(
+        '${File(first.modelPath).parent.path}${Platform.pathSeparator}'
+        '.verified',
+      );
+      expect(await marker.exists(), isTrue);
+      await marker.delete();
+
+      loaded.clear();
+      await resolver().resolve(pack);
+      expect(loaded, contains(manifest.modelAsset));
+      expect(await marker.exists(), isTrue);
+    });
+
+    test('still rejects bundled bytes that fail the manifest hash', () async {
+      assets[manifest.modelAsset] = Uint8List.fromList([7, 7, 7]);
+      await expectLater(
+        resolver().resolve(pack),
+        throwsA(
+          isA<RagModelPackException>().having(
+            (error) => error.code,
+            'code',
+            RagModelPackErrorCode.assetHashMismatch,
+          ),
+        ),
+      );
+    });
+  });
+
   test('prepared model-pack config carries Q8_0 and expected dimension', () {
     final config = RagConfig.fromPreparedFiles(
       tokenizerPath: '/tmp/tokenizer.json',
