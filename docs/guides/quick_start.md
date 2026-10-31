@@ -50,7 +50,7 @@ For macOS, also set the Runner project's deployment target to 14.0 in Xcode.
 ```yaml
 # pubspec.yaml
 dependencies:
-  mobile_rag_engine: ^0.21.0
+  mobile_rag_engine: ^0.22.0
 ```
 
 ```bash

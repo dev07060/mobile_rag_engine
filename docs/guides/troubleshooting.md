@@ -11,7 +11,7 @@ Solutions for common issues when using `mobile_rag_engine`.
 **Cause:** Your app resolved 0.20.x. The Model Pack `setup` command and
 `RagModelPack` exist only in 0.21.0 and later.
 
-**Solution:** Use `mobile_rag_engine: ^0.21.0`, or stay on 0.20.x and follow
+**Solution:** Use `mobile_rag_engine: ^0.22.0`, or stay on 0.20.x and follow
 the
 [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md#installation),
 which downloads the model files manually and initializes with
@@ -33,7 +33,7 @@ Cargokit uses them **only when `rustup` is not installed**; with `rustup` on
   did not match the package's public key. Retry on a clean network; do not
   bypass the check.
 - 0.20.x and earlier never shipped binaries, so they always need Rust. Upgrade
-  to `^0.21.0`.
+  to `^0.22.0`.
 
 **Errors from `cargo` / `rustup` (Rust installed, source build):**
 1. Make sure Rust stable is current: `rustup default stable`. Cargokit adds the
