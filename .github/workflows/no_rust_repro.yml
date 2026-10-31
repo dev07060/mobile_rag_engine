@@ -41,7 +41,13 @@ jobs:
       - name: Hide Rust toolchain
         if: matrix.rust == 'hidden'
         run: |
+          # macOS runners also ship rustup through Homebrew
+          # (/opt/homebrew/opt/rustup/bin), outside ~/.cargo.
+          if command -v brew >/dev/null 2>&1; then
+            brew uninstall --ignore-dependencies --force rustup rust 2>/dev/null || true
+          fi
           rm -rf "$HOME/.cargo" "$HOME/.rustup"
+          hash -r
           if command -v rustup >/dev/null 2>&1 || command -v cargo >/dev/null 2>&1; then
             echo "::error::rustup/cargo still on PATH: $(command -v rustup) $(command -v cargo)"
             exit 1
@@ -123,12 +129,15 @@ jobs:
 
       - name: Summarize result
         if: always()
-        working-directory: repro_app
         run: |
+          # Cargokit reports a missing toolchain as "rustup not found in PATH."
           rust_pattern='(rustup|cargo).*(No such file or directory|not found|ProcessException)|(ProcessException|No such file or directory|command not found).*(rustup|cargo)'
+          log=repro_app/build.log
           if [ "${{ steps.build.outcome }}" = "success" ]; then
             verdict="PASS"
-          elif [ -f build.log ] && grep -E -i -q "$rust_pattern" build.log; then
+          elif [ "${{ steps.build.outcome }}" = "skipped" ]; then
+            verdict="NOT RUN: an earlier step failed, see the job log"
+          elif [ -f "$log" ] && grep -E -i -q "$rust_pattern" "$log"; then
             verdict="FAIL: Rust toolchain not found (Cargokit build from source)"
           else
             verdict="FAIL: other cause, see the build log artifact"
@@ -138,8 +147,8 @@ jobs:
             echo ""
             echo "- Package: \`mobile_rag_engine ${PACKAGE_VERSION}\` from pub.dev"
             echo "- Result: **${verdict}**"
-            if [ -f build.log ]; then
-              matches=$(grep -E -i "$rust_pattern" build.log | head -n 5)
+            if [ -f "$log" ]; then
+              matches=$(grep -E -i "$rust_pattern" "$log" | head -n 5)
               if [ -n "$matches" ]; then
                 echo ""
                 echo '```'
