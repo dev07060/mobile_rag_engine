@@ -10,22 +10,47 @@ round-trip for retrieval.
 ![pub package](https://img.shields.io/pub/v/mobile_rag_engine)
 ![flutter](https://img.shields.io/badge/Flutter-3.9%2B-blue)
 ![rust](https://img.shields.io/badge/Core-Rust-orange)
-![platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
+![platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS-lightgrey)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Use it when you need a **Flutter local RAG engine** for private notes, document
 Q&A, chat with PDF, offline assistants, or enterprise apps where user data must
 stay on the device.
 
+> **Retrieval only.** This package finds and assembles the relevant context.
+> Generating an answer with an LLM is your app's separate step.
+
+> **Which version does this README describe?** This README tracks the
+> `0.21.0-dev` preview line on `main`. The current stable release on pub.dev is
+> **0.20.1**; follow its README on
+> [pub.dev](https://pub.dev/packages/mobile_rag_engine/versions/0.20.1) or at the
+> [`v0.20.1` tag](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md)
+> if you install `^0.20.x`. The Model Pack `setup` command and `RagModelPack`
+> shown below exist only in `0.21.0-dev.11` and later.
+>
+> Both lines compile the Rust core from source on the first build, so install
+> Rust first (see [Native Core Built by Cargokit](#native-core-built-by-cargokit)).
+
 ---
 
 ## Why this package?
 
-### No Rust Installation Required
+### Native Core Built by Cargokit
 
-**You do NOT need to install Rust, Cargo, or Android NDK.**
+The Rust core (`rag_engine_flutter`) is compiled from source by
+[Cargokit](https://github.com/irondash/cargokit) during your first
+`flutter build`. Published packages do **not** include pre-compiled binaries
+yet, so a Rust toolchain is required today:
 
-This package includes **pre-compiled binaries** for iOS, Android, macOS, Windows, and Linux. Just `pub add` and run.
+- Install Rust with [rustup](https://rustup.rs/) (stable). Cargokit adds the
+  Rust targets it needs through `rustup`.
+- iOS/macOS builds need Xcode. Android builds need the Android SDK; if the
+  NDK version your project requests is missing, Cargokit installs it with the
+  SDK's `cmdline-tools` (`sdkmanager`).
+- The first build of each platform compiles the Rust crate and takes longer;
+  later builds reuse the cached artifacts.
+
+Pre-compiled binaries are planned; this section will change when they ship.
 
 ### Performance
 
@@ -77,7 +102,7 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 | **Search** | HNSW vector + BM25 keyword hybrid search with RRF fusion; metadata-first search with explicit context/chunk hydration |
 | **Storage** | SQLite persistence, HNSW Index persistence (fast startup), connection pooling, resumable indexing |
 | **Collections** | Collection-scoped ingest/search/rebuild via `inCollection('id')` |
-| **Performance** | Rust core, 10x faster tokenization, thread control, memory optimized |
+| **Performance** | Rust core, HuggingFace `tokenizers`, thread control, memory optimized |
 | **Context** | Engine-tokenizer exact context budget, adjacent chunk expansion, single source mode |
 
 **Support boundaries:** text-layer PDFs are production-ready. Scanned or image-only PDFs should be routed through an OCR layer before indexing. DOCX extraction is available for early adopters, but complex DOCX layouts such as tables, headers, and footnotes should be treated as beta.
@@ -91,8 +116,10 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 | **iOS** | 16.0+ |
 | **Android** | API 21+ (Android 5.0 Lollipop) |
 | **macOS** | 14.0+ |
-| **Windows** | Windows 10+ (x64) |
-| **Linux** | glibc 2.31+ (x64) |
+| **Build host** | Rust stable via rustup (see [Native Core Built by Cargokit](#native-core-built-by-cargokit)) |
+
+Windows and Linux are not supported yet: their native build has not been
+verified end to end, even though pub.dev may list them as platforms.
 
 > ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods builds on both iOS and macOS require static framework linkage (`use_frameworks! :linkage => :static`); set the host deployment targets to iOS 16.0+ and macOS 14.0+. Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
 
@@ -102,10 +129,19 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 
 ### 1. Add the dependency
 
+Pin the preview version exactly. A caret constraint such as `^0.20.0` never
+selects a `-dev` release, so it resolves to 0.20.1, which does not have the
+`setup` command or `RagModelPack` used below.
+
 ```yaml
 dependencies:
-  mobile_rag_engine: ^0.20.0
+  mobile_rag_engine: 0.21.0-dev.12
 ```
+
+> Staying on stable 0.20.1? Use `mobile_rag_engine: ^0.20.1` and follow the
+> [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md#installation)
+> instead: it downloads the model files manually and initializes with
+> `tokenizerAsset` + `modelAsset`.
 
 ### 2. Install the verified Model Pack
 
@@ -136,8 +172,10 @@ await MobileRag.initialize(
 The first success is add documents, rebuild the index, and get non-empty
 chunks/context from search. LLM generation remains your app's separate step.
 
-Need a custom or multilingual ONNX model? The original two-asset initializer
-remains available as an advanced/legacy path; see the
+The Model Pack preset is English-only (`all-MiniLM-L6-v2`). For Korean, CJK,
+or other multilingual documents, use a multilingual ONNX model through the
+original two-asset initializer, which remains available as an advanced path;
+see the
 [Model Setup Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md).
 
 ---
@@ -184,23 +222,6 @@ await MobileRag.initialize(
 if (!MobileRag.instance.isIndexReady) {
   await MobileRag.instance.warmupFuture;
 }
-```
-
-### Storage default and experimental VABQ
-
-The normal public initialization paths use Q8_0 storage by default. VABQ is
-an experimental, advanced opt-in: it is enabled only when you explicitly pass
-a matching `VabqProfile` to `MobileRag.initialize` or `RagConfig`. Model asset
-names and embedding dimensions never select VABQ automatically. Model Pack v1
-is fixed to Q8_0 and rejects a VABQ profile; use the custom two-asset path for
-VABQ research.
-
-```dart
-await MobileRag.initialize(
-  tokenizerAsset: 'assets/tokenizer.json',
-  modelAsset: 'assets/model.onnx',
-  vabqProfile: VabqProfile.allMiniLmL6V2, // explicit experimental opt-in
-);
 ```
 
 ### Adding Documents and Searching
@@ -314,6 +335,23 @@ print(travelHits.length);
 If you do not specify a collection, the engine uses the default `__default__`
 collection for backward compatibility.
 
+### Storage default and experimental VABQ
+
+Most apps can skip this section. The normal public initialization paths use
+Q8_0 storage by default. VABQ is an experimental, advanced opt-in: it is
+enabled only when you explicitly pass a matching `VabqProfile` to
+`MobileRag.initialize` or `RagConfig`. Model asset names and embedding
+dimensions never select VABQ automatically. Model Pack v1 is fixed to Q8_0 and
+rejects a VABQ profile; use the custom two-asset path for VABQ research.
+
+```dart
+await MobileRag.initialize(
+  tokenizerAsset: 'assets/tokenizer.json',
+  modelAsset: 'assets/model.onnx',
+  vabqProfile: VabqProfile.allMiniLmL6V2, // explicit experimental opt-in
+);
+```
+
 > **Advanced Usage:** For fine-grained control, use the high-level metadata lane (`searchMeta`, `assembleContext`, `hydrateChunks`, `getChunkExcerpts`) and the public API reference. Most apps should stay on the `MobileRag` facade.
 
 
@@ -321,9 +359,16 @@ collection for backward compatibility.
 
 ## Sample App
 
-Check out the example application using this package. This desktop app demonstrates **full RAG pipeline integration with an LLM (Gemma 2B)** running locally on-device.
+The [`example/`](https://github.com/dev07060/mobile_rag_engine/tree/main/example)
+app in this repository exercises ingest, chunking, and search against the
+current source.
 
 [mobile-ondevice-rag-desktop](https://github.com/dev07060/mobile-ondevice-rag-desktop)
+is an older desktop demo that pairs retrieval with LLM generation (Gemma 2B
+through a local [Ollama](https://ollama.com/) server). It is built against
+`mobile_rag_engine` 0.14.x and predates the Model Pack setup, so treat it as a
+reference for wiring retrieval into an LLM prompt, not as a copy-paste starting
+point.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/dev07060/mobile_rag_engine/main/assets/readme-sources/sample_app.png" width="860" alt="Sample App Screenshot">
