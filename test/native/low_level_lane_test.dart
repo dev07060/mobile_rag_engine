@@ -9,6 +9,8 @@ import 'package:mobile_rag_engine/src/rust/api/error.dart';
 import 'package:mobile_rag_engine/src/rust/api/source_rag.dart';
 import 'package:mobile_rag_engine/src/rust/frb_generated.dart';
 
+import 'native_test_support.dart';
+
 frb.Int64List _toInt64List(List<int> values) {
   final result = frb.Int64List(values.length);
   for (var i = 0; i < values.length; i++) {
@@ -86,7 +88,7 @@ void main() {
       () async {
     final dir = await _initTempDb('low_level_lane_hydrate');
     addTearDown(() async {
-      await dir.delete(recursive: true);
+      await releaseNativeFilesAndDelete(dir);
     });
 
     const collectionId = 'dart-low-level-lane';
@@ -147,7 +149,7 @@ void main() {
   test('stale search handle is rejected after collection mutation', () async {
     final dir = await _initTempDb('low_level_lane_stale');
     addTearDown(() async {
-      await dir.delete(recursive: true);
+      await releaseNativeFilesAndDelete(dir);
     });
 
     const collectionId = 'dart-low-level-stale';

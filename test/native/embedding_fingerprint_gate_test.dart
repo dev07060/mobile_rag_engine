@@ -9,6 +9,8 @@ import 'package:mobile_rag_engine/src/rust/api/source_rag.dart' as source_rag;
 import 'package:mobile_rag_engine/src/rust/frb_generated.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import 'native_test_support.dart';
+
 Future<void> _ensureRustLoaded() async {
   if (!RustLib.instance.initialized) {
     await RustLib.init();
@@ -117,7 +119,7 @@ void main() {
             fail('Expected Mismatch, got $gate');
         }
       } finally {
-        await dir.delete(recursive: true);
+        await releaseNativeFilesAndDelete(dir);
       }
     },
   );
@@ -217,7 +219,7 @@ void main() {
         );
         expect(closedGate, isA<EmbeddingFingerprintGate_Ok>());
       } finally {
-        await dir.delete(recursive: true);
+        await releaseNativeFilesAndDelete(dir);
       }
     },
   );
@@ -266,7 +268,7 @@ void main() {
         expect(axes.embeddingFingerprint, 'old',
             reason: 'axis must not rotate without consent');
       } finally {
-        await dir.delete(recursive: true);
+        await releaseNativeFilesAndDelete(dir);
       }
     },
   );
@@ -326,7 +328,7 @@ void main() {
         expect(axes.embeddingFingerprint, 'new');
         expect(axes.embeddingFingerprintPending, '');
       } finally {
-        await dir.delete(recursive: true);
+        await releaseNativeFilesAndDelete(dir);
       }
     },
   );

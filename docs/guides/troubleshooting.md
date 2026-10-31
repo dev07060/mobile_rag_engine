@@ -57,8 +57,9 @@ flutter run
 
 ### Windows or Linux build fails
 
-Windows and Linux are not supported yet. Their native build has not been
-verified end to end, even though pub.dev may list them as platforms.
+- **Windows x64** is supported from 0.22.0. Install Visual Studio with the
+  "Desktop development with C++" workload. Windows on ARM64 is not supported.
+- **Linux** is not supported.
 
 ---
 

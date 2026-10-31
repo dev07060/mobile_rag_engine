@@ -31,7 +31,6 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../src/rust/api/tokenizer.dart';
 import '../src/rust/api/source_rag.dart'
@@ -44,6 +43,7 @@ import '../src/rust/api/source_rag.dart'
         AssembledContextV2;
 import '../src/rust/api/db_pool.dart';
 import '../src/rust/api/error.dart';
+import '../src/rust/api/hnsw_index.dart' show clearHnswIndex;
 import '../src/rust/api/migration_meta.dart'
     as migration_meta
     show
@@ -63,6 +63,7 @@ import '../src/rust/api/source_rag.dart'
     show listChunksNeedingReembed, updateChunkReembedded;
 import '../src/internal/defaults.dart';
 import '../src/internal/embedding_fingerprint.dart';
+import '../src/internal/storage_directory.dart';
 import '../src/internal/validation.dart';
 import '../model_pack.dart';
 
@@ -264,7 +265,7 @@ class RagEngine {
   /// Initialize RagEngine with all dependencies.
   ///
   /// This method handles:
-  /// 1. Copying tokenizer asset to documents directory
+  /// 1. Copying tokenizer asset to the storage directory
   /// 2. Initializing the tokenizer
   /// 3. Loading the ONNX embedding model
   /// 4. Initializing the RAG database
@@ -289,8 +290,8 @@ class RagEngine {
     // 0. Auto-initialize Rust library (safe to call multiple times)
     await _ensureRustInitialized();
 
-    // 1. Get app documents directory
-    final dir = await getApplicationDocumentsDirectory();
+    // 1. Get app storage directory
+    final dir = await ragStorageDirectory();
     final dbPath = "${dir.path}/${config.databaseName ?? 'rag.sqlite'}";
     final tokenizerPath =
         config.preparedTokenizerPath ?? "${dir.path}/tokenizer.json";
@@ -1123,6 +1124,9 @@ class RagEngine {
     // 1. Close DB pool
     debugPrint('[RagEngine] clearAllData: Closing DB pool...');
     await closeDbPool();
+    // Unmap the loaded HNSW index too: Windows refuses to delete a file that
+    // is still memory-mapped, so its `.hnsw` would survive the sweep below.
+    await clearHnswIndex();
     debugPrint('[RagEngine] clearAllData: DB pool closed.');
 
     // 2-3. Delete the database and everything derived from it: SQLite

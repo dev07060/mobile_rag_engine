@@ -34,6 +34,9 @@ jobs:
   precompile:
     name: Precompile (${{ matrix.family }})
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -53,6 +56,9 @@ jobs:
               --target=x86_64-apple-ios
               --target=aarch64-apple-darwin
               --target=x86_64-apple-darwin
+          - family: windows
+            os: windows-latest
+            targets: --target=x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
 
@@ -109,6 +115,9 @@ jobs:
     name: No-Rust Build (${{ matrix.platform }})
     needs: precompile
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -122,6 +131,9 @@ jobs:
           - platform: macos
             os: macos-latest
             build_command: flutter build macos --debug
+          - platform: windows
+            os: windows-latest
+            build_command: flutter build windows --debug
     steps:
       - uses: actions/checkout@v4
 

@@ -31,11 +31,14 @@ env:
 jobs:
   repro:
     name: ${{ matrix.platform }} / Rust ${{ matrix.rust }}
-    runs-on: ${{ matrix.platform == 'android' && 'ubuntu-latest' || 'macos-latest' }}
+    runs-on: ${{ matrix.platform == 'android' && 'ubuntu-latest' || matrix.platform == 'windows' && 'windows-latest' || 'macos-latest' }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
-        platform: [android, ios, macos]
+        platform: [android, ios, macos, windows]
         rust: ${{ fromJSON(inputs.rust == 'hidden' && '["hidden"]' || inputs.rust == 'installed' && '["installed"]' || '["hidden","installed"]') }}
     steps:
       - name: Hide Rust toolchain
@@ -119,6 +122,7 @@ jobs:
             android) cmd="flutter build apk --debug --target-platform android-arm64" ;;
             ios)     cmd="flutter build ios --simulator --no-codesign" ;;
             macos)   cmd="flutter build macos --debug" ;;
+            windows) cmd="flutter build windows --debug" ;;
           esac
           set +e
           $cmd -v > build.log 2>&1
@@ -148,7 +152,8 @@ jobs:
             echo "- Package: \`mobile_rag_engine ${PACKAGE_VERSION}\` from pub.dev"
             echo "- Result: **${verdict}**"
             if [ -f "$log" ]; then
-              matches=$(grep -E -i "$rust_pattern" "$log" | head -n 5)
+              # `shell: bash` enables pipefail; no match is not an error here.
+              matches=$(grep -E -i "$rust_pattern" "$log" | head -n 5 || true)
               if [ -n "$matches" ]; then
                 echo ""
                 echo '```'
