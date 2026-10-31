@@ -1,0 +1,158 @@
+name: No-Rust Install Repro
+
+# Reproduces what a new user sees: a fresh `flutter create` app that installs
+# mobile_rag_engine from pub.dev (not this checkout) and builds it on a machine
+# with or without a Rust toolchain. The "installed" arm is the control: if it
+# passes and the "hidden" arm fails, the failure is caused by the missing Rust
+# toolchain rather than by the host app setup.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "mobile_rag_engine version to install from pub.dev"
+        required: true
+        default: "0.20.1"
+      rust:
+        description: "Which Rust arms to run"
+        type: choice
+        options: [both, hidden, installed]
+        default: both
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/no_rust_repro.yml"
+
+env:
+  FLUTTER_VERSION: "3.38.7"
+  FLUTTER_CHANNEL: "stable"
+  PACKAGE_VERSION: ${{ inputs.version || '0.20.1' }}
+
+jobs:
+  repro:
+    name: ${{ matrix.platform }} / Rust ${{ matrix.rust }}
+    runs-on: ${{ matrix.platform == 'android' && 'ubuntu-latest' || 'macos-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [android, ios, macos]
+        rust: ${{ fromJSON(inputs.rust == 'hidden' && '["hidden"]' || inputs.rust == 'installed' && '["installed"]' || '["hidden","installed"]') }}
+    steps:
+      - name: Hide Rust toolchain
+        if: matrix.rust == 'hidden'
+        run: |
+          rm -rf "$HOME/.cargo" "$HOME/.rustup"
+          if command -v rustup >/dev/null 2>&1 || command -v cargo >/dev/null 2>&1; then
+            echo "::error::rustup/cargo still on PATH: $(command -v rustup) $(command -v cargo)"
+            exit 1
+          fi
+
+      - name: Setup Rust
+        if: matrix.rust == 'installed'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust target (Android)
+        if: matrix.rust == 'installed' && matrix.platform == 'android'
+        run: rustup target add aarch64-linux-android
+
+      - name: Install Rust targets (iOS simulator)
+        if: matrix.rust == 'installed' && matrix.platform == 'ios'
+        run: rustup target add aarch64-apple-ios-sim x86_64-apple-ios
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+
+      - name: Setup Java (Android only)
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK (Android only)
+        if: matrix.platform == 'android'
+        uses: android-actions/setup-android@v3
+        with:
+          # The default also installs the legacy 'tools' package, which
+          # sdkmanager 16.0 on current runners no longer provides.
+          packages: platform-tools
+
+      - name: Create app and add the published package
+        run: |
+          flutter create --platforms=${{ matrix.platform }} --project-name repro_app repro_app
+          cd repro_app
+          flutter pub add "mobile_rag_engine:${PACKAGE_VERSION}"
+          flutter pub deps --style=compact | grep -E "^- (mobile_rag_engine|rag_engine_flutter) "
+
+      # Apply the host settings the README asks for, so the only remaining
+      # difference between the two arms is the Rust toolchain.
+      - name: Apply documented iOS host settings
+        if: matrix.platform == 'ios'
+        working-directory: repro_app/ios
+        run: |
+          perl -pi -e "s/^#? ?platform :ios, .*/platform :ios, '16.0'/; s/^(\s*)use_frameworks!\s*$/\1use_frameworks! :linkage => :static\n/" Podfile
+          perl -pi -e 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;/IPHONEOS_DEPLOYMENT_TARGET = 16.0;/g' Runner.xcodeproj/project.pbxproj
+          grep -n "platform :ios\|use_frameworks" Podfile
+
+      - name: Apply documented macOS host settings
+        if: matrix.platform == 'macos'
+        working-directory: repro_app/macos
+        run: |
+          perl -pi -e "s/^platform :osx, .*/platform :osx, '14.0'/; s/^(\s*)use_frameworks!\s*$/\1use_frameworks! :linkage => :static\n/" Podfile
+          perl -pi -e 's/MACOSX_DEPLOYMENT_TARGET = [0-9.]+;/MACOSX_DEPLOYMENT_TARGET = 14.0;/g' Runner.xcodeproj/project.pbxproj
+          grep -n "platform :osx\|use_frameworks" Podfile
+
+      - name: Build
+        id: build
+        working-directory: repro_app
+        run: |
+          case "${{ matrix.platform }}" in
+            android) cmd="flutter build apk --debug --target-platform android-arm64" ;;
+            ios)     cmd="flutter build ios --simulator --no-codesign" ;;
+            macos)   cmd="flutter build macos --debug" ;;
+          esac
+          set +e
+          $cmd -v > build.log 2>&1
+          status=$?
+          set -e
+          tail -n 150 build.log
+          exit $status
+
+      - name: Summarize result
+        if: always()
+        working-directory: repro_app
+        run: |
+          rust_pattern='(rustup|cargo).*(No such file or directory|not found|ProcessException)|(ProcessException|No such file or directory|command not found).*(rustup|cargo)'
+          if [ "${{ steps.build.outcome }}" = "success" ]; then
+            verdict="PASS"
+          elif [ -f build.log ] && grep -E -i -q "$rust_pattern" build.log; then
+            verdict="FAIL: Rust toolchain not found (Cargokit build from source)"
+          else
+            verdict="FAIL: other cause, see the build log artifact"
+          fi
+          {
+            echo "### ${{ matrix.platform }} / Rust ${{ matrix.rust }}"
+            echo ""
+            echo "- Package: \`mobile_rag_engine ${PACKAGE_VERSION}\` from pub.dev"
+            echo "- Result: **${verdict}**"
+            if [ -f build.log ]; then
+              matches=$(grep -E -i "$rust_pattern" build.log | head -n 5)
+              if [ -n "$matches" ]; then
+                echo ""
+                echo '```'
+                echo "$matches"
+                echo '```'
+              fi
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.platform }}-rust-${{ matrix.rust }}
+          path: repro_app/build.log
+          if-no-files-found: ignore
