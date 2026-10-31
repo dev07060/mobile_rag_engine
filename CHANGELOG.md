@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+* Forward-ported the 0.20.1 fixes: `search()` no longer prints the query text and query-embedding values via `debugPrint`; interrupted ingestions are recovered by the native companion on startup.
+
 ## 0.21.0-dev.12
 * **Initialization reliability**:
   - Serialized embedding fingerprint initialization ahead of deferred BM25/HNSW warmup, preventing fresh-database SQLite lock contention.
@@ -36,6 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **VABQ Research Engine**:
   - Added experimental Variance-aware Adaptive Block Quantization (VABQ) research support.
   - VABQ is an explicit advanced opt-in; normal initialization continues to use Q8_0 storage by default. This research entry does not make general speed, memory, or retrieval-quality claims relative to Q8_0.
+
+## 0.20.1
+* **Privacy**:
+  - `search()` no longer prints the query text and query-embedding values through `debugPrint`, which also emitted them in release builds.
+* **Ingestion recovery**:
+  - Requires `rag_engine_flutter: ^0.19.3`: sources interrupted mid-ingest by a crash or kill are marked `failed` on next startup instead of staying `processing` forever, so re-adding them resumes ingestion.
+* **Documentation**:
+  - Corrected the install requirements: published packages do not include pre-compiled binaries, so a Rust toolchain (rustup) is required. Windows and Linux are removed from the supported platforms. Model download URLs are pinned to a fixed revision.
 
 ## 0.20.0
 * **Block-wise Quantization**:
