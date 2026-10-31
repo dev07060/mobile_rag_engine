@@ -374,9 +374,9 @@ class RagEngine {
       embeddingWorkerInitialized = true;
 
       // 4. Probe the actual model output dimension and configure Rust before
-      // any database or MMAP write can occur. The host explicitly supplies the
-      // variance profile; the filename and dimension are never used to infer it.
-      onProgress?.call('Validating VABQ profile...');
+      // any database or MMAP write can occur. VABQ is internal research and
+      // not selectable through the public API, so storage is always Q8_0.
+      onProgress?.call('Validating embedding dimension...');
       final probe = await EmbeddingService.embed(_kFingerprintProbeText);
       final expectedDimension = config.expectedEmbeddingDimension;
       if (expectedDimension != null && probe.length != expectedDimension) {
@@ -386,9 +386,7 @@ class RagEngine {
         );
       }
       await vabq_config.configureVabqProfile(
-        profile: config.vabqProfile == VabqProfile.none
-            ? null
-            : vabqProfileWireName(config.vabqProfile),
+        profile: null,
         embeddingDimension: probe.length,
       );
 
@@ -399,7 +397,10 @@ class RagEngine {
       final currentFingerprint = computeEmbeddingFingerprint(
         modelBasename: embeddingModelBasename(modelPath),
         dim: probe.length,
-        quant: embeddingQuantizationFingerprintAxis(config.vabqProfile),
+        // Keeps the persisted `f32+vabq:none` axis so existing Q8_0 databases
+        // still match; a DB written with a VABQ profile on a 0.21.0-dev
+        // release mismatches and must be re-embedded.
+        quant: embeddingQuantizationFingerprintAxis(VabqProfile.none),
       );
 
       // 6. Initialize the database and resolve the embedding fingerprint before

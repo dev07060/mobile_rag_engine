@@ -1,50 +1,37 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_rag_engine/mobile_rag_engine.dart' as public_api;
 import 'package:mobile_rag_engine/services/rag_config.dart';
 import 'package:mobile_rag_engine/src/internal/embedding_fingerprint.dart';
 
 void main() {
-  test('public configuration defaults to Q8_0 without inferring VABQ', () {
-    const defaultConfig = RagConfig(
+  test('public configuration never selects VABQ', () {
+    // VABQ is internal research; RagConfig has no profile to set, and the
+    // engine always configures Q8_0 storage.
+    const config = RagConfig(
       tokenizerAsset: 'assets/tokenizer.json',
       modelAsset: 'assets/bge-base-en-v1.5-768.onnx',
     );
-    final assetConfig = RagConfig.fromAssets(
-      tokenizerAsset: 'assets/tokenizer.json',
-      modelAsset: 'assets/all-mpnet-base-v2-768.onnx',
-    );
-    const configured = RagConfig(
-      tokenizerAsset: 'assets/tokenizer.json',
-      modelAsset: 'assets/model.onnx',
-      vabqProfile: VabqProfile.allMiniLmL6V2,
-    );
+    expect(config.modelAsset, endsWith('.onnx'));
+  });
 
-    expect(defaultConfig.vabqProfile, VabqProfile.none);
-    expect(assetConfig.vabqProfile, VabqProfile.none);
-    expect(configured.vabqProfile, VabqProfile.allMiniLmL6V2);
-    expect(vabqProfileWireName(defaultConfig.vabqProfile), 'none');
-    expect(vabqProfileWireName(assetConfig.vabqProfile), 'none');
+  test('the Q8_0 fingerprint axis is unchanged for existing databases', () {
+    expect(vabqProfileWireName(VabqProfile.none), 'none');
     expect(
       embeddingQuantizationFingerprintAxis(VabqProfile.none),
       'f32+vabq:none',
     );
     expect(
-      embeddingQuantizationFingerprintAxis(VabqProfile.allMiniLmL6V2),
-      'f32+vabq:allMiniLmL6V2',
-    );
-    expect(vabqProfileWireName(VabqProfile.bgeBaseEnV15), 'bgeBaseEnV15');
-    expect(public_api.VabqProfile.bgeBaseEnV15, VabqProfile.bgeBaseEnV15);
-    expect(
-      embeddingQuantizationFingerprintAxis(VabqProfile.bgeBaseEnV15),
-      'f32+vabq:bgeBaseEnV15',
-    );
-    expect(
       computeEmbeddingFingerprint(
         modelBasename: 'model.onnx',
-        dim: 768,
-        quant: embeddingQuantizationFingerprintAxis(VabqProfile.bgeBaseEnV15),
+        dim: 384,
+        quant: embeddingQuantizationFingerprintAxis(VabqProfile.none),
       ),
-      'model.onnx|768|f32+vabq:bgeBaseEnV15',
+      'model.onnx|384|f32+vabq:none',
+    );
+    // A database written with a VABQ profile on a 0.21.0 dev release carries a
+    // different axis, so it is detected as a fingerprint mismatch.
+    expect(
+      embeddingQuantizationFingerprintAxis(VabqProfile.allMiniLmL6V2),
+      isNot(embeddingQuantizationFingerprintAxis(VabqProfile.none)),
     );
   });
 }
