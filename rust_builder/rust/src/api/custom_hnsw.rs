@@ -406,13 +406,78 @@ impl MmapHnswSearcher {
         let num_nodes = cursor.read_u32::<LittleEndian>()?;
         let blob_len = cursor.read_u32::<LittleEndian>()?;
 
-        Ok(Self {
+        let searcher = Self {
             mmap,
             entry_point,
             max_layer,
             num_nodes,
             blob_len,
-        })
+        };
+        searcher.validate_layout()?;
+        Ok(searcher)
+    }
+
+    /// Walk the directory and every node record once so a truncated or
+    /// corrupted file is rejected here: `search` reads with unchecked offsets
+    /// and would otherwise panic on an out-of-bounds slice.
+    fn validate_layout(&self) -> Result<()> {
+        let len = self.mmap.len();
+        let num_nodes = self.num_nodes as usize;
+        let data_start = 18 + num_nodes * 4;
+        if data_start > len {
+            anyhow::bail!("Invalid HNSW file: truncated node directory");
+        }
+        if num_nodes == 0 {
+            return Ok(());
+        }
+        if self.entry_point as usize >= num_nodes {
+            anyhow::bail!("Invalid HNSW file: entry point out of range");
+        }
+
+        let read_u16 = |pos: usize| u16::from_le_bytes([self.mmap[pos], self.mmap[pos + 1]]);
+        let mut expected = data_start;
+        for index in 0..self.num_nodes {
+            if self.get_node_offset(index) != expected {
+                anyhow::bail!("Invalid HNSW file: node directory does not match node data");
+            }
+            let mut pos = expected + 8 + self.blob_len as usize;
+            if pos >= len {
+                anyhow::bail!("Invalid HNSW file: truncated node record");
+            }
+            let node_max_layer = self.mmap[pos];
+            if node_max_layer > self.max_layer {
+                anyhow::bail!("Invalid HNSW file: node layer above index max layer");
+            }
+            pos += 1;
+            for _ in 0..=node_max_layer {
+                if pos + 2 > len {
+                    anyhow::bail!("Invalid HNSW file: truncated node connections");
+                }
+                let num_conn = read_u16(pos) as usize;
+                pos += 2;
+                let end = pos + num_conn * 4;
+                if end > len {
+                    anyhow::bail!("Invalid HNSW file: truncated node connections");
+                }
+                for conn in (pos..end).step_by(4) {
+                    let neighbor = u32::from_le_bytes([
+                        self.mmap[conn],
+                        self.mmap[conn + 1],
+                        self.mmap[conn + 2],
+                        self.mmap[conn + 3],
+                    ]);
+                    if neighbor >= self.num_nodes {
+                        anyhow::bail!("Invalid HNSW file: neighbor index out of range");
+                    }
+                }
+                pos = end;
+            }
+            expected = pos;
+        }
+        if expected != len {
+            anyhow::bail!("Invalid HNSW file: unexpected trailing bytes");
+        }
+        Ok(())
     }
 
     pub fn get_num_nodes(&self) -> u32 {
@@ -672,6 +737,169 @@ mod tests {
         let results = searcher.search(&active_query, 1).unwrap();
 
         assert_eq!(results.first().map(|result| result.0), Some(1));
+    }
+
+    // Deterministic pseudo-random unit vectors (no rand seed control in the
+    // builder's layer draw, so recall floors below keep a margin).
+    fn lcg_vectors(count: usize, dim: usize, seed: u64) -> Vec<Vec<f32>> {
+        let mut state = seed;
+        (0..count)
+            .map(|_| {
+                let v: Vec<f32> = (0..dim)
+                    .map(|_| {
+                        state = state
+                            .wrapping_mul(6_364_136_223_846_793_005)
+                            .wrapping_add(1_442_695_040_888_963_407);
+                        ((state >> 33) as f32 / (1u64 << 31) as f32) * 2.0 - 1.0
+                    })
+                    .collect();
+                let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+                v.into_iter().map(|x| x / norm).collect()
+            })
+            .collect()
+    }
+
+    fn exact_top_k(corpus: &[Vec<f32>], query: &[f32], k: usize) -> Vec<i64> {
+        let mut scored: Vec<(i64, f32)> = corpus
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (i as i64, cosine_distance(query, v)))
+            .collect();
+        scored.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        scored.into_iter().take(k).map(|(id, _)| id).collect()
+    }
+
+    fn recall_at_k(expected: &[i64], got: &[(i64, f32)], k: usize) -> f32 {
+        let got: HashSet<i64> = got.iter().take(k).map(|(id, _)| *id).collect();
+        expected.iter().filter(|id| got.contains(id)).count() as f32 / k as f32
+    }
+
+    // Mirrors the production build: hnsw_index::hnsw_build_params picks
+    // (M, M0, efConstruction) by corpus size; search uses ef = max(100, 5 * top_k).
+    fn build_index(corpus: &[Vec<f32>]) -> HnswBuilder {
+        let (m, m0, ef_construction) = if corpus.len() > 10_000 {
+            (24, 48, 200)
+        } else if corpus.len() > 1_000 {
+            (20, 40, 150)
+        } else {
+            (16, 32, 100)
+        };
+        let mut builder = HnswBuilder::new(m, m0, ef_construction);
+        for (i, v) in corpus.iter().enumerate() {
+            builder.insert(i as i64, v.clone());
+        }
+        builder
+    }
+
+    const RECALL_CORPUS: usize = 1500;
+    const RECALL_DIM: usize = 384;
+    const RECALL_QUERIES: usize = 50;
+    const K: usize = 10;
+    const PRODUCTION_EF: usize = 100;
+
+    #[test]
+    fn builder_recall_at_10_matches_exact_search() {
+        let corpus = lcg_vectors(RECALL_CORPUS, RECALL_DIM, 7);
+        let queries = lcg_vectors(RECALL_QUERIES, RECALL_DIM, 99);
+        let builder = build_index(&corpus);
+
+        let mean_recall = queries
+            .iter()
+            .map(|q| recall_at_k(&exact_top_k(&corpus, q, K), &builder.search(q, PRODUCTION_EF), K))
+            .sum::<f32>()
+            / RECALL_QUERIES as f32;
+        println!("custom_hnsw builder recall@10 = {mean_recall}");
+        assert!(mean_recall >= 0.95, "builder recall@10 {mean_recall} < 0.95");
+    }
+
+    #[test]
+    fn mmap_recall_at_10_survives_save_and_load() {
+        configure_active_vabq_profile(None, RECALL_DIM as i32).unwrap();
+        let corpus = lcg_vectors(RECALL_CORPUS, RECALL_DIM, 7);
+        let queries = lcg_vectors(RECALL_QUERIES, RECALL_DIM, 99);
+        let builder = build_index(&corpus);
+
+        let directory = tempdir().unwrap();
+        let index_path = directory.path().join("recall.hnsw");
+        builder.save_to_disk(index_path.to_str().unwrap()).unwrap();
+        let searcher = MmapHnswSearcher::new(index_path.to_str().unwrap()).unwrap();
+        assert_eq!(searcher.get_num_nodes() as usize, RECALL_CORPUS);
+
+        let mean_recall = queries
+            .iter()
+            .map(|q| {
+                let active = active_quantized_query(q).unwrap();
+                recall_at_k(&exact_top_k(&corpus, q, K), &searcher.search(&active, PRODUCTION_EF).unwrap(), K)
+            })
+            .sum::<f32>()
+            / RECALL_QUERIES as f32;
+        println!("custom_hnsw mmap (Q8_0) recall@10 = {mean_recall}");
+        assert!(mean_recall >= 0.95, "mmap recall@10 {mean_recall} < 0.95");
+    }
+
+    #[test]
+    fn empty_index_saves_loads_and_returns_no_results() {
+        configure_active_vabq_profile(None, 4).unwrap();
+        let builder = HnswBuilder::new(16, 32, 100);
+        assert!(builder.search(&[1.0, 0.0, 0.0, 0.0], 10).is_empty());
+
+        let directory = tempdir().unwrap();
+        let index_path = directory.path().join("empty.hnsw");
+        builder.save_to_disk(index_path.to_str().unwrap()).unwrap();
+        let searcher = MmapHnswSearcher::new(index_path.to_str().unwrap()).unwrap();
+        let query = active_quantized_query(&[1.0, 0.0, 0.0, 0.0]).unwrap();
+        assert!(searcher.search(&query, 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn save_rejects_mixed_embedding_dimensions() {
+        configure_active_vabq_profile(None, 4).unwrap();
+        let mut builder = HnswBuilder::new(16, 32, 100);
+        builder.insert(1, vec![1.0, 0.0, 0.0, 0.0]);
+        builder.insert(2, vec![1.0, 0.0, 0.0]);
+
+        let directory = tempdir().unwrap();
+        let index_path = directory.path().join("mixed.hnsw");
+        assert!(builder.save_to_disk(index_path.to_str().unwrap()).is_err());
+        assert!(!index_path.exists());
+    }
+
+    #[test]
+    fn load_rejects_bad_magic_version_and_truncated_files() {
+        configure_active_vabq_profile(None, RECALL_DIM as i32).unwrap();
+        let directory = tempdir().unwrap();
+        let corpus = lcg_vectors(50, RECALL_DIM, 3);
+        let builder = build_index(&corpus);
+        let good_path = directory.path().join("good.hnsw");
+        builder.save_to_disk(good_path.to_str().unwrap()).unwrap();
+        let good = std::fs::read(&good_path).unwrap();
+
+        let write = |name: &str, bytes: &[u8]| {
+            let path = directory.path().join(name);
+            std::fs::write(&path, bytes).unwrap();
+            path
+        };
+
+        let mut bad_magic = good.clone();
+        bad_magic[0] = b'X';
+        assert!(MmapHnswSearcher::new(write("magic.hnsw", &bad_magic).to_str().unwrap()).is_err());
+
+        let mut bad_version = good.clone();
+        bad_version[4] = 9;
+        assert!(MmapHnswSearcher::new(write("version.hnsw", &bad_version).to_str().unwrap()).is_err());
+
+        assert!(MmapHnswSearcher::new(write("tiny.hnsw", &good[..10]).to_str().unwrap()).is_err());
+
+        // A file cut inside the node directory or node data must be rejected at
+        // load time instead of panicking on an out-of-bounds read during search.
+        for cut in [30, good.len() / 2, good.len() - 1] {
+            let path = write(&format!("cut-{cut}.hnsw"), &good[..cut]);
+            assert!(
+                MmapHnswSearcher::new(path.to_str().unwrap()).is_err(),
+                "truncated file ({cut} of {} bytes) was accepted",
+                good.len()
+            );
+        }
     }
 
     #[test]
