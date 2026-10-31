@@ -497,6 +497,39 @@ class RagEngine {
     }
   }
 
+  /// Whether [candidateName] (a file name in the database's directory) is an
+  /// on-disk artifact derived from the database file [dbFileName]: SQLite
+  /// sidecars, the mmap vector store, HNSW indexes of every collection
+  /// (current and legacy formats) and index dirty markers.
+  @visibleForTesting
+  static bool isDatabaseArtifact(String dbFileName, String candidateName) {
+    // Matches Rust's Path::with_extension("vec") in db_pool.rs.
+    final dot = dbFileName.lastIndexOf('.');
+    final vectorStoreName =
+        '${dot > 0 ? dbFileName.substring(0, dot) : dbFileName}.vec';
+    if ({
+      dbFileName,
+      '$dbFileName-wal',
+      '$dbFileName-shm',
+      '$dbFileName-journal',
+      vectorStoreName,
+    }.contains(candidateName)) {
+      return true;
+    }
+    // Index and marker names use the Dart-side stem (known DB extension
+    // stripped); collections other than the default add an 8-hex FNV suffix.
+    final stem = RegExp.escape(_stripDbExtension(dbFileName));
+    final index = RegExp(
+      '^$stem(_hnsw(_[0-9a-f]{8})?)?'
+      r'(\.pbin|\.hnsw|\.hnsw\.tmp|\.hnsw\.data|\.hnsw\.graph)?$',
+    );
+    final dirtyMarker = RegExp(
+      '^$stem'
+      r'(\.[0-9a-f]{8})?\.dirty$',
+    );
+    return index.hasMatch(candidateName) || dirtyMarker.hasMatch(candidateName);
+  }
+
   static String _stripDbExtension(String path) {
     const knownDbExtensions = ['.sqlite3', '.sqlite', '.db'];
     final lower = path.toLowerCase();
@@ -1070,9 +1103,9 @@ class RagEngine {
   /// Clear all data (database and index files) and reset the engine.
   ///
   /// This is a destructive operation that:
-  /// 1. Closes the database connection
-  /// 2. Deletes the SQLite database file
-  /// 3. Deletes the HNSW index file
+  /// 1. Closes the database connection and the vector store
+  /// 2. Deletes the SQLite database file and its sidecars
+  /// 3. Deletes the vector store and the HNSW indexes of every collection
   /// 4. Re-initializes the database and service
   Future<void> clearAllData() async {
     debugPrint('[RagEngine] clearAllData: Starting...');
@@ -1091,33 +1124,26 @@ class RagEngine {
     await closeDbPool();
     debugPrint('[RagEngine] clearAllData: DB pool closed.');
 
-    // 2. Delete DB file
+    // 2-3. Delete the database and everything derived from it: SQLite
+    // sidecars, the mmap vector store (the only copy of quantized embeddings),
+    // and the HNSW indexes and dirty markers of every collection. A stale
+    // index left behind could pass the node-count parity check against the
+    // new database and map old vectors onto reused chunk ids.
     final dbFile = File(dbPath);
-    if (await dbFile.exists()) {
-      debugPrint('[RagEngine] clearAllData: Deleting DB file at $dbPath...');
-      await dbFile.delete();
-      debugPrint('[RagEngine] clearAllData: DB file deleted.');
-    } else {
-      debugPrint('[RagEngine] clearAllData: DB file not found.');
-    }
-
-    // 3. Delete index artifacts (new and legacy naming patterns)
-    final baseNoExt = _stripDbExtension(dbPath);
-    final indexStems = <String>{baseNoExt, '${baseNoExt}_hnsw'};
-    final indexCandidates = <String>{
-      for (final stem in indexStems) stem,
-      for (final stem in indexStems) '$stem.pbin',
-      for (final stem in indexStems) '$stem.hnsw.data',
-      for (final stem in indexStems) '$stem.hnsw.graph',
-    };
-
-    for (final path in indexCandidates) {
-      final file = File(path);
-      if (await file.exists()) {
-        debugPrint('[RagEngine] clearAllData: Deleting index artifact: $path');
-        await file.delete();
+    final dbFileName = dbFile.uri.pathSegments.last;
+    var deleted = 0;
+    if (await dbFile.parent.exists()) {
+      await for (final entity in dbFile.parent.list(followLinks: false)) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.last;
+        if (!isDatabaseArtifact(dbFileName, name)) continue;
+        await entity.delete();
+        deleted++;
       }
     }
+    debugPrint(
+      '[RagEngine] clearAllData: Deleted $deleted database artifact(s).',
+    );
 
     // 4. Re-initialize DB pool
     debugPrint('[RagEngine] clearAllData: Re-initializing DB pool...');
