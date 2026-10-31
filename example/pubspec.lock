@@ -65,6 +65,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.3.5+1"
+  crypto:
+    dependency: transitive
+    description:
+      name: crypto
+      sha256: e3626ae6270383c9e3a549f34c9e4cd26c09ae6a9adaab2bf4737a00340efdc4
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.8"
   fake_async:
     dependency: transitive
     description:
@@ -237,7 +245,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.21.0-dev.10"
+    version: "0.21.0"
   path:
     dependency: transitive
     description:
@@ -324,7 +332,7 @@ packages:
       path: "../rust_builder"
       relative: true
     source: path
-    version: "0.20.0-dev.11"
+    version: "0.20.0"
   sky_engine:
     dependency: transitive
     description: flutter
