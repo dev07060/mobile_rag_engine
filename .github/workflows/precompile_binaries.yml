@@ -121,7 +121,13 @@ jobs:
 
       - name: Hide Rust toolchain
         run: |
+          # macOS runners also ship rustup through Homebrew
+          # (/opt/homebrew/opt/rustup/bin), outside ~/.cargo.
+          if command -v brew >/dev/null 2>&1; then
+            brew uninstall --ignore-dependencies --force rustup rust 2>/dev/null || true
+          fi
           rm -rf "$HOME/.cargo" "$HOME/.rustup"
+          hash -r
           if command -v rustup >/dev/null 2>&1 || command -v cargo >/dev/null 2>&1; then
             echo "::error::rustup/cargo still on PATH: $(command -v rustup) $(command -v cargo)"
             exit 1
