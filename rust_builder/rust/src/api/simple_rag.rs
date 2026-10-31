@@ -27,7 +27,7 @@ use crate::api::vector_math::{
     l2_norm_f32,
 };
 #[cfg(feature = "vector_quant_i8")]
-use crate::api::vector_quant::{quantize_f32_for_active_profile, score_persisted_quantized_blob};
+use crate::api::vector_quant::{quantize_f32_for_active_profile, PreparedPersistedQuery};
 use flutter_rust_bridge::frb;
 use log::{debug, error, info, warn};
 use rusqlite::{params, Connection};
@@ -400,6 +400,8 @@ fn search_with_linear_scan(query_embedding: Vec<f32>, top_k: u32) -> anyhow::Res
     let conn = get_connection()?;
 
     let query_norm = l2_norm_f32(&query_embedding);
+    #[cfg(feature = "vector_quant_i8")]
+    let prepared_query = PreparedPersistedQuery::new(&query_embedding);
     let mut candidates: Vec<(f64, String)> = Vec::new();
 
     let mut stmt = match conn.prepare("SELECT content, embedding, embedding_i8 FROM docs") {
@@ -421,7 +423,7 @@ fn search_with_linear_scan(query_embedding: Vec<f32>, top_k: u32) -> anyhow::Res
 
         #[cfg(feature = "vector_quant_i8")]
         let similarity = if let Some(qblob) = embedding_i8_blob.as_deref() {
-            if let Some(similarity) = score_persisted_quantized_blob(&query_embedding, qblob)
+            if let Some(similarity) = prepared_query.score(qblob)
                 .map_err(|error| anyhow::anyhow!(error.to_string()))?
             {
                 similarity
