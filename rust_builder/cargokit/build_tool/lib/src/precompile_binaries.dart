@@ -192,7 +192,9 @@ class PrecompileBinaries {
             name: 'Precompiled binaries ${hash.substring(0, 8)}',
             targetCommitish: null,
             isDraft: false,
-            isPrerelease: false,
+            // Pre-release so binary-only releases never become the
+            // repository's "Latest" release; download URLs are unaffected.
+            isPrerelease: true,
             body: 'Precompiled binaries for crate $packageName, '
                 'crate hash $hash.',
           ));
