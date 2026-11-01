@@ -11,7 +11,7 @@ Solutions for common issues when using `mobile_rag_engine`.
 **Cause:** Your app resolved 0.20.x. The Model Pack `setup` command and
 `RagModelPack` exist only in 0.21.0 and later.
 
-**Solution:** Use `mobile_rag_engine: ^0.22.1`, or stay on 0.20.x and follow
+**Solution:** Use `mobile_rag_engine: ^0.22.2`, or stay on 0.20.x and follow
 the
 [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md#installation),
 which downloads the model files manually and initializes with
@@ -33,7 +33,7 @@ Cargokit uses them **only when `rustup` is not installed**; with `rustup` on
   did not match the package's public key. Retry on a clean network; do not
   bypass the check.
 - 0.20.x and earlier never shipped binaries, so they always need Rust. Upgrade
-  to `^0.22.1`.
+  to `^0.22.2`.
 
 **Errors from `cargo` / `rustup` (Rust installed, source build):**
 1. Make sure Rust stable is current: `rustup default stable`. Cargokit adds the
@@ -348,7 +348,7 @@ Pending exception java.lang.ClassNotFoundException: ai.onnxruntime.TensorInfo
 **Cause:** Flutter release builds shrink the app with R8, which removes ONNX
 Runtime classes that its JNI code looks up by name.
 
-**Solution:** Use `rag_engine_flutter` 0.21.1 or later, which ships the keep
+**Solution:** Use `mobile_rag_engine` 0.22.2 or later (`rag_engine_flutter` 0.21.1), which ships the keep
 rule. On earlier versions, add it to the app yourself:
 1. Create `android/app/proguard-rules.pro` with
    `-keep class ai.onnxruntime.** { *; }`
@@ -369,7 +369,7 @@ Failed to lookup symbol 'frb_get_rust_content_hash': dlsym(RTLD_DEFAULT, frb_get
 executable. Release linking dead-strips the functions Dart looks up by name,
 and archiving strips the remaining global symbols.
 
-**Solution:** Use `rag_engine_flutter` 0.21.1 or later, which sets both for the
+**Solution:** Use `mobile_rag_engine` 0.22.2 or later (`rag_engine_flutter` 0.21.1), which sets both for the
 Runner target. On earlier versions, in Xcode's Runner target build settings:
 1. Add `-Wl,-export_dynamic` to **Other Linker Flags** (iOS; macOS already has it).
 2. Set **Strip Style** to **Non-Global Symbols** for Release.
