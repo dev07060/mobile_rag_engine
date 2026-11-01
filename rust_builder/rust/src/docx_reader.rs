@@ -24,6 +24,7 @@
 //   that order (numeric part order within a kind), each part once, with
 //   byte-identical part texts emitted only once.
 
+use std::collections::HashSet;
 use std::io::{Cursor, Read};
 
 use anyhow::{anyhow, Result};
@@ -41,26 +42,57 @@ const MC_NS: &[u8] = b"http://schemas.openxmlformats.org/markup-compatibility/20
 const MAIN_PART: &str = "word/document.xml";
 
 /// Resource limits for reading an untrusted DOCX container.
+///
+/// The decompression budget shared by every XML part we read is
+/// `clamp(max_compression_ratio * input_len, min_uncompressed_bytes,
+/// total_uncompressed_bytes)` (see [DocxLimits::budget_for]).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DocxLimits {
-    /// Total decompressed bytes allowed across every XML part we read.
+    /// Absolute cap on decompressed bytes, whatever the input size.
     pub total_uncompressed_bytes: u64,
+    /// Budget per byte of input (the whole container, media included).
+    pub max_compression_ratio: u64,
+    /// Floor of the ratio budget, so tiny documents always fit.
+    pub min_uncompressed_bytes: u64,
     /// Maximum number of entries in the zip central directory.
     pub max_entries: usize,
 }
 
 impl DocxLimits {
-    /// 200 MB = 4x the 50 MB input cap. Only text-bearing XML parts are
-    /// decompressed (never media), and real-world WordprocessingML compresses
-    /// ~5-10x, so a legitimate document near the input cap still fits, while
-    /// a zip bomb (1000:1+ ratios) is cut off long before it threatens memory
-    /// on a phone. Entry count: real documents have tens to a few hundred
-    /// entries; 10k leaves ample room and bounds per-entry bookkeeping.
+    /// Absolute cap 200 MB = 4x the 50 MB input cap. Only text-bearing XML
+    /// parts are decompressed (never media).
+    ///
+    /// The cap alone is not enough on a phone: a ~200 KB DOCX could inflate to
+    /// 200 MB of XML, and the extracted text is held next to it, which iOS
+    /// jetsam kills (no unwind, so `catch_unwind` cannot help). So the budget
+    /// also scales with the input: text-only OOXML parts typically compress
+    /// 5-20x, and the input length also counts media and zip overhead, so
+    /// 100x is generous for real documents while a bomb (1000:1+) is cut off
+    /// at ~100x its own size. The 16 MB floor keeps tiny-but-valid files
+    /// (a few KB of highly repetitive XML) working.
+    ///
+    /// Entry count: real documents have tens to a few hundred entries; 10k
+    /// leaves ample room and bounds per-entry bookkeeping.
     pub(crate) const DEFAULT: DocxLimits = DocxLimits {
         total_uncompressed_bytes: 200 * 1024 * 1024,
+        max_compression_ratio: 100,
+        min_uncompressed_bytes: 16 * 1024 * 1024,
         max_entries: 10_000,
     };
+
+    /// Decompression budget for a container of `input_len` bytes.
+    pub(crate) fn budget_for(&self, input_len: usize) -> u64 {
+        (input_len as u64)
+            .saturating_mul(self.max_compression_ratio)
+            .max(self.min_uncompressed_bytes)
+            .min(self.total_uncompressed_bytes)
+    }
 }
+
+/// Upper bound on the up-front allocation for one part. The declared size
+/// comes from the (untrusted) zip header, so it only sizes the first
+/// allocation up to this cap; larger parts grow the buffer as they inflate.
+const MAX_PREALLOCATED_PART_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Extract plain text from DOCX bytes with [DocxLimits::DEFAULT].
 pub(crate) fn extract_docx_text(bytes: &[u8]) -> Result<String> {
@@ -84,13 +116,13 @@ pub(crate) fn extract_docx_text_with_limits(bytes: &[u8], limits: DocxLimits) ->
         return Err(anyhow!("not a DOCX document: missing {}", MAIN_PART));
     }
 
-    let mut budget = limits.total_uncompressed_bytes;
+    let mut budget = limits.budget_for(bytes.len());
 
     let main_xml = read_part(&mut archive, MAIN_PART, &mut budget)?;
     let mut out = walk_part(&main_xml).map_err(|e| anyhow!("{}: {}", MAIN_PART, e))?;
     drop(main_xml);
 
-    let mut seen_texts: Vec<String> = Vec::new();
+    let mut seen_texts: HashSet<String> = HashSet::new();
     for part in auxiliary_parts(&names) {
         let xml = read_part(&mut archive, &part, &mut budget)?;
         // A malformed header/footer/notes part must not sink the body text.
@@ -101,19 +133,19 @@ pub(crate) fn extract_docx_text_with_limits(bytes: &[u8], limits: DocxLimits) ->
                 continue;
             }
         };
-        let text = text.trim_matches('\n').to_owned();
-        if text.trim().is_empty() || seen_texts.contains(&text) {
+        let text = text.trim_matches('\n');
+        if text.trim().is_empty() || seen_texts.contains(text) {
             continue;
         }
         if !out.is_empty() && !out.ends_with("\n\n") {
             out.push_str(if out.ends_with('\n') { "\n" } else { "\n\n" });
         }
-        out.push_str(&text);
+        out.push_str(text);
         out.push('\n');
-        seen_texts.push(text);
+        seen_texts.insert(text.to_owned());
     }
 
-    Ok(finalize(&out))
+    Ok(finalize(out))
 }
 
 /// Header, footer, footnote and endnote parts, in a stable order.
@@ -165,7 +197,7 @@ fn read_part<R: Read + std::io::Seek>(
     if declared > *budget {
         return Err(decompression_limit_error(name));
     }
-    let mut raw = Vec::with_capacity(declared as usize);
+    let mut raw = Vec::with_capacity(declared.min(MAX_PREALLOCATED_PART_BYTES) as usize);
     entry
         .take(*budget + 1)
         .read_to_end(&mut raw)
@@ -191,22 +223,51 @@ fn decompression_limit_error(name: &str) -> anyhow::Error {
 }
 
 /// Collapse 3+ consecutive newlines and trim trailing spaces on each line.
-fn finalize(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
+///
+/// Works in place on the walker's buffer (the output is never longer than
+/// the input), so the extracted text is not copied a third time.
+fn finalize(text: String) -> String {
+    let mut bytes = text.into_bytes();
+    let len = bytes.len();
+    let mut write = 0usize;
     let mut newlines = 0usize;
-    for line in text.split('\n') {
-        let line = line.trim_end_matches(' ');
-        if line.trim().is_empty() {
+    let mut start = 0usize;
+    loop {
+        let end = bytes[start..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map_or(len, |i| start + i);
+        let mut line_end = end;
+        while line_end > start && bytes[line_end - 1] == b' ' {
+            line_end -= 1;
+        }
+        // Split only at ASCII '\n' / ' ', so every line is valid UTF-8.
+        let blank = std::str::from_utf8(&bytes[start..line_end])
+            .map_or(false, |line| line.trim().is_empty());
+        if blank {
             newlines += 1;
-            continue;
+        } else {
+            // `write <= start` holds: every separator written here stands
+            // for at least as many '\n' bytes already consumed.
+            if write > 0 {
+                bytes[write] = b'\n';
+                write += 1;
+                if newlines > 1 {
+                    bytes[write] = b'\n';
+                    write += 1;
+                }
+            }
+            newlines = 1;
+            bytes.copy_within(start..line_end, write);
+            write += line_end - start;
         }
-        if !out.is_empty() {
-            out.push_str(if newlines > 1 { "\n\n" } else { "\n" });
+        if end == len {
+            break;
         }
-        newlines = 1;
-        out.push_str(line);
+        start = end + 1;
     }
-    out
+    bytes.truncate(write);
+    String::from_utf8(bytes).expect("finalize keeps UTF-8 boundaries")
 }
 
 // ---------------------------------------------------------------------------
@@ -301,7 +362,16 @@ impl Walker {
     }
 
     /// Handles self-closing elements (and the leaf meaning of a Start).
-    fn empty(&mut self, local: &[u8], _e: &BytesStart) {
+    fn empty(&mut self, local: &[u8], e: &BytesStart) {
+        // Structural elements whose mere presence matters: `<w:tc/>` is an
+        // empty cell (dropping it shifts the remaining columns left),
+        // `<w:p/>` an empty paragraph, `<w:tr/>` an empty row. Treat them as
+        // an immediately closed Start; `start` never routes these back here.
+        if matches!(local, b"p" | b"tc" | b"tr") {
+            self.start(local, e);
+            self.end(local);
+            return;
+        }
         if self.run_depth == 0 {
             // `w:tab` also appears in `w:pPr/w:tabs` as a tab-stop definition.
             return;
@@ -745,6 +815,8 @@ mod tests {
         );
         let limits = DocxLimits {
             total_uncompressed_bytes: 1 << 20,
+            max_compression_ratio: u64::MAX,
+            min_uncompressed_bytes: 0,
             max_entries: 100,
         };
         let err = extract_docx_text_with_limits(&bytes, limits).unwrap_err();
@@ -760,6 +832,8 @@ mod tests {
         patch_declared_size(&mut bytes, MAIN_PART, 100);
         let limits = DocxLimits {
             total_uncompressed_bytes: 1 << 20,
+            max_compression_ratio: u64::MAX,
+            min_uncompressed_bytes: 0,
             max_entries: 100,
         };
         let err = extract_docx_text_with_limits(&bytes, limits).unwrap_err();
@@ -777,12 +851,73 @@ mod tests {
     }
 
     #[test]
+    fn default_limits_reject_small_highly_compressible_docx_by_ratio() {
+        // ~24 MB of XML in a container of a few tens of KB: under the 200 MB
+        // absolute cap, but far above 100x its own size and the 16 MB floor.
+        let big = format!("<w:p><w:r><w:t>{}</w:t></w:r></w:p>", "a".repeat(24 << 20));
+        let bytes = docx(&big);
+        assert!(
+            bytes.len() < 160 * 1024,
+            "fixture should be small: {}",
+            bytes.len()
+        );
+        let budget = DocxLimits::DEFAULT.budget_for(bytes.len());
+        assert_eq!(budget, 16 * 1024 * 1024, "small input gets the floor");
+        let err = extract_docx_text(&bytes).unwrap_err();
+        assert!(err.to_string().contains("size limit"), "got: {err}");
+    }
+
+    #[test]
+    fn ratio_budget_is_clamped_between_floor_and_absolute_cap() {
+        let d = DocxLimits::DEFAULT;
+        assert_eq!(d.budget_for(0), 16 * 1024 * 1024);
+        assert_eq!(d.budget_for(1024 * 1024), 100 * 1024 * 1024);
+        assert_eq!(d.budget_for(50 * 1024 * 1024), 200 * 1024 * 1024);
+        assert_eq!(d.budget_for(usize::MAX), 200 * 1024 * 1024);
+    }
+
+    #[test]
+    fn keeps_self_closing_cells_paragraphs_and_rows() {
+        // An empty middle cell must keep its column, not shift C left.
+        let body = format!(
+            "{}{}{}<w:p/><w:p/>{}",
+            p("Before."),
+            format!(
+                "<w:tbl><w:tr>{}<w:tc/>{}</w:tr><w:tr/><w:tr>{}{}{}</w:tr></w:tbl>",
+                tc(&p("A")),
+                tc(&p("C")),
+                tc(&p("D")),
+                tc(&p("E")),
+                tc(&p("F")),
+            ),
+            p("Then."),
+            p("After a gap."),
+        );
+        assert_eq!(
+            extract(&docx(&body)),
+            "Before.\nA |  | C\nD | E | F\nThen.\n\nAfter a gap."
+        );
+    }
+
+    #[test]
+    fn finalize_collapses_blank_runs_and_trims_trailing_spaces() {
+        assert_eq!(finalize(String::new()), "");
+        assert_eq!(finalize("\n\n  \n".to_string()), "");
+        assert_eq!(
+            finalize("\n a  \nb\n\n\n\t\nc d \n\n한글  \n".to_string()),
+            " a\nb\n\nc d\n\n한글"
+        );
+    }
+
+    #[test]
     fn budget_is_shared_across_parts() {
         let body = p(&"b".repeat(600 * 1024));
         let footer = part("ftr", &p(&"f".repeat(600 * 1024)));
         let bytes = zip_parts(&[(MAIN_PART, &document(&body)), ("word/footer1.xml", &footer)]);
         let limits = DocxLimits {
             total_uncompressed_bytes: 1 << 20,
+            max_compression_ratio: u64::MAX,
+            min_uncompressed_bytes: 0,
             max_entries: 100,
         };
         let err = extract_docx_text_with_limits(&bytes, limits).unwrap_err();
@@ -802,6 +937,8 @@ mod tests {
         all.push((MAIN_PART, &doc));
         let limits = DocxLimits {
             total_uncompressed_bytes: 1 << 20,
+            max_compression_ratio: u64::MAX,
+            min_uncompressed_bytes: 0,
             max_entries: 10,
         };
         let err = extract_docx_text_with_limits(&zip_parts(&all), limits).unwrap_err();
