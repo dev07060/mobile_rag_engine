@@ -12,7 +12,7 @@ name: Quick Start E2E
 # A second stage builds the app the way it ships. Android runs the release APK
 # (R8 shrinking on) and macOS runs an archived app (symbols stripped). iOS
 # release builds cannot run on a simulator, so its archive is checked for the
-# symbols Dart looks up at runtime.
+# symbols Dart looks up at runtime. Windows runs its release build.
 #
 # Pull requests install the package and its native companion from the PR head
 # through git dependencies; a manual run can also check a version published on
@@ -365,6 +365,29 @@ jobs:
           grep "QUICKSTART_RESULT" release_run.log | tee -a release.log
           grep -q "QUICKSTART_RESULT PASS" release_run.log
 
+      - name: "6. Release build (Windows)"
+        if: matrix.platform == 'windows'
+        id: release_windows
+        working-directory: app
+        run: |
+          trap 'echo "release $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
+          flutter build windows --release > release.log 2>&1 || { tail -n 80 release.log; exit 1; }
+          result="$TEMP/quickstart_result.txt"
+          rm -f "$result"
+          ./build/windows/x64/runner/Release/quickstart_app.exe &
+          pid=$!
+          for _ in $(seq 1 60); do
+            [ -s "$result" ] && break
+            sleep 5
+          done
+          kill "$pid" 2>/dev/null || true
+          if [ ! -s "$result" ]; then
+            echo "No result after 5 minutes" | tee -a release.log
+            exit 1
+          fi
+          sed 's/^/QUICKSTART_RESULT /' "$result" | tee -a release.log
+          head -n 1 "$result" | grep -q '^PASS'
+
       # Tells an app that hung or crashed apart from a lost debug connection.
       - name: Dump simulator app log (iOS failure only)
         if: failure() && matrix.platform == 'ios' && steps.sim.outputs.udid != ''
@@ -377,7 +400,7 @@ jobs:
         if: always()
         run: |
           stage="none"
-          for s in create:${{ steps.create.outcome }} setup:${{ steps.setup.outcome }} assets:${{ steps.assets.outcome }} run:${{ steps.run_android.outcome }}${{ steps.run_ios.outcome }}${{ steps.run_desktop.outcome }} release:${{ steps.release_ios.outcome }}${{ steps.release_macos.outcome }}; do
+          for s in create:${{ steps.create.outcome }} setup:${{ steps.setup.outcome }} assets:${{ steps.assets.outcome }} run:${{ steps.run_android.outcome }}${{ steps.run_ios.outcome }}${{ steps.run_desktop.outcome }} release:${{ steps.release_ios.outcome }}${{ steps.release_macos.outcome }}${{ steps.release_windows.outcome }}; do
             case "${s#*:}" in
               *failure*) stage="${s%%:*}"; break ;;
             esac
