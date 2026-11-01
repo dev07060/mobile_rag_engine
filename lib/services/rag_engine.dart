@@ -320,6 +320,7 @@ class RagEngine {
     );
     final normalizedOverlapChars = normalizeOverlapChars(
       config.overlapChars,
+      maxChunkChars: normalizedMaxChunkChars,
       context: 'RagEngine.initialize',
     );
     warnThreadConfigConflict(

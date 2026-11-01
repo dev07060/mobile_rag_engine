@@ -229,6 +229,9 @@ class SourceRagService {
         ),
         overlapChars = normalizeOverlapChars(
           overlapChars,
+          maxChunkChars: maxChunkChars < kMinChunkChars
+              ? kMinChunkChars
+              : maxChunkChars,
           context: 'SourceRagService',
         );
 
@@ -576,8 +579,10 @@ class SourceRagService {
   /// all embeddings into memory. Each batch of [kIngestionBatchSize] chunks is
   /// embedded, saved to DB, then released — keeping memory usage flat.
   ///
-  /// [chunkDelay] controls the yield duration between batches (default: 10ms).
-  /// This allows GC to run and prevents thermal throttling on mobile devices.
+  /// [chunkDelay] is an optional pause between batches. By default the loop
+  /// only yields to the event loop; inference already runs on a worker isolate.
+  /// Set it to throttle long ingestions, for example to limit heat on mobile
+  /// devices.
   Future<SourceAddResult> addSourceWithChunking(
     String content, {
     String? metadata,
@@ -666,7 +671,7 @@ class SourceRagService {
     // Mark dirty only when ingestion will actually run (parity with old path).
     await _markDirty();
 
-    final effectiveDelay = chunkDelay ?? const Duration(milliseconds: 10);
+    final effectiveDelay = chunkDelay ?? Duration.zero;
     var savedCount = 0;
     var sessionDisposed = false;
 

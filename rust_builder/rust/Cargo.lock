@@ -641,17 +641,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "docx-lite"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a66db35e6c788cf5624ac83aefbea59f8f7ab9f26a276a73dea53645f66119f8"
-dependencies = [
- "quick-xml",
- "thiserror 1.0.69",
- "zip",
-]
-
-[[package]]
 name = "dyn-stack"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2165,7 +2154,6 @@ dependencies = [
  "byteorder",
  "crc32fast",
  "criterion",
- "docx-lite",
  "faer",
  "flutter_rust_bridge",
  "gag",
@@ -2176,6 +2164,7 @@ dependencies = [
  "once_cell",
  "oslog",
  "pdf-extract",
+ "quick-xml",
  "r2d2",
  "r2d2_sqlite",
  "rand 0.8.5",
@@ -2190,6 +2179,7 @@ dependencies = [
  "tokenizers",
  "unicode-segmentation",
  "uuid",
+ "zip",
 ]
 
 [[package]]

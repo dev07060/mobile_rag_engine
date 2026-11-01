@@ -13,6 +13,7 @@ use mimalloc::MiMalloc;
 static GLOBAL_ALLOCATOR: MiMalloc = MiMalloc;
 
 pub mod api;
+mod docx_reader;
 mod frb_generated;
 
 // Bench-only public surface. Gated behind the `bench` feature so it never

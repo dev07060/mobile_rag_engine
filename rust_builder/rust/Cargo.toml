@@ -50,7 +50,11 @@ unicode-segmentation = "1.12"
 
 # Document-to-Text (DTT) - PDF and DOCX text extraction
 pdf-extract = "0.7"
-docx-lite = "0.2"
+# DOCX is read by the in-house `docx_reader` module on top of these two.
+# Exact pins: both were already in Cargo.lock (via the former docx-lite dep),
+# so swapping the reader in added no new crates to the tree.
+zip = { version = "=0.6.6", default-features = false, features = ["deflate"] }
+quick-xml = "=0.36.2"
 
 # Regex for PDF dehyphenation (fix line-break word splits)
 regex = "1.11"
