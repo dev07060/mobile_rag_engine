@@ -20,7 +20,7 @@ stay on the device.
 > **Retrieval only.** This package finds and assembles the relevant context.
 > Generating an answer with an LLM is your app's separate step.
 
-> **This README describes 0.22.0.** Still on 0.20.x? It has no Model Pack
+> **This README describes 0.22.1.** Still on 0.20.x? It has no Model Pack
 > `setup` command or `RagModelPack`, and it always builds the Rust core from
 > source; follow the
 > [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md)
@@ -129,7 +129,7 @@ user's (often OneDrive-synced) Documents folder; other platforms are unchanged.
 
 ```yaml
 dependencies:
-  mobile_rag_engine: ^0.22.0
+  mobile_rag_engine: ^0.22.1
 ```
 
 ### 2. Install the verified Model Pack

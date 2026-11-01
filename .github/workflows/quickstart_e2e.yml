@@ -23,7 +23,7 @@ on:
       version:
         description: "mobile_rag_engine version to install from pub.dev"
         required: true
-        default: "0.22.0"
+        default: "0.22.1"
   pull_request:
     branches: [main]
     paths:
@@ -35,7 +35,7 @@ env:
   FLUTTER_VERSION: "3.38.7"
   FLUTTER_CHANNEL: "stable"
   SOURCE: ${{ github.event_name == 'pull_request' && 'git' || inputs.source }}
-  PACKAGE_VERSION: ${{ inputs.version || '0.22.0' }}
+  PACKAGE_VERSION: ${{ inputs.version || '0.22.1' }}
   GIT_URL: https://github.com/${{ github.repository }}.git
   GIT_REF: ${{ github.event.pull_request.head.sha || github.sha }}
   PRESET: stable-minilm-l6-v2-arm64-en
