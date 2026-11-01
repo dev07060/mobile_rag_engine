@@ -179,6 +179,8 @@ Runtime setup notes:
   `use_frameworks! :linkage => :static` in the Runner target.
 - Set the macOS Runner project's deployment target to 14.0 as well as
   `platform :osx, '14.0'` in its Podfile.
+- From 0.22.1, `dart run mobile_rag_engine:setup` applies the settings above
+  to the generated iOS and macOS hosts (`--skip-host-config` turns this off).
 - Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
 
 `mobile_rag_engine` uses the default ONNX Runtime execution path for embedding inference. Do not assume CoreML, NNAPI, or another hardware execution provider is active unless you configure and validate that path in your host app.

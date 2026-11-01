@@ -1,0 +1,344 @@
+name: Quick Start E2E
+
+# Follows the README Installation section as a new user would, on a machine
+# without Rust: a fresh `flutter create` app adds mobile_rag_engine, runs the
+# Model Pack `setup` command, registers the assets, and then runs the README's
+# first-success path (initialize, add a document, rebuild, search) on a real
+# device target. The generated host project is never edited by hand, so the
+# Apple jobs only pass if `setup` applies the host settings itself. Each stage
+# is timed and reported, so a red job names the step where a user would get
+# stuck.
+#
+# Pull requests install the package from the PR head through a git
+# dependency; a manual run can also check a version published on pub.dev.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Install from pub.dev (version below) or from this ref through git"
+        type: choice
+        options: [pub, git]
+        default: pub
+      version:
+        description: "mobile_rag_engine version to install from pub.dev"
+        required: true
+        default: "0.22.0"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/quickstart_e2e.yml"
+      - "bin/setup.dart"
+      - "lib/src/model_pack/**"
+
+env:
+  FLUTTER_VERSION: "3.38.7"
+  FLUTTER_CHANNEL: "stable"
+  SOURCE: ${{ github.event_name == 'pull_request' && 'git' || inputs.source }}
+  PACKAGE_VERSION: ${{ inputs.version || '0.22.0' }}
+  GIT_URL: https://github.com/${{ github.repository }}.git
+  GIT_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+  PRESET: stable-minilm-l6-v2-arm64-en
+
+jobs:
+  quickstart:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform == 'android' && 'ubuntu-latest' || matrix.platform == 'windows' && 'windows-latest' || 'macos-latest' }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [android, ios, macos, windows]
+    steps:
+      - name: Hide Rust toolchain
+        run: |
+          # macOS runners also ship rustup through Homebrew, outside ~/.cargo.
+          if command -v brew >/dev/null 2>&1; then
+            brew uninstall --ignore-dependencies --force rustup rust 2>/dev/null || true
+          fi
+          rm -rf "$HOME/.cargo" "$HOME/.rustup"
+          hash -r
+          if command -v rustup >/dev/null 2>&1 || command -v cargo >/dev/null 2>&1; then
+            echo "::error::rustup/cargo still on PATH: $(command -v rustup) $(command -v cargo)"
+            exit 1
+          fi
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+
+      - name: Setup Java (Android only)
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK (Android only)
+        if: matrix.platform == 'android'
+        uses: android-actions/setup-android@v3
+        with:
+          # The default also installs the legacy 'tools' package, which
+          # sdkmanager 16.0 on current runners no longer provides.
+          packages: platform-tools
+
+      - name: "1. Create app and add the dependency"
+        id: create
+        run: |
+          trap 'echo "create $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
+          flutter create --platforms=${{ matrix.platform }} --project-name quickstart_app app
+          cd app
+          if [ "$SOURCE" = git ]; then
+            flutter pub add "mobile_rag_engine:{\"git\":{\"url\":\"$GIT_URL\",\"ref\":\"$GIT_REF\"}}"
+          else
+            flutter pub add "mobile_rag_engine:${PACKAGE_VERSION}"
+          fi
+          flutter pub add 'dev:integration_test:{"sdk":"flutter"}'
+          flutter pub deps --style=compact | grep -E "^- (mobile_rag_engine|rag_engine_flutter) "
+
+      - name: "2. Install and verify the Model Pack"
+        id: setup
+        working-directory: app
+        run: |
+          trap 'echo "setup $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
+          dart run mobile_rag_engine:setup --preset "$PRESET"
+          dart run mobile_rag_engine:setup --preset "$PRESET" --check
+          ls -l assets/mobile_rag
+          for podfile in ios/Podfile macos/Podfile; do
+            [ -f "$podfile" ] && grep -n "platform :\|use_frameworks" "$podfile"
+          done
+          true
+
+      - name: "3. Register the assets"
+        id: assets
+        working-directory: app
+        run: |
+          trap 'echo "assets $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
+          # `flutter create` writes CRLF line endings on Windows.
+          perl -0pi -e 's/^flutter:(\r?\n)/flutter:$1  assets:$1    - assets\/mobile_rag\/$1/m' pubspec.yaml
+          grep -q "^    - assets/mobile_rag/" pubspec.yaml
+          grep -n -A3 "^flutter:" pubspec.yaml
+
+      - name: "4. Write the README first-success code"
+        working-directory: app
+        run: |
+          mkdir -p integration_test
+          cat > integration_test/quickstart_test.dart <<'EOF'
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:integration_test/integration_test.dart';
+          import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+
+          void main() {
+            IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+            testWidgets('README first success', (tester) async {
+              final watch = Stopwatch()..start();
+              await MobileRag.initialize(
+                modelPack: const RagModelPack.asset(
+                  'assets/mobile_rag/model-pack.json',
+                ),
+              );
+              print('QUICKSTART initialize_ms=${watch.elapsedMilliseconds}');
+
+              await MobileRag.instance.addDocument(
+                'Flutter is a UI toolkit for building apps.',
+              );
+              await MobileRag.instance.rebuildIndex();
+
+              final result = await MobileRag.instance.search(
+                'What is Flutter?',
+                tokenBudget: 2000,
+              );
+              print('QUICKSTART chunks=${result.chunks.length} '
+                  'total_ms=${watch.elapsedMilliseconds}');
+              expect(result.chunks, isNotEmpty);
+              expect(result.context.text, contains('Flutter'));
+            });
+          }
+          EOF
+
+      - name: Boot iOS simulator
+        if: matrix.platform == 'ios'
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          for runtime, items in sorted(devices.items(), reverse=True):
+              if "iOS" not in runtime:
+                  continue
+              for d in items:
+                  if d["name"].startswith("iPhone"):
+                      print(d["udid"]); sys.exit(0)
+          sys.exit(1)')
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Enable KVM (Android only)
+        if: matrix.platform == 'android'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: "5. Build and run on device (Android emulator)"
+        if: matrix.platform == 'android'
+        id: run_android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          script: cd app && start=$(date +%s); flutter test integration_test -d emulator-5554 -r expanded > run.log 2>&1; status=$?; echo "run $(( $(date +%s) - start ))" >> "$RUNNER_TEMP/timings"; tail -n 200 run.log; exit $status
+
+      # `flutter test` on an iOS simulator starts the app paused and waits for
+      # the tool's debug connection, which CI runners often lose ("The log
+      # reader failed unexpectedly"). Run the same code as the app's main()
+      # instead, launch it with simctl, and read the result file it writes.
+      - name: "5. Build and run on device (iOS simulator)"
+        if: matrix.platform == 'ios'
+        id: run_ios
+        working-directory: app
+        run: |
+          trap 'echo "run $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
+          cat > lib/main.dart <<'EOF'
+          import 'dart:io';
+
+          import 'package:flutter/widgets.dart';
+          import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+
+          Future<void> main() async {
+            WidgetsFlutterBinding.ensureInitialized();
+            final out = File('${Directory.systemTemp.path}/quickstart_result.txt');
+            final watch = Stopwatch()..start();
+            try {
+              await MobileRag.initialize(
+                modelPack: const RagModelPack.asset(
+                  'assets/mobile_rag/model-pack.json',
+                ),
+              );
+              final initMs = watch.elapsedMilliseconds;
+              await MobileRag.instance.addDocument(
+                'Flutter is a UI toolkit for building apps.',
+              );
+              await MobileRag.instance.rebuildIndex();
+              final result = await MobileRag.instance.search(
+                'What is Flutter?',
+                tokenBudget: 2000,
+              );
+              final ok = result.chunks.isNotEmpty &&
+                  result.context.text.contains('Flutter');
+              out.writeAsStringSync(
+                '${ok ? 'PASS' : 'FAIL'}\n'
+                'QUICKSTART initialize_ms=$initMs\n'
+                'QUICKSTART chunks=${result.chunks.length} '
+                'total_ms=${watch.elapsedMilliseconds}\n',
+              );
+            } catch (error, stack) {
+              out.writeAsStringSync('FAIL\nQUICKSTART error=$error\n$stack\n');
+            }
+            runApp(const SizedBox());
+          }
+          EOF
+          set +e
+          flutter build ios --simulator --debug > run.log 2>&1
+          status=$?
+          set -e
+          tail -n 60 run.log
+          [ $status -eq 0 ] || exit $status
+
+          udid="${{ steps.sim.outputs.udid }}"
+          bundle_id=com.example.quickstartApp
+          xcrun simctl install "$udid" build/ios/iphonesimulator/Runner.app
+          xcrun simctl launch "$udid" "$bundle_id"
+          result="$(xcrun simctl get_app_container "$udid" "$bundle_id" data)/tmp/quickstart_result.txt"
+          for _ in $(seq 1 60); do
+            [ -s "$result" ] && break
+            sleep 5
+          done
+          if [ ! -s "$result" ]; then
+            echo "No result after 5 minutes" | tee -a run.log
+            exit 1
+          fi
+          cat "$result" | tee -a run.log
+          head -n 1 "$result" | grep -q '^PASS$'
+
+      - name: "5. Build and run on device"
+        if: matrix.platform == 'macos' || matrix.platform == 'windows'
+        id: run_desktop
+        working-directory: app
+        run: |
+          trap 'echo "run $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
+          set +e
+          flutter test integration_test -d "${{ matrix.platform }}" -r expanded > run.log 2>&1
+          status=$?
+          set -e
+          tail -n 200 run.log
+          exit $status
+
+      # Tells an app that hung or crashed apart from a lost debug connection.
+      - name: Dump simulator app log (iOS failure only)
+        if: failure() && matrix.platform == 'ios' && steps.sim.outputs.udid != ''
+        run: |
+          xcrun simctl spawn "${{ steps.sim.outputs.udid }}" log show --last 20m --style compact \
+            --predicate 'process == "Runner"' > app/simulator.log 2>&1 || true
+          tail -n 150 app/simulator.log
+
+      - name: Summarize result
+        if: always()
+        run: |
+          stage="none"
+          for s in create:${{ steps.create.outcome }} setup:${{ steps.setup.outcome }} assets:${{ steps.assets.outcome }} run:${{ steps.run_android.outcome }}${{ steps.run_ios.outcome }}${{ steps.run_desktop.outcome }}; do
+            case "${s#*:}" in
+              *failure*) stage="${s%%:*}"; break ;;
+            esac
+          done
+          if [ "$stage" = "none" ] && grep -q "QUICKSTART chunks=" app/run.log 2>/dev/null; then
+            verdict="PASS"
+          elif [ "$stage" = "none" ]; then
+            verdict="NOT FINISHED: see the job log"
+          else
+            verdict="FAIL at stage: $stage"
+          fi
+          {
+            echo "### ${{ matrix.platform }}"
+            echo ""
+            if [ "$SOURCE" = git ]; then
+              echo "- Package: \`mobile_rag_engine\` from git \`${GIT_REF}\`, no Rust"
+            else
+              echo "- Package: \`mobile_rag_engine ${PACKAGE_VERSION}\` from pub.dev, no Rust"
+            fi
+            echo "- Result: **${verdict}**"
+            if [ -f "$RUNNER_TEMP/timings" ]; then
+              echo "- Stage seconds: $(tr '\n' ' ' < "$RUNNER_TEMP/timings")"
+            fi
+            if [ -f app/run.log ]; then
+              grep -h "QUICKSTART" app/run.log | sed 's/^/- /' || true
+              echo ""
+              echo '<details><summary>Last errors</summary>'
+              echo ""
+              echo '```'
+              grep -E -i "error|exception|failed" app/run.log | tail -n 15 || true
+              echo '```'
+              echo '</details>'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickstart-${{ matrix.platform }}
+          path: |
+            app/run.log
+            app/simulator.log
+            app/pubspec.yaml
+            app/ios/Podfile
+            app/macos/Podfile
+          if-no-files-found: ignore

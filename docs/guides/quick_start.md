@@ -18,8 +18,11 @@ Get started with `mobile_rag_engine` in 5 minutes.
 > [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md#installation)
 > instead; the `setup` command and `RagModelPack` below do not exist there.
 
-For CocoaPods hosts, set the platform and static framework linkage in the
-generated app's Podfile. Keep the rest of the generated Podfile unchanged:
+CocoaPods hosts need iOS 16.0 / macOS 14.0 deployment targets and static
+framework linkage. From 0.22.1, the `setup` command in Step 2 applies these to
+the generated app and prints each change, so you can skip this section. On
+0.22.0, or if you ran `setup --skip-host-config`, set them in the Podfile and
+keep the rest of the generated Podfile unchanged:
 
 ```ruby
 # ios/Podfile
@@ -71,6 +74,12 @@ dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en --check
 The setup command installs the immutable MiniLM model, tokenizer, and
 `model-pack.json` under `assets/mobile_rag/`. The check command verifies their
 lengths and SHA-256 hashes before the app initializes them.
+
+From 0.22.1, setup also updates `ios/` and `macos/` when they exist: it raises
+the Podfile `platform` and the Runner deployment target to iOS 16.0 / macOS
+14.0 when they are lower, and switches `use_frameworks!` to
+`:linkage => :static`. `--check` fails while any of these are still pending.
+Pass `--skip-host-config` to manage the host projects yourself.
 
 > Need multilingual support (Korean, CJK) or another custom ONNX model? The
 > two-asset initializer remains an advanced path; see the

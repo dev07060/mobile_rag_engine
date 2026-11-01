@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+* **Setup applies the Apple host settings**:
+  - `dart run mobile_rag_engine:setup` now raises the iOS and macOS host settings the native dependencies need: the Podfile `platform` (iOS 16.0 / macOS 14.0), the Runner deployment target, and `use_frameworks! :linkage => :static`. Previously a fresh `flutter create` app that followed the README Installation steps failed in `pod install`. Higher targets are kept, each change is printed, `--check` fails while changes are pending, and `--skip-host-config` opts out.
+
 ## 0.22.0
 * **Windows (x64)**:
   - Requires `rag_engine_flutter: 0.21.0`.
