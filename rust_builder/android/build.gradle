@@ -46,6 +46,9 @@ android {
 
     defaultConfig {
         minSdkVersion 19
+        // Applied to the app's release build so R8 keeps the ONNX Runtime
+        // classes its JNI code looks up by name.
+        consumerProguardFiles 'proguard-rules.pro'
     }
 }
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.21.1
+* **Release builds**: Debug builds were unaffected; these fix apps built for release.
+  - Android: ships a consumer ProGuard rule that keeps `ai.onnxruntime.**`. R8 removed classes that ONNX Runtime's JNI code looks up by name, so release APKs aborted with `ClassNotFoundException: ai.onnxruntime.TensorInfo` on the first embedding.
+  - iOS: the Runner target links with `-Wl,-export_dynamic`. Release builds dead-stripped the Rust functions Dart looks up at runtime (`Failed to lookup symbol 'frb_get_rust_content_hash'`).
+  - iOS and macOS: the Runner target uses `STRIP_STYLE = non-global`, so archives (App Store, TestFlight, Ad Hoc) keep those symbols.
+  - The Rust sources are unchanged, so the 0.21.0 pre-compiled binaries are reused.
+
 ## 0.21.0
 * **Windows (x64)**: Declares the Windows plugin platform and publishes `windows/` again. A signed pre-compiled binary for `x86_64-pc-windows-msvc` is built alongside the other targets.
 * **Fix**: `save_hnsw_index` unmaps the previously loaded index before renaming the new file over it. Windows refused to replace a mapped file ("Access is denied").

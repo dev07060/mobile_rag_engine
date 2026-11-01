@@ -9,8 +9,14 @@ name: Quick Start E2E
 # is timed and reported, so a red job names the step where a user would get
 # stuck.
 #
-# Pull requests install the package from the PR head through a git
-# dependency; a manual run can also check a version published on pub.dev.
+# A second stage builds the app the way it ships. Android runs the release APK
+# (R8 shrinking on) and macOS runs an archived app (symbols stripped). iOS
+# release builds cannot run on a simulator, so its archive is checked for the
+# symbols Dart looks up at runtime.
+#
+# Pull requests install the package and its native companion from the PR head
+# through git dependencies; a manual run can also check a version published on
+# pub.dev.
 
 on:
   workflow_dispatch:
@@ -30,6 +36,9 @@ on:
       - ".github/workflows/quickstart_e2e.yml"
       - "bin/setup.dart"
       - "lib/src/model_pack/**"
+      - "rust_builder/android/**"
+      - "rust_builder/ios/**"
+      - "rust_builder/macos/**"
 
 env:
   FLUTTER_VERSION: "3.38.7"
@@ -95,6 +104,9 @@ jobs:
           cd app
           if [ "$SOURCE" = git ]; then
             flutter pub add "mobile_rag_engine:{\"git\":{\"url\":\"$GIT_URL\",\"ref\":\"$GIT_REF\"}}"
+            # The root pins rag_engine_flutter from pub.dev; use the PR's copy
+            # so changes to its podspecs and Gradle files are tested too.
+            flutter pub add "override:rag_engine_flutter:{\"git\":{\"url\":\"$GIT_URL\",\"ref\":\"$GIT_REF\",\"path\":\"rust_builder\"}}"
           else
             flutter pub add "mobile_rag_engine:${PACKAGE_VERSION}"
           fi
@@ -162,6 +174,68 @@ jobs:
           }
           EOF
 
+          # The same code as the app's main(), for runs without the test
+          # harness. It prints the result and writes it to a file.
+          cat > lib/main.dart <<'EOF'
+          import 'dart:io';
+
+          import 'package:flutter/widgets.dart';
+          import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+
+          Future<void> main() async {
+            WidgetsFlutterBinding.ensureInitialized();
+            final out = File('${Directory.systemTemp.path}/quickstart_result.txt');
+            final watch = Stopwatch()..start();
+            String report;
+            try {
+              await MobileRag.initialize(
+                modelPack: const RagModelPack.asset(
+                  'assets/mobile_rag/model-pack.json',
+                ),
+              );
+              final initMs = watch.elapsedMilliseconds;
+              await MobileRag.instance.addDocument(
+                'Flutter is a UI toolkit for building apps.',
+              );
+              await MobileRag.instance.rebuildIndex();
+              final result = await MobileRag.instance.search(
+                'What is Flutter?',
+                tokenBudget: 2000,
+              );
+              final ok = result.chunks.isNotEmpty &&
+                  result.context.text.contains('Flutter');
+              report = '${ok ? 'PASS' : 'FAIL'}\n'
+                  'QUICKSTART initialize_ms=$initMs\n'
+                  'QUICKSTART chunks=${result.chunks.length} '
+                  'total_ms=${watch.elapsedMilliseconds}\n';
+            } catch (error, stack) {
+              report = 'FAIL\nQUICKSTART error=$error\n$stack\n';
+            }
+            out.writeAsStringSync(report);
+            for (final line in report.trimRight().split('\n')) {
+              print('QUICKSTART_RESULT $line');
+            }
+            runApp(const SizedBox());
+          }
+          EOF
+
+          # Android release check, run inside the emulator step.
+          cat > release_android.sh <<'EOF'
+          set -e
+          start=$(date +%s)
+          trap 'echo "release $(( $(date +%s) - start ))" >> "$RUNNER_TEMP/timings"' EXIT
+          flutter build apk --release --target-platform android-x64 > release.log 2>&1 || { tail -n 80 release.log; exit 1; }
+          adb install -r build/app/outputs/flutter-apk/app-release.apk
+          adb logcat -c
+          adb shell am start -n com.example.quickstart_app/.MainActivity
+          for _ in $(seq 1 60); do
+            adb logcat -d | grep -q "QUICKSTART_RESULT \(PASS\|FAIL\)" && break
+            sleep 5
+          done
+          adb logcat -d | grep -E "QUICKSTART_RESULT|AndroidRuntime|Pending exception" | tee -a release.log
+          adb logcat -d | grep -q "QUICKSTART_RESULT PASS"
+          EOF
+
       - name: Boot iOS simulator
         if: matrix.platform == 'ios'
         id: sim
@@ -195,7 +269,9 @@ jobs:
           api-level: 34
           target: google_apis
           arch: x86_64
-          script: cd app && start=$(date +%s); flutter test integration_test -d emulator-5554 -r expanded > run.log 2>&1; status=$?; echo "run $(( $(date +%s) - start ))" >> "$RUNNER_TEMP/timings"; tail -n 200 run.log; exit $status
+          script: |
+            cd app && start=$(date +%s); flutter test integration_test -d emulator-5554 -r expanded > run.log 2>&1; status=$?; echo "run $(( $(date +%s) - start ))" >> "$RUNNER_TEMP/timings"; tail -n 200 run.log; exit $status
+            cd app && bash release_android.sh
 
       # `flutter test` on an iOS simulator starts the app paused and waits for
       # the tool's debug connection, which CI runners often lose ("The log
@@ -207,45 +283,6 @@ jobs:
         working-directory: app
         run: |
           trap 'echo "run $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
-          cat > lib/main.dart <<'EOF'
-          import 'dart:io';
-
-          import 'package:flutter/widgets.dart';
-          import 'package:mobile_rag_engine/mobile_rag_engine.dart';
-
-          Future<void> main() async {
-            WidgetsFlutterBinding.ensureInitialized();
-            final out = File('${Directory.systemTemp.path}/quickstart_result.txt');
-            final watch = Stopwatch()..start();
-            try {
-              await MobileRag.initialize(
-                modelPack: const RagModelPack.asset(
-                  'assets/mobile_rag/model-pack.json',
-                ),
-              );
-              final initMs = watch.elapsedMilliseconds;
-              await MobileRag.instance.addDocument(
-                'Flutter is a UI toolkit for building apps.',
-              );
-              await MobileRag.instance.rebuildIndex();
-              final result = await MobileRag.instance.search(
-                'What is Flutter?',
-                tokenBudget: 2000,
-              );
-              final ok = result.chunks.isNotEmpty &&
-                  result.context.text.contains('Flutter');
-              out.writeAsStringSync(
-                '${ok ? 'PASS' : 'FAIL'}\n'
-                'QUICKSTART initialize_ms=$initMs\n'
-                'QUICKSTART chunks=${result.chunks.length} '
-                'total_ms=${watch.elapsedMilliseconds}\n',
-              );
-            } catch (error, stack) {
-              out.writeAsStringSync('FAIL\nQUICKSTART error=$error\n$stack\n');
-            }
-            runApp(const SizedBox());
-          }
-          EOF
           set +e
           flutter build ios --simulator --debug > run.log 2>&1
           status=$?
@@ -282,6 +319,50 @@ jobs:
           tail -n 200 run.log
           exit $status
 
+      # Archives strip the executable, which removes any Rust symbol that is not
+      # exported. Dart finds the Rust functions by name at runtime, so an
+      # archive that lacks them fails in MobileRag.initialize().
+      - name: "6. Release build (iOS archive, exported symbols)"
+        if: matrix.platform == 'ios'
+        id: release_ios
+        working-directory: app
+        run: |
+          trap 'echo "release $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
+          flutter build ios --release --no-codesign --config-only > release.log 2>&1 || { tail -n 80 release.log; exit 1; }
+          xcodebuild archive -workspace ios/Runner.xcworkspace -scheme Runner \
+            -configuration Release -sdk iphoneos -archivePath build/Runner.xcarchive \
+            CODE_SIGNING_ALLOWED=NO >> release.log 2>&1 || { grep -E "error:" release.log | tail -n 20; exit 1; }
+          exports=$(xcrun dyld_info -exports build/Runner.xcarchive/Products/Applications/Runner.app/Runner)
+          for symbol in frb_get_rust_content_hash frb_pde_ffi_dispatcher_primary frb_pde_ffi_dispatcher_sync; do
+            if echo "$exports" | grep -q "_${symbol}\$"; then
+              echo "exported: $symbol" | tee -a release.log
+            else
+              echo "::error::The iOS archive does not export $symbol" | tee -a release.log
+              exit 1
+            fi
+          done
+
+      - name: "6. Release build (macOS archive)"
+        if: matrix.platform == 'macos'
+        id: release_macos
+        working-directory: app
+        run: |
+          trap 'echo "release $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
+          flutter build macos --release --config-only > release.log 2>&1 || { tail -n 80 release.log; exit 1; }
+          xcodebuild archive -workspace macos/Runner.xcworkspace -scheme Runner \
+            -configuration Release -archivePath build/Runner.xcarchive \
+            CODE_SIGN_IDENTITY=- >> release.log 2>&1 || { grep -E "error:" release.log | tail -n 20; exit 1; }
+          app=build/Runner.xcarchive/Products/Applications/quickstart_app.app/Contents/MacOS/quickstart_app
+          "$app" > release_run.log 2>&1 &
+          pid=$!
+          for _ in $(seq 1 60); do
+            grep -q "QUICKSTART_RESULT \(PASS\|FAIL\)" release_run.log && break
+            sleep 5
+          done
+          kill "$pid" 2>/dev/null || true
+          grep "QUICKSTART_RESULT" release_run.log | tee -a release.log
+          grep -q "QUICKSTART_RESULT PASS" release_run.log
+
       # Tells an app that hung or crashed apart from a lost debug connection.
       - name: Dump simulator app log (iOS failure only)
         if: failure() && matrix.platform == 'ios' && steps.sim.outputs.udid != ''
@@ -294,7 +375,7 @@ jobs:
         if: always()
         run: |
           stage="none"
-          for s in create:${{ steps.create.outcome }} setup:${{ steps.setup.outcome }} assets:${{ steps.assets.outcome }} run:${{ steps.run_android.outcome }}${{ steps.run_ios.outcome }}${{ steps.run_desktop.outcome }}; do
+          for s in create:${{ steps.create.outcome }} setup:${{ steps.setup.outcome }} assets:${{ steps.assets.outcome }} run:${{ steps.run_android.outcome }}${{ steps.run_ios.outcome }}${{ steps.run_desktop.outcome }} release:${{ steps.release_ios.outcome }}${{ steps.release_macos.outcome }}; do
             case "${s#*:}" in
               *failure*) stage="${s%%:*}"; break ;;
             esac
@@ -328,6 +409,10 @@ jobs:
               echo '```'
               echo '</details>'
             fi
+            if [ -f app/release.log ]; then
+              echo "- Release build:"
+              grep -hE "QUICKSTART_RESULT|exported:|does not export" app/release.log | sed 's/^/  - /' || true
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload logs
@@ -337,6 +422,7 @@ jobs:
           name: quickstart-${{ matrix.platform }}
           path: |
             app/run.log
+            app/release.log
             app/simulator.log
             app/pubspec.yaml
             app/ios/Podfile

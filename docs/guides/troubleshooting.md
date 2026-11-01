@@ -337,6 +337,45 @@ The same applies to `The plugin "flutter_onnxruntime" requires a higher minimum 
 
 ---
 
+### Android: release build crashes on the first search
+
+**Symptom:** Debug builds work, but the release APK/AAB aborts during
+`MobileRag.initialize()` or the first search with:
+```
+Pending exception java.lang.ClassNotFoundException: ai.onnxruntime.TensorInfo
+```
+
+**Cause:** Flutter release builds shrink the app with R8, which removes ONNX
+Runtime classes that its JNI code looks up by name.
+
+**Solution:** Use `rag_engine_flutter` 0.21.1 or later, which ships the keep
+rule. On earlier versions, add it to the app yourself:
+1. Create `android/app/proguard-rules.pro` with
+   `-keep class ai.onnxruntime.** { *; }`
+2. In `android/app/build.gradle(.kts)`, inside `buildTypes { release { ... } }`,
+   add `proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")`.
+
+---
+
+### iOS / macOS: release build fails with "Failed to lookup symbol"
+
+**Symptom:** Debug builds work, but an archived app (App Store, TestFlight,
+Ad Hoc) or an iOS release build fails in `MobileRag.initialize()` with:
+```
+Failed to lookup symbol 'frb_get_rust_content_hash': dlsym(RTLD_DEFAULT, frb_get_rust_content_hash): symbol not found
+```
+
+**Cause:** With static linkage the Rust library is part of the Runner
+executable. Release linking dead-strips the functions Dart looks up by name,
+and archiving strips the remaining global symbols.
+
+**Solution:** Use `rag_engine_flutter` 0.21.1 or later, which sets both for the
+Runner target. On earlier versions, in Xcode's Runner target build settings:
+1. Add `-Wl,-export_dynamic` to **Other Linker Flags** (iOS; macOS already has it).
+2. Set **Strip Style** to **Non-Global Symbols** for Release.
+
+---
+
 ### iOS: Pod Install Failed
 
 ```bash

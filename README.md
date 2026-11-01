@@ -119,7 +119,7 @@ app. On Windows, the engine stores its database, index files, and copied model
 assets in the app support directory (`%APPDATA%\<company>\<app>`) instead of the
 user's (often OneDrive-synced) Documents folder; other platforms are unchanged.
 
-> ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods builds on both iOS and macOS need static framework linkage (`use_frameworks! :linkage => :static`) and deployment targets of iOS 16.0+ and macOS 14.0+, while `flutter create` generates iOS 13.0 / macOS 10.15 with dynamic frameworks. From 0.22.1, the `setup` command below applies these settings for you; on 0.22.0, set them by hand as shown in the [Quick Start](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/quick_start.md). Android release builds should keep ONNX Runtime classes in ProGuard/R8 rules.
+> ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods builds on both iOS and macOS need static framework linkage (`use_frameworks! :linkage => :static`) and deployment targets of iOS 16.0+ and macOS 14.0+, while `flutter create` generates iOS 13.0 / macOS 10.15 with dynamic frameworks. From 0.22.1, the `setup` command below applies these settings for you; on 0.22.0, set them by hand as shown in the [Quick Start](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/quick_start.md). Android release builds need ONNX Runtime classes kept from R8; `rag_engine_flutter` 0.21.1 ships that rule and the iOS/macOS release linker settings (see [Troubleshooting](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md) for earlier versions).
 
 ---
 

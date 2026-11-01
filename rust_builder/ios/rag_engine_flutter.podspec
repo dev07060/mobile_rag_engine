@@ -41,8 +41,12 @@ A new Flutter FFI plugin project.
     'OTHER_LDFLAGS' => '-force_load ${BUILT_PRODUCTS_DIR}/librag_engine_flutter.a',
   }
 
-  # App target (Runner) build settings - propagates -force_load to the main executable
+  # App target (Runner) build settings - force-loads the static Rust archive and
+  # keeps FRB's process lookup symbols in the main executable. Release builds
+  # dead-strip them at link time without -export_dynamic, and archives strip
+  # them again unless only non-global symbols are stripped.
   s.user_target_xcconfig = {
-    'OTHER_LDFLAGS' => '$(inherited) -force_load ${BUILT_PRODUCTS_DIR}/rag_engine_flutter/librag_engine_flutter.a',
+    'OTHER_LDFLAGS' => '$(inherited) -force_load ${BUILT_PRODUCTS_DIR}/rag_engine_flutter/librag_engine_flutter.a -Wl,-export_dynamic',
+    'STRIP_STYLE' => 'non-global',
   }
 end
