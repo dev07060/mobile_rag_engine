@@ -42,7 +42,9 @@ A new Flutter FFI plugin project.
 
   # App target (Runner) build settings - keeps FRB's process lookup symbols in
   # the main executable as well as force-loading the static Rust archive.
+  # Archives strip them again unless only non-global symbols are stripped.
   s.user_target_xcconfig = {
     'OTHER_LDFLAGS' => '$(inherited) -force_load ${BUILT_PRODUCTS_DIR}/rag_engine_flutter/librag_engine_flutter.a -Wl,-export_dynamic',
+    'STRIP_STYLE' => 'non-global',
   }
 end
