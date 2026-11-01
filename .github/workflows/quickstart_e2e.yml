@@ -334,7 +334,9 @@ jobs:
             CODE_SIGNING_ALLOWED=NO >> release.log 2>&1 || { grep -E "error:" release.log | tail -n 20; exit 1; }
           exports=$(xcrun dyld_info -exports build/Runner.xcarchive/Products/Applications/Runner.app/Runner)
           for symbol in frb_get_rust_content_hash frb_pde_ffi_dispatcher_primary frb_pde_ffi_dispatcher_sync; do
-            if echo "$exports" | grep -q "_${symbol}\$"; then
+            # A here-string, not a pipe: with pipefail, grep -q exiting early
+            # breaks the pipe and reads as "not found".
+            if grep -q "_${symbol}\$" <<< "$exports"; then
               echo "exported: $symbol" | tee -a release.log
             else
               echo "::error::The iOS archive does not export $symbol" | tee -a release.log
