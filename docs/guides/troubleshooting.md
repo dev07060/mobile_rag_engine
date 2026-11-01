@@ -328,10 +328,12 @@ dyld: Library not loaded: @rpath/libonnxruntime.dylib
 
 **Cause:** `mobile_rag_engine` (since 0.19.0) uses `flutter_onnxruntime` which relies on statically linked ONNX Runtime binaries. Flutter's default iOS project uses dynamic frameworks (`use_frameworks!`).
 
-**Solution:** Update your `ios/Podfile` to use static linkage for frameworks:
-1. Open `ios/Podfile`
+**Solution:** From 0.22.1, run `dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en` again; it applies static linkage and the deployment targets to `ios/` and `macos/`. To change it by hand instead:
+1. Open `ios/Podfile` (or `macos/Podfile`)
 2. Change `use_frameworks!` to `use_frameworks! :linkage => :static`
 3. Run `pod install` again.
+
+The same applies to `The plugin "flutter_onnxruntime" requires a higher minimum iOS deployment version` (or macOS): the host needs iOS 16.0 / macOS 14.0.
 
 ---
 
