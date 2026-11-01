@@ -1,20 +1,25 @@
 name: Quick Start E2E
 
 # Follows the README Installation section as a new user would, on a machine
-# without Rust: a fresh `flutter create` app installs mobile_rag_engine from
-# pub.dev, runs the Model Pack `setup` command, registers the assets, and then
-# runs the README's first-success path (initialize, add a document, rebuild,
-# search) on a real device target. Each stage is timed and reported, so a red
-# job names the step where a user would get stuck.
+# without Rust: a fresh `flutter create` app adds mobile_rag_engine, runs the
+# Model Pack `setup` command, registers the assets, and then runs the README's
+# first-success path (initialize, add a document, rebuild, search) on a real
+# device target. The generated host project is never edited by hand, so the
+# Apple jobs only pass if `setup` applies the host settings itself. Each stage
+# is timed and reported, so a red job names the step where a user would get
+# stuck.
 #
-# `host: as-is` keeps the generated host project untouched, which is what a
-# user who follows only the README Installation steps ends up with.
-# `host: documented` applies the Podfile and deployment-target settings from
-# docs/guides/quick_start.md.
+# Pull requests install the package from the PR head through a git
+# dependency; a manual run can also check a version published on pub.dev.
 
 on:
   workflow_dispatch:
     inputs:
+      source:
+        description: "Install from pub.dev (version below) or from this ref through git"
+        type: choice
+        options: [pub, git]
+        default: pub
       version:
         description: "mobile_rag_engine version to install from pub.dev"
         required: true
@@ -23,16 +28,21 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/quickstart_e2e.yml"
+      - "bin/setup.dart"
+      - "lib/src/model_pack/**"
 
 env:
   FLUTTER_VERSION: "3.38.7"
   FLUTTER_CHANNEL: "stable"
+  SOURCE: ${{ github.event_name == 'pull_request' && 'git' || inputs.source }}
   PACKAGE_VERSION: ${{ inputs.version || '0.22.0' }}
+  GIT_URL: https://github.com/${{ github.repository }}.git
+  GIT_REF: ${{ github.event.pull_request.head.sha || github.sha }}
   PRESET: stable-minilm-l6-v2-arm64-en
 
 jobs:
   quickstart:
-    name: ${{ matrix.platform }} / host ${{ matrix.host }}
+    name: ${{ matrix.platform }}
     runs-on: ${{ matrix.platform == 'android' && 'ubuntu-latest' || matrix.platform == 'windows' && 'windows-latest' || 'macos-latest' }}
     timeout-minutes: 60
     defaults:
@@ -41,15 +51,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { platform: android, host: as-is }
-          - { platform: ios, host: as-is }
-          - { platform: ios, host: documented }
-          - { platform: ios, host: target-only }
-          - { platform: macos, host: as-is }
-          - { platform: macos, host: documented }
-          - { platform: macos, host: target-only }
-          - { platform: windows, host: as-is }
+        platform: [android, ios, macos, windows]
     steps:
       - name: Hide Rust toolchain
         run: |
@@ -91,7 +93,11 @@ jobs:
           trap 'echo "create $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
           flutter create --platforms=${{ matrix.platform }} --project-name quickstart_app app
           cd app
-          flutter pub add "mobile_rag_engine:${PACKAGE_VERSION}"
+          if [ "$SOURCE" = git ]; then
+            flutter pub add "mobile_rag_engine:{\"git\":{\"url\":\"$GIT_URL\",\"ref\":\"$GIT_REF\"}}"
+          else
+            flutter pub add "mobile_rag_engine:${PACKAGE_VERSION}"
+          fi
           flutter pub add 'dev:integration_test:{"sdk":"flutter"}'
           flutter pub deps --style=compact | grep -E "^- (mobile_rag_engine|rag_engine_flutter) "
 
@@ -103,6 +109,10 @@ jobs:
           dart run mobile_rag_engine:setup --preset "$PRESET"
           dart run mobile_rag_engine:setup --preset "$PRESET" --check
           ls -l assets/mobile_rag
+          for podfile in ios/Podfile macos/Podfile; do
+            [ -f "$podfile" ] && grep -n "platform :\|use_frameworks" "$podfile"
+          done
+          true
 
       - name: "3. Register the assets"
         id: assets
@@ -113,26 +123,6 @@ jobs:
           perl -0pi -e 's/^flutter:(\r?\n)/flutter:$1  assets:$1    - assets\/mobile_rag\/$1/m' pubspec.yaml
           grep -q "^    - assets/mobile_rag/" pubspec.yaml
           grep -n -A3 "^flutter:" pubspec.yaml
-
-      - name: "Apply documented iOS host settings"
-        if: matrix.platform == 'ios' && matrix.host != 'as-is'
-        working-directory: app/ios
-        env:
-          HOST: ${{ matrix.host }}
-        run: |
-          perl -pi -e "s/^#? ?platform :ios, .*/platform :ios, '16.0'/; s/^(\s*)use_frameworks!\s*$/\1use_frameworks! :linkage => :static\n/ if \$ENV{HOST} eq 'documented'" Podfile
-          perl -pi -e 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;/IPHONEOS_DEPLOYMENT_TARGET = 16.0;/g' Runner.xcodeproj/project.pbxproj
-          grep -n "platform :ios\|use_frameworks" Podfile
-
-      - name: "Apply documented macOS host settings"
-        if: matrix.platform == 'macos' && matrix.host != 'as-is'
-        working-directory: app/macos
-        env:
-          HOST: ${{ matrix.host }}
-        run: |
-          perl -pi -e "s/^platform :osx, .*/platform :osx, '14.0'/; s/^(\s*)use_frameworks!\s*$/\1use_frameworks! :linkage => :static\n/ if \$ENV{HOST} eq 'documented'" Podfile
-          perl -pi -e 's/MACOSX_DEPLOYMENT_TARGET = [0-9.]+;/MACOSX_DEPLOYMENT_TARGET = 14.0;/g' Runner.xcodeproj/project.pbxproj
-          grep -n "platform :osx\|use_frameworks" Podfile
 
       - name: "4. Write the README first-success code"
         working-directory: app
@@ -317,9 +307,13 @@ jobs:
             verdict="FAIL at stage: $stage"
           fi
           {
-            echo "### ${{ matrix.platform }} / host ${{ matrix.host }}"
+            echo "### ${{ matrix.platform }}"
             echo ""
-            echo "- Package: \`mobile_rag_engine ${PACKAGE_VERSION}\` from pub.dev, no Rust"
+            if [ "$SOURCE" = git ]; then
+              echo "- Package: \`mobile_rag_engine\` from git \`${GIT_REF}\`, no Rust"
+            else
+              echo "- Package: \`mobile_rag_engine ${PACKAGE_VERSION}\` from pub.dev, no Rust"
+            fi
             echo "- Result: **${verdict}**"
             if [ -f "$RUNNER_TEMP/timings" ]; then
               echo "- Stage seconds: $(tr '\n' ' ' < "$RUNNER_TEMP/timings")"
@@ -340,7 +334,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: quickstart-${{ matrix.platform }}-${{ matrix.host }}
+          name: quickstart-${{ matrix.platform }}
           path: |
             app/run.log
             app/simulator.log
