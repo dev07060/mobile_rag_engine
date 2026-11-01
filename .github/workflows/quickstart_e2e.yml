@@ -12,7 +12,9 @@ name: Quick Start E2E
 # A second stage builds the app the way it ships. Android runs the release APK
 # (R8 shrinking on) and macOS runs an archived app (symbols stripped). iOS
 # release builds cannot run on a simulator, so its archive is checked for the
-# symbols Dart looks up at runtime. Windows runs its release build.
+# symbols Dart looks up at runtime and for the privacy manifest App Store review
+# requires. The Android APK's native libraries must be 16 KB page aligned, as
+# Google Play requires. Windows runs its release build.
 #
 # Pull requests install the package and its native companion from the PR head
 # through git dependencies; a manual run can also check a version published on
@@ -225,6 +227,19 @@ jobs:
           start=$(date +%s)
           trap 'echo "release $(( $(date +%s) - start ))" >> "$RUNNER_TEMP/timings"' EXIT
           flutter build apk --release --target-platform android-x64 > release.log 2>&1 || { tail -n 80 release.log; exit 1; }
+          # Google Play requires 16 KB page alignment of 64-bit native
+          # libraries for Android 15+ targets.
+          readelf=$(ls "$ANDROID_SDK_ROOT"/ndk/*/toolchains/llvm/prebuilt/*/bin/llvm-readelf | tail -n 1)
+          rm -rf apk_libs && unzip -q build/app/outputs/flutter-apk/app-release.apk 'lib/*' -d apk_libs
+          for so in apk_libs/lib/arm64-v8a/*.so apk_libs/lib/x86_64/*.so; do
+            [ -f "$so" ] || continue
+            align=$("$readelf" -lW "$so" | awk '$1 == "LOAD" { print $NF }' | sort -u | head -n 1)
+            echo "page alignment: ${so#apk_libs/} $align" | tee -a release.log
+            if [ $((align)) -lt 16384 ]; then
+              echo "::error::${so#apk_libs/} is not 16 KB aligned ($align)"
+              exit 1
+            fi
+          done
           adb install -r build/app/outputs/flutter-apk/app-release.apk
           adb logcat -c
           adb shell am start -n com.example.quickstart_app/.MainActivity
@@ -332,7 +347,16 @@ jobs:
           xcodebuild archive -workspace ios/Runner.xcworkspace -scheme Runner \
             -configuration Release -sdk iphoneos -archivePath build/Runner.xcarchive \
             CODE_SIGNING_ALLOWED=NO >> release.log 2>&1 || { grep -E "error:" release.log | tail -n 20; exit 1; }
-          exports=$(xcrun dyld_info -exports build/Runner.xcarchive/Products/Applications/Runner.app/Runner)
+          app=build/Runner.xcarchive/Products/Applications/Runner.app
+          # App Store review rejects required-reason APIs without a declaration.
+          manifest="$app/rag_engine_flutter_privacy.bundle/PrivacyInfo.xcprivacy"
+          if [ -f "$manifest" ]; then
+            echo "exported: privacy manifest" | tee -a release.log
+          else
+            echo "::error::The iOS archive has no rag_engine_flutter privacy manifest" | tee -a release.log
+            exit 1
+          fi
+          exports=$(xcrun dyld_info -exports "$app/Runner")
           for symbol in frb_get_rust_content_hash frb_pde_ffi_dispatcher_primary frb_pde_ffi_dispatcher_sync; do
             # A here-string, not a pipe: with pipefail, grep -q exiting early
             # breaks the pipe and reads as "not found".
@@ -436,7 +460,7 @@ jobs:
             fi
             if [ -f app/release.log ]; then
               echo "- Release build:"
-              grep -hE "QUICKSTART_RESULT|exported:|does not export" app/release.log | sed 's/^/  - /' || true
+              grep -hE "QUICKSTART_RESULT|exported:|does not export|page alignment|privacy manifest" app/release.log | sed 's/^/  - /' || true
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 

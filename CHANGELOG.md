@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Android release builds no longer abort on the first embedding. R8 removed ONNX Runtime classes; the native companion now ships the keep rule.
   - iOS release builds and iOS/macOS archives keep the Rust symbols Dart looks up at runtime, instead of failing with `Failed to lookup symbol 'frb_get_rust_content_hash'`.
   - Debug builds were unaffected. Apps on earlier versions can apply the same settings by hand (see Troubleshooting).
+* **Store submission** (with `rag_engine_flutter` 0.21.1):
+  - The Android native library is 16 KB page aligned, as Google Play requires for apps targeting Android 15+.
+  - iOS apps get a privacy manifest for the required-reason APIs the bundled SQLite uses, so App Store review accepts them.
 
 ## 0.22.1
 * **Setup applies the Apple host settings**:

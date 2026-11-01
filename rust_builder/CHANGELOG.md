@@ -5,7 +5,10 @@
   - Android: ships a consumer ProGuard rule that keeps `ai.onnxruntime.**`. R8 removed classes that ONNX Runtime's JNI code looks up by name, so release APKs aborted with `ClassNotFoundException: ai.onnxruntime.TensorInfo` on the first embedding.
   - iOS: the Runner target links with `-Wl,-export_dynamic`. Release builds dead-stripped the Rust functions Dart looks up at runtime (`Failed to lookup symbol 'frb_get_rust_content_hash'`).
   - iOS and macOS: the Runner target uses `STRIP_STYLE = non-global`, so archives (App Store, TestFlight, Ad Hoc) keep those symbols.
-  - The Rust sources are unchanged, so the 0.21.0 pre-compiled binaries are reused.
+* **Store submission**:
+  - Android: the native library is linked with 16 KB page alignment (`-z max-page-size=16384`). Google Play requires this for apps targeting Android 15+; 0.21.0's library was 4 KB aligned.
+  - iOS: ships a privacy manifest (`PrivacyInfo.xcprivacy`) for the required-reason APIs the bundled SQLite uses: file timestamps (`C617.1`) and disk space (`E174.1`). App Store review rejects undeclared uses (ITMS-91053).
+  - The new `build.rs` changes the crate hash, so 0.21.1 ships newly built and signed pre-compiled binaries.
 
 ## 0.21.0
 * **Windows (x64)**: Declares the Windows plugin platform and publishes `windows/` again. A signed pre-compiled binary for `x86_64-pc-windows-msvc` is built alongside the other targets.
