@@ -27,11 +27,40 @@ use log::info;
 use once_cell::sync::OnceCell;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
+use scheduled_thread_pool::ScheduledThreadPool;
 use std::path::Path;
-use std::sync::RwLock;
+use std::sync::{mpsc, Arc, RwLock};
+
+/// A connection pool together with the worker r2d2 opens its connections on.
+struct DbPool {
+    pool: Pool<SqliteConnectionManager>,
+    /// Single-threaded, so one marker job can wait out every queued connect.
+    workers: Arc<ScheduledThreadPool>,
+}
+
+impl DbPool {
+    /// Drops the pool and returns only once every SQLite handle it opened is
+    /// closed.
+    ///
+    /// Checking out a connection makes r2d2 open a `min_idle` replacement on
+    /// `workers`, and that job holds the pool alive until it finishes, so
+    /// dropping our handle alone can leave a connection open after we return
+    /// (Windows then reports "database is locked" or refuses to delete the
+    /// file). Once a job queued after the drop has run on the single worker,
+    /// no earlier job can still hold the pool.
+    fn release(self) {
+        let DbPool { pool, workers } = self;
+        drop(pool);
+        let (done, wait) = mpsc::channel();
+        workers.execute(move || {
+            let _ = done.send(());
+        });
+        let _ = wait.recv();
+    }
+}
 
 /// Global database connection pool (thread-safe)
-static DB_POOL: OnceCell<RwLock<Option<Pool<SqliteConnectionManager>>>> = OnceCell::new();
+static DB_POOL: OnceCell<RwLock<Option<DbPool>>> = OnceCell::new();
 
 /// Initialize the global connection pool with optimized SQLite settings.
 ///
@@ -72,16 +101,28 @@ pub fn init_db_pool(db_path: String, max_size: u32) -> Result<()> {
         Ok(())
     });
 
-    let pool = Pool::builder()
-        .max_size(max_size)
-        .min_idle(Some(1)) // Keep at least 1 connection alive
-        .connection_timeout(std::time::Duration::from_secs(5))
-        .build(manager)?;
+    let workers = Arc::new(
+        ScheduledThreadPool::builder()
+            .num_threads(1)
+            .thread_name_pattern("rag-db-pool-{}")
+            .build(),
+    );
+    let pool = DbPool {
+        pool: Pool::builder()
+            .max_size(max_size)
+            .min_idle(Some(1)) // Keep at least 1 connection alive
+            .connection_timeout(std::time::Duration::from_secs(5))
+            .thread_pool(workers.clone())
+            .build(manager)?,
+        workers,
+    };
 
     // Support re-initialization
     if let Some(lock) = DB_POOL.get() {
-        let mut guard = lock.write().unwrap();
-        *guard = Some(pool);
+        let old = lock.write().unwrap().replace(pool);
+        if let Some(old) = old {
+            old.release();
+        }
         info!("[db_pool] Connection pool updated/re-initialized");
     } else {
         // Try to initialize for the first time
@@ -92,8 +133,10 @@ pub fn init_db_pool(db_path: String, max_size: u32) -> Result<()> {
             // Retrieve our pool and update the existing lock.
             let my_pool = params.into_inner().unwrap().unwrap();
             let existing_lock = DB_POOL.get().unwrap();
-            let mut guard = existing_lock.write().unwrap();
-            *guard = Some(my_pool);
+            let old = existing_lock.write().unwrap().replace(my_pool);
+            if let Some(old) = old {
+                old.release();
+            }
             info!("[db_pool] Connection pool updated (race condition handled)");
         } else {
             info!("[db_pool] Connection pool initialized successfully");
@@ -149,7 +192,7 @@ pub(crate) fn get_connection() -> Result<r2d2::PooledConnection<SqliteConnection
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("DB pool is None"))?;
 
-    Ok(pool.get()?)
+    Ok(pool.pool.get()?)
 }
 
 /// Check if the connection pool is initialized.
@@ -169,9 +212,13 @@ pub fn get_pool_stats() -> Option<(u32, u32, u32)> {
         .get()
         .and_then(|lock| lock.read().ok())
         .and_then(|guard| {
-            guard.as_ref().map(|pool| {
-                let state = pool.state();
-                (state.connections, state.idle_connections, pool.max_size())
+            guard.as_ref().map(|db| {
+                let state = db.pool.state();
+                (
+                    state.connections,
+                    state.idle_connections,
+                    db.pool.max_size(),
+                )
             })
         })
 }
@@ -180,10 +227,14 @@ pub fn get_pool_stats() -> Option<(u32, u32, u32)> {
 ///
 /// This should be called during application shutdown. After calling this,
 /// you must call `init_db_pool` again before using database operations.
+/// When it returns, every pooled SQLite handle has been closed, so the
+/// database files can be opened exclusively or deleted.
 pub fn close_db_pool() {
     if let Some(pool_lock) = DB_POOL.get() {
-        let mut pool_guard = pool_lock.write().unwrap();
-        *pool_guard = None;
+        let old = pool_lock.write().unwrap().take();
+        if let Some(old) = old {
+            old.release();
+        }
         info!("[db_pool] Connection pool closed");
     }
     // The vector store is opened by init_db_pool next to the database; drop
@@ -219,6 +270,29 @@ mod tests {
         close_db_pool();
         // clearAllData deletes the .vec file next; no mapping may outlive it.
         assert!(crate::api::mmap_store::MMAP_STORE.read().unwrap().is_none());
+    }
+
+    #[test]
+    fn test_close_releases_every_sqlite_handle() {
+        // Checking out the only idle connection makes r2d2 open a min_idle
+        // replacement on a background thread. close_db_pool must not return
+        // while that connection is still being opened (Windows CI saw
+        // "database is locked" and undeletable temp dirs right after close).
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("handles.sqlite");
+        for _ in 0..50 {
+            init_db_pool(db_path.to_str().unwrap().to_string(), 2).unwrap();
+            drop(get_connection().unwrap());
+            close_db_pool();
+
+            // Leaving WAL needs the only connection to the file, so this
+            // fails with SQLITE_BUSY while any pooled handle is still open.
+            let conn = rusqlite::Connection::open(&db_path).unwrap();
+            let mode: String = conn
+                .query_row("PRAGMA journal_mode = DELETE", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(mode, "delete");
+        }
     }
 
     #[test]
