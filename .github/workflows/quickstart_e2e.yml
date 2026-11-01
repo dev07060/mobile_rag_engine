@@ -45,8 +45,10 @@ jobs:
           - { platform: android, host: as-is }
           - { platform: ios, host: as-is }
           - { platform: ios, host: documented }
+          - { platform: ios, host: target-only }
           - { platform: macos, host: as-is }
           - { platform: macos, host: documented }
+          - { platform: macos, host: target-only }
           - { platform: windows, host: as-is }
     steps:
       - name: Hide Rust toolchain
@@ -113,18 +115,22 @@ jobs:
           grep -n -A3 "^flutter:" pubspec.yaml
 
       - name: "Apply documented iOS host settings"
-        if: matrix.platform == 'ios' && matrix.host == 'documented'
+        if: matrix.platform == 'ios' && matrix.host != 'as-is'
         working-directory: app/ios
+        env:
+          HOST: ${{ matrix.host }}
         run: |
-          perl -pi -e "s/^#? ?platform :ios, .*/platform :ios, '16.0'/; s/^(\s*)use_frameworks!\s*$/\1use_frameworks! :linkage => :static\n/" Podfile
+          perl -pi -e "s/^#? ?platform :ios, .*/platform :ios, '16.0'/; s/^(\s*)use_frameworks!\s*$/\1use_frameworks! :linkage => :static\n/ if \$ENV{HOST} eq 'documented'" Podfile
           perl -pi -e 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;/IPHONEOS_DEPLOYMENT_TARGET = 16.0;/g' Runner.xcodeproj/project.pbxproj
           grep -n "platform :ios\|use_frameworks" Podfile
 
       - name: "Apply documented macOS host settings"
-        if: matrix.platform == 'macos' && matrix.host == 'documented'
+        if: matrix.platform == 'macos' && matrix.host != 'as-is'
         working-directory: app/macos
+        env:
+          HOST: ${{ matrix.host }}
         run: |
-          perl -pi -e "s/^platform :osx, .*/platform :osx, '14.0'/; s/^(\s*)use_frameworks!\s*$/\1use_frameworks! :linkage => :static\n/" Podfile
+          perl -pi -e "s/^platform :osx, .*/platform :osx, '14.0'/; s/^(\s*)use_frameworks!\s*$/\1use_frameworks! :linkage => :static\n/ if \$ENV{HOST} eq 'documented'" Podfile
           perl -pi -e 's/MACOSX_DEPLOYMENT_TARGET = [0-9.]+;/MACOSX_DEPLOYMENT_TARGET = 14.0;/g' Runner.xcodeproj/project.pbxproj
           grep -n "platform :osx\|use_frameworks" Podfile
 
