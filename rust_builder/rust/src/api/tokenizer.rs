@@ -36,7 +36,7 @@ static TRUNCATING_TOKENIZERS: Lazy<RwLock<HashMap<usize, Tokenizer>>> =
 static COUNT_TOKENS_UNTRUNCATED_CALLS: AtomicUsize = AtomicUsize::new(0);
 #[cfg(test)]
 static TRUNCATING_TOKENIZER_BUILDS: AtomicUsize = AtomicUsize::new(0);
-const TOKENIZER_BASE_TRUNCATION_MAX_LENGTH: usize = 256;
+pub(crate) const TOKENIZER_BASE_TRUNCATION_MAX_LENGTH: usize = 256;
 const TOKENIZER_MID_TRUNCATION_MAX_LENGTH: usize = 384;
 const TOKENIZER_MAX_TRUNCATION_MAX_LENGTH: usize = 512;
 const TOKENIZER_MID_TRUNCATION_CHAR_THRESHOLD: usize = 1200;
