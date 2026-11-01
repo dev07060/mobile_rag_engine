@@ -182,7 +182,7 @@ Runtime setup notes:
 - From 0.22.1, `dart run mobile_rag_engine:setup` applies the settings above
   to the generated iOS and macOS hosts (`--skip-host-config` turns this off).
 - Android release builds must keep the ONNX Runtime classes from R8. From
-  `rag_engine_flutter` 0.21.1 the plugin ships this rule; on earlier versions
+  0.22.2 (`rag_engine_flutter` 0.21.1) the plugin ships this rule; on earlier versions
   add `-keep class ai.onnxruntime.** { *; }` to the app's ProGuard rules (see
   [Troubleshooting](troubleshooting.md#android-release-build-crashes-on-the-first-search)).
 

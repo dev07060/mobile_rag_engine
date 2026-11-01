@@ -20,7 +20,7 @@ stay on the device.
 > **Retrieval only.** This package finds and assembles the relevant context.
 > Generating an answer with an LLM is your app's separate step.
 
-> **This README describes 0.22.1.** Still on 0.20.x? It has no Model Pack
+> **This README describes 0.22.2.** Still on 0.20.x? It has no Model Pack
 > `setup` command or `RagModelPack`, and it always builds the Rust core from
 > source; follow the
 > [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md)
@@ -119,7 +119,7 @@ app. On Windows, the engine stores its database, index files, and copied model
 assets in the app support directory (`%APPDATA%\<company>\<app>`) instead of the
 user's (often OneDrive-synced) Documents folder; other platforms are unchanged.
 
-> ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods builds on both iOS and macOS need static framework linkage (`use_frameworks! :linkage => :static`) and deployment targets of iOS 16.0+ and macOS 14.0+, while `flutter create` generates iOS 13.0 / macOS 10.15 with dynamic frameworks. From 0.22.1, the `setup` command below applies these settings for you; on 0.22.0, set them by hand as shown in the [Quick Start](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/quick_start.md). Android release builds need ONNX Runtime classes kept from R8; `rag_engine_flutter` 0.21.1 ships that rule, the iOS/macOS release linker settings, 16 KB Android page alignment and an iOS privacy manifest (see [Troubleshooting](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md) for earlier versions).
+> ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods builds on both iOS and macOS need static framework linkage (`use_frameworks! :linkage => :static`) and deployment targets of iOS 16.0+ and macOS 14.0+, while `flutter create` generates iOS 13.0 / macOS 10.15 with dynamic frameworks. From 0.22.1, the `setup` command below applies these settings for you; on 0.22.0, set them by hand as shown in the [Quick Start](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/quick_start.md). Android release builds need ONNX Runtime classes kept from R8; from 0.22.2 (`rag_engine_flutter` 0.21.1) the package ships that rule, the iOS/macOS release linker settings, 16 KB Android page alignment and an iOS privacy manifest (see [Troubleshooting](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md) for earlier versions).
 
 ---
 
@@ -129,7 +129,7 @@ user's (often OneDrive-synced) Documents folder; other platforms are unchanged.
 
 ```yaml
 dependencies:
-  mobile_rag_engine: ^0.22.1
+  mobile_rag_engine: ^0.22.2
 ```
 
 ### 2. Install the verified Model Pack
