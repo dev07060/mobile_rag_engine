@@ -5,8 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.22.0
 * **Windows (x64)**:
+  - Requires `rag_engine_flutter: 0.21.0`.
   - Supported on Windows 10+ x64 through the native companion's Windows plugin and signed pre-compiled binary. No Rust toolchain is required, as on the other platforms. Windows on ARM64 and Linux are not supported.
   - On Windows, the database, index files and copied model assets live in the app support directory (`%APPDATA%\<company>\<app>`) instead of the user's Documents folder. Other platforms keep their existing location.
 * **Fixes**:

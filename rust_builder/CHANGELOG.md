@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.21.0
 * **Windows (x64)**: Declares the Windows plugin platform and publishes `windows/` again. A signed pre-compiled binary for `x86_64-pc-windows-msvc` is built alongside the other targets.
 * **Fix**: `save_hnsw_index` unmaps the previously loaded index before renaming the new file over it. Windows refused to replace a mapped file ("Access is denied").
 
