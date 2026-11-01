@@ -502,19 +502,13 @@ fn extract_single_page(
 pub fn extract_text_from_pdf(file_bytes: Vec<u8>) -> Result<String> {
     // Loading + decryption can fail wholesale — those errors are still
     // fatal: there are no pages to fall back to.
-    let doc = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let mut doc = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         pdf_extract::Document::load_mem(&file_bytes)
     }))
     .map_err(|_| anyhow!("PDF load panicked"))?
     .map_err(|e| anyhow!("PDF extraction failed: {:?}", e))?;
 
-    if doc.is_encrypted() {
-        // Match upstream behavior: a missing password makes content
-        // extraction silently produce empty pages. Surface this as Err.
-        return Err(anyhow!(
-            "PDF is encrypted; password-based decryption is not supported"
-        ));
-    }
+    decrypt_with_empty_user_password(&mut doc)?;
 
     // get_pages() returns a BTreeMap<u32, ObjectId> with the canonical set
     // of page numbers reachable from the page tree, in order. Iterating
@@ -563,17 +557,53 @@ pub fn extract_text_from_pdf(file_bytes: Vec<u8>) -> Result<String> {
     Ok(joined)
 }
 
+/// Owner-password-only PDFs (copy/print restrictions, common for government
+/// and bank documents) are encrypted with an empty *user* password. Mirror
+/// pdf-extract's own `maybe_decrypt`: try `decrypt("")` and only reject when a
+/// real user password is required or the scheme is unsupported (lopdf 0.34
+/// handles RC4 V1/V2 R2/R3; AES V4/V5 is reported as unsupported).
+fn decrypt_with_empty_user_password(doc: &mut pdf_extract::Document) -> Result<()> {
+    if !doc.is_encrypted() {
+        return Ok(());
+    }
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| doc.decrypt("")))
+        .map_err(|_| anyhow!("PDF decryption panicked"))?;
+    match outcome {
+        Ok(()) => Ok(()),
+        Err(pdf_extract::Error::Decryption(
+            pdf_extract::encryption::DecryptionError::IncorrectPassword,
+        )) => Err(anyhow!(
+            "PDF is encrypted; it requires a user password, which is not supported"
+        )),
+        Err(e) => Err(anyhow!(
+            "PDF is encrypted; decryption is not supported for this file: {}",
+            e
+        )),
+    }
+}
+
+/// Input cap shared by [extract_text_from_document] and the direct
+/// [extract_text_from_docx] entry point.
+const MAX_FILE_SIZE: usize = 50 * 1024 * 1024; // 50MB
+
 /// Extract text content from a DOCX file (bytes)
 pub fn extract_text_from_docx(file_bytes: Vec<u8>) -> Result<String> {
-    docx_lite::extract_text_from_bytes(&file_bytes)
-        .map_err(|e| anyhow!("DOCX extraction failed: {}", e))
+    if file_bytes.len() > MAX_FILE_SIZE {
+        return Err(anyhow!(
+            "File too large ({} bytes). Maximum supported size is 50MB.",
+            file_bytes.len()
+        ));
+    }
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::docx_reader::extract_docx_text(&file_bytes)
+    }))
+    .map_err(|_| anyhow!("DOCX extraction failed: parser panicked"))?
+    .map_err(|e| anyhow!("DOCX extraction failed: {}", e))
 }
 
 /// Auto-detect document type and extract text
 /// Uses magic bytes to determine file format
 pub fn extract_text_from_document(file_bytes: Vec<u8>) -> Result<String> {
-    const MAX_FILE_SIZE: usize = 50 * 1024 * 1024; // 50MB
-
     if file_bytes.len() > MAX_FILE_SIZE {
         return Err(anyhow!(
             "File too large ({} bytes). Maximum supported size is 50MB.",
@@ -893,6 +923,164 @@ mod tests {
             msg.contains("PDF extraction failed") || msg.contains("PDF load panicked"),
             "got: {}",
             msg,
+        );
+    }
+
+    /// RC4 (symmetric) for building encrypted fixtures; lopdf's is private.
+    fn rc4(key: &[u8], data: &[u8]) -> Vec<u8> {
+        let mut s: [u8; 256] = std::array::from_fn(|i| i as u8);
+        let mut j = 0u8;
+        for i in 0..256 {
+            j = j.wrapping_add(s[i]).wrapping_add(key[i % key.len()]);
+            s.swap(i, j as usize);
+        }
+        let (mut i, mut j) = (0u8, 0u8);
+        data.iter()
+            .map(|b| {
+                i = i.wrapping_add(1);
+                j = j.wrapping_add(s[i as usize]);
+                s.swap(i as usize, j as usize);
+                b ^ s[s[i as usize].wrapping_add(s[j as usize]) as usize]
+            })
+            .collect()
+    }
+
+    /// Build a one-page PDF encrypted with the Standard handler (V1/R2,
+    /// RC4-40). With `owner_only`, the user password is empty (the shape of
+    /// "copy/print restricted" PDFs); otherwise `/U` is garbage, so a real
+    /// user password would be required.
+    fn build_rc4_encrypted_pdf(text: &str, owner_only: bool) -> Vec<u8> {
+        use pdf_extract::{Dictionary, Document, Object, Stream, StringFormat};
+        const PAD: [u8; 32] = [
+            0x28, 0xBF, 0x4E, 0x5E, 0x4E, 0x75, 0x8A, 0x41, 0x64, 0x00, 0x4E, 0x56, 0xFF, 0xFA,
+            0x01, 0x08, 0x2E, 0x2E, 0x00, 0xB6, 0xD0, 0x68, 0x3E, 0x80, 0x2F, 0x0C, 0xA9, 0xFE,
+            0x64, 0x53, 0x69, 0x7A,
+        ];
+        let name = |s: &str| Object::Name(s.as_bytes().to_vec());
+        let mut doc = Document::with_version("1.4");
+        let pages_id = doc.new_object_id();
+
+        let mut font = Dictionary::new();
+        font.set("Type", name("Font"));
+        font.set("Subtype", name("Type1"));
+        font.set("BaseFont", name("Helvetica"));
+        let font_id = doc.add_object(font);
+        let mut fonts = Dictionary::new();
+        fonts.set("F1", Object::Reference(font_id));
+        let mut resources = Dictionary::new();
+        resources.set("Font", fonts);
+
+        let content = format!("BT /F1 12 Tf 72 720 Td ({}) Tj ET", text);
+        let content_id = doc.add_object(Stream::new(Dictionary::new(), content.into_bytes()));
+
+        let mut page = Dictionary::new();
+        page.set("Type", name("Page"));
+        page.set("Parent", Object::Reference(pages_id));
+        page.set("Contents", Object::Reference(content_id));
+        page.set("Resources", resources);
+        page.set("MediaBox", vec![0.into(), 0.into(), 612.into(), 792.into()]);
+        let page_id = doc.add_object(page);
+
+        let mut pages = Dictionary::new();
+        pages.set("Type", name("Pages"));
+        pages.set("Kids", vec![Object::Reference(page_id)]);
+        pages.set("Count", 1);
+        doc.objects.insert(pages_id, Object::Dictionary(pages));
+
+        let mut catalog = Dictionary::new();
+        catalog.set("Type", name("Catalog"));
+        catalog.set("Pages", Object::Reference(pages_id));
+        let catalog_id = doc.add_object(catalog);
+
+        let hex = |b: Vec<u8>| Object::String(b, StringFormat::Hexadecimal);
+        let mut encrypt = Dictionary::new();
+        encrypt.set("Filter", name("Standard"));
+        encrypt.set("V", 1);
+        encrypt.set("R", 2);
+        encrypt.set("Length", 40);
+        // The owner hash is arbitrary here: only the user password (empty)
+        // is ever checked on open.
+        encrypt.set("O", hex((0u8..32).map(|b| b.wrapping_mul(7)).collect()));
+        encrypt.set("U", hex(vec![0u8; 32]));
+        encrypt.set("P", -44); // printing/copying not allowed
+        let encrypt_id = doc.add_object(encrypt);
+
+        doc.trailer.set("Root", Object::Reference(catalog_id));
+        doc.trailer.set("Encrypt", Object::Reference(encrypt_id));
+        let file_id: Vec<u8> = (0u8..16).collect();
+        doc.trailer
+            .set("ID", vec![hex(file_id.clone()), hex(file_id)]);
+
+        let key = pdf_extract::encryption::get_encryption_key(&doc, "", false).unwrap();
+        let u = if owner_only {
+            rc4(&key, &PAD) // Algorithm 3.4: U = RC4(key, padding)
+        } else {
+            vec![0x5A; 32]
+        };
+        doc.get_object_mut(encrypt_id)
+            .unwrap()
+            .as_dict_mut()
+            .unwrap()
+            .set("U", hex(u));
+
+        // Encrypt the content stream (RC4 is symmetric, so lopdf's public
+        // per-object "decrypt" doubles as the encryptor).
+        let plain = doc.get_object(content_id).unwrap().clone();
+        let cipher = pdf_extract::encryption::decrypt_object(&key, content_id, &plain).unwrap();
+        if let Object::Stream(s) = doc.get_object_mut(content_id).unwrap() {
+            s.set_content(cipher);
+        }
+
+        let mut out = Vec::new();
+        doc.save_to(&mut out).unwrap();
+        out
+    }
+
+    #[test]
+    fn test_extract_text_from_pdf_decrypts_owner_password_only_pdf() {
+        let text = "Restricted but readable statement 2026";
+        let bytes = build_rc4_encrypted_pdf(text, true);
+        assert!(pdf_extract::Document::load_mem(&bytes)
+            .unwrap()
+            .is_encrypted());
+        let out = extract_text_from_pdf(bytes).expect("owner-only PDF should extract");
+        assert!(out.contains("Restricted but readable"), "got: {:?}", out);
+    }
+
+    #[test]
+    fn test_extract_text_from_pdf_rejects_user_password_pdf() {
+        let bytes = build_rc4_encrypted_pdf("Secret content needing password", false);
+        let msg = extract_text_from_pdf(bytes).unwrap_err().to_string();
+        assert!(msg.contains("requires a user password"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_extract_text_from_docx_entry_point() {
+        use std::io::Write;
+        let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        w.start_file("word/document.xml", zip::write::FileOptions::default())
+            .unwrap();
+        w.write_all(
+            concat!(
+                r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">"#,
+                r#"<w:body><w:p><w:r><w:t>Hello</w:t></w:r><w:r><w:t xml:space="preserve"> </w:t></w:r>"#,
+                r#"<w:r><w:t>world</w:t></w:r></w:p></w:body></w:document>"#,
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+        let bytes = w.finish().unwrap().into_inner();
+        assert_eq!(
+            extract_text_from_docx(bytes.clone()).unwrap(),
+            "Hello world"
+        );
+        assert_eq!(extract_text_from_document(bytes).unwrap(), "Hello world");
+
+        let err = extract_text_from_document(b"PK\x03\x04garbage".to_vec()).unwrap_err();
+        assert!(
+            err.to_string().contains("DOCX extraction failed"),
+            "got: {}",
+            err
         );
     }
 
