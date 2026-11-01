@@ -229,6 +229,9 @@ class SourceRagService {
         ),
         overlapChars = normalizeOverlapChars(
           overlapChars,
+          maxChunkChars: maxChunkChars < kMinChunkChars
+              ? kMinChunkChars
+              : maxChunkChars,
           context: 'SourceRagService',
         );
 

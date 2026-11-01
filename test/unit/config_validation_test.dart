@@ -35,6 +35,20 @@ void main() {
       expect(normalizeOverlapChars(7), 7);
     });
 
+    test('clamps overlapChars below half of maxChunkChars (matches Rust)', () {
+      expect(normalizeOverlapChars(600, maxChunkChars: 500), 249);
+      expect(normalizeOverlapChars(50, maxChunkChars: 100), 49);
+      expect(normalizeOverlapChars(30, maxChunkChars: 500), 30);
+      expect(normalizeOverlapChars(-1, maxChunkChars: 500), 0);
+
+      final service = SourceRagService(
+        dbPath: 'test.sqlite',
+        maxChunkChars: 10,
+        overlapChars: 80,
+      );
+      expect(service.overlapChars, 49);
+    });
+
     test('applies chunking normalization in SourceRagService constructor', () {
       final service = SourceRagService(
         dbPath: 'test.sqlite',
