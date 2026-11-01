@@ -186,6 +186,36 @@ fn get_collection_data_generation(
     .map_err(|e| RagError::DatabaseError(e.to_string()))
 }
 
+/// Read-only variant of the generation getters for search paths: a plain
+/// SELECT, so a search never takes the SQLite write lock (which
+/// `ensure_collection_row`'s `INSERT OR IGNORE` does) and cannot contend with
+/// a running ingest. `None` means the collection has no state row yet.
+/// `column` must be a trusted identifier (`data_generation` /
+/// `index_generation`).
+fn read_collection_generation(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+    column: &str,
+) -> Result<Option<i64>, RagError> {
+    conn.query_row(
+        &format!("SELECT {column} FROM collection_index_state WHERE collection_id = ?1"),
+        params![collection_id],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|e| RagError::DatabaseError(e.to_string()))
+}
+
+/// `data_generation` for search-handle freshness checks, without writing.
+/// A missing row reads as 0, the value `ensure_collection_row` would insert,
+/// and any later mutation creates the row and bumps it past 0.
+fn read_collection_data_generation(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+) -> Result<i64, RagError> {
+    Ok(read_collection_generation(conn, collection_id, "data_generation")?.unwrap_or(0))
+}
+
 /// Change counter for everything an HNSW index is built from: bumped by every
 /// `data_generation` bump *and* by embedding-only updates (re-embedding),
 /// which must not bump `data_generation` because that would invalidate
@@ -417,7 +447,8 @@ fn active_hnsw_is_current(
     let Some(built) = active_hnsw_generation(collection_id) else {
         return Ok(false);
     };
-    Ok(built == get_collection_index_generation(conn, collection_id)?)
+    // Search path: read-only. A missing row is "unknown", never current.
+    Ok(read_collection_generation(conn, collection_id, "index_generation")? == Some(built))
 }
 
 /// Drop the given chunk ids from the in-memory BM25 index when it currently
@@ -450,9 +481,31 @@ fn chunk_ids_for_source(
     Ok(ids)
 }
 
+/// Key under which a persisted HNSW file is recorded: the file name of
+/// `base_path` (e.g. `rag.db_hnsw`), not the absolute path. iOS may move the
+/// app container on update or restore, which changes every absolute sandbox
+/// path; keying on it would force a full rebuild after each such move. The
+/// file name still rejects a file saved under another name (another DB or a
+/// collection-specific path), which is what the path key is for.
+fn hnsw_saved_path_key(base_path: &str) -> String {
+    std::path::Path::new(base_path)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| base_path.to_string())
+}
+
 /// Generation recorded when the HNSW file at `base_path` was last written for
 /// `collection_id`. `None` when the file was never saved through this code
-/// (legacy caches), was saved for another path, or its provenance is unknown.
+/// (legacy caches), was saved under another file name, or its provenance is
+/// unknown.
+///
+/// The record must also match the collection's current `data_generation`.
+/// An older app version (same `sql_schema_version`, so it can open this DB)
+/// bumps `data_generation` on every mutation but knows nothing about
+/// `index_generation` or this record, and reuses the HNSW file on a
+/// count-only check. Without the `data_generation` match, save at gen N ->
+/// downgrade, delete + add with reused ids -> upgrade would find
+/// `index_generation == hnsw_saved_generation` and accept a stale file.
 fn persisted_hnsw_generation(
     conn: &rusqlite::Connection,
     collection_id: &str,
@@ -461,8 +514,10 @@ fn persisted_hnsw_generation(
     ensure_collection_row(conn, collection_id)?;
     conn.query_row(
         "SELECT hnsw_saved_generation FROM collection_index_state
-         WHERE collection_id = ?1 AND hnsw_saved_path = ?2",
-        params![collection_id, base_path],
+         WHERE collection_id = ?1
+           AND hnsw_saved_path = ?2
+           AND hnsw_saved_data_generation = data_generation",
+        params![collection_id, hnsw_saved_path_key(base_path)],
         |row| row.get::<_, Option<i64>>(0),
     )
     .optional()
@@ -470,6 +525,11 @@ fn persisted_hnsw_generation(
     .map_err(|e| RagError::DatabaseError(e.to_string()))
 }
 
+/// Record (or, with `generation == None`, invalidate) the provenance of the
+/// HNSW file at `base_path`. The current `data_generation` is stored next to
+/// the index generation: if `index_generation` has not moved since the build,
+/// neither has `data_generation` (every bump of the latter bumps the former),
+/// and if it has moved, the index generation already mismatches.
 fn record_persisted_hnsw_generation(
     conn: &rusqlite::Connection,
     collection_id: &str,
@@ -480,9 +540,10 @@ fn record_persisted_hnsw_generation(
     conn.execute(
         "UPDATE collection_index_state
          SET hnsw_saved_generation = ?2,
-             hnsw_saved_path = ?3
+             hnsw_saved_path = ?3,
+             hnsw_saved_data_generation = CASE WHEN ?2 IS NULL THEN NULL ELSE data_generation END
          WHERE collection_id = ?1",
-        params![collection_id, generation, base_path],
+        params![collection_id, generation, hnsw_saved_path_key(base_path)],
     )
     .map_err(|e| RagError::DatabaseError(e.to_string()))?;
     Ok(())
@@ -708,7 +769,8 @@ pub fn init_source_db() -> Result<(), RagError> {
             last_error TEXT,
             index_generation INTEGER NOT NULL DEFAULT 0,
             hnsw_saved_generation INTEGER,
-            hnsw_saved_path TEXT
+            hnsw_saved_path TEXT,
+            hnsw_saved_data_generation INTEGER
         )",
         [],
     )
@@ -733,6 +795,10 @@ pub fn init_source_db() -> Result<(), RagError> {
         (
             "hnsw_saved_path",
             "ALTER TABLE collection_index_state ADD COLUMN hnsw_saved_path TEXT",
+        ),
+        (
+            "hnsw_saved_data_generation",
+            "ALTER TABLE collection_index_state ADD COLUMN hnsw_saved_data_generation INTEGER",
         ),
     ] {
         let exists = conn
@@ -1667,7 +1733,7 @@ pub struct SearchHandle {
 
 impl SearchHandle {
     fn ensure_fresh_with_conn(&self, conn: &rusqlite::Connection) -> Result<i64, RagError> {
-        let current_generation = get_collection_data_generation(&conn, &self.collection_id)?;
+        let current_generation = read_collection_data_generation(conn, &self.collection_id)?;
         if current_generation != self.data_generation {
             return Err(RagError::StaleSearchHandle(format!(
                 "collection={} expected_generation={} current_generation={}",
@@ -1682,7 +1748,7 @@ impl SearchHandle {
         conn: &rusqlite::Connection,
         start_generation: i64,
     ) -> Result<(), RagError> {
-        let end_generation = get_collection_data_generation(conn, &self.collection_id)?;
+        let end_generation = read_collection_data_generation(conn, &self.collection_id)?;
         if end_generation != start_generation {
             return Err(RagError::ConcurrentMutation(format!(
                 "collection={} changed during search handle operation start_generation={} end_generation={}",
@@ -2027,7 +2093,7 @@ fn search_meta_hybrid_once(
     options: &SearchMetaHybridOptions,
 ) -> Result<SearchHandle, RagError> {
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
-    let start_generation = get_collection_data_generation(&conn, collection_id)?;
+    let start_generation = read_collection_data_generation(&conn, collection_id)?;
 
     let effective_top_k = if options
         .source_ids
@@ -2112,7 +2178,7 @@ fn search_meta_hybrid_once(
 
     run_search_meta_test_hook();
 
-    let end_generation = get_collection_data_generation(&conn, collection_id)?;
+    let end_generation = read_collection_data_generation(&conn, collection_id)?;
     if end_generation != start_generation {
         return Err(RagError::ConcurrentMutation(format!(
             "collection={} changed while creating search handle",
@@ -5152,6 +5218,139 @@ mod tests {
         assert!(load_collection_hnsw_index(collection.to_string(), base_path.clone()).unwrap());
 
         let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        teardown_test_db(db_path);
+    }
+
+    /// Seeds one source, activates (HNSW built and persisted), and simulates a
+    /// restart. Returns base_path.
+    fn seed_persisted_hnsw(db_path: &std::path::Path, collection: &str, ext: &str) -> String {
+        let base_path = db_path.with_extension(ext).to_string_lossy().into_owned();
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        add_completed_source(
+            collection,
+            "source a",
+            vec![
+                stale_chunk(0, "anchor alpha", stale_axis(0)),
+                stale_chunk(1, "anchor bravo", stale_axis(1)),
+            ],
+        );
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        forget_in_memory_indexes();
+        base_path
+    }
+
+    #[test]
+    fn persisted_hnsw_survives_a_moved_app_container() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_persisted_hnsw_moved_container.db");
+        let collection = "moved-container";
+        let base_path = seed_persisted_hnsw(&db_path, collection, "moved-hnsw");
+
+        // The record holds the file name, not the absolute sandbox path.
+        let conn = get_connection().unwrap();
+        let saved_path: Option<String> = conn
+            .query_row(
+                "SELECT hnsw_saved_path FROM collection_index_state WHERE collection_id = ?1",
+                params![collection],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            saved_path.as_deref(),
+            Some(hnsw_saved_path_key(&base_path).as_str())
+        );
+        assert!(!saved_path.unwrap().contains(std::path::MAIN_SEPARATOR));
+
+        // iOS moved the container: same file name, different directory.
+        let moved_dir =
+            std::env::temp_dir().join(format!("rag_moved_container_{}", std::process::id()));
+        std::fs::create_dir_all(&moved_dir).unwrap();
+        let moved_base = moved_dir
+            .join(std::path::Path::new(&base_path).file_name().unwrap())
+            .to_string_lossy()
+            .into_owned();
+        std::fs::copy(format!("{base_path}.hnsw"), format!("{moved_base}.hnsw")).unwrap();
+        assert!(
+            load_collection_hnsw_index(collection.to_string(), moved_base.clone()).unwrap(),
+            "a persisted HNSW must be reused after the container path changes"
+        );
+
+        // A file under another name is still not trusted.
+        forget_in_memory_indexes();
+        let other_base = moved_dir.join("other_hnsw").to_string_lossy().into_owned();
+        std::fs::copy(format!("{base_path}.hnsw"), format!("{other_base}.hnsw")).unwrap();
+        assert!(!load_collection_hnsw_index(collection.to_string(), other_base).unwrap());
+
+        let _ = std::fs::remove_dir_all(&moved_dir);
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn persisted_hnsw_is_rejected_after_an_older_version_mutated_the_collection() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_persisted_hnsw_downgrade.db");
+        let collection = "downgrade";
+        let base_path = seed_persisted_hnsw(&db_path, collection, "downgrade-hnsw");
+
+        // An older version deletes and re-adds with reused ids: it bumps only
+        // data_generation (it predates index_generation and the saved record)
+        // and swaps the vectors behind the same ids, keeping the count.
+        let conn = get_connection().unwrap();
+        conn.execute(
+            "UPDATE collection_index_state SET data_generation = data_generation + 1
+             WHERE collection_id = ?1",
+            params![collection],
+        )
+        .unwrap();
+        drop(conn);
+
+        assert!(
+            !load_collection_hnsw_index(collection.to_string(), base_path.clone()).unwrap(),
+            "index_generation still matches, but data_generation moved: must rebuild"
+        );
+
+        // Activation rebuilds and re-records, so the next restart reuses it.
+        forget_in_memory_indexes();
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        forget_in_memory_indexes();
+        assert!(load_collection_hnsw_index(collection.to_string(), base_path.clone()).unwrap());
+
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn vector_search_does_not_write_collection_state() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_vector_search_read_only.db");
+        let collection = "read-only-search";
+        add_completed_source(
+            collection,
+            "source a",
+            vec![stale_chunk(0, "anchor alpha", stale_axis(0))],
+        );
+        // Build the active HNSW for the collection.
+        let first = search_chunks_in_collection(collection.to_string(), stale_axis(0), 1).unwrap();
+        assert_eq!(first.len(), 1);
+
+        // An ingest holds the write lock. With no busy_timeout, a search that
+        // wrote (even a no-op INSERT OR IGNORE) would fail with SQLITE_BUSY;
+        // a read-only search proceeds under WAL.
+        let writer = get_connection().unwrap();
+        writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let results = search_chunks_in_collection(collection.to_string(), stale_axis(0), 1)
+            .expect("a warm vector search must not need the write lock");
+        assert_eq!(results.len(), 1);
+        assert_eq!(
+            read_collection_generation(&writer, "never-created", "index_generation").unwrap(),
+            None
+        );
+        writer.execute_batch("ROLLBACK").unwrap();
+        drop(writer);
         teardown_test_db(db_path);
     }
 
