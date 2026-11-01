@@ -107,7 +107,9 @@ jobs:
         working-directory: app
         run: |
           trap 'echo "assets $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
-          perl -0pi -e 's/^flutter:\n/flutter:\n  assets:\n    - assets\/mobile_rag\/\n/m' pubspec.yaml
+          # `flutter create` writes CRLF line endings on Windows.
+          perl -0pi -e 's/^flutter:(\r?\n)/flutter:$1  assets:$1    - assets\/mobile_rag\/$1/m' pubspec.yaml
+          grep -q "^    - assets/mobile_rag/" pubspec.yaml
           grep -n -A3 "^flutter:" pubspec.yaml
 
       - name: "Apply documented iOS host settings"
@@ -216,6 +218,14 @@ jobs:
           tail -n 200 run.log
           exit $status
 
+      # Tells an app that hung or crashed apart from a lost debug connection.
+      - name: Dump simulator app log (iOS failure only)
+        if: failure() && matrix.platform == 'ios' && steps.sim.outputs.udid != ''
+        run: |
+          xcrun simctl spawn "${{ steps.sim.outputs.udid }}" log show --last 20m --style compact \
+            --predicate 'process == "Runner"' > app/simulator.log 2>&1 || true
+          tail -n 150 app/simulator.log
+
       - name: Summarize result
         if: always()
         run: |
@@ -259,6 +269,7 @@ jobs:
           name: quickstart-${{ matrix.platform }}-${{ matrix.host }}
           path: |
             app/run.log
+            app/simulator.log
             app/pubspec.yaml
             app/ios/Podfile
             app/macos/Podfile
