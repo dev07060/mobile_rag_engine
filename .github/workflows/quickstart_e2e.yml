@@ -201,18 +201,86 @@ jobs:
           arch: x86_64
           script: cd app && start=$(date +%s); flutter test integration_test -d emulator-5554 -r expanded > run.log 2>&1; status=$?; echo "run $(( $(date +%s) - start ))" >> "$RUNNER_TEMP/timings"; tail -n 200 run.log; exit $status
 
+      # `flutter test` on an iOS simulator starts the app paused and waits for
+      # the tool's debug connection, which CI runners often lose ("The log
+      # reader failed unexpectedly"). Run the same code as the app's main()
+      # instead, launch it with simctl, and read the result file it writes.
+      - name: "5. Build and run on device (iOS simulator)"
+        if: matrix.platform == 'ios'
+        id: run_ios
+        working-directory: app
+        run: |
+          trap 'echo "run $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
+          cat > lib/main.dart <<'EOF'
+          import 'dart:io';
+
+          import 'package:flutter/widgets.dart';
+          import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+
+          Future<void> main() async {
+            WidgetsFlutterBinding.ensureInitialized();
+            final out = File('${Directory.systemTemp.path}/quickstart_result.txt');
+            final watch = Stopwatch()..start();
+            try {
+              await MobileRag.initialize(
+                modelPack: const RagModelPack.asset(
+                  'assets/mobile_rag/model-pack.json',
+                ),
+              );
+              final initMs = watch.elapsedMilliseconds;
+              await MobileRag.instance.addDocument(
+                'Flutter is a UI toolkit for building apps.',
+              );
+              await MobileRag.instance.rebuildIndex();
+              final result = await MobileRag.instance.search(
+                'What is Flutter?',
+                tokenBudget: 2000,
+              );
+              final ok = result.chunks.isNotEmpty &&
+                  result.context.text.contains('Flutter');
+              out.writeAsStringSync(
+                '${ok ? 'PASS' : 'FAIL'}\n'
+                'QUICKSTART initialize_ms=$initMs\n'
+                'QUICKSTART chunks=${result.chunks.length} '
+                'total_ms=${watch.elapsedMilliseconds}\n',
+              );
+            } catch (error, stack) {
+              out.writeAsStringSync('FAIL\nQUICKSTART error=$error\n$stack\n');
+            }
+            runApp(const SizedBox());
+          }
+          EOF
+          set +e
+          flutter build ios --simulator --debug > run.log 2>&1
+          status=$?
+          set -e
+          tail -n 60 run.log
+          [ $status -eq 0 ] || exit $status
+
+          udid="${{ steps.sim.outputs.udid }}"
+          bundle_id=com.example.quickstartApp
+          xcrun simctl install "$udid" build/ios/iphonesimulator/Runner.app
+          xcrun simctl launch "$udid" "$bundle_id"
+          result="$(xcrun simctl get_app_container "$udid" "$bundle_id" data)/tmp/quickstart_result.txt"
+          for _ in $(seq 1 60); do
+            [ -s "$result" ] && break
+            sleep 5
+          done
+          if [ ! -s "$result" ]; then
+            echo "No result after 5 minutes" | tee -a run.log
+            exit 1
+          fi
+          cat "$result" | tee -a run.log
+          head -n 1 "$result" | grep -q '^PASS$'
+
       - name: "5. Build and run on device"
-        if: matrix.platform != 'android'
+        if: matrix.platform == 'macos' || matrix.platform == 'windows'
         id: run_desktop
         working-directory: app
         run: |
           trap 'echo "run $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
-          case "${{ matrix.platform }}" in
-            ios)     device="${{ steps.sim.outputs.udid }}" ;;
-            *)       device="${{ matrix.platform }}" ;;
-          esac
           set +e
-          flutter test integration_test -d "$device" -r expanded > run.log 2>&1
+          flutter test integration_test -d "${{ matrix.platform }}" -r expanded > run.log 2>&1
           status=$?
           set -e
           tail -n 200 run.log
@@ -230,9 +298,9 @@ jobs:
         if: always()
         run: |
           stage="none"
-          for s in create:${{ steps.create.outcome }} setup:${{ steps.setup.outcome }} assets:${{ steps.assets.outcome }} run:${{ steps.run_android.outcome }}${{ steps.run_desktop.outcome }}; do
+          for s in create:${{ steps.create.outcome }} setup:${{ steps.setup.outcome }} assets:${{ steps.assets.outcome }} run:${{ steps.run_android.outcome }}${{ steps.run_ios.outcome }}${{ steps.run_desktop.outcome }}; do
             case "${s#*:}" in
-              failure*|*failure) stage="${s%%:*}"; break ;;
+              *failure*) stage="${s%%:*}"; break ;;
             esac
           done
           if [ "$stage" = "none" ] && grep -q "QUICKSTART chunks=" app/run.log 2>/dev/null; then
