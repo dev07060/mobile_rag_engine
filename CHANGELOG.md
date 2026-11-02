@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+* **Search quality for dense scripts** (with the next `rag_engine_flutter`):
+  - Chunks are embedded up to 512 tokens instead of a limit chosen by character count, which cut most Korean, Japanese and Chinese chunks under 1,200 characters at 256 tokens. In a desktop measurement on a Korean retrieval benchmark, nDCG@10 rose from 0.907 to 0.942 (`TextChunker.recursive`) and from 0.805 to 0.895 (`TextChunker.markdown`).
+  - Dense text is split into fewer, fuller chunks. English text at the default chunk size is chunked as before.
+  - Markdown chunks, including code blocks and tables, now fit the token limit, so no text is dropped at embedding time.
+  - Existing databases keep working. Re-ingesting Korean, Japanese or Chinese documents is optional and recovers the truncated text.
+
 ## 0.22.3
 * Requires `rag_engine_flutter: 0.21.2`.
 * **Search** (with `rag_engine_flutter` 0.21.2):
