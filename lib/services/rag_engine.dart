@@ -29,7 +29,6 @@ library;
 import 'dart:io';
 import 'dart:async';
 
-import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 
 import '../src/rust/api/tokenizer.dart';
@@ -62,6 +61,7 @@ import '../src/rust/api/migration_meta.dart'
 import '../src/rust/api/source_rag.dart'
     as rust_rag
     show listChunksNeedingReembed, updateChunkReembedded;
+import '../src/internal/asset_file_sync.dart';
 import '../src/internal/defaults.dart';
 import '../src/internal/embedding_fingerprint.dart';
 import '../src/internal/storage_directory.dart';
@@ -303,16 +303,16 @@ class RagEngine {
     // 2. Copy and initialize tokenizer
     onProgress?.call('Initializing tokenizer...');
     if (config.preparedTokenizerPath == null) {
-      await _copyAssetToFile(config.tokenizerAsset, tokenizerPath);
+      await syncAssetToFile(config.tokenizerAsset, tokenizerPath);
     }
     await initTokenizer(tokenizerPath: tokenizerPath);
     final vocabSize = getVocabSize();
 
     // 3. Prepare ONNX embedding model (Copy logic)
     onProgress?.call('Preparing embedding model...');
-    // Copy model asset to file (optimized for memory)
+    // Copy the model asset to a file, refreshing a stale copy.
     if (config.preparedModelPath == null) {
-      await _copyAssetToFile(config.modelAsset, modelPath);
+      await syncAssetToFile(config.modelAsset, modelPath);
     }
 
     final normalizedMaxChunkChars = normalizeMaxChunkChars(
@@ -521,17 +521,6 @@ class RagEngine {
   }
 
   /// Copy asset file to filesystem if it doesn't exist.
-  static Future<void> _copyAssetToFile(
-    String assetPath,
-    String filePath,
-  ) async {
-    final file = File(filePath);
-    if (!await file.exists()) {
-      final data = await rootBundle.load(assetPath);
-      await file.writeAsBytes(data.buffer.asUint8List());
-    }
-  }
-
   /// Whether [candidateName] (a file name in the database's directory) is an
   /// on-disk artifact derived from the database file [dbFileName]: SQLite
   /// sidecars, the mmap vector store, HNSW indexes of every collection

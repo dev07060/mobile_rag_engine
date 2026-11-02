@@ -115,11 +115,13 @@ against these hashes and lengths on first launch:
 }
 ```
 
-Use a Model Pack rather than `modelAsset`/`tokenizerAsset`. Those parameters
-copy the tokenizer to a fixed file name and skip the copy when that file
-already exists, so an app that previously ran MiniLM would keep MiniLM's
-tokenizer. A Model Pack is stored under its hashes and is always the one you
-bundled.
+Use a Model Pack rather than `modelAsset`/`tokenizerAsset`. In
+`mobile_rag_engine` 0.22.3 and earlier, those parameters copy the tokenizer to a
+fixed file name and skip the copy when that file already exists, so an app that
+previously ran MiniLM would keep MiniLM's tokenizer. Later versions refresh a
+stale copy, but they load and hash the bundled files on every launch to check.
+A Model Pack is stored under its hashes, is always the one you bundled, and
+skips that check once installed.
 
 ### 3. Bundle and initialize
 
