@@ -235,7 +235,8 @@ class MobileRag {
   Future<MigrationAxes> get migrationState => _engine!.migrationState;
 
   /// Fingerprint computed from the currently loaded embedding model
-  /// (`{modelBasename}|{dim}|{quant}`). Stable across reboots as long as the
+  /// (`{modelBasename}|{dim}|{quant}|{modelIdentity}`, where the identity is a
+  /// hash of the model file's content). Stable across reboots as long as the
   /// host app keeps loading the same model file.
   String get currentEmbeddingFingerprint =>
       _engine!.currentEmbeddingFingerprint;

@@ -69,6 +69,64 @@ void main() {
   });
 
   test(
+    'a fingerprint without model identity is extended in place, then a '
+    'same-name model swap is caught',
+    () async {
+      final dir = await _freshDir();
+      try {
+        final dbPath = '${dir.path}/extend.sqlite';
+        await initDbPool(dbPath: dbPath, maxSize: 2);
+        await source_rag.initSourceDb();
+
+        // A database written before the model identity was part of the
+        // fingerprint.
+        const legacy = 'model_qint8_arm64.onnx|384|f32+vabq:none';
+        const minilm = '$legacy|sha256:aaaa';
+        const koen = '$legacy|sha256:bbbb';
+        await writeEmbeddingFingerprint(fingerprint: legacy);
+        final seed = sqlite3.open(dbPath);
+        try {
+          _seedSource(db: seed, id: 1, content: 'doc-1');
+          _seedChunk(
+            db: seed,
+            sourceId: 1,
+            chunkIndex: 0,
+            content: 'chunk-1',
+            fingerprint: legacy,
+          );
+        } finally {
+          seed.dispose();
+        }
+
+        await extendEmbeddingFingerprint(from: legacy, to: minilm);
+        expect(
+          await detectEmbeddingFingerprintGate(currentFingerprint: minilm),
+          isA<EmbeddingFingerprintGate_Ok>(),
+        );
+        expect(await countChunksNeedingReembed(targetFingerprint: minilm), 0);
+
+        // Same file name and dimension, different model: now a mismatch.
+        final gate = await detectEmbeddingFingerprintGate(
+          currentFingerprint: koen,
+        );
+        expect(gate, isA<EmbeddingFingerprintGate_Mismatch>());
+        expect(
+          (gate as EmbeddingFingerprintGate_Mismatch).remainingChunks,
+          1,
+        );
+
+        // Extending is not a way to switch models.
+        await expectLater(
+          extendEmbeddingFingerprint(from: minilm, to: koen),
+          throwsA(anything),
+        );
+      } finally {
+        await releaseNativeFilesAndDelete(dir);
+      }
+    },
+  );
+
+  test(
     'model swap surfaces EmbeddingFingerprintGate.mismatch with remaining count',
     () async {
       final dir = await _freshDir();

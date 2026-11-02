@@ -388,6 +388,47 @@ pub fn write_embedding_fingerprint(fingerprint: String) -> Result<(), RagError> 
     Ok(())
 }
 
+/// Rewrite `from` to `to` wherever it is persisted: the baseline, the pending
+/// target and the chunk tags. Values other than `from` are left alone.
+///
+/// For fingerprint formats that gain a component, e.g. a model identity
+/// appended to `{modelBasename}|{dim}|{quant}`. The embeddings are unchanged,
+/// so this must not be used to switch models: `to` has to be `from` plus one
+/// or more `|`-separated components.
+pub fn extend_embedding_fingerprint(from: String, to: String) -> Result<(), RagError> {
+    let extends = !from.is_empty()
+        && to
+            .strip_prefix(&from)
+            .and_then(|rest| rest.strip_prefix('|'))
+            .is_some_and(|rest| !rest.is_empty());
+    if !extends {
+        return Err(RagError::InvalidInput(format!(
+            "'{to}' does not extend '{from}' with new components"
+        )));
+    }
+    let mut conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    for key in [KEY_EMBEDDING_FINGERPRINT, KEY_EMBEDDING_FINGERPRINT_PENDING] {
+        if read_axis_string_or_empty(&tx, key)? == from {
+            upsert_axis(&tx, key, &to)?;
+        }
+    }
+    tx.execute(
+        "UPDATE chunks SET embedding_fingerprint = ?2 WHERE embedding_fingerprint = ?1",
+        params![from, to],
+    )
+    .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    tx.commit()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    info!(
+        "[migration_meta] embedding_fingerprint extended from '{}' to '{}'",
+        from, to
+    );
+    Ok(())
+}
+
 /// Begin a reembed-to-`target_fingerprint` flow.
 ///
 /// Writes `embedding_fingerprint_pending = target_fingerprint` (sticky across
@@ -688,6 +729,70 @@ mod tests {
         write_embedding_fingerprint("model|384|f32".to_string()).unwrap();
         let gate = detect_embedding_fingerprint_gate("model|384|f32".to_string()).unwrap();
         assert!(matches!(gate, EmbeddingFingerprintGate::Ok));
+        drop(pool);
+    }
+
+    #[test]
+    fn extending_fingerprint_rewrites_stored_pending_and_chunks() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("m|384|f32".to_string()).unwrap();
+        insert_chunk("c1", Some("m|384|f32"));
+        insert_chunk("c2", Some("other|384|f32"));
+        upsert_axis(
+            &get_connection().unwrap(),
+            KEY_EMBEDDING_FINGERPRINT_PENDING,
+            "m|384|f32",
+        )
+        .unwrap();
+
+        extend_embedding_fingerprint("m|384|f32".to_string(), "m|384|f32|id".to_string()).unwrap();
+
+        let axes = read_migration_axes().unwrap();
+        assert_eq!(axes.embedding_fingerprint, "m|384|f32|id");
+        assert_eq!(axes.embedding_fingerprint_pending, "m|384|f32|id");
+        let conn = get_connection().unwrap();
+        assert_eq!(
+            count_chunks_with_non_matching_fingerprint(&conn, "m|384|f32|id").unwrap(),
+            1,
+            "only chunks tagged with the old fingerprint are rewritten"
+        );
+        drop(pool);
+    }
+
+    #[test]
+    fn extending_fingerprint_leaves_other_values_alone() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("old|384|f32".to_string()).unwrap();
+
+        extend_embedding_fingerprint("m|384|f32".to_string(), "m|384|f32|id".to_string()).unwrap();
+
+        let axes = read_migration_axes().unwrap();
+        assert_eq!(axes.embedding_fingerprint, "old|384|f32");
+        assert_eq!(axes.embedding_fingerprint_pending, EMPTY_FINGERPRINT);
+        drop(pool);
+    }
+
+    #[test]
+    fn extending_fingerprint_refuses_an_unrelated_target() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("m|384|f32".to_string()).unwrap();
+
+        for to in ["n|384|f32|id", "m|384|f32", "m|384|f32x", "m|384|f32|"] {
+            assert!(
+                extend_embedding_fingerprint("m|384|f32".to_string(), to.to_string()).is_err(),
+                "{to} must be refused"
+            );
+        }
+        assert_eq!(
+            read_migration_axes().unwrap().embedding_fingerprint,
+            "m|384|f32"
+        );
         drop(pool);
     }
 

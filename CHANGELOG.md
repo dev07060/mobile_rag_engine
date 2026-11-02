@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Korean keyword search matches words with attached particles: a query for "검색엔진" finds "검색엔진은".
   - Building the vector index after adding or removing documents is about 3.8× faster, and vector search is about 2× faster.
 * **Ingestion** (needs the next `rag_engine_flutter`): chunking long Korean and other token-dense text that has to be split is up to 3× faster.
+* **Model swaps are detected by content** (needs the next `rag_engine_flutter`): the embedding fingerprint includes a hash of the model file (its size and first and last MiB), not only its file name and dimension. Replacing a model with another of the same name and dimension, such as two 384-dimension `model_qint8_arm64.onnx` exports, now locks search and ingestion until `reembedAll()` or `clearAndRestart()`, instead of mixing vectors from both models. Existing databases are updated in place on the first launch, without re-embedding, when the model file name and dimension still match. `currentEmbeddingFingerprint` gains a fourth component.
 * **Dependencies**: `flutter_rust_bridge` is pinned to 2.13.0, up from 2.11.1, and needs the next `rag_engine_flutter`. The pin stays exact because the generated bindings must match the runtime version. Apps that also depend on `flutter_rust_bridge` directly must allow 2.13.0.
 
 ## 0.22.3

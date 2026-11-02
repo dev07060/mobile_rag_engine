@@ -55,6 +55,7 @@ import '../src/rust/api/migration_meta.dart'
         beginEmbeddingReembed,
         countChunksNeedingReembed,
         detectEmbeddingFingerprintGate,
+        extendEmbeddingFingerprint,
         finalizeEmbeddingReembed,
         readMigrationAxes,
         writeEmbeddingFingerprint;
@@ -396,13 +397,21 @@ class RagEngine {
       onProgress?.call('Initializing connection pool...');
       await initDbPool(dbPath: dbPath, maxSize: 4);
 
-      final currentFingerprint = computeEmbeddingFingerprint(
-        modelBasename: embeddingModelBasename(modelPath),
+      final modelBasename = embeddingModelBasename(modelPath);
+      // Keeps the persisted `f32+vabq:none` axis so existing Q8_0 databases
+      // still match; a DB written with a VABQ profile on a 0.21.0-dev
+      // release mismatches and must be re-embedded.
+      final quant = embeddingQuantizationFingerprintAxis(VabqProfile.none);
+      final fingerprintWithoutModelIdentity = computeEmbeddingFingerprint(
+        modelBasename: modelBasename,
         dim: probe.length,
-        // Keeps the persisted `f32+vabq:none` axis so existing Q8_0 databases
-        // still match; a DB written with a VABQ profile on a 0.21.0-dev
-        // release mismatches and must be re-embedded.
-        quant: embeddingQuantizationFingerprintAxis(VabqProfile.none),
+        quant: quant,
+      );
+      final currentFingerprint = computeEmbeddingFingerprint(
+        modelBasename: modelBasename,
+        dim: probe.length,
+        quant: quant,
+        modelIdentity: await embeddingModelIdentity(modelPath),
       );
 
       // 6. Initialize the database and resolve the embedding fingerprint before
@@ -421,6 +430,10 @@ class RagEngine {
           // The fingerprint tables are created by SourceRagService.init, so this
           // must remain inside its pre-warmup database-ready boundary.
           onProgress?.call('Validating embedding fingerprint...');
+          await _extendFingerprintWithoutModelIdentity(
+            fingerprintWithoutModelIdentity,
+            currentFingerprint,
+          );
           initialLock = await _resolveFingerprintGate(currentFingerprint);
         },
       );
@@ -458,6 +471,25 @@ class RagEngine {
   /// One-shot probe text used solely to read the model's output dimension.
   /// The embedding is thrown away; only `length` matters.
   static const String _kFingerprintProbeText = '__mobile_rag_engine_probe__';
+
+  /// Databases from releases without a model identity in the fingerprint
+  /// store `{modelBasename}|{dim}|{quant}`. When that still matches the loaded
+  /// model, append the identity in place instead of locking for a reembed.
+  /// This trusts that the file was not swapped under the same name, which is
+  /// all those releases could check.
+  static Future<void> _extendFingerprintWithoutModelIdentity(
+    String withoutModelIdentity,
+    String currentFingerprint,
+  ) async {
+    final axes = await migration_meta.readMigrationAxes();
+    if (axes.embeddingFingerprint == withoutModelIdentity ||
+        axes.embeddingFingerprintPending == withoutModelIdentity) {
+      await migration_meta.extendEmbeddingFingerprint(
+        from: withoutModelIdentity,
+        to: currentFingerprint,
+      );
+    }
+  }
 
   static Future<RagEmbeddingFingerprintLock?> _resolveFingerprintGate(
     String currentFingerprint,
