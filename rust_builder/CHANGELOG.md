@@ -15,6 +15,7 @@
   - Short lines inside a paragraph are no longer treated as titles. Hard-wrapped text (for example from PDFs) was split into one chunk per line.
   - Every chunk, including its overlap, now fits the embedding model's token limit. The end of a chunk was silently truncated at embedding time.
   - `overlap_chars` is clamped below half of `max_chars`.
+* **Database pool**: `close_db_pool` returns only after every pooled SQLite handle is closed. A replacement connection that the pool opened in the background could close later, so writing to or deleting the database right after closing failed with `database is locked` or a file-in-use error, most often on Windows. Each pool now uses a single background worker.
 
 ## 0.21.1
 * **Release builds**: Debug builds were unaffected; these fix apps built for release.
