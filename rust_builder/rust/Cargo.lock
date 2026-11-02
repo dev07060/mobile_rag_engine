@@ -2181,6 +2181,7 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "rusqlite",
+ "scheduled-thread-pool",
  "serde",
  "serde_json",
  "sha2",
