@@ -24,12 +24,36 @@ int normalizeMaxChunkChars(int value, {String context = 'runtime'}) {
   return kMinChunkChars;
 }
 
-int normalizeOverlapChars(int value, {String context = 'runtime'}) {
-  if (value >= 0) return value;
-  debugPrint(
-    '[Validation][$context] overlapChars=$value is negative. Using 0.',
-  );
-  return 0;
+/// Largest allowed overlap for [maxChunkChars]: strictly less than half of it.
+///
+/// Mirrors `clamp_overlap_chars` in
+/// `rust_builder/rust/src/api/semantic_chunker.rs`, which applies the same
+/// clamp natively.
+int maxOverlapCharsFor(int maxChunkChars) =>
+    maxChunkChars <= 1 ? 0 : (maxChunkChars - 1) ~/ 2;
+
+int normalizeOverlapChars(
+  int value, {
+  int? maxChunkChars,
+  String context = 'runtime',
+}) {
+  if (value < 0) {
+    debugPrint(
+      '[Validation][$context] overlapChars=$value is negative. Using 0.',
+    );
+    return 0;
+  }
+  if (maxChunkChars != null) {
+    final limit = maxOverlapCharsFor(maxChunkChars);
+    if (value > limit) {
+      debugPrint(
+        '[Validation][$context] overlapChars=$value must be less than half '
+        'of maxChunkChars=$maxChunkChars. Using $limit.',
+      );
+      return limit;
+    }
+  }
+  return value;
 }
 
 void warnThreadConfigConflict({

@@ -241,6 +241,16 @@ pub fn loaded_hnsw_node_count() -> Option<usize> {
         .map(|searcher| searcher.get_num_nodes() as usize)
 }
 
+/// True when an in-memory builder with at least one node exists, i.e. when
+/// `save_hnsw_index` would actually write a file (it silently skips otherwise).
+pub(crate) fn hnsw_builder_has_nodes() -> bool {
+    HNSW_BUILDER
+        .read()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|builder| !builder.nodes.is_empty())
+}
+
 pub fn clear_hnsw_index() {
     let mut index_guard = HNSW_INDEX.write().unwrap();
     *index_guard = None;

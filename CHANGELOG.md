@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+* **Search** (with `rag_engine_flutter` 0.21.2):
+  - Deleted documents no longer appear in results after other documents are added, and newly added chunks are found by keyword search without a manual `rebuildIndex()`.
+  - The first launch after upgrading rebuilds the vector index once.
+* **Document extraction** (with `rag_engine_flutter` 0.21.2):
+  - DOCX text keeps its spaces, tabs and line breaks, and tables, text boxes, headers, footers and footnotes are included in place. A DOCX ingested before this version extracts to different text, so adding it again creates a new source instead of being detected as a duplicate.
+  - PDFs that only restrict copying or printing are now accepted.
+* **Chunking** (with `rag_engine_flutter` 0.21.2):
+  - Hard-wrapped text (for example from PDFs) is no longer split into one chunk per line, so these documents produce fewer, fuller chunks.
+  - Chunks, including their overlap, now fit the embedding model's token limit, so no text is dropped at embedding time.
+  - `overlapChars` is clamped below half of `maxChunkChars`, with a warning.
+* **Ingestion**: `chunkDelay` now defaults to no pause between embedding batches (previously 10 ms). Pass a duration to throttle long ingestions.
+
 ## 0.22.2
 * Requires `rag_engine_flutter: 0.21.1`.
 * **Release builds**:

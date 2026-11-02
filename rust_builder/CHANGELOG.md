@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.21.2
+* **Search index**:
+  - Deleted chunks no longer come back in results. SQLite reuses the ids of deleted chunks, and an index was reused whenever its chunk count matched the database. Each BM25/HNSW index now records the collection generation it was built from, and is rebuilt when the data changed. Deletes also remove ids from the active BM25 index.
+  - Chunks added since the last rebuild are found by BM25 after the next activation, without an explicit rebuild.
+  - `collection_index_state` gains columns through additive migrations. The first activation after upgrading rebuilds the HNSW index once.
+  - Vector search no longer writes to the database, so it doesn't wait on a running ingestion.
+* **DOCX extraction** (replaces `docx-lite`):
+  - Spaces, tabs and line breaks are kept. Words were merged ("Hello world" became "Helloworld").
+  - Tables, nested tables and text boxes stay where they are in the document, with empty cells kept. Headers, footers, footnotes and endnotes follow the body. Deleted revision text is skipped.
+  - Decompression is limited to 100× the file size (16 MB to 200 MB), so a small crafted file can't exhaust memory.
+* **PDF extraction**: PDFs that only restrict copying or printing (empty user password) are now read instead of rejected as encrypted. AES-encrypted PDFs are still unsupported.
+* **Chunking**:
+  - Short lines inside a paragraph are no longer treated as titles. Hard-wrapped text (for example from PDFs) was split into one chunk per line.
+  - Every chunk, including its overlap, now fits the embedding model's token limit. The end of a chunk was silently truncated at embedding time.
+  - `overlap_chars` is clamped below half of `max_chars`.
+
 ## 0.21.1
 * **Release builds**: Debug builds were unaffected; these fix apps built for release.
   - Android: ships a consumer ProGuard rule that keeps `ai.onnxruntime.**`. R8 removed classes that ONNX Runtime's JNI code looks up by name, so release APKs aborted with `ClassNotFoundException: ai.onnxruntime.TensorInfo` on the first embedding.

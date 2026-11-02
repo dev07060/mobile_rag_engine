@@ -17,12 +17,14 @@
 //! Extended RAG API with sources and chunks for LLM-optimized context.
 
 use crate::api::activation_metrics;
-use crate::api::bm25_search::{bm25_add_documents, bm25_clear_index, is_bm25_index_loaded};
+use crate::api::bm25_search::{
+    bm25_add_documents, bm25_clear_index, bm25_remove_documents, is_bm25_index_loaded,
+};
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
 use crate::api::hnsw_index::{
-    build_hnsw_index, build_hnsw_index_streaming, clear_hnsw_index, is_hnsw_index_loaded,
-    load_hnsw_index, loaded_hnsw_node_count, save_hnsw_index, search_hnsw,
+    build_hnsw_index, build_hnsw_index_streaming, clear_hnsw_index, hnsw_builder_has_nodes,
+    is_hnsw_index_loaded, load_hnsw_index, loaded_hnsw_node_count, save_hnsw_index, search_hnsw,
 };
 use crate::api::hybrid_search::{search_hybrid_meta_inner, RrfConfig, SearchFilter};
 use crate::api::ingest_metrics::{
@@ -51,8 +53,24 @@ use std::time::Instant;
 
 pub const DEFAULT_COLLECTION_ID: &str = "__default__";
 
-static ACTIVE_HNSW_COLLECTION: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
-static ACTIVE_BM25_COLLECTION: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
+/// Which collection the global in-memory index was built for, and from which
+/// state of that collection.
+///
+/// `generation` is the collection counter read *before* the index read its
+/// rows: `data_generation` for BM25 (content + eligibility) and
+/// `index_generation` for HNSW (content + eligibility + embeddings). `None`
+/// means "unknown provenance" and is never reused. Counts alone are not
+/// enough: `chunks.id` has no AUTOINCREMENT, so SQLite reuses deleted rowids
+/// and a delete-then-add can keep the node count while changing every
+/// vector/term behind the reused ids.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ActiveIndex {
+    collection_id: String,
+    generation: Option<i64>,
+}
+
+static ACTIVE_HNSW_COLLECTION: Lazy<RwLock<Option<ActiveIndex>>> = Lazy::new(|| RwLock::new(None));
+static ACTIVE_BM25_COLLECTION: Lazy<RwLock<Option<ActiveIndex>>> = Lazy::new(|| RwLock::new(None));
 static QUERY_TERM_SPLITTER: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"[\s\(\)\[\]\{\},.!?:;/|_\-]+"#).expect("valid query splitter regex")
 });
@@ -168,6 +186,53 @@ fn get_collection_data_generation(
     .map_err(|e| RagError::DatabaseError(e.to_string()))
 }
 
+/// Read-only variant of the generation getters for search paths: a plain
+/// SELECT, so a search never takes the SQLite write lock (which
+/// `ensure_collection_row`'s `INSERT OR IGNORE` does) and cannot contend with
+/// a running ingest. `None` means the collection has no state row yet.
+/// `column` must be a trusted identifier (`data_generation` /
+/// `index_generation`).
+fn read_collection_generation(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+    column: &str,
+) -> Result<Option<i64>, RagError> {
+    conn.query_row(
+        &format!("SELECT {column} FROM collection_index_state WHERE collection_id = ?1"),
+        params![collection_id],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|e| RagError::DatabaseError(e.to_string()))
+}
+
+/// `data_generation` for search-handle freshness checks, without writing.
+/// A missing row reads as 0, the value `ensure_collection_row` would insert,
+/// and any later mutation creates the row and bumps it past 0.
+fn read_collection_data_generation(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+) -> Result<i64, RagError> {
+    Ok(read_collection_generation(conn, collection_id, "data_generation")?.unwrap_or(0))
+}
+
+/// Change counter for everything an HNSW index is built from: bumped by every
+/// `data_generation` bump *and* by embedding-only updates (re-embedding),
+/// which must not bump `data_generation` because that would invalidate
+/// in-flight search handles whose content did not change.
+fn get_collection_index_generation(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+) -> Result<i64, RagError> {
+    ensure_collection_row(conn, collection_id)?;
+    conn.query_row(
+        "SELECT index_generation FROM collection_index_state WHERE collection_id = ?1",
+        params![collection_id],
+        |row| row.get(0),
+    )
+    .map_err(|e| RagError::DatabaseError(e.to_string()))
+}
+
 fn ensure_collection_row(conn: &rusqlite::Connection, collection_id: &str) -> Result<(), RagError> {
     conn.execute(
         "INSERT OR IGNORE INTO collections(id, name) VALUES (?1, ?2)",
@@ -190,6 +255,7 @@ fn mark_collection_dirty(conn: &rusqlite::Connection, collection_id: &str) -> Re
         "UPDATE collection_index_state
          SET hnsw_dirty = 1,
              bm25_dirty = 1,
+             index_generation = index_generation + 1,
              last_error = NULL
          WHERE collection_id = ?1",
         params![collection_id],
@@ -208,6 +274,7 @@ fn mark_collection_data_changed(
          SET hnsw_dirty = 1,
              bm25_dirty = 1,
              data_generation = data_generation + 1,
+             index_generation = index_generation + 1,
              last_error = NULL
          WHERE collection_id = ?1",
         params![collection_id],
@@ -287,6 +354,32 @@ fn loaded_hnsw_has_db_parity(
     Ok(false)
 }
 
+/// Accept a loaded HNSW only when it matches the DB by node count *and* was
+/// built from the collection's current `index_generation`. On rejection the
+/// index is cleared and the collection is marked HNSW-dirty.
+fn loaded_hnsw_is_current(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+    built_generation: Option<i64>,
+) -> Result<bool, RagError> {
+    if !loaded_hnsw_has_db_parity(conn, collection_id)? {
+        return Ok(false);
+    }
+    let current = get_collection_index_generation(conn, collection_id)?;
+    if built_generation == Some(current) {
+        return Ok(true);
+    }
+
+    let error = format!(
+        "HNSW cache is stale for collection {collection_id}: built_generation={}, current_generation={current}",
+        built_generation.map_or_else(|| "unknown".to_string(), |g| g.to_string())
+    );
+    clear_hnsw_index();
+    mark_collection_hnsw_failed(conn, collection_id, &error)?;
+    log::warn!("[hnsw] {error}");
+    Ok(false)
+}
+
 fn mark_collection_bm25_clean(
     conn: &rusqlite::Connection,
     collection_id: &str,
@@ -304,24 +397,182 @@ fn mark_collection_bm25_clean(
     Ok(())
 }
 
-fn set_active_hnsw_collection(collection_id: &str) {
+fn set_active_hnsw_collection(collection_id: &str, generation: Option<i64>) {
     let mut guard = ACTIVE_HNSW_COLLECTION.write().unwrap();
-    *guard = Some(collection_id.to_string());
+    *guard = Some(ActiveIndex {
+        collection_id: collection_id.to_string(),
+        generation,
+    });
 }
 
-fn set_active_bm25_collection(collection_id: &str) {
+fn set_active_bm25_collection(collection_id: &str, generation: Option<i64>) {
     let mut guard = ACTIVE_BM25_COLLECTION.write().unwrap();
-    *guard = Some(collection_id.to_string());
-}
-
-fn is_active_hnsw_collection(collection_id: &str) -> bool {
-    let guard = ACTIVE_HNSW_COLLECTION.read().unwrap();
-    guard.as_deref() == Some(collection_id)
+    *guard = Some(ActiveIndex {
+        collection_id: collection_id.to_string(),
+        generation,
+    });
 }
 
 fn is_active_bm25_collection(collection_id: &str) -> bool {
     let guard = ACTIVE_BM25_COLLECTION.read().unwrap();
-    guard.as_deref() == Some(collection_id)
+    guard
+        .as_ref()
+        .is_some_and(|active| active.collection_id == collection_id)
+}
+
+/// Generation the in-memory HNSW was built from, if it belongs to `collection_id`.
+fn active_hnsw_generation(collection_id: &str) -> Option<i64> {
+    let guard = ACTIVE_HNSW_COLLECTION.read().unwrap();
+    guard
+        .as_ref()
+        .filter(|active| active.collection_id == collection_id)
+        .and_then(|active| active.generation)
+}
+
+/// Generation the in-memory BM25 was built from, if it belongs to `collection_id`.
+fn active_bm25_generation(collection_id: &str) -> Option<i64> {
+    let guard = ACTIVE_BM25_COLLECTION.read().unwrap();
+    guard
+        .as_ref()
+        .filter(|active| active.collection_id == collection_id)
+        .and_then(|active| active.generation)
+}
+
+/// True when the in-memory HNSW belongs to `collection_id` and was built from
+/// its current `index_generation`.
+fn active_hnsw_is_current(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+) -> Result<bool, RagError> {
+    let Some(built) = active_hnsw_generation(collection_id) else {
+        return Ok(false);
+    };
+    // Search path: read-only. A missing row is "unknown", never current.
+    Ok(read_collection_generation(conn, collection_id, "index_generation")? == Some(built))
+}
+
+/// Drop the given chunk ids from the in-memory BM25 index when it currently
+/// serves `collection_id`, so searches that run before the next activation
+/// cannot return deleted rows (or rows that later reuse their ids). The
+/// active generation is left untouched, so the next activation still
+/// rebuilds from the DB.
+fn remove_deleted_chunks_from_active_bm25(collection_id: &str, chunk_ids: &[i64]) {
+    if !chunk_ids.is_empty() && is_active_bm25_collection(collection_id) {
+        bm25_remove_documents(chunk_ids);
+    }
+}
+
+fn chunk_ids_for_source(
+    conn: &rusqlite::Connection,
+    source_id: i64,
+    collection_id: Option<&str>,
+) -> Result<Vec<i64>, RagError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id FROM chunks
+             WHERE source_id = ?1 AND (?2 IS NULL OR collection_id = ?2)",
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let ids = stmt
+        .query_map(params![source_id, collection_id], |row| row.get(0))
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?
+        .collect::<Result<Vec<i64>, _>>()
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    Ok(ids)
+}
+
+/// Key under which a persisted HNSW file is recorded: the file name of
+/// `base_path` (e.g. `rag.db_hnsw`), not the absolute path. iOS may move the
+/// app container on update or restore, which changes every absolute sandbox
+/// path; keying on it would force a full rebuild after each such move. The
+/// file name still rejects a file saved under another name (another DB or a
+/// collection-specific path), which is what the path key is for.
+fn hnsw_saved_path_key(base_path: &str) -> String {
+    std::path::Path::new(base_path)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| base_path.to_string())
+}
+
+/// Generation recorded when the HNSW file at `base_path` was last written for
+/// `collection_id`. `None` when the file was never saved through this code
+/// (legacy caches), was saved under another file name, or its provenance is
+/// unknown.
+///
+/// The record must also match the collection's current `data_generation`.
+/// An older app version (same `sql_schema_version`, so it can open this DB)
+/// bumps `data_generation` on every mutation but knows nothing about
+/// `index_generation` or this record, and reuses the HNSW file on a
+/// count-only check. Without the `data_generation` match, save at gen N ->
+/// downgrade, delete + add with reused ids -> upgrade would find
+/// `index_generation == hnsw_saved_generation` and accept a stale file.
+fn persisted_hnsw_generation(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+    base_path: &str,
+) -> Result<Option<i64>, RagError> {
+    ensure_collection_row(conn, collection_id)?;
+    conn.query_row(
+        "SELECT hnsw_saved_generation FROM collection_index_state
+         WHERE collection_id = ?1
+           AND hnsw_saved_path = ?2
+           AND hnsw_saved_data_generation = data_generation",
+        params![collection_id, hnsw_saved_path_key(base_path)],
+        |row| row.get::<_, Option<i64>>(0),
+    )
+    .optional()
+    .map(Option::flatten)
+    .map_err(|e| RagError::DatabaseError(e.to_string()))
+}
+
+/// Record (or, with `generation == None`, invalidate) the provenance of the
+/// HNSW file at `base_path`. The current `data_generation` is stored next to
+/// the index generation: if `index_generation` has not moved since the build,
+/// neither has `data_generation` (every bump of the latter bumps the former),
+/// and if it has moved, the index generation already mismatches.
+fn record_persisted_hnsw_generation(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+    base_path: &str,
+    generation: Option<i64>,
+) -> Result<(), RagError> {
+    ensure_collection_row(conn, collection_id)?;
+    conn.execute(
+        "UPDATE collection_index_state
+         SET hnsw_saved_generation = ?2,
+             hnsw_saved_path = ?3,
+             hnsw_saved_data_generation = CASE WHEN ?2 IS NULL THEN NULL ELSE data_generation END
+         WHERE collection_id = ?1",
+        params![collection_id, generation, hnsw_saved_path_key(base_path)],
+    )
+    .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    Ok(())
+}
+
+/// Persist the in-memory HNSW for `collection_id` and record which generation
+/// the written file holds. The record is cleared before the write so a crash
+/// mid-save leaves "unknown" (forcing a rebuild) rather than a stale match.
+fn save_hnsw_with_generation(
+    conn: &rusqlite::Connection,
+    collection_id: &str,
+    base_path: &str,
+) -> Result<(), RagError> {
+    // `save_hnsw_index` only writes when an in-memory builder with nodes
+    // exists; otherwise the file on disk (and its record) is left as is.
+    let will_write = hnsw_builder_has_nodes();
+    if will_write {
+        record_persisted_hnsw_generation(conn, collection_id, base_path, None)?;
+    }
+    save_hnsw_index(base_path).map_err(|e| RagError::IoError(e.to_string()))?;
+    if will_write {
+        record_persisted_hnsw_generation(
+            conn,
+            collection_id,
+            base_path,
+            active_hnsw_generation(collection_id),
+        )?;
+    }
+    Ok(())
 }
 
 /// Initialize database with sources and chunks tables.
@@ -515,22 +766,51 @@ pub fn init_source_db() -> Result<(), RagError> {
             data_generation INTEGER NOT NULL DEFAULT 0,
             last_hnsw_built_at INTEGER,
             last_bm25_built_at INTEGER,
-            last_error TEXT
+            last_error TEXT,
+            index_generation INTEGER NOT NULL DEFAULT 0,
+            hnsw_saved_generation INTEGER,
+            hnsw_saved_path TEXT,
+            hnsw_saved_data_generation INTEGER
         )",
         [],
     )
     .map_err(|e| RagError::DatabaseError(e.to_string()))?;
 
-    let has_data_generation: bool = conn
-        .prepare("SELECT data_generation FROM collection_index_state LIMIT 1")
-        .is_ok();
-    if !has_data_generation {
-        info!("[init_source_db] Migrating: adding data_generation to collection_index_state");
-        conn.execute(
+    // Additive column migrations for older DBs (ALTER ADD COLUMN, no table
+    // rebuild). `hnsw_saved_generation` starts NULL, so a cache persisted by
+    // an older version is rebuilt once instead of trusted on count alone.
+    for (column, ddl) in [
+        (
+            "data_generation",
             "ALTER TABLE collection_index_state ADD COLUMN data_generation INTEGER NOT NULL DEFAULT 0",
-            [],
-        )
-        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        ),
+        (
+            "index_generation",
+            "ALTER TABLE collection_index_state ADD COLUMN index_generation INTEGER NOT NULL DEFAULT 0",
+        ),
+        (
+            "hnsw_saved_generation",
+            "ALTER TABLE collection_index_state ADD COLUMN hnsw_saved_generation INTEGER",
+        ),
+        (
+            "hnsw_saved_path",
+            "ALTER TABLE collection_index_state ADD COLUMN hnsw_saved_path TEXT",
+        ),
+        (
+            "hnsw_saved_data_generation",
+            "ALTER TABLE collection_index_state ADD COLUMN hnsw_saved_data_generation INTEGER",
+        ),
+    ] {
+        let exists = conn
+            .prepare(&format!(
+                "SELECT {column} FROM collection_index_state LIMIT 1"
+            ))
+            .is_ok();
+        if !exists {
+            info!("[init_source_db] Migrating: adding {column} to collection_index_state");
+            conn.execute(ddl, [])
+                .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        }
     }
 
     conn.execute(
@@ -784,6 +1064,7 @@ pub fn clear_source_chunks(source_id: i64) -> Result<i32, RagError> {
         )
         .optional()
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let deleted_ids = chunk_ids_for_source(&conn, source_id, None)?;
     let deleted = conn
         .execute(
             "DELETE FROM chunks WHERE source_id = ?1",
@@ -794,6 +1075,7 @@ pub fn clear_source_chunks(source_id: i64) -> Result<i32, RagError> {
     if deleted > 0 {
         if let Some(collection_id) = source_collection_id {
             mark_collection_data_changed(&conn, &collection_id)?;
+            remove_deleted_chunks_from_active_bm25(&collection_id, &deleted_ids);
         }
     }
     Ok(deleted as i32)
@@ -1013,11 +1295,15 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     ensure_collection_row(&conn, &collection_id)?;
 
+    // Read the generation before the rows: a mutation racing this rebuild
+    // then leaves the recorded generation behind and forces another rebuild,
+    // instead of letting a pre-mutation index pass as current.
+    let built_generation = get_collection_index_generation(&conn, &collection_id)?;
     let point_count_hint = eligible_hnsw_point_count(&conn, &collection_id)?;
 
     if point_count_hint == 0 {
         clear_hnsw_index();
-        set_active_hnsw_collection(&collection_id);
+        set_active_hnsw_collection(&collection_id, Some(built_generation));
         mark_collection_hnsw_clean(&conn, &collection_id)?;
         return Ok(());
     }
@@ -1156,7 +1442,7 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
             collection_id, inserted
         );
     }
-    set_active_hnsw_collection(&collection_id);
+    set_active_hnsw_collection(&collection_id, Some(built_generation));
     mark_collection_hnsw_clean(&conn, &collection_id)?;
     Ok(())
 }
@@ -1182,6 +1468,9 @@ fn rebuild_chunk_bm25_index_for_collection_inner(collection_id: String) -> Resul
     );
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     ensure_collection_row(&conn, &collection_id)?;
+
+    // Same ordering rule as the HNSW rebuild: generation first, rows second.
+    let built_generation = get_collection_data_generation(&conn, &collection_id)?;
 
     // Clear existing BM25 index
     bm25_clear_index();
@@ -1209,7 +1498,7 @@ fn rebuild_chunk_bm25_index_for_collection_inner(collection_id: String) -> Resul
         );
         bm25_add_documents(docs);
     }
-    set_active_bm25_collection(&collection_id);
+    set_active_bm25_collection(&collection_id, Some(built_generation));
     mark_collection_bm25_clean(&conn, &collection_id)?;
     info!("[rebuild_chunk_bm25] Complete");
     Ok(())
@@ -1226,12 +1515,15 @@ pub fn save_collection_hnsw_index(
     base_path: String,
 ) -> Result<(), RagError> {
     let collection_id = normalize_collection_id(collection_id);
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    // Keep the provenance of the in-memory index when it already belongs to
+    // this collection; otherwise it is unknown and must not be reused later.
+    let generation = active_hnsw_generation(&collection_id);
+    set_active_hnsw_collection(&collection_id, generation);
     let start = Instant::now();
-    let result = save_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()));
+    let result = save_hnsw_with_generation(&conn, &collection_id, &base_path);
     activation_metrics::record_hnsw_save_nanos(elapsed_nanos_u64(start));
-    result?;
-    set_active_hnsw_collection(&collection_id);
-    Ok(())
+    result
 }
 
 /// Load HNSW index from disk and mark the collection as active.
@@ -1254,10 +1546,11 @@ pub fn load_collection_hnsw_index(
     };
     if loaded {
         let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
-        if !loaded_hnsw_has_db_parity(&conn, &collection_id)? {
+        let saved_generation = persisted_hnsw_generation(&conn, &collection_id, &base_path)?;
+        if !loaded_hnsw_is_current(&conn, &collection_id, saved_generation)? {
             return Ok(false);
         }
-        set_active_hnsw_collection(&collection_id);
+        set_active_hnsw_collection(&collection_id, saved_generation);
         mark_collection_hnsw_clean(&conn, &collection_id)?;
     }
     Ok(loaded)
@@ -1267,6 +1560,15 @@ pub fn load_collection_hnsw_index(
 ///
 /// BM25 is rebuilt for the collection when not active, and HNSW is loaded (or rebuilt)
 /// from the collection-specific path as needed.
+///
+/// Freshness contract: an in-memory or persisted index is reused only when it
+/// was built from the collection's current generation (`data_generation` for
+/// BM25, `index_generation` for HNSW). Any mutation (`add_chunks`, source
+/// delete/status change, re-embedding) therefore makes the next activation
+/// rebuild exactly the stale index, while activations with no intervening
+/// mutation are cheap no-ops. Callers do not need an explicit rebuild after
+/// appending chunks for search correctness; the rebuild cost is paid by the
+/// first activation after the change.
 pub fn activate_collection_for_hybrid_search(
     collection_id: String,
     base_path: String,
@@ -1285,13 +1587,17 @@ fn activate_collection_for_hybrid_search_inner(
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     ensure_collection_row(&conn, &collection_id)?;
 
-    if !is_bm25_index_loaded() || !is_active_bm25_collection(&collection_id) {
+    let current_data_generation = get_collection_data_generation(&conn, &collection_id)?;
+    if !is_bm25_index_loaded()
+        || active_bm25_generation(&collection_id) != Some(current_data_generation)
+    {
         rebuild_chunk_bm25_index_for_collection(collection_id.clone())?;
     }
 
+    let active_hnsw_generation_for_collection = active_hnsw_generation(&collection_id);
     let active_cache_is_valid =
-        if is_hnsw_index_loaded() && is_active_hnsw_collection(&collection_id) {
-            loaded_hnsw_has_db_parity(&conn, &collection_id)?
+        if is_hnsw_index_loaded() && active_hnsw_generation_for_collection.is_some() {
+            loaded_hnsw_is_current(&conn, &collection_id, active_hnsw_generation_for_collection)?
         } else {
             false
         };
@@ -1310,14 +1616,21 @@ fn activate_collection_for_hybrid_search_inner(
                 return Err(err);
             }
         };
-        if loaded && loaded_hnsw_has_db_parity(&conn, &collection_id)? {
-            set_active_hnsw_collection(&collection_id);
+        let saved_generation = if loaded {
+            persisted_hnsw_generation(&conn, &collection_id, &base_path)?
+        } else {
+            None
+        };
+        if loaded && loaded_hnsw_is_current(&conn, &collection_id, saved_generation)? {
+            set_active_hnsw_collection(&collection_id, saved_generation);
             mark_collection_hnsw_clean(&conn, &collection_id)?;
         } else {
             rebuild_chunk_hnsw_index_for_collection(collection_id.clone())?;
+            // The rebuild recorded the generation it read; keep it (not the
+            // current one) so a mutation racing the rebuild is caught next time.
+            let built_generation = active_hnsw_generation(&collection_id);
             let save_start = Instant::now();
-            let save_result =
-                save_hnsw_index(&base_path).map_err(|e| RagError::IoError(e.to_string()));
+            let save_result = save_hnsw_with_generation(&conn, &collection_id, &base_path);
             activation_metrics::record_hnsw_save_nanos(elapsed_nanos_u64(save_start));
             save_result?;
             if !loaded_hnsw_has_db_parity(&conn, &collection_id)? {
@@ -1325,7 +1638,7 @@ fn activate_collection_for_hybrid_search_inner(
                     "HNSW cache parity failed after rebuilding collection {collection_id}"
                 )));
             }
-            set_active_hnsw_collection(&collection_id);
+            set_active_hnsw_collection(&collection_id, built_generation);
             mark_collection_hnsw_clean(&conn, &collection_id)?;
         }
     }
@@ -1420,7 +1733,7 @@ pub struct SearchHandle {
 
 impl SearchHandle {
     fn ensure_fresh_with_conn(&self, conn: &rusqlite::Connection) -> Result<i64, RagError> {
-        let current_generation = get_collection_data_generation(&conn, &self.collection_id)?;
+        let current_generation = read_collection_data_generation(conn, &self.collection_id)?;
         if current_generation != self.data_generation {
             return Err(RagError::StaleSearchHandle(format!(
                 "collection={} expected_generation={} current_generation={}",
@@ -1435,7 +1748,7 @@ impl SearchHandle {
         conn: &rusqlite::Connection,
         start_generation: i64,
     ) -> Result<(), RagError> {
-        let end_generation = get_collection_data_generation(conn, &self.collection_id)?;
+        let end_generation = read_collection_data_generation(conn, &self.collection_id)?;
         if end_generation != start_generation {
             return Err(RagError::ConcurrentMutation(format!(
                 "collection={} changed during search handle operation start_generation={} end_generation={}",
@@ -1780,7 +2093,7 @@ fn search_meta_hybrid_once(
     options: &SearchMetaHybridOptions,
 ) -> Result<SearchHandle, RagError> {
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
-    let start_generation = get_collection_data_generation(&conn, collection_id)?;
+    let start_generation = read_collection_data_generation(&conn, collection_id)?;
 
     let effective_top_k = if options
         .source_ids
@@ -1865,7 +2178,7 @@ fn search_meta_hybrid_once(
 
     run_search_meta_test_hook();
 
-    let end_generation = get_collection_data_generation(&conn, collection_id)?;
+    let end_generation = read_collection_data_generation(&conn, collection_id)?;
     if end_generation != start_generation {
         return Err(RagError::ConcurrentMutation(format!(
             "collection={} changed while creating search handle",
@@ -2512,7 +2825,11 @@ pub fn search_chunks_in_collection(
     );
 
     // HNSW index is global in-memory; if active collection differs, rebuild scoped index.
-    if !is_hnsw_index_loaded() || !is_active_hnsw_collection(&collection_id) {
+    let hnsw_is_current = {
+        let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        active_hnsw_is_current(&conn, &collection_id)?
+    };
+    if !is_hnsw_index_loaded() || !hnsw_is_current {
         debug!(
             "[search_chunks] HNSW missing or different collection active. Rebuilding for {}",
             collection_id
@@ -2800,6 +3117,7 @@ pub fn delete_source(source_id: i64) -> Result<(), RagError> {
 pub fn delete_source_in_collection(collection_id: String, source_id: i64) -> Result<(), RagError> {
     let collection_id = normalize_collection_id(collection_id);
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let deleted_ids = chunk_ids_for_source(&conn, source_id, Some(&collection_id))?;
     conn.execute(
         "DELETE FROM chunks WHERE source_id = ?1 AND collection_id = ?2",
         params![source_id, &collection_id],
@@ -2810,7 +3128,10 @@ pub fn delete_source_in_collection(collection_id: String, source_id: i64) -> Res
         params![source_id, &collection_id],
     )
     .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    // The generation bump makes the next activation rebuild BM25/HNSW; the
+    // BM25 removal covers searches that run before that activation.
     mark_collection_data_changed(&conn, &collection_id)?;
+    remove_deleted_chunks_from_active_bm25(&collection_id, &deleted_ids);
     info!("[delete_source] Deleted source {}", source_id);
     Ok(())
 }
@@ -4700,6 +5021,434 @@ mod tests {
             .unwrap_err();
         assert!(matches!(err, RagError::ConcurrentMutation(_)));
 
+        teardown_test_db(db_path);
+    }
+
+    // ---- Index staleness: chunk-id reuse and appends without a rebuild ----
+    //
+    // `chunks.id` is `INTEGER PRIMARY KEY` without AUTOINCREMENT, so SQLite
+    // hands a deleted source's ids to the next inserted chunks. A cached
+    // BM25/HNSW index whose node count still matches the DB must therefore
+    // not be trusted on count alone.
+
+    const STALE_DIM: usize = 768;
+
+    fn stale_axis(i: usize) -> Vec<f32> {
+        let mut v = vec![0.0f32; STALE_DIM];
+        v[i] = 1.0;
+        v
+    }
+
+    fn stale_chunk(index: i32, content: &str, embedding: Vec<f32>) -> ChunkData {
+        ChunkData {
+            content: content.to_string(),
+            chunk_index: index,
+            start_pos: index * 32,
+            end_pos: index * 32 + content.len() as i32,
+            chunk_type: "text".to_string(),
+            embedding,
+        }
+    }
+
+    fn add_completed_source(collection: &str, name: &str, chunks: Vec<ChunkData>) -> i64 {
+        let source =
+            add_source_in_collection(collection.to_string(), name.to_string(), None, None).unwrap();
+        update_source_status(source.source_id, "completed".to_string()).unwrap();
+        add_chunks(source.source_id, chunks).unwrap();
+        source.source_id
+    }
+
+    fn chunk_ids_of(source_id: i64) -> Vec<i64> {
+        get_connection()
+            .unwrap()
+            .prepare("SELECT id FROM chunks WHERE source_id = ?1 ORDER BY chunk_index")
+            .unwrap()
+            .query_map(params![source_id], |row| row.get(0))
+            .unwrap()
+            .map(|row| row.unwrap())
+            .collect()
+    }
+
+    fn chunk_content(chunk_id: i64) -> Option<String> {
+        get_connection()
+            .unwrap()
+            .query_row(
+                "SELECT content FROM chunks WHERE id = ?1",
+                params![chunk_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .unwrap()
+    }
+
+    /// BM25 leg only: ids the in-memory BM25 index returns for `query`.
+    fn bm25_hit_ids(query: &str) -> Vec<i64> {
+        bm25_search(query.to_string(), 10)
+            .into_iter()
+            .map(|hit| hit.doc_id)
+            .collect()
+    }
+
+    /// Vector leg only: the id the in-memory HNSW index ranks first.
+    fn hnsw_top_id(query: Vec<f32>) -> i64 {
+        crate::api::hnsw_index::search_hnsw(query, 1).unwrap()[0].id
+    }
+
+    /// Simulate an app restart: drop every in-memory index and active marker
+    /// while keeping the SQLite DB and the persisted HNSW file.
+    fn forget_in_memory_indexes() {
+        clear_hnsw_index();
+        bm25_clear_index();
+        *ACTIVE_HNSW_COLLECTION.write().unwrap() = None;
+        *ACTIVE_BM25_COLLECTION.write().unwrap() = None;
+    }
+
+    /// Seeds A (kept) and B (to be deleted), activates (BM25 + HNSW built and
+    /// persisted), then deletes B and adds C. Returns (base_path, c_ids).
+    fn seed_delete_then_add_with_id_reuse(
+        db_path: &std::path::Path,
+        collection: &str,
+    ) -> (String, Vec<i64>) {
+        let base_path = db_path
+            .with_extension("stale-hnsw")
+            .to_string_lossy()
+            .into_owned();
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+
+        add_completed_source(
+            collection,
+            "source a",
+            vec![stale_chunk(0, "anchor alpha", stale_axis(0))],
+        );
+        let source_b = add_completed_source(
+            collection,
+            "source b",
+            vec![
+                stale_chunk(0, "zebrafruit banana", stale_axis(1)),
+                stale_chunk(1, "zebrafruit cherry", stale_axis(2)),
+            ],
+        );
+        let b_ids = chunk_ids_of(source_b);
+
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        assert_eq!(bm25_hit_ids("zebrafruit").len(), 2);
+        assert_eq!(hnsw_top_id(stale_axis(1)), b_ids[0]);
+
+        delete_source_in_collection(collection.to_string(), source_b).unwrap();
+        // C's vectors are B's swapped, so a stale vector index ranks the wrong
+        // C chunk first instead of merely tying.
+        let source_c = add_completed_source(
+            collection,
+            "source c",
+            vec![
+                stale_chunk(0, "quokkastone delta", stale_axis(2)),
+                stale_chunk(1, "quokkastone echo", stale_axis(1)),
+            ],
+        );
+        let c_ids = chunk_ids_of(source_c);
+        // Precondition of the bug: SQLite reused B's rowids for C.
+        assert_eq!(c_ids, b_ids, "expected SQLite to reuse the deleted rowids");
+        (base_path, c_ids)
+    }
+
+    fn assert_index_reflects_c(c_ids: &[i64]) {
+        // BM25: B's word is gone, C's word is found.
+        let stale_hits = bm25_hit_ids("zebrafruit");
+        assert!(
+            stale_hits.is_empty(),
+            "BM25 returned deleted content under reused ids: {:?}",
+            stale_hits
+                .iter()
+                .map(|id| chunk_content(*id))
+                .collect::<Vec<_>>()
+        );
+        let mut fresh_hits = bm25_hit_ids("quokkastone");
+        fresh_hits.sort();
+        assert_eq!(fresh_hits, c_ids.to_vec(), "BM25 must find C's chunks");
+
+        // Vector: axis(1) now belongs to C chunk 1, axis(2) to C chunk 0.
+        assert_eq!(
+            chunk_content(hnsw_top_id(stale_axis(1))).as_deref(),
+            Some("quokkastone echo")
+        );
+        assert_eq!(
+            chunk_content(hnsw_top_id(stale_axis(2))).as_deref(),
+            Some("quokkastone delta")
+        );
+    }
+
+    #[test]
+    fn activate_rejects_in_memory_indexes_after_delete_then_add_reuses_ids() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_stale_in_memory_index_id_reuse.db");
+        let collection = "stale-in-memory";
+        let (base_path, c_ids) = seed_delete_then_add_with_id_reuse(&db_path, collection);
+
+        // Same process, no explicit rebuild: activation alone must notice.
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        assert_index_reflects_c(&c_ids);
+
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn activate_rejects_persisted_hnsw_after_delete_then_add_reuses_ids() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_stale_persisted_index_id_reuse.db");
+        let collection = "stale-persisted";
+        let (base_path, c_ids) = seed_delete_then_add_with_id_reuse(&db_path, collection);
+
+        // Restart: the persisted HNSW file still has B's vectors under the
+        // ids C now owns, and its node count equals the DB count.
+        forget_in_memory_indexes();
+        assert!(
+            !load_collection_hnsw_index(collection.to_string(), base_path.clone()).unwrap(),
+            "a persisted HNSW built before the delete/add must not be accepted"
+        );
+        forget_in_memory_indexes();
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        assert_index_reflects_c(&c_ids);
+
+        // The rebuilt index was persisted with the current generation, so the
+        // next restart loads it instead of rebuilding again.
+        forget_in_memory_indexes();
+        assert!(load_collection_hnsw_index(collection.to_string(), base_path.clone()).unwrap());
+
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        teardown_test_db(db_path);
+    }
+
+    /// Seeds one source, activates (HNSW built and persisted), and simulates a
+    /// restart. Returns base_path.
+    fn seed_persisted_hnsw(db_path: &std::path::Path, collection: &str, ext: &str) -> String {
+        let base_path = db_path.with_extension(ext).to_string_lossy().into_owned();
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        add_completed_source(
+            collection,
+            "source a",
+            vec![
+                stale_chunk(0, "anchor alpha", stale_axis(0)),
+                stale_chunk(1, "anchor bravo", stale_axis(1)),
+            ],
+        );
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        forget_in_memory_indexes();
+        base_path
+    }
+
+    #[test]
+    fn persisted_hnsw_survives_a_moved_app_container() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_persisted_hnsw_moved_container.db");
+        let collection = "moved-container";
+        let base_path = seed_persisted_hnsw(&db_path, collection, "moved-hnsw");
+
+        // The record holds the file name, not the absolute sandbox path.
+        let conn = get_connection().unwrap();
+        let saved_path: Option<String> = conn
+            .query_row(
+                "SELECT hnsw_saved_path FROM collection_index_state WHERE collection_id = ?1",
+                params![collection],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            saved_path.as_deref(),
+            Some(hnsw_saved_path_key(&base_path).as_str())
+        );
+        assert!(!saved_path.unwrap().contains(std::path::MAIN_SEPARATOR));
+
+        // iOS moved the container: same file name, different directory.
+        let moved_dir =
+            std::env::temp_dir().join(format!("rag_moved_container_{}", std::process::id()));
+        std::fs::create_dir_all(&moved_dir).unwrap();
+        let moved_base = moved_dir
+            .join(std::path::Path::new(&base_path).file_name().unwrap())
+            .to_string_lossy()
+            .into_owned();
+        std::fs::copy(format!("{base_path}.hnsw"), format!("{moved_base}.hnsw")).unwrap();
+        assert!(
+            load_collection_hnsw_index(collection.to_string(), moved_base.clone()).unwrap(),
+            "a persisted HNSW must be reused after the container path changes"
+        );
+
+        // A file under another name is still not trusted.
+        forget_in_memory_indexes();
+        let other_base = moved_dir.join("other_hnsw").to_string_lossy().into_owned();
+        std::fs::copy(format!("{base_path}.hnsw"), format!("{other_base}.hnsw")).unwrap();
+        assert!(!load_collection_hnsw_index(collection.to_string(), other_base).unwrap());
+
+        let _ = std::fs::remove_dir_all(&moved_dir);
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn persisted_hnsw_is_rejected_after_an_older_version_mutated_the_collection() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_persisted_hnsw_downgrade.db");
+        let collection = "downgrade";
+        let base_path = seed_persisted_hnsw(&db_path, collection, "downgrade-hnsw");
+
+        // An older version deletes and re-adds with reused ids: it bumps only
+        // data_generation (it predates index_generation and the saved record)
+        // and swaps the vectors behind the same ids, keeping the count.
+        let conn = get_connection().unwrap();
+        conn.execute(
+            "UPDATE collection_index_state SET data_generation = data_generation + 1
+             WHERE collection_id = ?1",
+            params![collection],
+        )
+        .unwrap();
+        drop(conn);
+
+        assert!(
+            !load_collection_hnsw_index(collection.to_string(), base_path.clone()).unwrap(),
+            "index_generation still matches, but data_generation moved: must rebuild"
+        );
+
+        // Activation rebuilds and re-records, so the next restart reuses it.
+        forget_in_memory_indexes();
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        forget_in_memory_indexes();
+        assert!(load_collection_hnsw_index(collection.to_string(), base_path.clone()).unwrap());
+
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn vector_search_does_not_write_collection_state() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_vector_search_read_only.db");
+        let collection = "read-only-search";
+        add_completed_source(
+            collection,
+            "source a",
+            vec![stale_chunk(0, "anchor alpha", stale_axis(0))],
+        );
+        // Build the active HNSW for the collection.
+        let first = search_chunks_in_collection(collection.to_string(), stale_axis(0), 1).unwrap();
+        assert_eq!(first.len(), 1);
+
+        // An ingest holds the write lock. With no busy_timeout, a search that
+        // wrote (even a no-op INSERT OR IGNORE) would fail with SQLITE_BUSY;
+        // a read-only search proceeds under WAL.
+        let writer = get_connection().unwrap();
+        writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let results = search_chunks_in_collection(collection.to_string(), stale_axis(0), 1)
+            .expect("a warm vector search must not need the write lock");
+        assert_eq!(results.len(), 1);
+        assert_eq!(
+            read_collection_generation(&writer, "never-created", "index_generation").unwrap(),
+            None
+        );
+        writer.execute_batch("ROLLBACK").unwrap();
+        drop(writer);
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn delete_removes_chunks_from_the_active_bm25_index_immediately() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_delete_removes_from_active_bm25.db");
+        let collection = "bm25-delete";
+        add_completed_source(
+            collection,
+            "keep",
+            vec![stale_chunk(0, "anchor alpha", vec![1.0, 0.0, 0.0, 0.0])],
+        );
+        let doomed = add_completed_source(
+            collection,
+            "doomed",
+            vec![stale_chunk(
+                0,
+                "zebrafruit banana",
+                vec![0.0, 1.0, 0.0, 0.0],
+            )],
+        );
+        let cleared = add_completed_source(
+            collection,
+            "cleared",
+            vec![stale_chunk(0, "walrusberry", vec![0.0, 0.0, 1.0, 0.0])],
+        );
+        rebuild_chunk_bm25_index_for_collection(collection.to_string()).unwrap();
+        assert_eq!(bm25_hit_ids("zebrafruit").len(), 1);
+        assert_eq!(bm25_hit_ids("walrusberry").len(), 1);
+
+        // Searches that run before the next activation must not see removed rows.
+        delete_source_in_collection(collection.to_string(), doomed).unwrap();
+        assert!(bm25_hit_ids("zebrafruit").is_empty());
+        clear_source_chunks(cleared).unwrap();
+        assert!(bm25_hit_ids("walrusberry").is_empty());
+        assert_eq!(bm25_hit_ids("anchor").len(), 1);
+
+        teardown_test_db(db_path);
+    }
+
+    /// Contract for appends: `add_chunks` bumps `data_generation`, so the
+    /// next `activate_collection_for_hybrid_search` (which every service-level
+    /// search runs first) rebuilds BM25/HNSW without an explicit rebuild call.
+    /// Activations with no intervening data change reuse the indexes.
+    #[test]
+    fn activate_picks_up_appended_chunks_and_skips_rebuild_when_unchanged() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_activate_picks_up_appends.db");
+        let collection = "append-contract";
+        let base_path = db_path
+            .with_extension("append-hnsw")
+            .to_string_lossy()
+            .into_owned();
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+
+        let source = add_completed_source(
+            collection,
+            "source",
+            vec![stale_chunk(0, "anchor alpha", stale_axis(0))],
+        );
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+
+        let rebuilds = || {
+            let stats = activation_metrics::activation_timing_stats();
+            (stats.bm25_rebuild_count, stats.hnsw_rebuild_count)
+        };
+
+        // No data change: activation is a no-op for both indexes.
+        let before = rebuilds();
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        assert_eq!(
+            rebuilds(),
+            before,
+            "unchanged data must not trigger a rebuild"
+        );
+
+        // Append without calling any rebuild.
+        add_chunks(
+            source,
+            vec![stale_chunk(1, "platypusgem appended", stale_axis(5))],
+        )
+        .unwrap();
+        let appended_id = chunk_ids_of(source)[1];
+
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        assert_eq!(bm25_hit_ids("platypusgem"), vec![appended_id]);
+        assert_eq!(hnsw_top_id(stale_axis(5)), appended_id);
+        let after_append = rebuilds();
+        assert_eq!(after_append.0, before.0 + 1);
+        assert_eq!(after_append.1, before.1 + 1);
+
+        // And it settles again.
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        assert_eq!(rebuilds(), after_append);
+
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
         teardown_test_db(db_path);
     }
 }

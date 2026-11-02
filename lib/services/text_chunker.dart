@@ -47,6 +47,7 @@ class TextChunker {
     );
     final normalizedOverlapChars = normalizeOverlapChars(
       overlapChars,
+      maxChunkChars: normalizedMaxChars,
       context: 'TextChunker.recursive',
     );
     return chunker.semanticChunkWithOverlap(

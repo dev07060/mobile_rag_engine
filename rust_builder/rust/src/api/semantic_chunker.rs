@@ -19,7 +19,9 @@
 use crate::api::ingest_metrics::{
     legacy_counters_enabled, LEGACY_CHUNKER_CHUNKS_OUT, LEGACY_CHUNKER_TEXT_IN,
 };
-use crate::api::tokenizer::{count_tokens_untruncated, resolve_truncation_max_length};
+use crate::api::tokenizer::{
+    count_tokens_untruncated, resolve_truncation_max_length, TOKENIZER_BASE_TRUNCATION_MAX_LENGTH,
+};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
@@ -27,11 +29,14 @@ use std::ops::Range;
 use text_splitter::TextSplitter;
 
 static NUMBERED_SECTION_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^(?:\d+(?:\.\d+)*|[IVXLCM]+)[\.\)]\s+\S").unwrap());
+    Lazy::new(|| Regex::new(r"^(?:\d{1,3}(?:\.\d+)*|[IVXLCM]+)[\.\)]\s+\S").unwrap());
 static ENGLISH_SECTION_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)^(chapter|section|appendix)\b").unwrap());
 static KOREAN_SECTION_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^제\s*\d+\s*[장절편부]").unwrap());
+/// Statute article heading: "제1조 (목적)", "제3조의2", but not "제3조에 따라".
+static KOREAN_ARTICLE_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^제\s*\d+\s*조(?:의\s*\d+)?(?:\s|\(|$)").unwrap());
 
 /// Chunk type classification.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -401,6 +406,14 @@ fn cached_token_count(
     Some(count)
 }
 
+/// Whether `range` fits the token budget the embedder will apply to it.
+///
+/// If the tokenizer is not initialized (or tokenization fails) this returns
+/// `true`, so chunking falls back to the character budget alone. That is
+/// deliberate: `semantic_chunk` is a public sync API that callers may use
+/// before the embedding model has loaded, and most unit tests run without a
+/// tokenizer. Ingestion initializes the tokenizer first, so the token check is
+/// always active on the path that feeds the embedder.
 fn fits_token_budget(
     text: &str,
     range: &Range<usize>,
@@ -412,21 +425,26 @@ fn fits_token_budget(
         .unwrap_or(true)
 }
 
-fn largest_token_fitting_prefix_end(
+/// Largest end in `cursor..end` (at most `upper_char_count` chars past
+/// `cursor`) such that `check_start..candidate_end` fits the token budget.
+/// `check_start` is `cursor` itself, or an earlier overlap start whose tokens
+/// must fit alongside the new content. Returns `cursor` if nothing fits.
+fn largest_token_fitting_end(
     text: &str,
-    start: usize,
+    check_start: usize,
+    cursor: usize,
     end: usize,
     upper_char_count: usize,
     cache: &mut HashMap<(usize, usize), usize>,
 ) -> usize {
     let mut low = 1usize;
     let mut high = upper_char_count;
-    let mut best = start;
+    let mut best = cursor;
 
     while low <= high {
         let mid = low + (high - low) / 2;
-        let candidate_end = advance_by_chars(text, start, end, mid);
-        if fits_token_budget(text, &(start..candidate_end), cache) {
+        let candidate_end = advance_by_chars(text, cursor, end, mid);
+        if fits_token_budget(text, &(check_start..candidate_end), cache) {
             best = candidate_end;
             low = mid + 1;
         } else if mid == 1 {
@@ -439,55 +457,157 @@ fn largest_token_fitting_prefix_end(
     best
 }
 
-fn split_token_budget_range(
-    text: &str,
-    range: Range<usize>,
-    max_chars: usize,
-    cache: &mut HashMap<(usize, usize), usize>,
-) -> Vec<Range<usize>> {
-    let mut parts = Vec::new();
-    let mut cursor = range.start;
+/// Overlap is capped at this many tokens, so a chunk always has at least half
+/// of the base budget for new content (otherwise a large overlap on dense text
+/// would leave room for only a sliver of new text per chunk).
+const MAX_OVERLAP_TOKENS: usize = TOKENIZER_BASE_TRUNCATION_MAX_LENGTH / 2;
 
-    while cursor < range.end {
-        let remaining = cursor..range.end;
-        if fits_token_budget(text, &remaining, cache) {
-            parts.push(remaining);
-            break;
-        }
-
-        let upper_char_count = char_count_in_range(text, &remaining).min(max_chars.max(1));
-        let best_end =
-            largest_token_fitting_prefix_end(text, cursor, range.end, upper_char_count, cache);
-        let next_end = if best_end > cursor {
-            best_end
-        } else {
-            advance_by_chars(text, cursor, range.end, 1)
-        };
-
-        parts.push(cursor..next_end);
-        cursor = next_end;
-    }
-
-    parts
+/// Upper bound for `overlap_chars`: strictly less than half of `max_chars`.
+/// Mirrored by `normalizeOverlapChars` in `lib/src/internal/validation.dart`.
+pub(crate) fn clamp_overlap_chars(max_chars: usize, overlap_chars: usize) -> usize {
+    overlap_chars.min(max_chars.saturating_sub(1) / 2)
 }
 
+/// Moves an overlap start later (shrinking the overlap taken from `prev`)
+/// until `accept(start)` holds. Prefers sentence/line boundaries, then falls
+/// back to a char-level search. Returns `no_overlap` if no overlap is
+/// acceptable. Only the overlap shrinks; the new content is untouched.
+fn shrink_overlap_start(
+    text: &str,
+    prev: &Range<usize>,
+    from: usize,
+    no_overlap: usize,
+    mut accept: impl FnMut(usize) -> bool,
+) -> usize {
+    if let Some(boundary) = overlap_boundary_starts(text, prev)
+        .into_iter()
+        .filter(|&b| b > from && b < prev.end)
+        .find(|&b| accept(b))
+    {
+        return boundary;
+    }
+
+    // Char-level: largest overlap length `k` whose start is acceptable.
+    let total = char_count_in_range(text, &(from..prev.end));
+    let mut low = 1usize;
+    let mut high = total.saturating_sub(1);
+    let mut best = no_overlap;
+    while low <= high {
+        let k = low + (high - low) / 2;
+        let start = advance_by_chars(text, from, prev.end, total - k);
+        if accept(start) {
+            best = start;
+            low = k + 1;
+        } else {
+            high = k - 1;
+        }
+    }
+    best
+}
+
+/// Start of the overlap prefix for the chunk whose new content begins at
+/// `cursor`, taken from the tail of the previous chunk's new content `prev`.
+/// Returns `cursor` when there is no overlap.
+fn overlap_prefix_start(
+    text: &str,
+    prev: Option<&Range<usize>>,
+    cursor: usize,
+    overlap_chars: usize,
+    cache: &mut HashMap<(usize, usize), usize>,
+) -> usize {
+    let Some(prev) = prev else {
+        return cursor;
+    };
+    if overlap_chars == 0 {
+        return cursor;
+    }
+    let start = overlap_start(text, prev, overlap_chars);
+    if start >= prev.end {
+        return cursor;
+    }
+
+    let within_cap = |s: usize, cache: &mut HashMap<(usize, usize), usize>| {
+        cached_token_count(text, &(s..prev.end), cache)
+            .map(|count| count <= MAX_OVERLAP_TOKENS)
+            .unwrap_or(true)
+    };
+    if within_cap(start, cache) {
+        return start;
+    }
+    shrink_overlap_start(text, prev, start, cursor, |s| within_cap(s, cache))
+}
+
+/// Applies the token budget to char-planned ranges, prepending up to
+/// `overlap_chars` of the previous chunk to each chunk after the first.
+///
+/// The budget is checked on the final chunk, overlap included, so nothing the
+/// embedder sees is silently truncated. When a chunk would not fit, the
+/// overlap shrinks first; the new content is split only when it does not fit
+/// on its own, and then the remainder carries into the next chunk. With
+/// `overlap_chars == 0` this is the plain per-range budget split.
 fn enforce_token_budget(
     text: &str,
     ranges: Vec<Range<usize>>,
     max_chars: usize,
+    overlap_chars: usize,
 ) -> Vec<Range<usize>> {
     let mut cache = HashMap::new();
-    let mut validated = Vec::new();
+    let mut planned = Vec::new();
+    let mut prev: Option<Range<usize>> = None;
 
     for range in ranges {
-        if fits_token_budget(text, &range, &mut cache) {
-            validated.push(range);
-        } else {
-            validated.extend(split_token_budget_range(text, range, max_chars, &mut cache));
+        let mut cursor = range.start;
+        while cursor < range.end {
+            let overlap =
+                overlap_prefix_start(text, prev.as_ref(), cursor, overlap_chars, &mut cache);
+            let remaining = cursor..range.end;
+
+            let (start, end) = if fits_token_budget(text, &(overlap..range.end), &mut cache) {
+                (overlap, range.end)
+            } else if fits_token_budget(text, &remaining, &mut cache) {
+                // The new content fits alone: shrink only the overlap.
+                let prev_range = prev.as_ref().expect("overlap implies a previous chunk");
+                let shrunk = shrink_overlap_start(text, prev_range, overlap, cursor, |s| {
+                    fits_token_budget(text, &(s..range.end), &mut cache)
+                });
+                (shrunk, range.end)
+            } else {
+                // The new content itself is over budget: split it, keeping the
+                // overlap if there is room, and carry the rest forward.
+                let upper_char_count = char_count_in_range(text, &remaining).min(max_chars.max(1));
+                let mut start = overlap;
+                let mut end = largest_token_fitting_end(
+                    text,
+                    start,
+                    cursor,
+                    range.end,
+                    upper_char_count,
+                    &mut cache,
+                );
+                if end <= cursor && start < cursor {
+                    start = cursor;
+                    end = largest_token_fitting_end(
+                        text,
+                        cursor,
+                        cursor,
+                        range.end,
+                        upper_char_count,
+                        &mut cache,
+                    );
+                }
+                if end <= cursor {
+                    end = advance_by_chars(text, cursor, range.end, 1);
+                }
+                (start, end)
+            };
+
+            planned.push(start..end);
+            prev = Some(cursor..end);
+            cursor = end;
         }
     }
 
-    validated
+    planned
 }
 
 fn plan_plain_text_ranges_char_budget(text: &str, max_chars: usize) -> Vec<Range<usize>> {
@@ -501,8 +621,12 @@ fn plan_plain_text_ranges_char_budget(text: &str, max_chars: usize) -> Vec<Range
         }
 
         let mut line_buffer: Option<Range<usize>> = None;
-        for line in split_line_ranges(text, &paragraph) {
-            let is_article_start = is_article_title(text[line.clone()].trim());
+        for (line_index, line) in split_line_ranges(text, &paragraph).into_iter().enumerate() {
+            // Paragraphs are separated by blank lines, so only the first line
+            // of a paragraph has a blank line (or the document start) before
+            // it. Lines inside a running paragraph, e.g. hard-wrapped prose,
+            // break only on explicit section patterns.
+            let is_article_start = is_section_break(text[line.clone()].trim(), line_index == 0);
             let candidate = match &line_buffer {
                 Some(buffer) => buffer.start..line.end,
                 None => line.clone(),
@@ -533,10 +657,21 @@ fn plan_plain_text_ranges_char_budget(text: &str, max_chars: usize) -> Vec<Range
 }
 
 fn plan_plain_text_ranges(text: &str, max_chars: usize) -> Vec<Range<usize>> {
+    plan_plain_text_ranges_with_overlap(text, max_chars, 0)
+}
+
+/// Final chunk ranges (overlap included) that each fit `max_chars` of new
+/// content and the embedder's token budget.
+fn plan_plain_text_ranges_with_overlap(
+    text: &str,
+    max_chars: usize,
+    overlap_chars: usize,
+) -> Vec<Range<usize>> {
     enforce_token_budget(
         text,
         plan_plain_text_ranges_char_budget(text, max_chars),
         max_chars,
+        overlap_chars,
     )
 }
 
@@ -637,20 +772,63 @@ pub fn semantic_chunk(text: String, max_chars: i32) -> Vec<SemanticChunk> {
     )
 }
 
+fn ends_with_sentence_boundary(trimmed: &str) -> bool {
+    trimmed
+        .chars()
+        .last()
+        .map(is_sentence_boundary_char)
+        .unwrap_or(false)
+}
+
+/// Headings recognisable from the line alone: Markdown `#`, numbered
+/// sections, `Chapter/Section/Appendix ...`, and Korean `제N장/절/편/부/조`.
+fn is_explicit_section_heading(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.is_empty() || is_bullet_line(trimmed) {
+        return false;
+    }
+
+    if trimmed.starts_with('#')
+        || NUMBERED_SECTION_RE.is_match(trimmed)
+        || KOREAN_SECTION_RE.is_match(trimmed)
+        || KOREAN_ARTICLE_RE.is_match(trimmed)
+    {
+        return true;
+    }
+
+    // "section ..." also starts ordinary wrapped prose lines, so require a
+    // capitalised, heading-shaped line.
+    ENGLISH_SECTION_RE.is_match(trimmed)
+        && trimmed.chars().next().map_or(false, char::is_uppercase)
+        && trimmed.chars().count() <= 80
+        && !ends_with_sentence_boundary(trimmed)
+}
+
+/// Whether a line inside an oversized paragraph starts a new chunk.
+///
+/// A short, unpunctuated line only looks like a heading; on its own that is
+/// no evidence, because hard-wrapped prose (PDF extraction, plain-text files)
+/// is made of exactly such lines. So the shape heuristic in
+/// [`is_article_title`] applies only when the line follows a blank line;
+/// inside a running paragraph only explicit section patterns split.
+fn is_section_break(line: &str, preceded_by_blank_line: bool) -> bool {
+    if preceded_by_blank_line {
+        is_article_title(line)
+    } else {
+        is_explicit_section_heading(line)
+    }
+}
+
+/// Whether a line looks like a title, judged from the line alone (explicit
+/// section patterns, or a short heading-shaped line). Use
+/// [`is_section_break`] to decide whether to split on it.
 fn is_article_title(line: &str) -> bool {
     let trimmed = line.trim();
     if trimmed.is_empty() || is_bullet_line(trimmed) {
         return false;
     }
 
-    if trimmed.starts_with('#') {
-        return true;
-    }
-
-    if NUMBERED_SECTION_RE.is_match(trimmed)
-        || ENGLISH_SECTION_RE.is_match(trimmed)
-        || KOREAN_SECTION_RE.is_match(trimmed)
-    {
+    if is_explicit_section_heading(trimmed) || ENGLISH_SECTION_RE.is_match(trimmed) {
         return true;
     }
 
@@ -723,25 +901,12 @@ pub fn semantic_chunk_with_overlap(
         return vec![];
     }
 
-    let base_ranges = plan_plain_text_ranges(&text, max_chars.max(100) as usize);
-    let overlap = overlap_chars.max(0) as usize;
-
-    let result = if overlap == 0 || base_ranges.len() <= 1 {
-        materialize_semantic_chunks(&text, base_ranges)
-    } else {
-        let ranges = base_ranges
-            .iter()
-            .enumerate()
-            .map(|(index, range)| {
-                if index == 0 {
-                    range.clone()
-                } else {
-                    overlap_start(&text, &base_ranges[index - 1], overlap)..range.end
-                }
-            })
-            .collect();
-        materialize_semantic_chunks(&text, ranges)
-    };
+    let max_chars = max_chars.max(100) as usize;
+    let overlap = clamp_overlap_chars(max_chars, overlap_chars.max(0) as usize);
+    let result = materialize_semantic_chunks(
+        &text,
+        plan_plain_text_ranges_with_overlap(&text, max_chars, overlap),
+    );
 
     if count_traffic {
         LEGACY_CHUNKER_CHUNKS_OUT.record(result.iter().map(|c| c.content.len() as u64).sum());
@@ -959,6 +1124,337 @@ mod tests {
         assert!(!is_article_title("Click Save"));
         assert!(!is_article_title("Settings"));
         assert!(!is_article_title("Retry later"));
+    }
+
+    // ---------------------------------------------------------------------
+    // Fixtures for the hard-wrap / overlap-budget regressions.
+    // ---------------------------------------------------------------------
+
+    fn next_rand(seed: &mut u64) -> usize {
+        *seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        (*seed >> 33) as usize
+    }
+
+    /// Joins `words` into sentences and hard-wraps them at `width` chars,
+    /// like PDF extraction output: no blank lines, and most lines end
+    /// mid-sentence without punctuation (so they "look like" short titles).
+    fn hard_wrap(words: &[&str], target_chars: usize, width: usize, ender: &str) -> String {
+        let mut seed = 42u64;
+        let mut text = String::new();
+        let mut line_chars = 0usize;
+        let mut sentence_len = 0usize;
+        let mut total_chars = 0usize;
+        while total_chars < target_chars {
+            let mut word = words[next_rand(&mut seed) % words.len()].to_string();
+            sentence_len += 1;
+            if sentence_len >= 8 + next_rand(&mut seed) % 12 {
+                word.push_str(ender);
+                sentence_len = 0;
+            }
+            let word_chars = word.chars().count();
+            if line_chars > 0 && line_chars + 1 + word_chars > width {
+                text.push('\n');
+                total_chars += 1;
+                line_chars = 0;
+            } else if line_chars > 0 {
+                text.push(' ');
+                total_chars += 1;
+                line_chars += 1;
+            }
+            text.push_str(&word);
+            total_chars += word_chars;
+            line_chars += word_chars;
+        }
+        text
+    }
+
+    const PROSE_WORDS: [&str; 24] = [
+        "the",
+        "engine",
+        "stores",
+        "vectors",
+        "for",
+        "each",
+        "chunk",
+        "and",
+        "retrieval",
+        "uses",
+        "hybrid",
+        "scoring",
+        "with",
+        "lexical",
+        "signals",
+        "document",
+        "mobile",
+        "device",
+        "query",
+        "embedding",
+        "model",
+        "returns",
+        "ranked",
+        "results",
+    ];
+    /// One or two letters per word: token-dense under the word-level test tokenizer.
+    const DENSE_WORDS: [&str; 8] = ["a", "bc", "d", "ef", "g", "hi", "j", "kl"];
+    const KOREAN_WORDS: [&str; 12] = [
+        "가",
+        "나다",
+        "라",
+        "마바",
+        "사",
+        "아자",
+        "차",
+        "카타",
+        "파",
+        "하가",
+        "임베딩",
+        "검색",
+    ];
+
+    fn non_whitespace(text: &str) -> String {
+        text.chars().filter(|c| !c.is_whitespace()).collect()
+    }
+
+    /// Every chunk is a raw source slice that fits the token budget, overlap
+    /// included, and the non-overlap parts concatenate back to the input.
+    /// Returns how many chunks carry a non-empty overlap prefix.
+    fn assert_chunks_fit_budget_and_cover_input(text: &str, chunks: &[SemanticChunk]) -> usize {
+        let mut prev_end = 0usize;
+        let mut unique = String::new();
+        let mut overlapped = 0usize;
+        for chunk in chunks {
+            assert_chunk_matches_source(text, chunk);
+            let tokens = count_tokens_untruncated(&chunk.content).unwrap();
+            let budget = resolve_truncation_max_length(&chunk.content);
+            assert!(
+                tokens <= budget,
+                "chunk {} has {} tokens > budget {}",
+                chunk.index,
+                tokens,
+                budget
+            );
+            let start = chunk.start_pos as usize;
+            let end = chunk.end_pos as usize;
+            assert!(
+                end > prev_end || prev_end == 0,
+                "chunk {} adds no new text",
+                chunk.index
+            );
+            if chunk.index > 0 && start < prev_end {
+                overlapped += 1;
+            }
+            unique.push_str(&text[start.max(prev_end)..end]);
+            prev_end = end;
+        }
+        assert_eq!(
+            non_whitespace(&unique),
+            non_whitespace(text),
+            "unique text was lost"
+        );
+        overlapped
+    }
+
+    #[test]
+    fn test_hard_wrapped_prose_is_not_split_per_line() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+
+        let text = hard_wrap(&PROSE_WORDS, 20_000, 72, ".");
+        let line_count = text.lines().count();
+        let max_chars = 1000;
+        let chunks = semantic_chunk(text.clone(), max_chars);
+
+        let avg_chars = chunks
+            .iter()
+            .map(|c| c.content.chars().count())
+            .sum::<usize>()
+            / chunks.len();
+        assert!(
+            chunks.len() * 4 < line_count,
+            "{} chunks for {} wrapped lines: lines are being treated as titles",
+            chunks.len(),
+            line_count
+        );
+        assert!(
+            avg_chars >= max_chars as usize * 3 / 4,
+            "average chunk is {avg_chars} chars, expected near {max_chars}"
+        );
+    }
+
+    #[test]
+    fn test_hard_wrapped_korean_prose_is_not_split_per_line() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+
+        let text = hard_wrap(&KOREAN_WORDS, 8_000, 28, "다.");
+        let line_count = text.lines().count();
+        let chunks = semantic_chunk(text.clone(), 400);
+        assert!(
+            chunks.len() * 4 < line_count,
+            "{} chunks for {} wrapped lines",
+            chunks.len(),
+            line_count
+        );
+    }
+
+    #[test]
+    fn test_real_titles_still_split() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+
+        // Blank-line separated short heading followed by body.
+        let text = "Intro paragraph that explains the purpose of the document.\n\n\
+                    Short Standalone Heading\n\
+                    Body text follows the heading directly and keeps going.";
+        let chunks = semantic_chunk(text.to_string(), 500);
+        assert!(chunks
+            .iter()
+            .any(|c| c.content.starts_with("Short Standalone Heading")));
+
+        // Numbered article heading inside an oversized paragraph.
+        let body = "This sentence is body text that belongs to the section above it.\n";
+        let text =
+            format!("1. Overview\n{body}{body}2. Installation\n{body}{body}3. Usage\n{body}{body}");
+        let chunks = semantic_chunk(text.clone(), 200);
+        for heading in ["1. Overview", "2. Installation", "3. Usage"] {
+            assert!(
+                chunks.iter().any(|c| c.content.starts_with(heading)),
+                "{heading:?} did not start a chunk: {:?}",
+                chunks.iter().map(|c| &c.content).collect::<Vec<_>>()
+            );
+        }
+
+        // Korean statute headings inside an oversized paragraph.
+        let text = "제1조 (목적)\n이 법은 개인정보의 처리 및 보호에 관한 사항을 정한다.\n\
+                    제2조 (정의)\n이 법에서 사용하는 용어의 뜻은 다음과 같다.\n\
+                    제3조 (적용 범위)\n이 법은 모든 개인정보처리자에게 적용한다.\n";
+        let chunks = semantic_chunk(text.to_string(), 100);
+        for heading in ["제1조 (목적)", "제2조 (정의)", "제3조 (적용 범위)"] {
+            assert!(
+                chunks.iter().any(|c| c.content.starts_with(heading)),
+                "{heading:?} did not start a chunk: {:?}",
+                chunks.iter().map(|c| &c.content).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn test_short_line_inside_running_paragraph_is_not_a_title() {
+        assert!(!is_section_break("Short Standalone Heading", false));
+        assert!(is_section_break("Short Standalone Heading", true));
+        assert!(is_section_break("1. Overview", false));
+        assert!(is_section_break("제1조 (목적)", false));
+        assert!(is_section_break("제1조의2 (정의)", false));
+        assert!(!is_section_break("제3조에 따라 처리한다", false));
+        assert!(!is_section_break("2019. The results were collected", false));
+        assert!(!is_section_break("section of the report describes", false));
+    }
+
+    #[test]
+    fn test_overlap_chars_are_clamped_below_half_of_max_chars() {
+        assert_eq!(clamp_overlap_chars(500, 600), 249);
+        assert_eq!(clamp_overlap_chars(1000, 30), 30);
+        assert_eq!(clamp_overlap_chars(100, 50), 49);
+        assert_eq!(clamp_overlap_chars(100, 0), 0);
+    }
+
+    #[test]
+    fn test_default_overlap_keeps_dense_chunks_within_token_budget() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+
+        let text = hard_wrap(&DENSE_WORDS, 12_000, 72, ".");
+        let chunks = semantic_chunk_with_overlap(text.clone(), 1000, 30);
+        assert!(chunks.len() > 1);
+        let overlapped = assert_chunks_fit_budget_and_cover_input(&text, &chunks);
+        assert!(
+            overlapped * 2 >= chunks.len(),
+            "only {overlapped}/{} chunks kept their overlap",
+            chunks.len()
+        );
+    }
+
+    #[test]
+    fn test_large_overlap_keeps_chunks_within_token_budget() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+
+        let text = hard_wrap(&DENSE_WORDS, 12_000, 72, ".");
+        let chunks = semantic_chunk_with_overlap(text.clone(), 1000, 800);
+        assert_chunks_fit_budget_and_cover_input(&text, &chunks);
+    }
+
+    #[test]
+    fn test_korean_overlap_larger_than_max_chars_stays_within_budget() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+
+        let paragraph = hard_wrap(&KOREAN_WORDS, 450, 40, "다.");
+        let text = std::iter::repeat(paragraph)
+            .take(20)
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        for overlap in [30, 600] {
+            let chunks = semantic_chunk_with_overlap(text.clone(), 500, overlap);
+            assert!(chunks.len() > 1);
+            assert_chunks_fit_budget_and_cover_input(&text, &chunks);
+        }
+    }
+
+    /// Before/after numbers for the audit fixtures, with the real MiniLM
+    /// tokenizer. Run with
+    /// `MRE_TOKENIZER_JSON=/path/to/tokenizer.json cargo test --lib \
+    ///  chunking_audit_report -- --ignored --nocapture --test-threads=1`.
+    #[test]
+    #[ignore]
+    fn chunking_audit_report() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let path = std::env::var("MRE_TOKENIZER_JSON").expect("set MRE_TOKENIZER_JSON");
+        init_tokenizer(path).unwrap();
+
+        let over_budget = |chunks: &[SemanticChunk]| {
+            chunks
+                .iter()
+                .filter(|c| {
+                    count_tokens_untruncated(&c.content).unwrap()
+                        > resolve_truncation_max_length(&c.content)
+                })
+                .count()
+        };
+        let report = |name: &str, text: &str, max: i32, overlap: i32| {
+            let chunks = semantic_chunk_with_overlap(text.to_string(), max, overlap);
+            let avg = chunks.iter().map(|c| c.content.len()).sum::<usize>() / chunks.len();
+            println!(
+                "{name}: {} bytes, max {max}, overlap {overlap} -> {} chunks, avg {avg} B, {} over budget",
+                text.len(),
+                chunks.len(),
+                over_budget(&chunks)
+            );
+        };
+
+        let prose = hard_wrap(&PROSE_WORDS, 200_000, 72, ".");
+        report("hard-wrapped prose", &prose, 1500, 0);
+        report("hard-wrapped prose", &prose, 1500, 30);
+        let dense = hard_wrap(&KOREAN_WORDS, 100_000, 72, "다.");
+        report("token-dense korean", &dense, 1000, 30);
+        report("token-dense korean", &dense, 1000, 0);
+        report("token-dense korean", &dense, 500, 600);
     }
 }
 

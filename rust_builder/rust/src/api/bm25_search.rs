@@ -87,6 +87,31 @@ impl InvertedIndex {
         self.avg_doc_length = self.total_tokens as f64 / self.doc_count as f64;
     }
 
+    /// Batch form of [`remove_document`]: one pass over the postings for the
+    /// whole set instead of one pass per document.
+    fn remove_documents(&mut self, doc_ids: &HashSet<i64>) {
+        let mut removed_any = false;
+        for doc_id in doc_ids {
+            if let Some(meta) = self.doc_meta.remove(doc_id) {
+                removed_any = true;
+                self.doc_count = self.doc_count.saturating_sub(1);
+                self.total_tokens = self.total_tokens.saturating_sub(meta.length);
+            }
+        }
+        if !removed_any {
+            return;
+        }
+        self.avg_doc_length = if self.doc_count > 0 {
+            self.total_tokens as f64 / self.doc_count as f64
+        } else {
+            0.0
+        };
+        for postings_list in self.postings.values_mut() {
+            postings_list.retain(|(id, _)| !doc_ids.contains(id));
+        }
+        self.postings.retain(|_, v| !v.is_empty());
+    }
+
     pub fn remove_document(&mut self, doc_id: i64) {
         if let Some(meta) = self.doc_meta.remove(&doc_id) {
             self.doc_count = self.doc_count.saturating_sub(1);
@@ -291,6 +316,14 @@ pub fn bm25_remove_document(doc_id: i64) {
     let mut index = INVERTED_INDEX.write().unwrap();
     index.remove_document(doc_id);
     debug!("[bm25] Removed document {} from index", doc_id);
+}
+
+/// Remove several documents from the BM25 index in one postings pass.
+pub(crate) fn bm25_remove_documents(doc_ids: &[i64]) {
+    let ids: HashSet<i64> = doc_ids.iter().copied().collect();
+    let mut index = INVERTED_INDEX.write().unwrap();
+    index.remove_documents(&ids);
+    debug!("[bm25] Removed {} documents from index", ids.len());
 }
 
 #[derive(Debug, Clone)]
