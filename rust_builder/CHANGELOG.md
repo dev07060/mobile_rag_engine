@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+* **Embedding truncation**: Text is cut at 512 tokens, the encoder's position limit, instead of at 256, 384 or 512 tokens chosen by character count. Text under 1,200 characters was cut at 256 tokens, so dense scripts such as Korean (about twice the tokens per character of English) lost the end of most chunks. In a desktop measurement on AutoRAGRetrieval (Korean) with a Korean e5 model, chunk-level nDCG@10 rose from 0.907 to 0.942 with semantic chunking and from 0.805 to 0.895 with markdown chunking.
+* **Chunking**:
+  - The semantic chunker's token budget is 512 tokens as well, so dense text is split into fewer, fuller chunks. English text at the default chunk size is chunked as before.
+  - Markdown chunks, including code blocks and tables, now fit the token limit. Only plain-text sections longer than `max_chars` were checked; the rest were truncated at embedding time.
+  - Chunk overlap stays capped at 128 tokens.
+* Existing indexes keep working, since the model and vector space are unchanged. Re-ingesting Korean, Japanese or Chinese documents is optional and recovers text that was truncated.
+* **HNSW**: Building the vector index is about 3.8× faster (20k × 384-dim vectors: 82 s to 22 s), and vector search on a loaded index is about 2× faster. The layer search kept its results in a list that it re-sorted for every neighbor it looked at; it now uses heaps and a visited bitset, and the builder caches vector norms. Recall is unchanged.
+* **BM25**: Korean words with attached particles or endings now match. Whole-word tokens never matched the bare stem: "검색엔진" missed "검색엔진은". Hangul words now also index their syllable bigrams. BM25 is rebuilt at activation, so existing data needs no migration.
+* **Chunking**: Splitting paragraphs that exceed the token budget tokenizes each paragraph once instead of once per candidate, so dense text such as Korean chunks up to 3× faster. Every chunk is still checked against the budget with an exact count.
+
 ## 0.21.2
 * **Search index**:
   - Deleted chunks no longer come back in results. SQLite reuses the ids of deleted chunks, and an index was reused whenever its chunk count matched the database. Each BM25/HNSW index now records the collection generation it was built from, and is rebuilt when the data changed. Deletes also remove ids from the active BM25 index.

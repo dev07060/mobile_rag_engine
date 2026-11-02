@@ -1,3 +1,4 @@
+use crate::api::vector_math::{dot_f32, l2_norm_f32};
 use crate::api::vector_quant::{
     cosine_similarity_active_quantized, quantize_f32_for_active_profile, ActiveQuantizedQuery,
 };
@@ -7,12 +8,13 @@ use flutter_rust_bridge::frb;
 use memmap2::{Mmap, MmapOptions};
 use rand::Rng;
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::BinaryHeap;
 use std::fs::File;
 use std::io::Cursor;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
+#[cfg(test)]
 fn cosine_distance(a: &[f32], b: &[f32]) -> f32 {
     let mut dot = 0.0;
     let mut norm_a = 0.0;
@@ -60,6 +62,79 @@ impl Ord for DistNode {
     }
 }
 
+/// Visited marks for one search, one bit per node index.
+struct VisitedSet(Vec<u64>);
+
+impl VisitedSet {
+    fn new(len: usize) -> Self {
+        Self(vec![0; len.div_ceil(64)])
+    }
+
+    /// Marks `index` and returns true if it was not visited before.
+    fn insert(&mut self, index: usize) -> bool {
+        let (word, bit) = (index / 64, 1u64 << (index % 64));
+        if word >= self.0.len() {
+            self.0.resize(word + 1, 0);
+        }
+        let fresh = self.0[word] & bit == 0;
+        self.0[word] |= bit;
+        fresh
+    }
+}
+
+/// Beam state for one HNSW layer search: a min-heap of candidates to expand and
+/// a max-heap holding the best `ef` results, so each step is O(log ef).
+struct BeamFrontier {
+    ef: usize,
+    candidates: BinaryHeap<std::cmp::Reverse<DistNode>>,
+    results: BinaryHeap<DistNode>,
+}
+
+impl BeamFrontier {
+    fn new(ef: usize) -> Self {
+        let ef = ef.max(1);
+        Self {
+            ef,
+            candidates: BinaryHeap::new(),
+            results: BinaryHeap::with_capacity(ef + 1),
+        }
+    }
+
+    fn furthest(&self) -> f32 {
+        if self.results.len() >= self.ef {
+            self.results.peek().map_or(f32::MAX, |n| n.dist)
+        } else {
+            f32::MAX
+        }
+    }
+
+    /// Adds a visited node if it can still improve the results.
+    fn offer(&mut self, index: usize, dist: f32) {
+        if self.results.len() < self.ef || dist < self.furthest() {
+            let node = DistNode { index, dist };
+            self.candidates.push(std::cmp::Reverse(node));
+            self.results.push(node);
+            if self.results.len() > self.ef {
+                self.results.pop();
+            }
+        }
+    }
+
+    /// The closest unexpanded candidate, or None once it is further than every result.
+    fn next_candidate(&mut self) -> Option<DistNode> {
+        let std::cmp::Reverse(c) = self.candidates.pop()?;
+        if c.dist > self.furthest() {
+            None
+        } else {
+            Some(c)
+        }
+    }
+
+    fn into_sorted(self) -> Vec<DistNode> {
+        self.results.into_sorted_vec()
+    }
+}
+
 #[frb(ignore)]
 pub struct HnswBuilder {
     pub nodes: Vec<Node>,
@@ -69,6 +144,9 @@ pub struct HnswBuilder {
     pub m0: usize,
     pub ef_construction: usize,
     ml: f32,
+    // L2 norm of each node's vector, parallel to `nodes`. Rebuilt on insert
+    // when `nodes` was assigned directly.
+    norms: Vec<f32>,
 }
 
 impl HnswBuilder {
@@ -82,7 +160,25 @@ impl HnswBuilder {
             m0,
             ef_construction,
             ml,
+            norms: Vec::new(),
         }
+    }
+
+    fn node_norm(&self, idx: usize) -> f32 {
+        match self.norms.get(idx) {
+            Some(&norm) if self.norms.len() == self.nodes.len() => norm,
+            _ => l2_norm_f32(&self.nodes[idx].vector),
+        }
+    }
+
+    /// Cosine distance from `query` (with precomputed `query_norm`) to node `idx`.
+    fn distance_to(&self, query: &[f32], query_norm: f32, idx: usize) -> f32 {
+        let node_norm = self.node_norm(idx);
+        if query_norm == 0.0 || node_norm == 0.0 {
+            return 1.0;
+        }
+        let sim = dot_f32(query, &self.nodes[idx].vector) / (query_norm * node_norm);
+        1.0 - sim.clamp(-1.0, 1.0)
     }
 
     fn random_layer(&self) -> usize {
@@ -94,74 +190,45 @@ impl HnswBuilder {
     fn search_layer(
         &self,
         query: &[f32],
+        query_norm: f32,
         entry_points: &[usize],
         ef: usize,
         lc: usize,
     ) -> Vec<DistNode> {
-        let mut visited = HashSet::new();
-        let mut candidates = BinaryHeap::new();
-        let mut top_results = Vec::new();
+        let mut visited = VisitedSet::new(self.nodes.len());
+        let mut frontier = BeamFrontier::new(ef);
 
         for &ep in entry_points {
             if visited.insert(ep) {
-                let dist = cosine_distance(query, &self.nodes[ep].vector);
-                candidates.push(std::cmp::Reverse(DistNode { index: ep, dist }));
-                top_results.push(DistNode { index: ep, dist });
+                frontier.offer(ep, self.distance_to(query, query_norm, ep));
             }
         }
 
-        while let Some(std::cmp::Reverse(c)) = candidates.pop() {
-            top_results.sort_by(|a, b| a.dist.partial_cmp(&b.dist).unwrap());
-            let furthest_dist = if top_results.len() >= ef {
-                top_results.last().unwrap().dist
-            } else {
-                f32::MAX
-            };
-
-            if c.dist > furthest_dist {
-                break;
-            }
-
+        while let Some(c) = frontier.next_candidate() {
             for &neighbor in &self.nodes[c.index].connections[lc] {
                 if visited.insert(neighbor) {
-                    let d = cosine_distance(query, &self.nodes[neighbor].vector);
-                    let furthest_dist = if top_results.len() >= ef {
-                        top_results.sort_by(|a, b| a.dist.partial_cmp(&b.dist).unwrap());
-                        top_results.last().unwrap().dist
-                    } else {
-                        f32::MAX
-                    };
-
-                    if top_results.len() < ef || d < furthest_dist {
-                        candidates.push(std::cmp::Reverse(DistNode {
-                            index: neighbor,
-                            dist: d,
-                        }));
-                        top_results.push(DistNode {
-                            index: neighbor,
-                            dist: d,
-                        });
-                        top_results.sort_by(|a, b| a.dist.partial_cmp(&b.dist).unwrap());
-                        if top_results.len() > ef {
-                            top_results.pop();
-                        }
-                    }
+                    frontier.offer(neighbor, self.distance_to(query, query_norm, neighbor));
                 }
             }
         }
 
-        top_results
+        frontier.into_sorted()
     }
 
     pub fn insert(&mut self, id: i64, vector: Vec<f32>) {
         let layer = self.random_layer();
         let new_idx = self.nodes.len();
+        if self.norms.len() != self.nodes.len() {
+            self.norms = self.nodes.iter().map(|n| l2_norm_f32(&n.vector)).collect();
+        }
+        let vector_norm = l2_norm_f32(&vector);
 
         let mut new_connections = vec![Vec::new(); layer + 1];
 
         if self.entry_point.is_none() {
             self.entry_point = Some(new_idx);
             self.max_layer = layer;
+            self.norms.push(vector_norm);
             self.nodes.push(Node {
                 id,
                 vector,
@@ -176,12 +243,12 @@ impl HnswBuilder {
 
         // Phase 1: greedy search down to layer + 1
         for lc in (layer + 1..=curr_max_layer).rev() {
-            let mut curr_dist = cosine_distance(&vector, &self.nodes[curr_ep].vector);
+            let mut curr_dist = self.distance_to(&vector, vector_norm, curr_ep);
             let mut changed = true;
             while changed {
                 changed = false;
                 for &neighbor in &self.nodes[curr_ep].connections[lc] {
-                    let d = cosine_distance(&vector, &self.nodes[neighbor].vector);
+                    let d = self.distance_to(&vector, vector_norm, neighbor);
                     if d < curr_dist {
                         curr_dist = d;
                         curr_ep = neighbor;
@@ -196,10 +263,8 @@ impl HnswBuilder {
 
         for lc in (0..=start_layer).rev() {
             let m_max = if lc == 0 { self.m0 } else { self.m };
-            let neighbors = self.search_layer(&vector, &eps, self.ef_construction, lc);
-
-            let mut best_n = neighbors.clone();
-            best_n.sort_by(|a, b| a.dist.partial_cmp(&b.dist).unwrap());
+            // search_layer returns the results sorted by distance.
+            let mut best_n = self.search_layer(&vector, vector_norm, &eps, self.ef_construction, lc);
             best_n.truncate(m_max);
 
             for n in &best_n {
@@ -210,6 +275,7 @@ impl HnswBuilder {
         }
 
         // Add node
+        self.norms.push(vector_norm);
         self.nodes.push(Node {
             id,
             vector: vector.clone(),
@@ -225,14 +291,13 @@ impl HnswBuilder {
 
                 // Prune
                 if self.nodes[n_idx].connections[lc].len() > m_max {
-                    let mut dists: Vec<_> = self.nodes[n_idx].connections[lc]
+                    let node = &self.nodes[n_idx];
+                    let node_norm = self.node_norm(n_idx);
+                    let mut dists: Vec<_> = node.connections[lc]
                         .iter()
                         .map(|&idx| DistNode {
                             index: idx,
-                            dist: cosine_distance(
-                                &self.nodes[n_idx].vector,
-                                &self.nodes[idx].vector,
-                            ),
+                            dist: self.distance_to(&node.vector, node_norm, idx),
                         })
                         .collect();
                     dists.sort_by(|a, b| a.dist.partial_cmp(&b.dist).unwrap());
@@ -256,15 +321,16 @@ impl HnswBuilder {
 
         let mut curr_ep = self.entry_point.unwrap();
         let curr_max_layer = self.max_layer;
+        let query_norm = l2_norm_f32(query);
 
         // Phase 1: greedy search down to layer + 1
         for lc in (1..=curr_max_layer).rev() {
-            let mut curr_dist = cosine_distance(query, &self.nodes[curr_ep].vector);
+            let mut curr_dist = self.distance_to(query, query_norm, curr_ep);
             let mut changed = true;
             while changed {
                 changed = false;
                 for &neighbor in &self.nodes[curr_ep].connections[lc] {
-                    let d = cosine_distance(query, &self.nodes[neighbor].vector);
+                    let d = self.distance_to(query, query_norm, neighbor);
                     if d < curr_dist {
                         curr_dist = d;
                         curr_ep = neighbor;
@@ -276,11 +342,7 @@ impl HnswBuilder {
 
         // Phase 2: search layer 0 with ef
         let eps = vec![curr_ep];
-        let mut neighbors = self.search_layer(query, &eps, ef, 0);
-
-        neighbors.sort_by(|a, b| a.dist.partial_cmp(&b.dist).unwrap());
-
-        neighbors
+        self.search_layer(query, query_norm, &eps, ef, 0)
             .into_iter()
             .map(|n| (self.nodes[n.index].id, n.dist))
             .collect()
@@ -550,36 +612,13 @@ impl MmapHnswSearcher {
         }
 
         // Phase 2: search layer 0
-        let mut visited = HashSet::new();
-        let mut candidates = BinaryHeap::new();
-        let mut top_results = Vec::new();
+        let mut visited = VisitedSet::new(self.num_nodes as usize);
+        let mut frontier = BeamFrontier::new(ef);
 
-        visited.insert(curr_ep);
+        visited.insert(curr_ep as usize);
+        frontier.offer(curr_ep as usize, distance_fn(self.get_node_offset(curr_ep))?);
 
-        let ep_offset = self.get_node_offset(curr_ep);
-        let dist = distance_fn(ep_offset)?;
-
-        candidates.push(std::cmp::Reverse(DistNode {
-            index: curr_ep as usize,
-            dist,
-        }));
-        top_results.push(DistNode {
-            index: curr_ep as usize,
-            dist,
-        });
-
-        while let Some(std::cmp::Reverse(c)) = candidates.pop() {
-            top_results.sort_by(|a, b| a.dist.partial_cmp(&b.dist).unwrap());
-            let furthest_dist = if top_results.len() >= ef {
-                top_results.last().unwrap().dist
-            } else {
-                f32::MAX
-            };
-
-            if c.dist > furthest_dist {
-                break;
-            }
-
+        while let Some(c) = frontier.next_candidate() {
             let offset = self.get_node_offset(c.index as u32);
             let mut cursor = Cursor::new(&self.mmap[offset..]);
             let _id = cursor.read_i64::<LittleEndian>().unwrap();
@@ -596,37 +635,16 @@ impl MmapHnswSearcher {
             for _ in 0..num_conn {
                 let neighbor_idx = cursor.read_u32::<LittleEndian>().unwrap();
 
-                if visited.insert(neighbor_idx) {
-                    let n_offset = self.get_node_offset(neighbor_idx);
-                    let d = distance_fn(n_offset)?;
-
-                    let furthest_dist = if top_results.len() >= ef {
-                        top_results.sort_by(|a, b| a.dist.partial_cmp(&b.dist).unwrap());
-                        top_results.last().unwrap().dist
-                    } else {
-                        f32::MAX
-                    };
-
-                    if top_results.len() < ef || d < furthest_dist {
-                        candidates.push(std::cmp::Reverse(DistNode {
-                            index: neighbor_idx as usize,
-                            dist: d,
-                        }));
-                        top_results.push(DistNode {
-                            index: neighbor_idx as usize,
-                            dist: d,
-                        });
-                        top_results.sort_by(|a, b| a.dist.partial_cmp(&b.dist).unwrap());
-                        if top_results.len() > ef {
-                            top_results.pop();
-                        }
-                    }
+                if visited.insert(neighbor_idx as usize) {
+                    let d = distance_fn(self.get_node_offset(neighbor_idx))?;
+                    frontier.offer(neighbor_idx as usize, d);
                 }
             }
         }
 
         // Map indices to DataIDs
-        Ok(top_results
+        Ok(frontier
+            .into_sorted()
             .into_iter()
             .map(|n| {
                 let offset = self.get_node_offset(n.index as u32);
@@ -643,6 +661,7 @@ impl MmapHnswSearcher {
 mod tests {
     use super::*;
     use crate::api::vector_quant::{active_quantized_query, configure_active_vabq_profile};
+    use std::collections::HashSet;
     use tempfile::tempdir;
 
     #[test]
@@ -810,6 +829,37 @@ mod tests {
             / RECALL_QUERIES as f32;
         println!("custom_hnsw builder recall@10 = {mean_recall}");
         assert!(mean_recall >= 0.95, "builder recall@10 {mean_recall} < 0.95");
+    }
+
+    // Build-time benchmark at production parameters. Run with:
+    // HNSW_BENCH_N=20000 cargo test --release --features vector_faer --lib hnsw_build_benchmark -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn hnsw_build_benchmark() {
+        let n: usize = std::env::var("HNSW_BENCH_N")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(5_000);
+        let corpus = lcg_vectors(n, RECALL_DIM, 7);
+        let queries = lcg_vectors(RECALL_QUERIES, RECALL_DIM, 99);
+
+        let started = std::time::Instant::now();
+        let builder = build_index(&corpus);
+        let build = started.elapsed();
+
+        let started = std::time::Instant::now();
+        let results: Vec<_> = queries.iter().map(|q| builder.search(q, PRODUCTION_EF)).collect();
+        let search = started.elapsed() / RECALL_QUERIES as u32;
+
+        let mean_recall = queries
+            .iter()
+            .zip(&results)
+            .map(|(q, got)| recall_at_k(&exact_top_k(&corpus, q, K), got, K))
+            .sum::<f32>()
+            / RECALL_QUERIES as f32;
+        println!(
+            "hnsw_build_benchmark n={n} build={build:?} search={search:?} recall@10={mean_recall}"
+        );
     }
 
     #[test]

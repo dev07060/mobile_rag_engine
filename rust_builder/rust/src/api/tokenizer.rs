@@ -19,39 +19,27 @@
 use anyhow::Result;
 use flutter_rust_bridge::frb;
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
 use tokenizers::Tokenizer;
 
 static TOKENIZER: Lazy<RwLock<Option<Tokenizer>>> = Lazy::new(|| RwLock::new(None));
-/// Copies of `TOKENIZER` with truncation preset, keyed by max length (at most
-/// one per `resolve_truncation_max_length` bucket). Setting truncation needs
+/// Copy of `TOKENIZER` with truncation preset. Setting truncation needs
 /// `&mut Tokenizer`, so this avoids deep-cloning the whole tokenizer on every
 /// `tokenize` call. Cleared whenever `init_tokenizer` replaces the tokenizer.
-static TRUNCATING_TOKENIZERS: Lazy<RwLock<HashMap<usize, Tokenizer>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static TRUNCATING_TOKENIZER: Lazy<RwLock<Option<Tokenizer>>> = Lazy::new(|| RwLock::new(None));
 #[cfg(test)]
 static COUNT_TOKENS_UNTRUNCATED_CALLS: AtomicUsize = AtomicUsize::new(0);
 #[cfg(test)]
 static TRUNCATING_TOKENIZER_BUILDS: AtomicUsize = AtomicUsize::new(0);
-pub(crate) const TOKENIZER_BASE_TRUNCATION_MAX_LENGTH: usize = 256;
-const TOKENIZER_MID_TRUNCATION_MAX_LENGTH: usize = 384;
-const TOKENIZER_MAX_TRUNCATION_MAX_LENGTH: usize = 512;
-const TOKENIZER_MID_TRUNCATION_CHAR_THRESHOLD: usize = 1200;
-const TOKENIZER_MAX_TRUNCATION_CHAR_THRESHOLD: usize = 2400;
 
-pub(crate) fn resolve_truncation_max_length(text: &str) -> usize {
-    let char_len = text.chars().count();
-    if char_len >= TOKENIZER_MAX_TRUNCATION_CHAR_THRESHOLD {
-        TOKENIZER_MAX_TRUNCATION_MAX_LENGTH
-    } else if char_len >= TOKENIZER_MID_TRUNCATION_CHAR_THRESHOLD {
-        TOKENIZER_MID_TRUNCATION_MAX_LENGTH
-    } else {
-        TOKENIZER_BASE_TRUNCATION_MAX_LENGTH
-    }
-}
+/// Model input length, `[CLS]`/`[SEP]` included. This is the position limit of
+/// BERT/XLM-R-family encoders, so text is only ever cut where the model would
+/// have to cut it anyway. It is a token count, not a character count: Korean
+/// packs about twice as many tokens per character as English, so a character
+/// threshold truncated dense text well below what the model can read.
+pub(crate) const TOKENIZER_TRUNCATION_MAX_LENGTH: usize = 512;
 
 /// Initialize tokenizer with tokenizer.json file path.
 pub fn init_tokenizer(tokenizer_path: String) -> Result<()> {
@@ -63,7 +51,7 @@ pub fn init_tokenizer(tokenizer_path: String) -> Result<()> {
 
     let mut global_tokenizer = TOKENIZER.write().unwrap();
     *global_tokenizer = Some(tokenizer);
-    TRUNCATING_TOKENIZERS.write().unwrap().clear();
+    *TRUNCATING_TOKENIZER.write().unwrap() = None;
     Ok(())
 }
 
@@ -86,32 +74,32 @@ fn encode_without_truncation(text: &str, add_special_tokens: bool) -> Result<tok
 fn encode_internal(
     text: &str,
     add_special_tokens: bool,
-    truncation_max_length: Option<usize>,
+    truncate: bool,
 ) -> Result<tokenizers::Encoding> {
-    let Some(max_length) = truncation_max_length else {
+    if !truncate {
         return encode_without_truncation(text, add_special_tokens);
-    };
+    }
 
     let encode = |tokenizer: &Tokenizer| {
         tokenizer
             .encode(text, add_special_tokens)
             .map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))
     };
-    if let Some(tokenizer) = TRUNCATING_TOKENIZERS.read().unwrap().get(&max_length) {
+    if let Some(tokenizer) = TRUNCATING_TOKENIZER.read().unwrap().as_ref() {
         return encode(tokenizer);
     }
 
     // Hold the base tokenizer's read lock while inserting so a concurrent
     // `init_tokenizer` cannot clear the cache between the clone and the insert.
     with_tokenizer(|base| {
-        let mut cache = TRUNCATING_TOKENIZERS.write().unwrap();
-        let tokenizer = cache.entry(max_length).or_insert_with(|| {
+        let mut cache = TRUNCATING_TOKENIZER.write().unwrap();
+        let tokenizer = cache.get_or_insert_with(|| {
             #[cfg(test)]
             TRUNCATING_TOKENIZER_BUILDS.fetch_add(1, Ordering::Relaxed);
             let mut tokenizer = base.clone();
             tokenizer
                 .with_truncation(Some(tokenizers::TruncationParams {
-                    max_length,
+                    max_length: TOKENIZER_TRUNCATION_MAX_LENGTH,
                     ..Default::default()
                 }))
                 .ok();
@@ -124,11 +112,34 @@ fn encode_internal(
 pub(crate) fn count_tokens_untruncated(text: &str) -> Result<usize> {
     #[cfg(test)]
     COUNT_TOKENS_UNTRUNCATED_CALLS.fetch_add(1, Ordering::Relaxed);
-    Ok(encode_internal(text, true, None)?.len())
+    Ok(encode_internal(text, true, false)?.len())
+}
+
+/// Encodes `text` once (with special tokens, untruncated) and returns the
+/// number of special tokens plus the `(start, end)` byte offsets of every
+/// other token. Token counts of sub-ranges read from these offsets are
+/// estimates: a word cut at a range edge can tokenize into more pieces, so
+/// callers must confirm a result with [`count_tokens_untruncated`].
+pub(crate) fn token_offsets_untruncated(text: &str) -> Result<(usize, Vec<(usize, usize)>)> {
+    let encoding = encode_internal(text, true, false)?;
+    let mut specials = 0usize;
+    let mut offsets = Vec::with_capacity(encoding.len());
+    for (&special, &offset) in encoding
+        .get_special_tokens_mask()
+        .iter()
+        .zip(encoding.get_offsets())
+    {
+        if special == 1 {
+            specials += 1;
+        } else {
+            offsets.push(offset);
+        }
+    }
+    Ok((specials, offsets))
 }
 
 pub(crate) fn count_plain_text_tokens_untruncated(text: &str) -> Result<usize> {
-    Ok(encode_internal(text, false, None)?.len())
+    Ok(encode_internal(text, false, false)?.len())
 }
 
 #[cfg(test)]
@@ -154,8 +165,7 @@ pub(crate) fn count_tokens_untruncated_call_count() -> usize {
 /// Tokenize text (returns token IDs with CLS/SEP tokens).
 #[frb(sync)]
 pub fn tokenize(text: String) -> Result<Vec<u32>> {
-    let max_length = resolve_truncation_max_length(&text);
-    let encoding = encode_internal(&text, true, Some(max_length))?;
+    let encoding = encode_internal(&text, true, true)?;
     Ok(encoding.get_ids().to_vec())
 }
 
@@ -223,21 +233,31 @@ mod tests {
         init_tokenizer(path.to_str().unwrap().to_string()).expect("failed to init tokenizer");
     }
 
+    // Dense text (Korean runs ~0.55 tokens/char vs ~0.25 for English) must not
+    // be cut below the model maximum just because it has few characters.
     #[test]
-    fn test_resolve_truncation_max_length_short() {
-        assert_eq!(resolve_truncation_max_length("hello world"), 256);
+    fn test_tokenize_keeps_dense_short_text_up_to_model_max() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+
+        // 400 words in 799 chars: 402 tokens with [CLS]/[SEP].
+        let text = vec!["가"; 400].join(" ");
+        assert_eq!(tokenize(text).unwrap().len(), 402);
     }
 
     #[test]
-    fn test_resolve_truncation_max_length_mid() {
-        let text = "가".repeat(1500);
-        assert_eq!(resolve_truncation_max_length(&text), 384);
-    }
+    fn test_tokenize_truncates_at_model_max() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
 
-    #[test]
-    fn test_resolve_truncation_max_length_long() {
-        let text = "x".repeat(3000);
-        assert_eq!(resolve_truncation_max_length(&text), 512);
+        assert_eq!(
+            tokenize(words(400)).unwrap().len(),
+            TOKENIZER_TRUNCATION_MAX_LENGTH
+        );
     }
 
     #[test]
@@ -271,7 +291,7 @@ mod tests {
         let truncated = tokenize(text.clone()).unwrap();
         let untruncated = count_tokens_untruncated(&text).unwrap();
 
-        assert_eq!(truncated.len(), TOKENIZER_MAX_TRUNCATION_MAX_LENGTH);
+        assert_eq!(truncated.len(), TOKENIZER_TRUNCATION_MAX_LENGTH);
         assert!(untruncated > truncated.len());
     }
 
@@ -299,7 +319,7 @@ mod tests {
 
     // The pre-cache behaviour: clone the tokenizer and set truncation per call.
     fn reference_tokenize(text: &str) -> Vec<u32> {
-        let max_length = resolve_truncation_max_length(text);
+        let max_length = TOKENIZER_TRUNCATION_MAX_LENGTH;
         with_tokenizer(|tokenizer| {
             let mut tokenizer = tokenizer.clone();
             tokenizer
@@ -320,15 +340,19 @@ mod tests {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         init_test_tokenizer();
 
-        // Short, mid (>= 1200 chars) and long (>= 2400 chars) texts hit the
-        // 256 / 384 / 512 truncation lengths.
-        for text in ["hello world".to_string(), words(110), words(220), words(400)] {
+        // Texts below, near and above the truncation length.
+        for text in [
+            "hello world".to_string(),
+            words(110),
+            words(220),
+            words(400),
+        ] {
             assert_eq!(tokenize(text.clone()).unwrap(), reference_tokenize(&text));
         }
     }
 
     #[test]
-    fn test_tokenize_reuses_one_truncating_tokenizer_per_length() {
+    fn test_tokenize_reuses_one_truncating_tokenizer() {
         let _guard = TOKENIZER_TEST_MUTEX
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -339,7 +363,7 @@ mod tests {
             tokenize("hello world".to_string()).unwrap();
             tokenize(words(400)).unwrap();
         }
-        assert_eq!(truncating_tokenizer_build_count(), 2);
+        assert_eq!(truncating_tokenizer_build_count(), 1);
     }
 
     #[test]
@@ -348,9 +372,15 @@ mod tests {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         init_test_tokenizer();
-        assert_eq!(tokenize("hello world".to_string()).unwrap(), vec![3, 1, 2, 4]);
+        assert_eq!(
+            tokenize("hello world".to_string()).unwrap(),
+            vec![3, 1, 2, 4]
+        );
 
         init_test_tokenizer_with_vocab(r#"{"[UNK]":0,"hello":7,"world":8,"[CLS]":3,"[SEP]":4}"#);
-        assert_eq!(tokenize("hello world".to_string()).unwrap(), vec![3, 7, 8, 4]);
+        assert_eq!(
+            tokenize("hello world".to_string()).unwrap(),
+            vec![3, 7, 8, 4]
+        );
     }
 }
