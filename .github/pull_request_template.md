@@ -4,8 +4,8 @@ Milestone **Mn** in `docs/milestones.md`.
 
 ## Verification
 
-<!-- The three sections below are required (docs/milestones.md, rule 8). The
-"PR Body Check" job fails while any of them is empty. Comments do not count. -->
+<!-- Fill in the three sections below before asking for a merge
+(docs/milestones.md, rule 8). -->
 
 ## 업그레이드 경로
 
