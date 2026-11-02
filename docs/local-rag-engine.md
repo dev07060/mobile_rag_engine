@@ -10,7 +10,7 @@ RAG 패키지**, **Dart 로컬 문서 검색**, **Flutter PDF RAG**.
 
 `mobile_rag_engine` provides the retrieval layer for local RAG apps:
 
-- document ingest from local text-layer PDF, Markdown, plain text, and beta DOCX;
+- document ingest from local text-layer PDF, Markdown, plain text, and DOCX;
 - chunking and embedding on the device;
 - SQLite-backed document and chunk storage;
 - HNSW vector search plus BM25 keyword search;

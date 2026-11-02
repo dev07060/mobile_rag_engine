@@ -85,13 +85,13 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
   <img src="https://raw.githubusercontent.com/dev07060/mobile_rag_engine/main/assets/readme-sources/package_introduction.png" width="860" alt="End-to-End RAG Pipeline">
 </p>
 
-> **One package, complete pipeline.** From any document format to LLM-ready context.
+> **One package, complete pipeline.** From PDF, DOCX, Markdown and plain text to LLM-ready context.
 
 ### Key Features
 
 | Category | Features |
 |:---------|:---------|
-| **Document Input** | Text-layer PDF, Markdown, Plain Text, and beta DOCX support; file-path and UTF-8 ingest fast paths |
+| **Document Input** | Text-layer PDF, DOCX, Markdown and plain text (up to 50 MB per file); file-path and UTF-8 ingest fast paths |
 | **Chunking** | Plain-text paragraph/line chunking with heading-aware split and tokenizer hard guard; Markdown structure-aware chunking with header-path metadata |
 | **Search** | HNSW vector + BM25 keyword hybrid search with RRF fusion; metadata-first search with explicit context/chunk hydration |
 | **Storage** | SQLite persistence, HNSW Index persistence (fast startup), connection pooling, resumable indexing |
@@ -99,7 +99,11 @@ Data never leaves the user's device. Perfect for privacy-focused apps (journals,
 | **Performance** | Rust core, HuggingFace `tokenizers`, thread control, memory optimized |
 | **Context** | Engine-tokenizer exact context budget, adjacent chunk expansion, single source mode |
 
-**Support boundaries:** text-layer PDFs are production-ready. Scanned or image-only PDFs should be routed through an OCR layer before indexing. DOCX extraction is available for early adopters, but complex DOCX layouts such as tables, headers, and footnotes should be treated as beta.
+**Support boundaries:**
+
+- **PDF**: text-layer PDFs are verified on a small sample set (see the table above). Large or table-heavy PDFs are still being validated. Scanned or image-only PDFs need an OCR layer before indexing, and AES-encrypted PDFs are rejected.
+- **DOCX**: body text, tables, text boxes, headers, footers and footnotes are extracted as plain text. Table cells are separated by ` | `; other layout such as columns and styling is not kept.
+- **Other formats** (HTML, RTF, PPTX, XLSX, images): not supported. Extract the text in your app and pass it to `addDocument`.
 
 ---
 
