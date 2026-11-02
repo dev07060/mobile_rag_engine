@@ -20,7 +20,6 @@ final json = result.toLlmJson(sourceNames: {7: 'refund.md'});
 
 ```json
 {
-  "context": "환불은 구매일로부터 14일 이내에 ...",
   "results": [
     {
       "id": "1",
@@ -28,7 +27,7 @@ final json = result.toLlmJson(sourceNames: {7: 'refund.md'});
       "source_name": "refund.md",
       "chunk_id": 31,
       "chunk_index": 1,
-      "score": 0.835,
+      "score": 1.0,
       "text": "환불은 구매일로부터 14일 이내에 ..."
     }
   ]
@@ -37,16 +36,24 @@ final json = result.toLlmJson(sourceNames: {7: 'refund.md'});
 
 | Field | Meaning |
 |---|---|
-| `context` | The assembled context text, the same as `result.context.text`. |
-| `results` | The passages that fit the token budget, in context order. |
-| `id` | Citation label for the model (`"1"`, `"2"`, …). |
+| `results` | The passages that fit the token budget, in context order. Each passage text appears once. |
+| `id` | Citation label for the model (`"1"`, `"2"`, …). Labels start at `firstId` (default 1). |
 | `source_id`, `chunk_id` | Map a citation back to the document, for example with `getSourceDocument(sourceId)`. |
 | `source_name` | The `name` given to `addDocument`, when known. Left out otherwise. |
 | `chunk_index` | Position of the chunk within its source. |
-| `score` | Retrieval score, rounded to three decimals. |
+| `score` | Relevance relative to the best passage in this result, which scores 1.0. Rounded to three decimals. Compare scores only within one result. |
 | `text` | The passage text. |
 
-Chunk metadata is not included, to keep tool results small.
+Chunk metadata and the engine's assembled `context.text` (the same passages
+wrapped in `<document>` blocks) are not included, to keep tool results small.
+
+Hybrid search ranks by reciprocal rank fusion, so its raw similarity is tiny
+(about 0.016 at best) and says nothing on its own. `score` is therefore
+relative. With vector-only search, the absolute cosine similarity is still on
+`ChunkSearchResult.similarity`.
+
+A result from `SearchHydrationMode.contextOnly` has no passage list. It becomes
+one passage with only `id` and `text` (the assembled context).
 
 ## Search as a tool
 
@@ -54,7 +61,7 @@ Chunk metadata is not included, to keep tool results small.
 
 ```dart
 final tool = RagSearchTool.fromMobileRag(MobileRag.instance);
-// For one collection: RagSearchTool.fromCollection(MobileRag.instance.inCollection('manuals'))
+// For one collection: RagSearchTool.fromCollection('manuals')
 ```
 
 `tool.definition` is provider-neutral:
@@ -80,7 +87,14 @@ the output back as the tool result.
 
 - **Search:** hybrid (vector + keyword) search, with passages kept within
   `tokenBudget` engine tokens (default 1500).
-- **Source names:** filled in from `listSources()`.
+- **Citation ids:** keep counting across calls on one tool. If the first
+  search returns passages 1–3, the next starts at 4, so ids never collide
+  within a conversation. Create a new tool for each conversation.
+- **Source names:** filled in from `listSources()` on each call that finds
+  passages. Names are not cached, because a removed source's id can be reused.
+- **Re-initializing:** the tool keeps working after `MobileRag.dispose()` and
+  a new `MobileRag.initialize()`. `fromCollection` looks the collection up on
+  `MobileRag.instance` for every call.
 - **`top_k`:** defaults to `defaultTopK` (5). Values above `maxTopK` are clamped
   to it.
 - **Invalid arguments:** a missing query or malformed JSON returns

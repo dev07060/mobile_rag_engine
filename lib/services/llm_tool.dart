@@ -17,6 +17,10 @@ typedef RagToolSearch =
 /// `input_schema`. Pass the model's tool-call arguments to [call] (decoded) or
 /// [callJson] (raw string) and send the result back as the tool result.
 ///
+/// Citation ids keep counting across calls on one tool, so passages from
+/// several searches in a conversation never share an id. Create a new tool
+/// for a new conversation.
+///
 /// ```dart
 /// final tool = RagSearchTool.fromMobileRag(MobileRag.instance);
 /// // Register tool.definition with your LLM client, then on a tool call:
@@ -43,6 +47,9 @@ class RagSearchTool {
 
   /// Searches [rag] with hybrid (vector + keyword) search, keeping the
   /// returned passages within [tokenBudget] engine tokens.
+  ///
+  /// [MobileRag] methods go through the current engine, so the tool keeps
+  /// working after [MobileRag.dispose] and a new [MobileRag.initialize].
   factory RagSearchTool.fromMobileRag(
     MobileRag rag, {
     String name = defaultName,
@@ -63,21 +70,24 @@ class RagSearchTool {
     maxTopK: maxTopK,
   );
 
-  /// Like [RagSearchTool.fromMobileRag], scoped to one collection.
+  /// Like [RagSearchTool.fromMobileRag], scoped to the collection
+  /// [collectionId].
+  ///
+  /// The collection is looked up on [MobileRag.instance] for every call,
+  /// because a [CollectionRag] keeps the engine it was created with.
   factory RagSearchTool.fromCollection(
-    CollectionRag collection, {
+    String collectionId, {
     String name = defaultName,
     String description = defaultDescription,
     int defaultTopK = 5,
     int maxTopK = 10,
     int tokenBudget = 1500,
   }) => RagSearchTool(
-    search: (query, topK) => collection.searchHybridWithContext(
-      query,
-      topK: topK,
-      tokenBudget: tokenBudget,
-    ),
-    listSources: collection.listSources,
+    search: (query, topK) => MobileRag.instance
+        .inCollection(collectionId)
+        .searchHybridWithContext(query, topK: topK, tokenBudget: tokenBudget),
+    listSources: () =>
+        MobileRag.instance.inCollection(collectionId).listSources(),
     name: name,
     description: description,
     defaultTopK: defaultTopK,
@@ -92,6 +102,9 @@ class RagSearchTool {
 
   final RagToolSearch _search;
   final Future<List<SourceEntry>> Function()? _listSources;
+
+  /// Citation id for the first passage of the next call.
+  int _nextId = 1;
 
   /// Tool name the model calls.
   final String name;
@@ -131,7 +144,8 @@ class RagSearchTool {
 
   /// Runs the search for decoded tool-call [arguments].
   ///
-  /// Returns [RagSearchResult.toLlmJson] with source names filled in. Invalid
+  /// Returns [RagSearchResult.toLlmJson] with source names filled in and
+  /// citation ids continuing from the previous call. Invalid
   /// arguments return `{"error": ...}` instead of throwing, so the model can
   /// correct its call; engine failures still throw.
   Future<Map<String, Object?>> call(Map<String, Object?> arguments) async {
@@ -151,7 +165,10 @@ class RagSearchTool {
     }
 
     final result = await _search(query.trim(), topK);
-    return result.toLlmJson(sourceNames: await _sourceNames(result));
+    final sourceNames = await _sourceNames(result);
+    final json = result.toLlmJson(sourceNames: sourceNames, firstId: _nextId);
+    _nextId += (json['results'] as List).length;
+    return json;
   }
 
   /// Runs the search for raw JSON [arguments] and returns the JSON result.
@@ -171,6 +188,8 @@ class RagSearchTool {
     return jsonEncode(await call(decoded));
   }
 
+  // Not cached: source ids can be reused after a source is removed, so a
+  // cached name could label another document.
   Future<Map<int, String>> _sourceNames(RagSearchResult result) async {
     final listSources = _listSources;
     if (listSources == null || result.context.includedChunks.isEmpty) {

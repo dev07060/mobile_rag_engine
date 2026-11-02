@@ -8,6 +8,8 @@ class MockMobileRag extends Mock implements MobileRag {}
 
 class MockCollectionRag extends Mock implements CollectionRag {}
 
+class MockRagEngine extends Mock implements RagEngine {}
+
 ChunkSearchResult _chunk(
   int chunkId,
   int sourceId,
@@ -50,7 +52,7 @@ void main() {
         extra: [_chunk(99, 7, 'over budget')],
       ).toLlmJson(sourceNames: {7: 'refund.md'});
 
-      expect(json['context'], '환불은 14일 이내\n\n---\n\nShipping takes 2-3 days');
+      expect(json.keys, ['results']);
       expect(json['results'], [
         {
           'id': '1',
@@ -58,7 +60,7 @@ void main() {
           'source_name': 'refund.md',
           'chunk_id': 31,
           'chunk_index': 1,
-          'score': 0.835,
+          'score': 1.0,
           'text': '환불은 14일 이내',
         },
         {
@@ -66,10 +68,51 @@ void main() {
           'source_id': 9,
           'chunk_id': 12,
           'chunk_index': 2,
-          'score': 0.5,
+          'score': 0.599,
           'text': 'Shipping takes 2-3 days',
         },
       ]);
+    });
+
+    test('keeps hybrid (RRF) scores apart', () {
+      // Hybrid similarity is 1/(60+rank)-based: about 0.016 at best.
+      final json = _result([
+        _chunk(1, 1, 'a', similarity: 0.01639),
+        _chunk(2, 1, 'b', similarity: 0.01613),
+        _chunk(3, 1, 'c', similarity: 0.01587),
+      ]).toLlmJson();
+
+      expect(
+        [for (final r in json['results'] as List) r['score']],
+        [1.0, 0.984, 0.968],
+      );
+    });
+
+    test('numbers citation ids from firstId', () {
+      final json = _result([
+        _chunk(1, 1, 'a'),
+        _chunk(2, 1, 'b'),
+      ]).toLlmJson(firstId: 4);
+
+      expect([for (final r in json['results'] as List) r['id']], ['4', '5']);
+    });
+
+    test('turns context-only results into one passage', () {
+      final json = RagSearchResult(
+        chunks: const [],
+        context: AssembledContext(
+          text: '<document id="7">...</document>',
+          includedChunks: const [],
+          estimatedTokens: 5,
+          remainingBudget: 0,
+        ),
+      ).toLlmJson(firstId: 3);
+
+      expect(json, {
+        'results': [
+          {'id': '3', 'text': '<document id="7">...</document>'},
+        ],
+      });
     });
 
     test('is encodable as JSON', () {
@@ -121,7 +164,7 @@ void main() {
 
         expect(calls, [('환불 기간', 3)]);
         final decoded = jsonDecode(output) as Map<String, dynamic>;
-        expect(decoded['context'], '환불은 14일 이내');
+        expect(decoded.keys, ['results']);
         expect(decoded['results'], [
           {
             'id': '1',
@@ -129,12 +172,26 @@ void main() {
             'source_name': 'refund.md',
             'chunk_id': 31,
             'chunk_index': 1,
-            'score': 0.5,
+            'score': 1.0,
             'text': '환불은 14일 이내',
           },
         ]);
       },
     );
+
+    test('continues citation ids across calls', () async {
+      final ids = <Object?>[];
+      final twoHits = RagSearchTool(
+        search: (query, topK) async =>
+            _result([_chunk(31, 7, 'a'), _chunk(12, 9, 'b')]),
+      );
+      for (final query in ['first', 'second']) {
+        final output = await twoHits.call({'query': query});
+        ids.addAll([for (final r in output['results'] as List) r['id']]);
+      }
+
+      expect(ids, ['1', '2', '3', '4']);
+    });
 
     test(
       'uses defaultTopK, clamps top_k and accepts integral doubles',
@@ -176,10 +233,7 @@ void main() {
         },
       );
 
-      expect(await empty.call({'query': 'a'}), {
-        'context': '',
-        'results': <Object?>[],
-      });
+      expect(await empty.call({'query': 'a'}), {'results': <Object?>[]});
       expect(lookups, 0);
     });
 
@@ -226,8 +280,13 @@ void main() {
       );
     });
 
-    test('fromCollection searches that collection', () async {
+    test('fromCollection looks the collection up on every call', () async {
+      final rag = MockMobileRag();
       final collection = MockCollectionRag();
+      when(() => rag.engine).thenReturn(MockRagEngine());
+      MobileRag.setMockInstance(rag);
+      addTearDown(() => MobileRag.setMockInstance(null));
+      when(() => rag.inCollection('manuals')).thenReturn(collection);
       when(
         () => collection.searchHybridWithContext(
           any(),
@@ -237,12 +296,15 @@ void main() {
       ).thenAnswer((_) async => _result([_chunk(31, 7, 'x')]));
       when(collection.listSources).thenAnswer((_) async => const []);
 
-      await RagSearchTool.fromCollection(collection).call({'query': 'q'});
+      final tool = RagSearchTool.fromCollection('manuals');
+      await tool.call({'query': 'q'});
+      await tool.call({'query': 'q'});
 
       verify(
         () =>
             collection.searchHybridWithContext('q', topK: 5, tokenBudget: 1500),
-      ).called(1);
+      ).called(2);
+      verify(() => rag.inCollection('manuals')).called(4);
     });
   });
 }
