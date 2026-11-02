@@ -283,15 +283,48 @@ fn keep_bm25_token(token: &str) -> bool {
     false
 }
 
+fn is_hangul_syllable(ch: char) -> bool {
+    matches!(ch as u32, 0xAC00..=0xD7A3)
+}
+
+/// Appends the character bigrams of every Hangul run in `word`.
+///
+/// Korean attaches particles and endings to words ("검색엔진은", "배터리가"), so
+/// whole-word tokens miss the bare stem. Bigrams let "검색엔진" match
+/// "검색엔진은". A word that is itself a single bigram adds nothing.
+fn push_hangul_bigrams(word: &str, out: &mut Vec<String>) {
+    let chars: Vec<char> = word.chars().collect();
+    let mut start = 0;
+    while start < chars.len() {
+        if !is_hangul_syllable(chars[start]) {
+            start += 1;
+            continue;
+        }
+        let mut end = start;
+        while end < chars.len() && is_hangul_syllable(chars[end]) {
+            end += 1;
+        }
+        let run = &chars[start..end];
+        // A two-syllable word is already its own bigram.
+        if run.len() >= 2 && !(run.len() == 2 && chars.len() == 2) {
+            out.extend(run.windows(2).map(|pair| pair.iter().collect::<String>()));
+        }
+        start = end;
+    }
+}
+
 pub(crate) fn tokenize_for_bm25(text: &str) -> Vec<String> {
     use unicode_segmentation::UnicodeSegmentation;
 
     // Use Unicode word segmentation for better CJK support
     // Handles Korean, Chinese, Japanese, and multi-language text
-    text.unicode_words()
-        .filter(|s| keep_bm25_token(s))
-        .map(|s| s.to_lowercase())
-        .collect()
+    let mut tokens = Vec::new();
+    for word in text.unicode_words().filter(|s| keep_bm25_token(s)) {
+        let word = word.to_lowercase();
+        push_hangul_bigrams(&word, &mut tokens);
+        tokens.push(word);
+    }
+    tokens
 }
 
 /// Add document to BM25 index.
@@ -388,6 +421,37 @@ pub fn bm25_get_document_count() -> usize {
 mod tests {
     use super::*;
 
+    // BM25 build-time benchmark. Run with:
+    // cargo test --release --lib bm25_build_benchmark -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn bm25_build_benchmark() {
+        let english = ["search", "engine", "vector", "index", "mobile", "device", "query", "chunk",
+            "document", "embedding", "model", "token", "battery", "memory", "storage", "latency"];
+        let korean = ["검색엔진은", "벡터를", "인덱스에서", "모바일", "기기에서", "질문을", "문서의",
+            "임베딩", "모델이", "토큰을", "배터리가", "메모리를", "저장소에", "지연시간이", "빠르게", "처리합니다"];
+        for (label, words) in [("english", &english), ("korean", &korean)] {
+            let mut seed = 12345u64;
+            let docs: Vec<(i64, String)> = (0..20_000)
+                .map(|id| {
+                    let mut text = String::new();
+                    while text.len() < 500 {
+                        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                        text.push_str(words[(seed >> 33) as usize % words.len()]);
+                        text.push(' ');
+                    }
+                    (id, text)
+                })
+                .collect();
+            let started = std::time::Instant::now();
+            let mut index = InvertedIndex::new();
+            for (id, text) in &docs {
+                index.add_document(*id, text);
+            }
+            println!("bm25_build_benchmark {label} docs=20000 build={:?} terms={}", started.elapsed(), index.postings.len());
+        }
+    }
+
     #[test]
     fn test_bm25_basic() {
         let mut index = InvertedIndex::new();
@@ -430,7 +494,23 @@ mod tests {
         let tokens = tokenize_for_bm25("안녕하세요! 반갑습니다.");
         assert!(tokens.contains(&"안녕하세요".to_string()));
         assert!(tokens.contains(&"반갑습니다".to_string()));
-        assert_eq!(tokens.len(), 2); // Only words, no punctuation
+        assert!(tokens.contains(&"안녕".to_string())); // syllable bigram
+        assert!(tokens.iter().all(|t| !t.contains('!') && !t.contains('.')));
+        assert_eq!(tokens.len(), 2 + 4 + 4); // two words plus their bigrams
+    }
+
+    #[test]
+    fn korean_query_matches_words_with_attached_particles() {
+        let mut index = InvertedIndex::new();
+        index.add_document(1, "검색엔진은 문서를 빠르게 찾습니다");
+        index.add_document(2, "배터리가 오래 갑니다");
+
+        // "검색엔진" appears only as "검색엔진은" (with the topic particle).
+        let results = index.search("검색엔진", 10);
+        assert_eq!(results.first().map(|r| r.0), Some(1));
+        // A query with its own particle still finds the bare stem.
+        let results = index.search("배터리는", 10);
+        assert_eq!(results.first().map(|r| r.0), Some(2));
     }
 
     #[test]
