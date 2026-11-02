@@ -1,0 +1,58 @@
+[
+  {
+    "model": "minilm-l6 int8(shipped)",
+    "threads": 4,
+    "load_ms": 52.1,
+    "tokenizer_rss_mb": 13.3,
+    "session_rss_mb": 45.9,
+    "query_tokens": 63,
+    "query_p50_ms": 2.33,
+    "chunk_tokens": 256,
+    "chunk_p50_ms": 8.45,
+    "inference_rss_mb": 5.9,
+    "onnx_mb": 22.0,
+    "tokenizer_mb": 0.4
+  },
+  {
+    "model": "koen-e5-tiny int8(shipped)",
+    "threads": 4,
+    "load_ms": 113.3,
+    "tokenizer_rss_mb": 44.0,
+    "session_rss_mb": 67.9,
+    "query_tokens": 22,
+    "query_p50_ms": 2.02,
+    "chunk_tokens": 256,
+    "chunk_p50_ms": 16.77,
+    "inference_rss_mb": 5.3,
+    "onnx_mb": 36.5,
+    "tokenizer_mb": 2.8
+  },
+  {
+    "model": "e5-small int8(ours)",
+    "threads": 4,
+    "load_ms": 309.4,
+    "tokenizer_rss_mb": 344.5,
+    "session_rss_mb": 267.8,
+    "query_tokens": 22,
+    "query_p50_ms": 1.88,
+    "chunk_tokens": 256,
+    "chunk_p50_ms": 17.53,
+    "inference_rss_mb": 2.3,
+    "onnx_mb": 112.6,
+    "tokenizer_mb": 16.3
+  },
+  {
+    "model": "e5-small-ko-v2 int8(ours)",
+    "threads": 4,
+    "load_ms": 298.2,
+    "tokenizer_rss_mb": 344.4,
+    "session_rss_mb": 267.3,
+    "query_tokens": 22,
+    "query_p50_ms": 1.87,
+    "chunk_tokens": 256,
+    "chunk_p50_ms": 17.48,
+    "inference_rss_mb": 2.4,
+    "onnx_mb": 112.6,
+    "tokenizer_mb": 16.3
+  }
+]

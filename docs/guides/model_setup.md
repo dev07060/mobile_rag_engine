@@ -54,6 +54,135 @@ non-empty chunks/context. LLM generation is outside this package step.
 
 ---
 
+<a id="korean-koen-e5-tiny"></a>
+
+## Korean documents: KoEn-E5-Tiny
+
+MiniLM is English-only. On Korean retrieval benchmarks it scores close to
+random, so Korean apps should swap in a Korean-English model.
+[KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX)
+(Apache-2.0) is the one we measured and recommend: it is 384-dimensional like
+MiniLM and adds about 17 MB to the app.
+
+| Model | Ko-StrategyQA nDCG@10 | AutoRAG nDCG@10 | ONNX + tokenizer |
+|:------|:---:|:---:|:---:|
+| all-MiniLM-L6-v2 (default) | 0.014 | 0.059 | 22.4 MB |
+| KoEn-E5-Tiny (int8, arm64) | 0.762 | 0.866 | 39.3 MB |
+
+Desktop measurement, whole documents embedded up to 512 tokens (MiniLM with
+the earlier character-based limit). Method and the chunked numbers are in
+[the measurement notes](../perf/multilingual-embedding/README.md).
+
+KoEn-E5-Tiny only covers Korean and English. Text in other scripts, such as
+Japanese or Chinese, is likely to be retrieved poorly.
+
+### 1. Download the files
+
+Pin the revision so the files cannot change under you:
+
+```bash
+mkdir -p assets/mobile_rag && cd assets/mobile_rag
+
+REV=5cf599a8cd6577f2f12a026130ad50132e472cfd
+BASE=https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX/resolve/$REV
+
+curl -L -o model.onnx "$BASE/onnx/model_qint8_arm64.onnx"
+curl -L -o tokenizer.json "$BASE/tokenizer.json"
+```
+
+### 2. Write the Model Pack manifest
+
+The `setup` command installs only the MiniLM pack, so write
+`assets/mobile_rag/model-pack.json` yourself. The engine checks both files
+against these hashes and lengths on first launch:
+
+```json
+{
+  "schemaVersion": 1,
+  "preset": "koen-e5-tiny-arm64-koen",
+  "modelId": "exp-models/dragonkue-KoEn-E5-Tiny-ONNX",
+  "revision": "5cf599a8cd6577f2f12a026130ad50132e472cfd",
+  "modelAsset": "assets/mobile_rag/model.onnx",
+  "tokenizerAsset": "assets/mobile_rag/tokenizer.json",
+  "modelSha256": "d463c9b1c29f3202d510e2836265d60f9e6e6dd518c5930ba865700646489bd4",
+  "tokenizerSha256": "a6dd38d692ac1caa6d5dbc195d92f1f978b5c74ec60e02ed15fdf04404742fe3",
+  "modelBytes": 38275821,
+  "tokenizerBytes": 2931715,
+  "architecture": "arm64",
+  "embeddingDimension": 384,
+  "license": "apache-2.0",
+  "language": "Korean, English"
+}
+```
+
+Use a Model Pack rather than `modelAsset`/`tokenizerAsset`. Those parameters
+copy the tokenizer to a fixed file name and skip the copy when that file
+already exists, so an app that previously ran MiniLM would keep MiniLM's
+tokenizer. A Model Pack is stored under its hashes and is always the one you
+bundled.
+
+### 3. Bundle and initialize
+
+```yaml
+flutter:
+  assets:
+    - assets/mobile_rag/
+```
+
+```dart
+await MobileRag.initialize(
+  modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json'),
+);
+```
+
+You do not need to add `query: ` or `passage: ` prefixes. With KoEn-E5-Tiny
+they change scores by 0.002 or less.
+
+### 4. Switching an existing database from MiniLM
+
+Vectors from different models cannot be compared, so the stored chunks must be
+embedded again.
+
+**`mobile_rag_engine` 0.22.3 and earlier** identify the model by file name and
+dimension only. Both packs install as `model.onnx` with 384 dimensions, so the
+engine does not notice the switch and would mix vectors from both models. Open
+a new database instead and add your documents again:
+
+```dart
+await MobileRag.initialize(
+  modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json'),
+  databaseName: 'rag_koen.sqlite',
+);
+```
+
+**Later releases** also hash the model file. After the switch they lock search
+and ingestion until the stored chunks are embedded again:
+
+```dart
+final rag = MobileRag.instance;
+if (rag.embeddingFingerprintLock != null) {
+  await rag.reembedAll(
+    onProgress: (p) => debugPrint('re-embedding ${p.done}/${p.total}'),
+  );
+}
+```
+
+`reembedAll` keeps your documents and resumes after an app restart. If you
+would rather re-ingest from your own sources, call
+`clearAndRestart(confirm: ClearAndRestartConfirmation.iUnderstandThisDeletesAllOnDeviceEmbeddings)`
+instead; it deletes the stored embeddings but keeps the `sources` table.
+
+### Cost
+
+KoEn-E5-Tiny has 12 layers to MiniLM's 6. On a desktop CPU, embedding a chunk
+takes about twice as long (55 ms vs 28 ms, one thread), so ingestion is
+slower. Queries are as fast or faster, because Korean text needs far fewer
+tokens with this tokenizer. Loading the model and tokenizer takes about
+110 MB of memory, against about 60 MB for MiniLM. These numbers have not been
+measured on a phone yet.
+
+---
+
 ## Advanced / legacy custom ONNX assets
 
 ## Model Comparison
@@ -61,6 +190,7 @@ non-empty chunks/context. LLM generation is outside this package step.
 | Model | Dimensions | Size (ONNX) | Max Tokens | Languages | Best For |
 |:------|:----------:|:-----------:|:----------:|:----------|:---------|
 | [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (INT8) | **384** | ~23 MB | 256 | English | English-only apps, lightweight & fast |
+| [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX) (INT8) | **384** | ~37 MB | 512 | Korean, English | Korean apps ([recipe](#korean-koen-e5-tiny)) |
 | [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~542 MB | 8,194 | 100+ (multilingual) | Korean, CJK, mixed-language apps |
 
 > **Dimension Matters**: The embedding dimension affects your vector index. Once you choose a model, all documents must use the same dimension. Switching models requires re-embedding all documents.

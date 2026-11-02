@@ -1,0 +1,200 @@
+[
+  {
+    "config": "minilm-l6 int8(shipped)",
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.01394,
+    "recall@10": 0.01999,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 66.8
+  },
+  {
+    "config": "minilm-l6 int8(shipped)",
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.05861,
+    "recall@10": 0.10526,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 7.0
+  },
+  {
+    "config": "koen-e5-tiny fp32",
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.7582,
+    "recall@10": 0.82569,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 178.2
+  },
+  {
+    "config": "koen-e5-tiny fp32",
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.75914,
+    "recall@10": 0.86842,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 23.6
+  },
+  {
+    "config": "koen-e5-tiny int8(shipped)",
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.75921,
+    "recall@10": 0.82127,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 112.9
+  },
+  {
+    "config": "koen-e5-tiny int8(shipped)",
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.75686,
+    "recall@10": 0.88596,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 11.3
+  },
+  {
+    "config": "koen-e5-tiny int8(ours)",
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.75559,
+    "recall@10": 0.81865,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 83.0
+  },
+  {
+    "config": "koen-e5-tiny int8(ours)",
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.7512,
+    "recall@10": 0.86842,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 14.3
+  },
+  {
+    "config": "koen-e5-tiny int8(shipped) no-prefix",
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.75945,
+    "recall@10": 0.81922,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 89.1
+  },
+  {
+    "config": "koen-e5-tiny int8(shipped) no-prefix",
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.75934,
+    "recall@10": 0.85088,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 15.8
+  },
+  {
+    "config": "e5-small fp32",
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.75116,
+    "recall@10": 0.81823,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 220.3
+  },
+  {
+    "config": "e5-small fp32",
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.7258,
+    "recall@10": 0.85088,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 29.8
+  },
+  {
+    "config": "e5-small int8(ours)",
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.73074,
+    "recall@10": 0.79819,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 145.7
+  },
+  {
+    "config": "e5-small int8(ours)",
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.72034,
+    "recall@10": 0.85088,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 11.7
+  },
+  {
+    "config": "e5-small int8(ours) no-prefix",
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.72066,
+    "recall@10": 0.78797,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 96.5
+  },
+  {
+    "config": "e5-small int8(ours) no-prefix",
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.67094,
+    "recall@10": 0.82456,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 13.6
+  },
+  {
+    "config": "e5-small-ko-v2 fp32",
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.7672,
+    "recall@10": 0.83146,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 172.0
+  },
+  {
+    "config": "e5-small-ko-v2 fp32",
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.76446,
+    "recall@10": 0.86842,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 23.0
+  },
+  {
+    "config": "e5-small-ko-v2 int8(ours)",
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.76033,
+    "recall@10": 0.81922,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 80.9
+  },
+  {
+    "config": "e5-small-ko-v2 int8(ours)",
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.76334,
+    "recall@10": 0.87719,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 11.0
+  },
+  {
+    "config": "e5-small-ko-v2 int8(ours) no-prefix",
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.75384,
+    "recall@10": 0.82076,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 83.6
+  },
+  {
+    "config": "e5-small-ko-v2 int8(ours) no-prefix",
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.7577,
+    "recall@10": 0.86842,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 11.9
+  }
+]
