@@ -47,8 +47,8 @@
   | 파일 | 크기 | 확인 시간 |
   |---|---|---|
   | KoEn 모델 | 38MB | 약 250ms |
-  | MiniLM 모델 | | 약 150ms |
-  | 토크나이저 | | 3~20ms |
+  | MiniLM 모델 | 23MB | 약 150ms |
+  | 토크나이저 | 0.5~2.9MB | 3~20ms |
 
 **문제:** `RagEngine._copyAssetToFile`(`lib/services/rag_engine.dart`)은 파일이 이미 있으면 복사하지 않는다. 토크나이저는 고정 이름 `tokenizer.json`으로, 모델은 asset 파일 이름으로 복사한다. 그래서 토크나이저를 바꾸거나, 앱 업데이트에서 같은 이름의 모델 파일 내용을 바꿔도 옛 파일을 계속 쓴다. M1 검증 중 시뮬레이터에서 KoEn 실행 뒤 MiniLM을 실행하니 KoEn 토크나이저가 남아 `Gather` 범위 오류로 실패했다. Model Pack 경로는 해시별 디렉터리라 영향 없다.
 
