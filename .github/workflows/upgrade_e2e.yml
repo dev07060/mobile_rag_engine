@@ -1,0 +1,64 @@
+name: Upgrade E2E
+
+# Milestone H1 (docs/milestones.md). Earlier checks only saw fresh installs and
+# fake values, so this starts from what the last release leaves on disk: a
+# fresh `flutter create` macOS app indexes documents with mobile_rag_engine
+# 0.22.3 from pub.dev, then the same app (same data container) switches to the
+# PR head and runs again with a model swapped in four ways. It also checks real
+# RagSearchTool output from the PR head. See tool/upgrade_e2e/run.sh.
+#
+# Checks in H1_KNOWN_FAILING reproduce known bugs and do not fail the job; they
+# are reported as "reproduced" in the job summary. Any other failure fails the
+# job, and so does a known-failing check that passes, so the fix that makes it
+# pass also removes it from the list (M6: s2 s3 s4, M7: b1 b2 b3 b4).
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/upgrade_e2e.yml"
+      - "tool/upgrade_e2e/**"
+      - "lib/**"
+      - "rust_builder/**"
+      - "bin/**"
+
+env:
+  FLUTTER_VERSION: "3.38.7"
+  FLUTTER_CHANNEL: "stable"
+  H1_BASE_VERSION: "0.22.3"
+  H1_KNOWN_FAILING: "s2 s3 s4 b1 b2 b3 b4"
+
+jobs:
+  upgrade:
+    name: Upgrade from 0.22.3 (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+
+      # The PR head's Rust crate has no precompiled binaries, so build it.
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run the upgrade harness
+        env:
+          H1_PACKAGE: git
+          H1_GIT_URL: https://github.com/${{ github.repository }}.git
+          H1_GIT_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+          H1_SUMMARY: ${{ github.step_summary }}
+        run: tool/upgrade_e2e/run.sh "$RUNNER_TEMP/h1"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-e2e-logs
+          path: ${{ runner.temp }}/h1/logs
+          if-no-files-found: ignore
