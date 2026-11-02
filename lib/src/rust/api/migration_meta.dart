@@ -9,8 +9,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'migration_meta.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `assert_no_unknown_future_axes`, `bootstrap_axes`, `count_chunks_with_non_matching_fingerprint`, `create_migration_meta_table`, `detect_existing_install`, `initialize_migration_meta`, `insert_axis_if_absent`, `read_axes_with`, `read_axis_int`, `read_axis_string_or_empty`, `read_axis_string`, `upsert_axis`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `assert_no_unknown_future_axes`, `bootstrap_axes`, `count_chunks_with_non_matching_fingerprint`, `create_migration_meta_table`, `detect_existing_install`, `initialize_migration_meta`, `insert_axis_if_absent`, `read_axes_with`, `read_axis_int`, `read_axis_string_or_empty`, `read_axis_string`, `stored_embedding_f32`, `upsert_axis`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
 
 /// Read the current 4-axis state from `migration_meta`.
 ///
@@ -59,6 +59,25 @@ Future<void> extendEmbeddingFingerprint({
 }) => RustLib.instance.api.crateApiMigrationMetaExtendEmbeddingFingerprint(
   from: from,
   to: to,
+);
+
+/// Read up to `limit` chunks embedded under `fingerprint`, shortest content
+/// first, with their stored embeddings decoded to f32.
+///
+/// A chunk belongs to `fingerprint` when it is tagged with it, or when it is
+/// untagged and `fingerprint` is the stored baseline: releases up to 0.22.3
+/// insert chunks without a tag, and untagged chunks follow the baseline.
+///
+/// Before [`extend_embedding_fingerprint`] trusts that the loaded model wrote
+/// a database, the caller re-embeds these texts and compares. Short chunks
+/// are picked because older releases truncated embedding input at fewer
+/// tokens, so a long chunk can embed differently under the same model.
+Future<List<EmbeddingSample>> sampleEmbeddingsForFingerprint({
+  required String fingerprint,
+  required int limit,
+}) => RustLib.instance.api.crateApiMigrationMetaSampleEmbeddingsForFingerprint(
+  fingerprint: fingerprint,
+  limit: limit,
 );
 
 /// Begin a reembed-to-`target_fingerprint` flow.
@@ -140,6 +159,30 @@ sealed class EmbeddingFingerprintGate with _$EmbeddingFingerprintGate {
     /// can simply continue without a fresh user confirmation.
     required bool resumeInProgress,
   }) = EmbeddingFingerprintGate_Mismatch;
+}
+
+/// A stored chunk embedding with the text it was computed from.
+class EmbeddingSample {
+  /// The text the indexer embedded (content plus any header path).
+  final String embeddingText;
+
+  /// The stored embedding as f32: the raw column when it holds f32, else the
+  /// packed (Q8_0) vector from `embedding_i8` or the MMAP store, decoded.
+  /// Empty when neither is readable.
+  final Float32List embedding;
+
+  const EmbeddingSample({required this.embeddingText, required this.embedding});
+
+  @override
+  int get hashCode => embeddingText.hashCode ^ embedding.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EmbeddingSample &&
+          runtimeType == other.runtimeType &&
+          embeddingText == other.embeddingText &&
+          embedding == other.embedding;
 }
 
 /// Read-only snapshot of all migration axes plus the last engine version.

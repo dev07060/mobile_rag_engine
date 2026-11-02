@@ -139,7 +139,7 @@ fn decode_structured_chunk_type(chunk_type: &str) -> (&str, Option<&str>) {
     )
 }
 
-fn render_context_text(content: &str, chunk_type: &str) -> String {
+pub(crate) fn render_context_text(content: &str, chunk_type: &str) -> String {
     let (_, header_path) = decode_structured_chunk_type(chunk_type);
     match header_path {
         Some(path) => format!("Header Path: {path}\n{content}"),

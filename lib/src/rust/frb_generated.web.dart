@@ -221,6 +221,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   EmbeddingRequest dco_decode_embedding_request(dynamic raw);
 
   @protected
+  EmbeddingSample dco_decode_embedding_sample(dynamic raw);
+
+  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
@@ -270,6 +273,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<EmbeddingRequest> dco_decode_list_embedding_request(dynamic raw);
+
+  @protected
+  List<EmbeddingSample> dco_decode_list_embedding_sample(dynamic raw);
 
   @protected
   List<HnswSearchResult> dco_decode_list_hnsw_search_result(dynamic raw);
@@ -638,6 +644,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   EmbeddingRequest sse_decode_embedding_request(SseDeserializer deserializer);
 
   @protected
+  EmbeddingSample sse_decode_embedding_sample(SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
@@ -703,6 +712,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<EmbeddingRequest> sse_decode_list_embedding_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<EmbeddingSample> sse_decode_list_embedding_sample(
     SseDeserializer deserializer,
   );
 
@@ -1163,6 +1177,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_embedding_sample(
+    EmbeddingSample self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
@@ -1246,6 +1266,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_embedding_request(
     List<EmbeddingRequest> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_embedding_sample(
+    List<EmbeddingSample> self,
     SseSerializer serializer,
   );
 

@@ -57,6 +57,7 @@ import '../src/rust/api/migration_meta.dart'
         extendEmbeddingFingerprint,
         finalizeEmbeddingReembed,
         readMigrationAxes,
+        sampleEmbeddingsForFingerprint,
         writeEmbeddingFingerprint;
 import '../src/rust/api/source_rag.dart'
     as rust_rag
@@ -475,8 +476,11 @@ class RagEngine {
   /// Databases from releases without a model identity in the fingerprint
   /// store `{modelBasename}|{dim}|{quant}`. When that still matches the loaded
   /// model, append the identity in place instead of locking for a reembed.
-  /// This trusts that the file was not swapped under the same name, which is
-  /// all those releases could check.
+  ///
+  /// The file name alone does not prove the model is the same: an app update
+  /// can ship another model under the same name. So a few stored chunks are
+  /// re-embedded first; if the loaded model does not reproduce their vectors,
+  /// the fingerprint stays as it is and the gate locks for a reembed.
   static Future<void> _extendFingerprintWithoutModelIdentity(
     String withoutModelIdentity,
     String currentFingerprint,
@@ -484,11 +488,39 @@ class RagEngine {
     final axes = await migration_meta.readMigrationAxes();
     if (axes.embeddingFingerprint == withoutModelIdentity ||
         axes.embeddingFingerprintPending == withoutModelIdentity) {
+      if (!await _loadedModelWroteEmbeddings(withoutModelIdentity)) return;
       await migration_meta.extendEmbeddingFingerprint(
         from: withoutModelIdentity,
         to: currentFingerprint,
       );
     }
+  }
+
+  /// Number of stored chunks [_loadedModelWroteEmbeddings] re-embeds.
+  static const int _kModelCheckSamples = 3;
+
+  /// Whether the loaded model reproduces the shortest stored chunks tagged
+  /// with [fingerprint]. True when there is nothing to compare.
+  static Future<bool> _loadedModelWroteEmbeddings(String fingerprint) async {
+    final samples = await migration_meta.sampleEmbeddingsForFingerprint(
+      fingerprint: fingerprint,
+      limit: _kModelCheckSamples,
+    );
+    for (final sample in samples) {
+      final current = await EmbeddingService.embed(sample.embeddingText);
+      final cosine = sample.embedding.length == current.length
+          ? embeddingCosine(sample.embedding, current).toStringAsFixed(4)
+          : 'n/a (dimension differs)';
+      debugPrint('[RagEngine] Model check for "$fingerprint": cosine $cosine');
+      if (!reproducesStoredEmbedding(sample.embedding, current)) {
+        debugPrint(
+          '[RagEngine] Loaded model does not reproduce stored embeddings; '
+          'not extending the fingerprint.',
+        );
+        return false;
+      }
+    }
+    return true;
   }
 
   static Future<RagEmbeddingFingerprintLock?> _resolveFingerprintGate(

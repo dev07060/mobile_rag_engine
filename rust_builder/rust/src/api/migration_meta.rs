@@ -25,6 +25,9 @@
 
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
+use crate::api::source_rag::render_context_text;
+use crate::api::mmap_store::MMAP_STORE;
+use crate::api::vector_quant::decode_packed_blob_to_f32;
 use log::info;
 use rusqlite::{params, Connection};
 
@@ -429,6 +432,85 @@ pub fn extend_embedding_fingerprint(from: String, to: String) -> Result<(), RagE
     Ok(())
 }
 
+/// A stored chunk embedding with the text it was computed from.
+#[derive(Debug, Clone)]
+pub struct EmbeddingSample {
+    /// The text the indexer embedded (content plus any header path).
+    pub embedding_text: String,
+    /// The stored embedding as f32: the raw column when it holds f32, else the
+    /// packed (Q8_0) vector from `embedding_i8` or the MMAP store, decoded.
+    /// Empty when neither is readable.
+    pub embedding: Vec<f32>,
+}
+
+/// Read up to `limit` chunks embedded under `fingerprint`, shortest content
+/// first, with their stored embeddings decoded to f32.
+///
+/// A chunk belongs to `fingerprint` when it is tagged with it, or when it is
+/// untagged and `fingerprint` is the stored baseline: releases up to 0.22.3
+/// insert chunks without a tag, and untagged chunks follow the baseline.
+///
+/// Before [`extend_embedding_fingerprint`] trusts that the loaded model wrote
+/// a database, the caller re-embeds these texts and compares. Short chunks
+/// are picked because older releases truncated embedding input at fewer
+/// tokens, so a long chunk can embed differently under the same model.
+pub fn sample_embeddings_for_fingerprint(
+    fingerprint: String,
+    limit: u32,
+) -> Result<Vec<EmbeddingSample>, RagError> {
+    let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let baseline = read_axis_string_or_empty(&conn, KEY_EMBEDDING_FINGERPRINT)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT content, COALESCE(chunk_type, 'general'), embedding, embedding_i8, mmap_id
+             FROM chunks
+             WHERE COALESCE(NULLIF(embedding_fingerprint, ''), ?2) = ?1
+             ORDER BY length(content), id
+             LIMIT ?3",
+        )
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let rows = stmt
+        .query_map(params![fingerprint, baseline, limit], |row| {
+            let content: String = row.get(0)?;
+            let chunk_type: String = row.get(1)?;
+            let embedding: Vec<u8> = row.get(2)?;
+            let packed: Option<Vec<u8>> = row.get(3)?;
+            let mmap_id: Option<i64> = row.get(4)?;
+            Ok((content, chunk_type, stored_embedding_f32(&embedding, packed, mmap_id)))
+        })
+        .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let mut samples = Vec::new();
+    for row in rows {
+        let (content, chunk_type, embedding) =
+            row.map_err(|e| RagError::DatabaseError(e.to_string()))?;
+        samples.push(EmbeddingSample {
+            embedding_text: render_context_text(&content, &chunk_type),
+            embedding,
+        });
+    }
+    Ok(samples)
+}
+
+/// Reads a chunk's embedding the way the HNSW rebuild does: f32 bytes when the
+/// `embedding` column has them, otherwise the packed vector inline or in the
+/// MMAP store (where ingestion puts it by default).
+fn stored_embedding_f32(embedding: &[u8], packed: Option<Vec<u8>>, mmap_id: Option<i64>) -> Vec<f32> {
+    if !embedding.is_empty() && embedding.len() % 4 == 0 {
+        return embedding
+            .chunks_exact(4)
+            .map(|b| f32::from_ne_bytes([b[0], b[1], b[2], b[3]]))
+            .collect();
+    }
+    let packed = packed.filter(|b| !b.is_empty()).or_else(|| {
+        let mmap_id = mmap_id.filter(|&id| id > 0)?;
+        let store = MMAP_STORE.read().unwrap();
+        store.as_ref()?.get(mmap_id as usize).map(<[u8]>::to_vec)
+    });
+    packed
+        .and_then(|blob| decode_packed_blob_to_f32(&blob))
+        .unwrap_or_default()
+}
+
 /// Begin a reembed-to-`target_fingerprint` flow.
 ///
 /// Writes `embedding_fingerprint_pending = target_fingerprint` (sticky across
@@ -631,7 +713,10 @@ mod tests {
             "CREATE TABLE IF NOT EXISTS chunks (
                 id INTEGER PRIMARY KEY,
                 content TEXT NOT NULL,
+                chunk_type TEXT DEFAULT 'general',
                 embedding BLOB,
+                embedding_i8 BLOB,
+                mmap_id INTEGER,
                 embedding_fingerprint TEXT
             )",
             [],
@@ -758,6 +843,54 @@ mod tests {
             1,
             "only chunks tagged with the old fingerprint are rewritten"
         );
+        drop(pool);
+    }
+
+    #[test]
+    fn samples_shortest_chunks_of_a_fingerprint_with_embeddings() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("m|384|f32".to_string()).unwrap();
+        let conn = get_connection().unwrap();
+        let vector = |value: f32| -> Vec<f32> { (0..32).map(|i| value * (i as f32 - 16.0)).collect() };
+        let insert = |content: &str, chunk_type: &str, fingerprint: Option<&str>, value: f32| {
+            // Packed Q8_0 with an empty f32 column, as quantized ingestion
+            // stores it (inline here instead of in the MMAP store).
+            let (packed, _) = crate::api::vector_quant::quantize_f32_to_u8_blob(&vector(value));
+            conn.execute(
+                "INSERT INTO chunks(content, chunk_type, embedding, embedding_i8, embedding_fingerprint)
+                 VALUES (?1, ?2, x'', ?3, ?4)",
+                rusqlite::params![content, chunk_type, packed, fingerprint],
+            )
+            .unwrap();
+        };
+        // Inserted after the baseline, untagged, as releases up to 0.22.3 do.
+        insert("a much longer chunk", "general", None, 1.0);
+        insert("short", "general", Some("m|384|f32"), 2.0);
+        insert("mid chunk", "markdown|Guide > Setup", None, 3.0);
+        insert("x", "general", Some("other|384|f32"), 4.0);
+
+        let samples = sample_embeddings_for_fingerprint("m|384|f32".to_string(), 2).unwrap();
+
+        assert_eq!(samples.len(), 2);
+        assert_eq!(samples[0].embedding_text, "short");
+        assert_eq!(samples[0].embedding.len(), 32);
+        for (decoded, original) in samples[0].embedding.iter().zip(vector(2.0)) {
+            assert!((decoded - original).abs() < 0.5, "{decoded} vs {original}");
+        }
+        assert_eq!(
+            samples[1].embedding_text,
+            "Header Path: Guide > Setup\nmid chunk"
+        );
+        // Untagged chunks follow the baseline, not other fingerprints.
+        let other = sample_embeddings_for_fingerprint("other|384|f32".to_string(), 3).unwrap();
+        assert_eq!(other.len(), 1);
+        assert_eq!(other[0].embedding_text, "x");
+        assert!(sample_embeddings_for_fingerprint("none".to_string(), 3)
+            .unwrap()
+            .is_empty());
+        drop(conn);
         drop(pool);
     }
 

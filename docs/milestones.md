@@ -19,7 +19,7 @@
 
 ## 현재 상태 (2026-11-03)
 
-- main: `e1da3b4` (#122 머지). 진행 중: M7.
+- main: `02d1bf0` (#123 머지). 진행 중: M6.
 - 마지막 배포: `mobile_rag_engine` 0.22.3. 그 뒤 변경은 모두 `## Unreleased`에 쌓여 있다.
   - 512 토큰 truncation (#115)
   - HNSW 빌드와 검색 속도, 한국어 BM25, 한국어 청킹 속도 (#116)
@@ -93,38 +93,10 @@
 | b4 | **FAIL (맹점 3)** | 예산 300토큰에 출력 717토큰 (한도 470 = 300 + 결과당 40 + 50) |
 
 
-### M7. LLM JSON 보완
-
-- **담당:** 이 대화의 세션, 브랜치 `feat/m7-llm-json-fixes`
-- **상태:** 진행 중 (2026-11-03 착수).
-
-**목표:** 맹점 2·3·4번과 6번 일부를 고친다.
-
-**착수 때 정한 형식 (2026-11-03)**
-- **본문은 `results[].text`에만 둔다.** `toLlmJson`과 tool 결과에서 `context`를 뺀다. 엔진의 `context.text`는 같은 청크를 `<document>` 블록과 메타데이터로 감싼 것이라, 인용 id가 붙은 `results` 쪽이 모델에 필요한 정보를 다 가진다.
-- **`contextOnly` 결과:** 포함된 청크 목록이 비어 있고 `context.text`만 있으므로, 그 텍스트를 결과 하나(`id`와 `text`만, 출처·점수 없음)로 돌려준다. 결과 모양은 항상 `{"results": [...]}` 하나다.
-- **`score`는 이 결과 안의 1위 대비 상대값이다** (`similarity / 최댓값`, 1위 = 1.0, 소수 셋째 자리). 하이브리드 점수는 순위 기반 RRF라 절댓값에 뜻이 없고(최대 약 0.016), 반올림하면 순위가 사라졌다. 상대값은 순위를 지키고 "1.0 = 가장 관련"으로 읽힌다. 다른 호출의 점수와는 비교하지 않는다고 문서에 적는다. 벡터 검색의 코사인 절댓값은 여기서 잃는다.
-- **인용 id는 tool 인스턴스 안에서 이어진다.** 첫 호출이 "1"~"3"을 쓰면 다음 호출은 "4"부터다. 같은 청크가 두 번 나와도 새 id를 받는다. `toLlmJson`에는 `firstId`(기본 1)를 더한다. 대화를 새로 시작하면 tool도 새로 만든다고 문서에 적는다.
-- **`listSources()`는 캐시하지 않는다 (범위 축소).** `sources.id`는 `INTEGER PRIMARY KEY`(AUTOINCREMENT 없음)라 지운 id가 재사용될 수 있어, 캐시하면 틀린 출처 이름을 줄 수 있다. 결과가 있을 때만 읽는 지금 동작을 유지한다. `SourceEntry`는 본문 없이 id·이름·시각만 읽는다.
-- **dispose 뒤 인스턴스:** `MobileRag`의 메서드는 정적 엔진을 거치므로 `fromMobileRag`는 다시 초기화한 뒤에도 동작한다(`MobileRag._engine`이 static이다. 고칠 것 없음). `CollectionRag`은 만들 때의 엔진을 붙잡으므로 `fromCollection`은 컬렉션 id를 받아 호출마다 `MobileRag.instance.inCollection(id)`로 찾는다.
-
-**포함**
-- `score`: RRF 점수를 그대로 반올림하지 않는다. 순위를 잃지 않는 형식(예: 순위 `rank`, 또는 반올림 없는 값)과 문서화된 의미로 바꾼다. 형식은 착수 때 이 문서에 먼저 정한다.
-- 본문 중복 제거: tool 결과에 본문이 한 번만 들어가게 한다(`context`와 `results[].text` 중 하나).
-- 인용 id: 한 tool 인스턴스 안에서 호출마다 겹치지 않게 한다.
-- 6번 일부: 호출마다 `listSources()` 전체를 읽는 것, `dispose` 이전 인스턴스를 붙잡는 것, `contextOnly` 결과의 빈 `results`.
-- H1의 `H1_KNOWN_FAILING`에서 H1-b 항목을 지운다.
-
-**제외:** 생성 호출(M4), LLM SDK 의존성.
-
-**완료 기준**
-- H1-b가 통과한다. 규칙 8의 네 항목. PR 하나, CI 통과.
-
-**손대는 파일:** `lib/services/llm_tool.dart`, `lib/services/source_rag_service.dart`(`toLlmJson`), `docs/guides/llm_tools.md`, `test/unit/**`, `CHANGELOG.md`, `.github/workflows/upgrade_e2e.yml`(`H1_KNOWN_FAILING` 한 줄), `docs/milestones.md`
-
 ### M6. fingerprint 이전 검증 + 레시피 정정
 
-- **상태:** 범위 초안, 합의 대기. M7 머지 뒤 착수한다. 착수는 사용자가 번호로 지시할 때만 한다.
+- **담당:** 이 대화의 세션, 브랜치 `fix/m6-fingerprint-extension-check`
+- **상태:** 진행 중 (2026-11-03 착수).
 
 **목표:** 맹점 1번을 고친다. 0.22.3의 3칸 fingerprint를 4칸으로 늘릴 때, 디스크의 모델이 그 DB를 만든 모델과 같은지 확인하지 않고 지금 파일의 해시를 붙이는 문제다.
 
@@ -133,18 +105,27 @@
 - `docs/guides/model_setup.md` 모델 전환 절의 "Later releases ... lock" 문단 정정.
 - H1의 `H1_KNOWN_FAILING`에서 S2~S4를 지운다.
 
+**착수 때 정한 방식 (2026-11-03)**
+- **표본 재임베딩 비교.** 확장할 3칸 fingerprint(`from`)에 속한 청크 중 본문이 가장 짧은 3개를 읽는다. 이 청크들을 지금 모델로 다시 임베딩하고, 저장된 벡터와 코사인 유사도를 잰다. 셋 다 기준값 이상이면 같은 모델로 보고 확장한다. 하나라도 낮으면 확장하지 않는다. 그러면 기존 fingerprint 비교가 3칸 ≠ 4칸으로 잠근다(`reembedAll()`/`clearAndRestart()` 안내는 기존 그대로다).
+- **짧은 청크를 고르는 이유:** #115가 임베딩 truncation을 256 → 512토큰으로 바꿨다. 긴 청크는 같은 모델이어도 0.22.3과 다른 벡터가 나올 수 있다. 짧은 청크는 두 버전의 입력이 같다. 임베딩 입력은 색인 때와 같은 `render_context_text(content, chunk_type)`을 쓴다.
+- **기준값 0.95.** 하네스에서 잰 값(로컬 macOS, 0.22.3 DB): s1(같은 MiniLM)은 세 표본 모두 1.0000이었고, s2~s4(KoEn)는 0.0289였다. 그래서 0.95면 양쪽 모두 여유가 크다.
+- **구현 중 알게 된 저장 형식:**
+  - **태그:** 0.22.3(native 0.21.2)은 청크를 저장할 때 청크별 fingerprint 태그를 비워 둔다. 그래서 "태그가 비었고 기준값이 `from`"인 청크도 `from`에 속한 것으로 본다. 처음에는 태그로만 찾아서 표본이 0개였고, 결국 그대로 확장됐다.
+  - **벡터 위치:** 벡터는 `chunks.embedding`(빈 값)에 있지 않다. Q8_0으로 압축돼 `.vec` MMAP 파일에 있고, `mmap_id`가 그 위치를 가리킨다. 표본 조회는 HNSW 재구성과 같은 순서로 읽는다: f32 컬럼 → `embedding_i8` → MMAP. 처음에는 f32 컬럼만 읽어 같은 모델(s1)까지 잠갔다.
+- **표본이 없으면**(`from` 청크 0개) 섞일 벡터가 없으므로 지금처럼 확장한다.
+- **비용:** 0.22.3 DB를 처음 열 때 한 번만, 짧은 청크 3개를 임베딩한다. 확장한 뒤에는 4칸이라 다시 실행되지 않는다.
+- **Rust 변경이 필요하다 (범위 확장).** Dart에서는 저장된 벡터를 읽을 API가 없다. 그래서 `migration_meta.rs`에 표본 조회 함수 하나와 FRB 생성 코드를 더한다. #118의 확장 함수도 Rust라서 어차피 다음 `rag_engine_flutter` 배포에 함께 들어간다.
+
 **제외:** asset 동기화 메모리(맹점 5번).
 
 **완료 기준**
 - H1-a S1~S4가 통과한다. 규칙 8의 네 항목. PR 하나, CI 통과.
 
-**손대는 파일:** `lib/services/rag_engine.dart`(`_extendFingerprintWithoutModelIdentity` 주변), `docs/guides/model_setup.md`(모델 전환 절), `test/unit/**`, `CHANGELOG.md`, `.github/workflows/upgrade_e2e.yml`(`H1_KNOWN_FAILING` 한 줄), `docs/milestones.md`
-
-> **겹치는 파일:** M7과 M6은 `CHANGELOG.md`·`upgrade_e2e.yml`·`test/unit/**`를 함께 고치므로 동시에 진행하지 않는다.
+**손대는 파일:** `lib/services/rag_engine.dart`(`_extendFingerprintWithoutModelIdentity` 주변), `rust_builder/rust/src/api/migration_meta.rs`(표본 조회 함수), `rust_builder/rust/src/api/source_rag.rs`(`render_context_text` 공개 범위), FRB 생성 파일(`lib/src/rust/**`, `rust_builder/rust/src/frb_generated.rs`), `docs/guides/model_setup.md`(모델 전환 절), `test/unit/**`, `CHANGELOG.md`, `.github/workflows/upgrade_e2e.yml`(`H1_KNOWN_FAILING` 한 줄), `docs/milestones.md`
 
 ### M4. `rag.ask` 생성 브리지
 
-- **상태:** 범위 초안. 합의 대기. M7 머지 뒤 착수한다 (M7에서 고친 결과 형식을 쓴다).
+- **상태:** 범위 초안. 합의 대기. M6 머지 뒤 착수한다 (M7에서 고친 결과 형식을 쓴다).
 
 **목표:** 사용자가 넘긴 생성 함수(`Future<String> Function(prompt)` 또는 스트림)를 받아 검색 → 컨텍스트 조립 → 생성 → 인용 포함 답을 돌려주는 얇은 함수. LLM SDK는 넣지 않는다.
 
@@ -191,6 +172,34 @@
 - 레거시 자산 확인 비용 절감: 전체 sha256 대신 크기 + 앞뒤 1MiB만 해시한다(#118 fingerprint와 같은 방식). 시뮬레이터에서 KoEn 매 시작 약 250ms와, 확인 중 모델 크기의 약 2배 순간 메모리를 줄인다. M5 실측을 본 뒤 판단한다.
 
 ## 완료
+
+### M7. LLM JSON 보완 — 완료 (#123, 2026-11-03)
+
+- **결과:** 실제 엔진 출력(macOS, MiniLM, 예산 300)으로 H1-b b1~b4 통과. 상위 3개 점수 `[1.0, 0.984, 0.962]`, 두 호출의 id `{1,2,3}`/`{4,5,6}`, 출력 717 → 405토큰.
+
+**목표:** 맹점 2·3·4번과 6번 일부를 고친다.
+
+**착수 때 정한 형식 (2026-11-03)**
+- **본문은 `results[].text`에만 둔다.** `toLlmJson`과 tool 결과에서 `context`를 뺀다. 엔진의 `context.text`는 같은 청크를 `<document>` 블록과 메타데이터로 감싼 것이라, 인용 id가 붙은 `results` 쪽이 모델에 필요한 정보를 다 가진다.
+- **`contextOnly` 결과:** 포함된 청크 목록이 비어 있고 `context.text`만 있으므로, 그 텍스트를 결과 하나(`id`와 `text`만, 출처·점수 없음)로 돌려준다. 결과 모양은 항상 `{"results": [...]}` 하나다.
+- **`score`는 이 결과 안의 1위 대비 상대값이다** (`similarity / 최댓값`, 1위 = 1.0, 소수 셋째 자리). 하이브리드 점수는 순위 기반 RRF라 절댓값에 뜻이 없고(최대 약 0.016), 반올림하면 순위가 사라졌다. 상대값은 순위를 지키고 "1.0 = 가장 관련"으로 읽힌다. 다른 호출의 점수와는 비교하지 않는다고 문서에 적는다. 벡터 검색의 코사인 절댓값은 여기서 잃는다.
+- **인용 id는 tool 인스턴스 안에서 이어진다.** 첫 호출이 "1"~"3"을 쓰면 다음 호출은 "4"부터다. 같은 청크가 두 번 나와도 새 id를 받는다. `toLlmJson`에는 `firstId`(기본 1)를 더한다. 대화를 새로 시작하면 tool도 새로 만든다고 문서에 적는다.
+- **`listSources()`는 캐시하지 않는다 (범위 축소).** `sources.id`는 `INTEGER PRIMARY KEY`(AUTOINCREMENT 없음)라 지운 id가 재사용될 수 있어, 캐시하면 틀린 출처 이름을 줄 수 있다. 결과가 있을 때만 읽는 지금 동작을 유지한다. `SourceEntry`는 본문 없이 id·이름·시각만 읽는다.
+- **dispose 뒤 인스턴스:** `MobileRag`의 메서드는 정적 엔진을 거치므로 `fromMobileRag`는 다시 초기화한 뒤에도 동작한다(`MobileRag._engine`이 static이다. 고칠 것 없음). `CollectionRag`은 만들 때의 엔진을 붙잡으므로 `fromCollection`은 컬렉션 id를 받아 호출마다 `MobileRag.instance.inCollection(id)`로 찾는다.
+
+**포함**
+- `score`: RRF 점수를 그대로 반올림하지 않는다. 순위를 잃지 않는 형식(예: 순위 `rank`, 또는 반올림 없는 값)과 문서화된 의미로 바꾼다. 형식은 착수 때 이 문서에 먼저 정한다.
+- 본문 중복 제거: tool 결과에 본문이 한 번만 들어가게 한다(`context`와 `results[].text` 중 하나).
+- 인용 id: 한 tool 인스턴스 안에서 호출마다 겹치지 않게 한다.
+- 6번 일부: 호출마다 `listSources()` 전체를 읽는 것, `dispose` 이전 인스턴스를 붙잡는 것, `contextOnly` 결과의 빈 `results`.
+- H1의 `H1_KNOWN_FAILING`에서 H1-b 항목을 지운다.
+
+**제외:** 생성 호출(M4), LLM SDK 의존성.
+
+**완료 기준**
+- H1-b가 통과한다. 규칙 8의 네 항목. PR 하나, CI 통과.
+
+**손대는 파일:** `lib/services/llm_tool.dart`, `lib/services/source_rag_service.dart`(`toLlmJson`), `docs/guides/llm_tools.md`, `test/unit/**`, `CHANGELOG.md`, `.github/workflows/upgrade_e2e.yml`(`H1_KNOWN_FAILING` 한 줄), `docs/milestones.md`
 
 ### M3. LLM용 검색 결과 — 완료 (#121, 2026-11-03)
 

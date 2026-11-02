@@ -158,7 +158,11 @@ await MobileRag.initialize(
 ```
 
 **Later releases** also hash the model file. After the switch they lock search
-and ingestion until the stored chunks are embedded again:
+and ingestion until the stored chunks are embedded again. This also holds when
+one app update both upgrades from 0.22.3 and switches the model. A 0.22.3
+database records only the file name and dimension. So on its first launch the
+engine re-embeds three short stored chunks and compares them with the stored
+vectors before it records the model hash, and locks if they differ:
 
 ```dart
 final rag = MobileRag.instance;
