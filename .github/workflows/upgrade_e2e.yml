@@ -27,7 +27,7 @@ env:
   FLUTTER_VERSION: "3.38.7"
   FLUTTER_CHANNEL: "stable"
   H1_BASE_VERSION: "0.22.3"
-  H1_KNOWN_FAILING: "s2 s3 s4 b1 b2 b3 b4"
+  H1_KNOWN_FAILING: "s2 s3 s4"
 
 jobs:
   upgrade:
