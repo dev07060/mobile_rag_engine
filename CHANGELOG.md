@@ -5,7 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.22.3
+* Requires `rag_engine_flutter: 0.21.2`.
 * **Search** (with `rag_engine_flutter` 0.21.2):
   - Deleted documents no longer appear in results after other documents are added, and newly added chunks are found by keyword search without a manual `rebuildIndex()`.
   - The first launch after upgrading rebuilds the vector index once.
@@ -16,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Hard-wrapped text (for example from PDFs) is no longer split into one chunk per line, so these documents produce fewer, fuller chunks.
   - Chunks, including their overlap, now fit the embedding model's token limit, so no text is dropped at embedding time.
   - `overlapChars` is clamped below half of `maxChunkChars`, with a warning.
+* **Database**: `closeDbPool()` returns only after every SQLite connection is closed, so writing to or deleting the database right after it no longer fails with `database is locked` or a file-in-use error, most often on Windows (with `rag_engine_flutter` 0.21.2).
 * **Ingestion**: `chunkDelay` now defaults to no pause between embedding batches (previously 10 ms). Pass a duration to throttle long ingestions.
 
 ## 0.22.2
