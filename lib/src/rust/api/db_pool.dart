@@ -6,7 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `get_connection`
+// These functions are ignored because they are not marked as `pub`: `get_connection`, `release`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DbPool`
 
 /// Initialize the global connection pool with optimized SQLite settings.
 ///
@@ -48,4 +49,6 @@ Future<(int, int, int)?> getPoolStats() =>
 ///
 /// This should be called during application shutdown. After calling this,
 /// you must call `init_db_pool` again before using database operations.
+/// When it returns, every pooled SQLite handle has been closed, so the
+/// database files can be opened exclusively or deleted.
 Future<void> closeDbPool() => RustLib.instance.api.crateApiDbPoolCloseDbPool();

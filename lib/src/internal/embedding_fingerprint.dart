@@ -6,26 +6,25 @@
 /// produces on each boot.
 library;
 
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart';
+
 /// Explicit host selection for the variance map used by VABQ.
 ///
 /// [none] is deliberately the default: an embedding dimension or model asset
 /// filename is not a reliable model identity and must never enable VABQ.
-enum VabqProfile {
-  none,
-  allMiniLmL6V2,
-  allMpnetBaseV2,
-  bgeBaseEnV15,
-  bgeM3,
-}
+enum VabqProfile { none, allMiniLmL6V2, allMpnetBaseV2, bgeBaseEnV15, bgeM3 }
 
 /// Stable host-to-Rust wire value for [VabqProfile].
 String vabqProfileWireName(VabqProfile profile) => switch (profile) {
-      VabqProfile.none => 'none',
-      VabqProfile.allMiniLmL6V2 => 'allMiniLmL6V2',
-      VabqProfile.allMpnetBaseV2 => 'allMpnetBaseV2',
-      VabqProfile.bgeBaseEnV15 => 'bgeBaseEnV15',
-      VabqProfile.bgeM3 => 'bgeM3',
-    };
+  VabqProfile.none => 'none',
+  VabqProfile.allMiniLmL6V2 => 'allMiniLmL6V2',
+  VabqProfile.allMpnetBaseV2 => 'allMpnetBaseV2',
+  VabqProfile.bgeBaseEnV15 => 'bgeBaseEnV15',
+  VabqProfile.bgeM3 => 'bgeM3',
+};
 
 /// Quantization axis persisted inside an embedding fingerprint.
 ///
@@ -36,20 +35,21 @@ String embeddingQuantizationFingerprintAxis(VabqProfile profile) =>
 
 /// Wire format produced by [computeEmbeddingFingerprint].
 ///
-/// `{modelBasename}|{dim}|{quant}`
+/// `{modelBasename}|{dim}|{quant}|{modelIdentity}`
 ///
-/// Example: `my-model.onnx|384|f32+vabq:allMiniLmL6V2`.
+/// Example: `my-model.onnx|384|f32+vabq:none|sha256:3f2a…`.
 ///
-/// The basename is taken from `modelPath` rather than its bytes so a host
-/// app that replaces the file in-place forces a mismatch (same path, new
-/// bytes ⇒ same basename ⇒ same fingerprint is not what we want; in that
-/// situation the host MUST also rename the file to a new basename). We rely
-/// on the dim component to catch the most common case of swapping models
-/// with different output sizes, even if the basename is reused.
+/// [modelIdentity] (from [embeddingModelIdentity]) tells apart models that
+/// share a file name and dimension, such as two 384-dim
+/// `model_qint8_arm64.onnx` exports, and a file replaced in place. Without
+/// it the fingerprint is the three-component form that earlier releases
+/// stored; the engine extends a stored three-component value in place when
+/// the model file name, dimension and quantization still match.
 String computeEmbeddingFingerprint({
   required String modelBasename,
   required int dim,
   required String quant,
+  String? modelIdentity,
 }) {
   if (modelBasename.isEmpty) {
     throw ArgumentError.value(
@@ -64,7 +64,44 @@ String computeEmbeddingFingerprint({
   if (quant.isEmpty) {
     throw ArgumentError.value(quant, 'quant', 'must be non-empty');
   }
-  return '$modelBasename|$dim|$quant';
+  if (modelIdentity == null) return '$modelBasename|$dim|$quant';
+  if (modelIdentity.isEmpty || modelIdentity.contains('|')) {
+    throw ArgumentError.value(
+      modelIdentity,
+      'modelIdentity',
+      'must be non-empty and must not contain "|"',
+    );
+  }
+  return '$modelBasename|$dim|$quant|$modelIdentity';
+}
+
+/// Bytes read from each end of the model file by [embeddingModelIdentity].
+const int _kModelIdentitySampleBytes = 1 << 20;
+
+/// Content identity of the model file at [modelPath]: a SHA-256 over the file
+/// size and its first and last MiB.
+///
+/// Weights fill both ends of an ONNX file, so different models (or different
+/// quantizations of one model) differ there even when the name and size
+/// match. Sampling makes the cost independent of model size (about 17 ms on
+/// an M3 Pro); hashing a whole 100 MB model on every boot would not be.
+Future<String> embeddingModelIdentity(String modelPath) async {
+  final file = await File(modelPath).open();
+  try {
+    final length = await file.length();
+    final sampleBytes = length < _kModelIdentitySampleBytes
+        ? length
+        : _kModelIdentitySampleBytes;
+    final buffer = BytesBuilder(copy: false)
+      ..add((ByteData(8)..setUint64(0, length)).buffer.asUint8List())
+      ..add(await file.read(sampleBytes));
+    await file.setPosition(length - sampleBytes);
+    buffer.add(await file.read(sampleBytes));
+    final digest = sha256.convert(buffer.takeBytes());
+    return 'sha256:${digest.toString().substring(0, 32)}';
+  } finally {
+    await file.close();
+  }
 }
 
 /// Extract just the file name component from `modelPath`.
@@ -131,8 +168,7 @@ class ClearAndRestartConfirmation {
   ///
   /// The name is verbose by design — typing it out is the consent.
   static const ClearAndRestartConfirmation
-      iUnderstandThisDeletesAllOnDeviceEmbeddings =
-      ClearAndRestartConfirmation._();
+  iUnderstandThisDeletesAllOnDeviceEmbeddings = ClearAndRestartConfirmation._();
 }
 
 /// Progress event emitted during `reembedAll(progress:)`.

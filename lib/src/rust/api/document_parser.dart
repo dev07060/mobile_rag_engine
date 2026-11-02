@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `below_threshold_error_message`, `dedup_adjacent_repeats`, `extract_single_page`, `find_adjacent_repeats`, `is_cjk`, `is_extraction_effectively_empty`, `is_noncharacter_code_point`, `is_private_use_code_point`, `join_pages`, `normalize_extracted_text`, `remove_trailing_page_number`, `should_include_scanned_marker`
+// These functions are ignored because they are not marked as `pub`: `below_threshold_error_message`, `decrypt_with_empty_user_password`, `dedup_adjacent_repeats`, `extract_single_page`, `find_adjacent_repeats`, `is_cjk`, `is_extraction_effectively_empty`, `is_noncharacter_code_point`, `is_private_use_code_point`, `join_pages`, `normalize_extracted_text`, `remove_trailing_page_number`, `should_include_scanned_marker`
 
 /// Extract text content from a PDF file (bytes)
 ///

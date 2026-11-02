@@ -46,6 +46,21 @@ Future<void> writeEmbeddingFingerprint({required String fingerprint}) => RustLib
     .api
     .crateApiMigrationMetaWriteEmbeddingFingerprint(fingerprint: fingerprint);
 
+/// Rewrite `from` to `to` wherever it is persisted: the baseline, the pending
+/// target and the chunk tags. Values other than `from` are left alone.
+///
+/// For fingerprint formats that gain a component, e.g. a model identity
+/// appended to `{modelBasename}|{dim}|{quant}`. The embeddings are unchanged,
+/// so this must not be used to switch models: `to` has to be `from` plus one
+/// or more `|`-separated components.
+Future<void> extendEmbeddingFingerprint({
+  required String from,
+  required String to,
+}) => RustLib.instance.api.crateApiMigrationMetaExtendEmbeddingFingerprint(
+  from: from,
+  to: to,
+);
+
 /// Begin a reembed-to-`target_fingerprint` flow.
 ///
 /// Writes `embedding_fingerprint_pending = target_fingerprint` (sticky across

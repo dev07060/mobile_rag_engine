@@ -10,6 +10,7 @@
 * **HNSW**: Building the vector index is about 3.8× faster (20k × 384-dim vectors: 82 s to 22 s), and vector search on a loaded index is about 2× faster. The layer search kept its results in a list that it re-sorted for every neighbor it looked at; it now uses heaps and a visited bitset, and the builder caches vector norms. Recall is unchanged.
 * **BM25**: Korean words with attached particles or endings now match. Whole-word tokens never matched the bare stem: "검색엔진" missed "검색엔진은". Hangul words now also index their syllable bigrams. BM25 is rebuilt at activation, so existing data needs no migration.
 * **Chunking**: Splitting paragraphs that exceed the token budget tokenizes each paragraph once instead of once per candidate, so dense text such as Korean chunks up to 3× faster. Every chunk is still checked against the budget with an exact count.
+* **Embedding fingerprint**: `extend_embedding_fingerprint(from, to)` rewrites a stored fingerprint, a pending reembed target and the chunk tags from `from` to `to` in one transaction, without touching embeddings. It only accepts a `to` that appends `|`-separated components to `from`, so it cannot be used to switch models. The Dart package uses it to add a model-content hash to fingerprints written by earlier releases.
 
 ## 0.21.2
 * **Search index**:

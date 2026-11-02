@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `count_plain_text_tokens_untruncated`, `count_tokens_untruncated`, `encode_internal`, `encode_without_truncation`, `resolve_truncation_max_length`, `with_tokenizer`
+// These functions are ignored because they are not marked as `pub`: `count_plain_text_tokens_untruncated`, `count_tokens_untruncated`, `encode_internal`, `encode_without_truncation`, `token_offsets_untruncated`, `with_tokenizer`
 
 /// Initialize tokenizer with tokenizer.json file path.
 Future<void> initTokenizer({required String tokenizerPath}) => RustLib
