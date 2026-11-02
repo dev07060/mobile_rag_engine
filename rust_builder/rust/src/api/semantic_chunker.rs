@@ -20,8 +20,7 @@ use crate::api::ingest_metrics::{
     legacy_counters_enabled, LEGACY_CHUNKER_CHUNKS_OUT, LEGACY_CHUNKER_TEXT_IN,
 };
 use crate::api::tokenizer::{
-    count_tokens_untruncated, resolve_truncation_max_length, token_offsets_untruncated,
-    TOKENIZER_BASE_TRUNCATION_MAX_LENGTH,
+    count_tokens_untruncated, token_offsets_untruncated, TOKENIZER_TRUNCATION_MAX_LENGTH,
 };
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -420,9 +419,8 @@ fn fits_token_budget(
     range: &Range<usize>,
     cache: &mut HashMap<(usize, usize), usize>,
 ) -> bool {
-    let slice = &text[range.clone()];
     cached_token_count(text, range, cache)
-        .map(|count| count <= resolve_truncation_max_length(slice))
+        .map(|count| count <= TOKENIZER_TRUNCATION_MAX_LENGTH)
         .unwrap_or(true)
 }
 
@@ -520,10 +518,10 @@ impl TokenEstimator {
         Some(self.specials + inside)
     }
 
-    /// True when even the estimate (a lower bound) is over `range`'s budget.
-    fn over_budget(&self, text: &str, range: &Range<usize>) -> bool {
+    /// True when even the estimate (a lower bound) is over the token budget.
+    fn over_budget(&self, range: &Range<usize>) -> bool {
         self.estimate(range)
-            .is_some_and(|count| count > resolve_truncation_max_length(&text[range.clone()]))
+            .is_some_and(|count| count > TOKENIZER_TRUNCATION_MAX_LENGTH)
     }
 }
 
@@ -535,7 +533,7 @@ fn fits_token_budget_estimated(
     estimator: Option<&TokenEstimator>,
     cache: &mut HashMap<(usize, usize), usize>,
 ) -> bool {
-    if estimator.is_some_and(|e| e.over_budget(text, range)) {
+    if estimator.is_some_and(|e| e.over_budget(range)) {
         return false;
     }
     fits_token_budget(text, range, cache)
@@ -574,8 +572,7 @@ fn estimate_token_fitting_end(
         while low <= high {
             let mid = low + (high - low) / 2;
             let candidate = check_start..advance_by_chars(text, cursor, end, mid);
-            let budget = resolve_truncation_max_length(&text[candidate.clone()]);
-            if estimator.estimate(&candidate)? + margin <= budget {
+            if estimator.estimate(&candidate)? + margin <= TOKENIZER_TRUNCATION_MAX_LENGTH {
                 best = candidate.end;
                 low = mid + 1;
             } else if mid == 1 {
@@ -594,10 +591,10 @@ fn estimate_token_fitting_end(
     None
 }
 
-/// Overlap is capped at this many tokens, so a chunk always has at least half
-/// of the base budget for new content (otherwise a large overlap on dense text
-/// would leave room for only a sliver of new text per chunk).
-const MAX_OVERLAP_TOKENS: usize = TOKENIZER_BASE_TRUNCATION_MAX_LENGTH / 2;
+/// Overlap is capped at this many tokens, so a chunk always has at least three
+/// quarters of the token budget for new content (otherwise a large overlap on
+/// dense text would leave room for only a sliver of new text per chunk).
+const MAX_OVERLAP_TOKENS: usize = 128;
 
 /// Upper bound for `overlap_chars`: strictly less than half of `max_chars`.
 /// Mirrored by `normalizeOverlapChars` in `lib/src/internal/validation.dart`.
@@ -1085,7 +1082,7 @@ mod tests {
     use super::*;
     use crate::api::tokenizer::{
         count_tokens_untruncated, count_tokens_untruncated_call_count, init_tokenizer,
-        reset_count_tokens_untruncated_call_count, resolve_truncation_max_length,
+        reset_count_tokens_untruncated_call_count, TOKENIZER_TRUNCATION_MAX_LENGTH,
     };
     use once_cell::sync::Lazy;
     use std::sync::Mutex;
@@ -1229,7 +1226,74 @@ mod tests {
         assert!(chunks.len() > 1);
         for chunk in &chunks {
             let token_count = count_tokens_untruncated(&chunk.content).unwrap();
-            assert!(token_count <= resolve_truncation_max_length(&chunk.content));
+            assert!(token_count <= TOKENIZER_TRUNCATION_MAX_LENGTH);
+        }
+    }
+
+    #[test]
+    fn test_semantic_chunk_keeps_dense_text_up_to_model_max() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+
+        // 400 tokens in 799 chars, like dense Korean prose: within the model
+        // maximum, so it must not be split for having few characters.
+        let text = vec!["가"; 400].join(" ");
+        let chunks = semantic_chunk(text, 5000);
+
+        assert_eq!(chunks.len(), 1);
+    }
+
+    fn assert_structured_chunks_fit_token_budget(text: &str, chunks: &[StructuredChunk]) {
+        for chunk in chunks {
+            assert_eq!(
+                &text[chunk.start_pos as usize..chunk.end_pos as usize],
+                chunk.content
+            );
+            let tokens = count_tokens_untruncated(&chunk.content).unwrap();
+            assert!(
+                tokens <= TOKENIZER_TRUNCATION_MAX_LENGTH,
+                "chunk {} has {} tokens",
+                chunk.index,
+                tokens
+            );
+        }
+    }
+
+    #[test]
+    fn test_markdown_short_section_fits_token_budget() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+
+        // 700 tokens in 1399 chars: under max_chars, over the token budget.
+        let text = format!("# Title\n\n{}", vec!["가"; 700].join(" "));
+        let chunks = markdown_chunk(text.clone(), 2000);
+
+        assert!(chunks.len() > 1);
+        assert_structured_chunks_fit_token_budget(&text, &chunks);
+    }
+
+    #[test]
+    fn test_markdown_code_block_fits_token_budget() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer();
+
+        // 800 tokens in 1599 chars of code, split by lines only before.
+        let body = vec!["a b c d e f g h"; 100].join("\n");
+        let text = format!("```\n{body}\n```");
+        let chunks = markdown_chunk(text.clone(), 5000);
+
+        assert!(chunks.len() > 1);
+        assert_structured_chunks_fit_token_budget(&text, &chunks);
+        let batch_id = chunks[0].batch_id.as_ref().expect("split code is linked");
+        for (i, chunk) in chunks.iter().enumerate() {
+            assert_eq!(chunk.batch_id.as_ref(), Some(batch_id));
+            assert_eq!(chunk.batch_index, Some(i as i32));
         }
     }
 
@@ -1393,7 +1457,7 @@ mod tests {
         for chunk in chunks {
             assert_chunk_matches_source(text, chunk);
             let tokens = count_tokens_untruncated(&chunk.content).unwrap();
-            let budget = resolve_truncation_max_length(&chunk.content);
+            let budget = TOKENIZER_TRUNCATION_MAX_LENGTH;
             assert!(
                 tokens <= budget,
                 "chunk {} has {} tokens > budget {}",
@@ -1598,8 +1662,7 @@ mod tests {
             chunks
                 .iter()
                 .filter(|c| {
-                    count_tokens_untruncated(&c.content).unwrap()
-                        > resolve_truncation_max_length(&c.content)
+                    count_tokens_untruncated(&c.content).unwrap() > TOKENIZER_TRUNCATION_MAX_LENGTH
                 })
                 .count()
         };
@@ -1710,11 +1773,23 @@ pub fn markdown_chunk(text: String, max_chars: i32) -> Vec<StructuredChunk> {
             "text".to_string()
         };
 
+        // Char-sized ranges can still exceed the token budget (dense scripts,
+        // code), so they go through the same token check as plain text.
         let section_char_count = content.chars().count();
         let sub_ranges = if section_char_count <= max_chars_usize {
-            vec![section.content_range.clone()]
+            enforce_token_budget(
+                &text,
+                vec![section.content_range.clone()],
+                max_chars_usize,
+                0,
+            )
         } else if section.is_table || section.is_code_block {
-            split_by_line_ranges(&text, &section.content_range, max_chars_usize)
+            enforce_token_budget(
+                &text,
+                split_by_line_ranges(&text, &section.content_range, max_chars_usize),
+                max_chars_usize,
+                0,
+            )
         } else {
             plan_plain_text_subranges(&text, &section.content_range, max_chars_usize)
         };
