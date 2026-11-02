@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Dense text is split into fewer, fuller chunks. English text at the default chunk size is chunked as before.
   - Markdown chunks, including code blocks and tables, now fit the token limit, so no text is dropped at embedding time.
   - Existing databases keep working. Re-ingesting Korean, Japanese or Chinese documents is optional and recovers the truncated text.
+* **Search** (needs the next `rag_engine_flutter`):
+  - Korean keyword search matches words with attached particles: a query for "검색엔진" finds "검색엔진은".
+  - Building the vector index after adding or removing documents is about 3.8× faster, and vector search is about 2× faster.
+* **Ingestion** (needs the next `rag_engine_flutter`): chunking long Korean and other token-dense text that has to be split is up to 3× faster.
 
 ## 0.22.3
 * Requires `rag_engine_flutter: 0.21.2`.

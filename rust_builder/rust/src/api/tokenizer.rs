@@ -115,6 +115,29 @@ pub(crate) fn count_tokens_untruncated(text: &str) -> Result<usize> {
     Ok(encode_internal(text, true, false)?.len())
 }
 
+/// Encodes `text` once (with special tokens, untruncated) and returns the
+/// number of special tokens plus the `(start, end)` byte offsets of every
+/// other token. Token counts of sub-ranges read from these offsets are
+/// estimates: a word cut at a range edge can tokenize into more pieces, so
+/// callers must confirm a result with [`count_tokens_untruncated`].
+pub(crate) fn token_offsets_untruncated(text: &str) -> Result<(usize, Vec<(usize, usize)>)> {
+    let encoding = encode_internal(text, true, false)?;
+    let mut specials = 0usize;
+    let mut offsets = Vec::with_capacity(encoding.len());
+    for (&special, &offset) in encoding
+        .get_special_tokens_mask()
+        .iter()
+        .zip(encoding.get_offsets())
+    {
+        if special == 1 {
+            specials += 1;
+        } else {
+            offsets.push(offset);
+        }
+    }
+    Ok((specials, offsets))
+}
+
 pub(crate) fn count_plain_text_tokens_untruncated(text: &str) -> Result<usize> {
     Ok(encode_internal(text, false, false)?.len())
 }
