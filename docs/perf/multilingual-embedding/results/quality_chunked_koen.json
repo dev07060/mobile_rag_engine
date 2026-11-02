@@ -1,0 +1,146 @@
+[
+  {
+    "dataset": "Ko-StrategyQA",
+    "max_chars": 500,
+    "variant": "budget=engine-tiers (current)",
+    "chunks": 11627,
+    "truncated_chunks_pct": 0.0,
+    "ndcg@10": 0.76156,
+    "recall@10": 0.82282
+  },
+  {
+    "dataset": "Ko-StrategyQA",
+    "max_chars": 500,
+    "variant": "budget=512",
+    "chunks": 10603,
+    "truncated_chunks_pct": 0.0,
+    "ndcg@10": 0.76057,
+    "recall@10": 0.82458
+  },
+  {
+    "dataset": "Ko-StrategyQA",
+    "max_chars": 500,
+    "variant": "chars-only, embed=engine-tiers (markdown, current)",
+    "chunks": 10602,
+    "truncated_chunks_pct": 9.6,
+    "ndcg@10": 0.76129,
+    "recall@10": 0.82537
+  },
+  {
+    "dataset": "Ko-StrategyQA",
+    "max_chars": 500,
+    "variant": "chars-only, embed=512 (markdown)",
+    "chunks": 10602,
+    "truncated_chunks_pct": 0.0,
+    "ndcg@10": 0.76247,
+    "recall@10": 0.82683
+  },
+  {
+    "dataset": "Ko-StrategyQA",
+    "max_chars": 1000,
+    "variant": "budget=engine-tiers (current)",
+    "chunks": 11191,
+    "truncated_chunks_pct": 0.0,
+    "ndcg@10": 0.76032,
+    "recall@10": 0.82183
+  },
+  {
+    "dataset": "Ko-StrategyQA",
+    "max_chars": 1000,
+    "variant": "budget=512",
+    "chunks": 9549,
+    "truncated_chunks_pct": 0.0,
+    "ndcg@10": 0.76064,
+    "recall@10": 0.82799
+  },
+  {
+    "dataset": "Ko-StrategyQA",
+    "max_chars": 1000,
+    "variant": "chars-only, embed=engine-tiers (markdown, current)",
+    "chunks": 9413,
+    "truncated_chunks_pct": 15.7,
+    "ndcg@10": 0.75679,
+    "recall@10": 0.82521
+  },
+  {
+    "dataset": "Ko-StrategyQA",
+    "max_chars": 1000,
+    "variant": "chars-only, embed=512 (markdown)",
+    "chunks": 9413,
+    "truncated_chunks_pct": 1.4,
+    "ndcg@10": 0.75853,
+    "recall@10": 0.82489
+  },
+  {
+    "dataset": "AutoRAGRetrieval",
+    "max_chars": 500,
+    "variant": "budget=engine-tiers (current)",
+    "chunks": 2116,
+    "truncated_chunks_pct": 0.0,
+    "ndcg@10": 0.90713,
+    "recall@10": 1.0
+  },
+  {
+    "dataset": "AutoRAGRetrieval",
+    "max_chars": 500,
+    "variant": "budget=512",
+    "chunks": 1567,
+    "truncated_chunks_pct": 0.0,
+    "ndcg@10": 0.94155,
+    "recall@10": 1.0
+  },
+  {
+    "dataset": "AutoRAGRetrieval",
+    "max_chars": 500,
+    "variant": "chars-only, embed=engine-tiers (markdown, current)",
+    "chunks": 1567,
+    "truncated_chunks_pct": 35.0,
+    "ndcg@10": 0.92816,
+    "recall@10": 1.0
+  },
+  {
+    "dataset": "AutoRAGRetrieval",
+    "max_chars": 500,
+    "variant": "chars-only, embed=512 (markdown)",
+    "chunks": 1567,
+    "truncated_chunks_pct": 0.0,
+    "ndcg@10": 0.94155,
+    "recall@10": 1.0
+  },
+  {
+    "dataset": "AutoRAGRetrieval",
+    "max_chars": 1000,
+    "variant": "budget=engine-tiers (current)",
+    "chunks": 1987,
+    "truncated_chunks_pct": 0.0,
+    "ndcg@10": 0.90506,
+    "recall@10": 1.0
+  },
+  {
+    "dataset": "AutoRAGRetrieval",
+    "max_chars": 1000,
+    "variant": "budget=512",
+    "chunks": 1140,
+    "truncated_chunks_pct": 0.0,
+    "ndcg@10": 0.91018,
+    "recall@10": 1.0
+  },
+  {
+    "dataset": "AutoRAGRetrieval",
+    "max_chars": 1000,
+    "variant": "chars-only, embed=engine-tiers (markdown, current)",
+    "chunks": 931,
+    "truncated_chunks_pct": 64.3,
+    "ndcg@10": 0.80458,
+    "recall@10": 0.92105
+  },
+  {
+    "dataset": "AutoRAGRetrieval",
+    "max_chars": 1000,
+    "variant": "chars-only, embed=512 (markdown)",
+    "chunks": 931,
+    "truncated_chunks_pct": 22.4,
+    "ndcg@10": 0.89455,
+    "recall@10": 1.0
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "model": "koenpack",
+    "docs": 720,
+    "chunks": 2152,
+    "ingest_ms": 79790,
+    "query_ms_avg": 361.79824561403507,
+    "queries": 114,
+    "ndcg10": 0.8939603014578814,
+    "recall10": 1.0,
+    "top1": 0.7719298245614035,
+    "fingerprint": "model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413"
+  },
+  {
+    "model": "koen",
+    "docs": 720,
+    "chunks": 2152,
+    "ingest_ms": 70257,
+    "query_ms_avg": 332.1929824561403,
+    "queries": 114,
+    "ndcg10": 0.8939603014578814,
+    "recall10": 1.0,
+    "top1": 0.7719298245614035,
+    "fingerprint": "_koen.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413"
+  }
+]

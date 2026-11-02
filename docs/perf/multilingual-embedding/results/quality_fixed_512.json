@@ -1,0 +1,142 @@
+[
+  {
+    "config": "koen-e5-tiny int8(shipped)",
+    "max_length": 512,
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.76238,
+    "recall@10": 0.82531,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 91.1
+  },
+  {
+    "config": "koen-e5-tiny int8(shipped)",
+    "max_length": 512,
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.86601,
+    "recall@10": 0.97368,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 19.8
+  },
+  {
+    "config": "koen-e5-tiny int8(shipped) no-prefix",
+    "max_length": 512,
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.76305,
+    "recall@10": 0.8233,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 153.2
+  },
+  {
+    "config": "koen-e5-tiny int8(shipped) no-prefix",
+    "max_length": 512,
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.86618,
+    "recall@10": 0.97368,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 20.4
+  },
+  {
+    "config": "e5-small int8(ours)",
+    "max_length": 512,
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.72672,
+    "recall@10": 0.79495,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 95.0
+  },
+  {
+    "config": "e5-small int8(ours)",
+    "max_length": 512,
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.7609,
+    "recall@10": 0.92982,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 21.4
+  },
+  {
+    "config": "e5-small int8(ours) no-prefix",
+    "max_length": 512,
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.72049,
+    "recall@10": 0.78473,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 120.8
+  },
+  {
+    "config": "e5-small int8(ours) no-prefix",
+    "max_length": 512,
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.71878,
+    "recall@10": 0.88596,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 21.8
+  },
+  {
+    "config": "e5-small-ko-v2 fp32",
+    "max_length": 512,
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.76849,
+    "recall@10": 0.83382,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 191.4
+  },
+  {
+    "config": "e5-small-ko-v2 fp32",
+    "max_length": 512,
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.85623,
+    "recall@10": 0.97368,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 39.2
+  },
+  {
+    "config": "e5-small-ko-v2 int8(ours)",
+    "max_length": 512,
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.7638,
+    "recall@10": 0.82119,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 167.1
+  },
+  {
+    "config": "e5-small-ko-v2 int8(ours)",
+    "max_length": 512,
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.83915,
+    "recall@10": 0.96491,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 20.1
+  },
+  {
+    "config": "e5-small-ko-v2 int8(ours) no-prefix",
+    "max_length": 512,
+    "dataset": "Ko-StrategyQA",
+    "ndcg@10": 0.7584,
+    "recall@10": 0.82766,
+    "queries": 592,
+    "docs": 9251,
+    "seconds": 90.7
+  },
+  {
+    "config": "e5-small-ko-v2 int8(ours) no-prefix",
+    "max_length": 512,
+    "dataset": "AutoRAGRetrieval",
+    "ndcg@10": 0.82178,
+    "recall@10": 0.95614,
+    "queries": 114,
+    "docs": 720,
+    "seconds": 19.1
+  }
+]
