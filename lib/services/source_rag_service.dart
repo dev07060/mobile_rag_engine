@@ -174,6 +174,43 @@ class RagSearchResult {
   final AssembledContext context;
 
   RagSearchResult({required this.chunks, required this.context});
+
+  /// JSON-ready view for handing results to an LLM, for example as a tool
+  /// result.
+  ///
+  /// `results` lists the chunks that fit the token budget
+  /// ([AssembledContext.includedChunks]). Each entry carries a citation label
+  /// `id` (`"1"`, `"2"`, …) for the model to cite, `source_id` and `chunk_id`
+  /// for the app to map a citation back to its document, and `source_name`
+  /// when [sourceNames] knows the source. `context` is [AssembledContext.text].
+  Map<String, Object?> toLlmJson({Map<int, String> sourceNames = const {}}) {
+    final included = context.includedChunks;
+    return {
+      'context': context.text,
+      'results': [
+        for (var i = 0; i < included.length; i++)
+          _chunkToLlmJson(i + 1, included[i], sourceNames),
+      ],
+    };
+  }
+
+  static Map<String, Object?> _chunkToLlmJson(
+    int label,
+    ChunkSearchResult chunk,
+    Map<int, String> sourceNames,
+  ) {
+    final sourceId = chunk.sourceId.toInt();
+    final sourceName = sourceNames[sourceId];
+    return {
+      'id': '$label',
+      'source_id': sourceId,
+      'source_name': ?sourceName,
+      'chunk_id': chunk.chunkId.toInt(),
+      'chunk_index': chunk.chunkIndex,
+      'score': double.parse(chunk.similarity.toStringAsFixed(3)),
+      'text': chunk.content,
+    };
+  }
 }
 
 /// Hydration mode for high-level hybrid search results.

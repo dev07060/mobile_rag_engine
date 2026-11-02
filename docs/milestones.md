@@ -12,65 +12,37 @@
 6. **머지는 사용자가 한다.** 세션은 "PR 열림, CI 통과"에서 멈춘다.
 7. **착수는 사용자가 마일스톤 번호로 지시할 때만 한다** (예: "M2 착수"). 순서는 아래 목록 순서를 기본으로 한다.
 
-## 현재 상태 (2026-11-02)
+## 현재 상태 (2026-11-03)
 
-- main: `0979f57` (#119 머지). 열린 PR 없음. 진행 중: M2.
+- main: `7612899` (#120 머지). 진행 중: M3.
 - 마지막 배포: `mobile_rag_engine` 0.22.3. 그 뒤 변경은 모두 `## Unreleased`에 쌓여 있다.
   - 512 토큰 truncation (#115)
   - HNSW 빌드와 검색 속도, 한국어 BM25, 한국어 청킹 속도 (#116)
   - flutter_rust_bridge 2.13 (#117)
   - 모델 파일 해시 fingerprint (#118)
+  - 레거시 자산 복사본 갱신 (#120). Dart만 바뀌어 `rag_engine_flutter` 배포는 필요 없고, 다음 `mobile_rag_engine` 배포에 들어간다.
 - 이 항목들은 다음 `rag_engine_flutter` 배포가 있어야 pub 사용자에게 동작한다. 배포 전까지 문서는 0.22.3 기준 안내를 유지한다 (M1 레시피가 그렇게 쓰여 있다).
 
 ## 마일스톤 목록 (착수 전 합의 필요)
 
-### M2. 레거시 자산 복사 버그
-
-- **담당:** 세션 "RAG 엔진 아키텍처 방향", 브랜치 `fix/legacy-asset-copy`
-- **상태:** PR 올림, 사용자 머지 대기 (2026-11-02)
-
-**방식 (착수 시 합의):** 복사할 때 대상 파일 옆에 기록 파일 `<대상>.asset-stamp`을 남긴다. 여기에는 asset 경로, 길이, sha256을 적는다. 시작할 때마다 asset을 읽은 뒤 다음 중 하나면 원자적으로(임시 파일 → rename) 다시 복사한다.
-- 기록 파일이 없다 (이 수정 이전에 복사된 파일 포함)
-- asset 경로가 다르다
-- 길이가 다르다
-- 대상 파일 길이가 기록과 다르다
-- 위 조건이 모두 같으면 sha256을 비교하고(UI isolate를 막지 않게 별도 isolate에서), 다르다
-
-비용은 매 시작마다 asset 로드와 sha256 한 번이다.
-
-**검증 결과 (2026-11-02, iPhone 16 Pro 시뮬레이터):**
-- `flutter test`는 실행이 끝나면 앱을 지운다. 그래서 한 프로세스 안에서 KoEn → MiniLM → KoEn → KoEn 순서로 초기화하고 해제했다. 네 번 모두 통과했고, KoEn 차례에는 한국어 질의의 top-1이 기대한 문서였다.
-- MiniLM 차례에서 기록 파일이 KoEn에서 MiniLM으로 바뀌었다. fingerprint의 모델 해시도 `fd688b…`에서 `e9246d…`로 바뀌었다.
-- 대조 실행: 엔진만 수정 전 코드로 돌리면, MiniLM 차례의 fingerprint가 KoEn 해시로 남는다. 남아 있던 KoEn 모델로 임베딩한 것이다.
-- 복사본이 이미 최신일 때 매 시작 확인 비용(Mac 위 시뮬레이터라 실기기는 다를 수 있다):
-
-  | 파일 | 크기 | 확인 시간 |
-  |---|---|---|
-  | KoEn 모델 | 38MB | 약 250ms |
-  | MiniLM 모델 | 23MB | 약 150ms |
-  | 토크나이저 | 0.5~2.9MB | 3~20ms |
-
-**문제:** `RagEngine._copyAssetToFile`(`lib/services/rag_engine.dart`)은 파일이 이미 있으면 복사하지 않는다. 토크나이저는 고정 이름 `tokenizer.json`으로, 모델은 asset 파일 이름으로 복사한다. 그래서 토크나이저를 바꾸거나, 앱 업데이트에서 같은 이름의 모델 파일 내용을 바꿔도 옛 파일을 계속 쓴다. M1 검증 중 시뮬레이터에서 KoEn 실행 뒤 MiniLM을 실행하니 KoEn 토크나이저가 남아 `Gather` 범위 오류로 실패했다. Model Pack 경로는 해시별 디렉터리라 영향 없다.
-
-**포함**
-- `modelAsset`/`tokenizerAsset` 경로에서 asset 내용이 바뀌면 다시 복사한다 (위 방식).
-- 매 시작 비용(asset 로드 + sha256)을 시뮬레이터에서 잰다.
-- 단위 테스트: 같은 이름의 asset 내용이 바뀐 경우, 토크나이저만 바뀐 경우.
-- `CHANGELOG.md` `## Unreleased`에 한 줄.
-
-**제외**
-- Model Pack 경로 변경
-- 오래된 복사본 정리(디스크 회수)는 필요하면 따로 적는다.
-
-**완료 기준**
-- 시뮬레이터에서 KoEn → MiniLM 순서로 앱을 재설치 없이 실행해 둘 다 동작한다.
-- PR 하나, CI 통과.
-
-**손대는 파일:** `lib/services/rag_engine.dart`(자산 복사 부분), 새 파일 `lib/src/internal/asset_file_sync.dart`, `test/unit/**`(새 테스트), `CHANGELOG.md`(`## Unreleased`), `docs/guides/model_setup.md`(Model Pack 권장 이유 문구만)
-
 ### M3. LLM용 검색 결과
 
-- **상태:** 범위 초안. 합의 대기. (방향 우선순위 2)
+- **담당:** 세션 "RAG 엔진 아키텍처 방향", 브랜치 `feat/llm-tool-results`
+- **상태:** PR 올림, 사용자 머지 대기 (2026-11-03). 방향 우선순위 2.
+
+**설계 (착수 시 확정)**
+- **결과 JSON:** `RagSearchResult.toLlmJson({sourceNames})`가 `{"context": ..., "results": [...]}`를 돌려준다.
+  - `results`는 토큰 예산 안에 들어간 청크(`context.includedChunks`)만 담는다.
+  - 항목 필드: `id`(인용 라벨 `"1"`, `"2"` …), `source_id`, `source_name`(알 때만), `chunk_id`, `chunk_index`, `score`(소수 셋째 자리), `text`
+  - 키는 snake_case로 쓴다. LLM이 읽고 앱이 `source_id`/`chunk_id`로 원문에 되짚어 가게 한다.
+  - `context`는 기존 `AssembledContext.text`다. 청크 metadata는 넣지 않는다(크기 때문).
+- **tool:** 새 파일 `lib/services/llm_tool.dart`에 `RagSearchTool`을 둔다.
+  - `definition`: 공급자 중립 형식 `{name, description, parameters}`. `parameters`는 JSON Schema로, `query`(string, 필수)와 `top_k`(integer, 1~`maxTopK`)를 받는다.
+  - `call(Map arguments)`: 검색 결과 JSON을 돌려준다. 인자가 잘못되면 예외 대신 `{"error": ...}`를 돌려줘서 모델이 다시 시도하게 한다. 엔진 오류는 그대로 던진다.
+  - `callJson(String)`: 인자를 문자열로 주는 SDK용. 결과도 문자열로 돌려준다.
+  - 생성: `RagSearchTool.fromMobileRag(MobileRag)`, `RagSearchTool.fromCollection(CollectionRag)`. 검색은 `searchHybridWithContext`(BM25 포함)를 쓰고, `source_name`은 호출마다 `listSources()`로 채운다.
+- 공급자 형식 변환(OpenAI `function`, Anthropic `input_schema`, Gemini `functionDeclarations`)은 가이드에 예제로만 둔다.
+- `lib/mobile_rag.dart`와 `context_builder.dart`는 고치지 않는다(아래 손대는 파일에서 뺀다).
 
 **목표:** 검색 결과를 어떤 LLM SDK에도 바로 넘길 수 있게 한다. 지금은 `RagSearchResult`(`chunks` + `AssembledContext.text`)와 `ContextBuilder.formatForPrompt`가 사람이 읽는 문자열만 준다.
 
@@ -89,7 +61,7 @@
 - 예제 코드로 tool schema → 가짜 tool 호출 → 결과 JSON 왕복이 테스트로 검증된다.
 - PR 하나, CI 통과.
 
-**손대는 파일:** `lib/services/source_rag_service.dart`(결과 타입), `lib/services/context_builder.dart`, 새 파일 `lib/services/llm_tool.dart`(가칭), `lib/mobile_rag.dart`(공개 API), `lib/mobile_rag_engine.dart`(export), `test/unit/**`, `CHANGELOG.md`, `docs/guides/` 새 문서
+**손대는 파일:** `lib/services/source_rag_service.dart`(`RagSearchResult`), 새 파일 `lib/services/llm_tool.dart`, `lib/mobile_rag_engine.dart`(export), `test/unit/**`, `CHANGELOG.md`, 새 문서 `docs/guides/llm_tools.md`, `README.md`(문서 목록에 한 줄), `docs/milestones.md`
 
 ### M4. `rag.ask` 생성 브리지
 
@@ -129,7 +101,7 @@
 
 **손대는 파일:** `docs/perf/multilingual-embedding/**`, `docs/guides/model_setup.md`(비용 절), `example/integration_test/`(측정 테스트가 필요하면 새 파일)
 
-> **겹치는 파일:** M2와 M5는 `docs/guides/model_setup.md`를, M3와 M4는 `lib/mobile_rag.dart`·`CHANGELOG.md`·`lib/mobile_rag_engine.dart`를 함께 고친다. 이 쌍은 동시에 진행하지 않는다. `CHANGELOG.md`는 M2·M3·M4가 모두 고치므로 한 번에 하나씩 진행한다.
+> **겹치는 파일:** M3와 M4는 `CHANGELOG.md`·`lib/mobile_rag_engine.dart`를 함께 고치므로 동시에 진행하지 않는다.
 
 ### 아직 마일스톤으로 적지 않은 후보
 
@@ -139,8 +111,13 @@
 - `lib/src/rust/api/mmap_store.dart` 잔존 파일 정리
 - query/document 접두어 설정 (e5-small 계열을 권장 모델로 추가할 때)
 - `AssembledContext.estimatedTokens` → `exactTokens` 이름 변경 (다음 breaking 배포 때)
+- 레거시 자산 확인 비용 절감: 전체 sha256 대신 크기 + 앞뒤 1MiB만 해시한다(#118 fingerprint와 같은 방식). 시뮬레이터에서 KoEn 매 시작 약 250ms와, 확인 중 모델 크기의 약 2배 순간 메모리를 줄인다. M5 실측을 본 뒤 판단한다.
 
 ## 완료
+
+### M2. 레거시 자산 복사 버그 — 완료 (#120, 2026-11-02)
+
+`modelAsset`/`tokenizerAsset` 복사본 옆에 `.asset-stamp`(asset 경로·길이·sha256)를 두고, asset과 다르면 원자적으로 다시 복사한다. 시뮬레이터에서 한 프로세스 안에 KoEn → MiniLM → KoEn → KoEn 순서로 초기화해 확인했다. 수정 전 코드로 대조하면 MiniLM 차례에도 KoEn 모델을 썼다. 매 시작 확인 비용은 시뮬레이터에서 KoEn 모델 약 250ms, MiniLM 약 150ms다.
 
 ### M1. 한국어 임베딩 레시피 — 완료 (#119, 2026-11-02)
 
