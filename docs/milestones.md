@@ -19,7 +19,7 @@
 
 ## 현재 상태 (2026-11-03)
 
-- main: `02d1bf0` (#123 머지). 진행 중: M6.
+- main: `9bd4231` (#124 머지). 진행 중: M4.
 - 마지막 배포: `mobile_rag_engine` 0.22.3. 그 뒤 변경은 모두 `## Unreleased`에 쌓여 있다.
   - 512 토큰 truncation (#115)
   - HNSW 빌드와 검색 속도, 한국어 BM25, 한국어 청킹 속도 (#116)
@@ -93,39 +93,10 @@
 | b4 | **FAIL (맹점 3)** | 예산 300토큰에 출력 717토큰 (한도 470 = 300 + 결과당 40 + 50) |
 
 
-### M6. fingerprint 이전 검증 + 레시피 정정
-
-- **담당:** 이 대화의 세션, 브랜치 `fix/m6-fingerprint-extension-check`
-- **상태:** 진행 중 (2026-11-03 착수).
-
-**목표:** 맹점 1번을 고친다. 0.22.3의 3칸 fingerprint를 4칸으로 늘릴 때, 디스크의 모델이 그 DB를 만든 모델과 같은지 확인하지 않고 지금 파일의 해시를 붙이는 문제다.
-
-**포함**
-- `_extendFingerprintWithoutModelIdentity` 주변: 확장 전에 저장된 벡터와 지금 모델이 같은 모델인지 검증한다(예: 저장된 청크 몇 개를 다시 임베딩해 비교). 다르면 확장하지 않고 잠근다. 방식은 착수 때 이 문서에 먼저 정한다.
-- `docs/guides/model_setup.md` 모델 전환 절의 "Later releases ... lock" 문단 정정.
-- H1의 `H1_KNOWN_FAILING`에서 S2~S4를 지운다.
-
-**착수 때 정한 방식 (2026-11-03)**
-- **표본 재임베딩 비교.** 확장할 3칸 fingerprint(`from`)에 속한 청크 중 본문이 가장 짧은 3개를 읽는다. 이 청크들을 지금 모델로 다시 임베딩하고, 저장된 벡터와 코사인 유사도를 잰다. 셋 다 기준값 이상이면 같은 모델로 보고 확장한다. 하나라도 낮으면 확장하지 않는다. 그러면 기존 fingerprint 비교가 3칸 ≠ 4칸으로 잠근다(`reembedAll()`/`clearAndRestart()` 안내는 기존 그대로다).
-- **짧은 청크를 고르는 이유:** #115가 임베딩 truncation을 256 → 512토큰으로 바꿨다. 긴 청크는 같은 모델이어도 0.22.3과 다른 벡터가 나올 수 있다. 짧은 청크는 두 버전의 입력이 같다. 임베딩 입력은 색인 때와 같은 `render_context_text(content, chunk_type)`을 쓴다.
-- **기준값 0.95.** 하네스에서 잰 값(로컬 macOS, 0.22.3 DB): s1(같은 MiniLM)은 세 표본 모두 1.0000이었고, s2~s4(KoEn)는 0.0289였다. 그래서 0.95면 양쪽 모두 여유가 크다.
-- **구현 중 알게 된 저장 형식:**
-  - **태그:** 0.22.3(native 0.21.2)은 청크를 저장할 때 청크별 fingerprint 태그를 비워 둔다. 그래서 "태그가 비었고 기준값이 `from`"인 청크도 `from`에 속한 것으로 본다. 처음에는 태그로만 찾아서 표본이 0개였고, 결국 그대로 확장됐다.
-  - **벡터 위치:** 벡터는 `chunks.embedding`(빈 값)에 있지 않다. Q8_0으로 압축돼 `.vec` MMAP 파일에 있고, `mmap_id`가 그 위치를 가리킨다. 표본 조회는 HNSW 재구성과 같은 순서로 읽는다: f32 컬럼 → `embedding_i8` → MMAP. 처음에는 f32 컬럼만 읽어 같은 모델(s1)까지 잠갔다.
-- **표본이 없으면**(`from` 청크 0개) 섞일 벡터가 없으므로 지금처럼 확장한다.
-- **비용:** 0.22.3 DB를 처음 열 때 한 번만, 짧은 청크 3개를 임베딩한다. 확장한 뒤에는 4칸이라 다시 실행되지 않는다.
-- **Rust 변경이 필요하다 (범위 확장).** Dart에서는 저장된 벡터를 읽을 API가 없다. 그래서 `migration_meta.rs`에 표본 조회 함수 하나와 FRB 생성 코드를 더한다. #118의 확장 함수도 Rust라서 어차피 다음 `rag_engine_flutter` 배포에 함께 들어간다.
-
-**제외:** asset 동기화 메모리(맹점 5번).
-
-**완료 기준**
-- H1-a S1~S4가 통과한다. 규칙 8의 네 항목. PR 하나, CI 통과.
-
-**손대는 파일:** `lib/services/rag_engine.dart`(`_extendFingerprintWithoutModelIdentity` 주변), `rust_builder/rust/src/api/migration_meta.rs`(표본 조회 함수), `rust_builder/rust/src/api/source_rag.rs`(`render_context_text` 공개 범위), FRB 생성 파일(`lib/src/rust/**`, `rust_builder/rust/src/frb_generated.rs`), `docs/guides/model_setup.md`(모델 전환 절), `test/unit/**`, `CHANGELOG.md`, `.github/workflows/upgrade_e2e.yml`(`H1_KNOWN_FAILING` 한 줄), `docs/milestones.md`
-
 ### M4. `rag.ask` 생성 브리지
 
-- **상태:** 범위 초안. 합의 대기. M6 머지 뒤 착수한다 (M7에서 고친 결과 형식을 쓴다).
+- **담당:** 이 대화의 세션, 브랜치 `feat/m4-rag-ask`
+- **상태:** 진행 중 (2026-11-03 착수).
 
 **목표:** 사용자가 넘긴 생성 함수(`Future<String> Function(prompt)` 또는 스트림)를 받아 검색 → 컨텍스트 조립 → 생성 → 인용 포함 답을 돌려주는 얇은 함수. LLM SDK는 넣지 않는다.
 
@@ -134,6 +105,23 @@
 - 스트리밍 여부는 착수할 때 이 문서에 먼저 정한다.
 - 가짜 생성 함수로 하는 단위 테스트, `CHANGELOG.md` 한 줄, 가이드
 
+**착수 때 정한 방식 (2026-11-03)**
+- **API:** `MobileRag.ask(question, generate: ...)`와 `CollectionRag.ask`. `generate`는 `Future<String> Function(String prompt)`이다. 결과 `RagAnswer`에는 답(`text`), 모델에 넘긴 구절(`passages`), 답에서 인용한 구절(`citations`), 보낸 `prompt`가 들어간다.
+- **스트리밍은 API에 넣지 않는다.** 대신 `prepareAsk(question)`이 검색과 프롬프트 조립까지만 하고 `RagAskPrompt`(prompt, passages)를 돌려준다. 앱은 자기 SDK로 스트리밍한 뒤 완성된 답을 `RagAskPrompt.answer(text)`에 넘긴다. SDK마다 스트림 모양(토큰 조각, 누적 문자열, 이벤트)이 달라서, 한 모양을 고르면 브리지가 얇지 않게 된다. `ask`는 `prepareAsk` + `generate` + `answer`일 뿐이다.
+- **검색:** `RagSearchTool.fromMobileRag`와 같다. 하이브리드 검색, `topK` 5, `tokenBudget` 1500. 구절은 M7의 `toLlmJson` 결과(인용 id는 매 `ask`마다 1부터, 소스 이름 포함)에서 만든다.
+- **기본 프롬프트:** JSON이 아닌 일반 텍스트다. 지시문(구절만 근거로 답하고, `[1]`처럼 인용하고, 없으면 없다고 말하고, 질문의 언어로 답한다), `[n] 소스 이름` + 본문 목록, 질문 순이다. `source_id`·`chunk_id`·`score`는 모델에 필요 없으므로 넣지 않는다. `buildPrompt: (question, passages) => String`으로 바꿀 수 있다.
+- **구절이 없으면** `generate`를 부르지 않는다. `text`가 빈 문자열이고 `passages`가 빈 `RagAnswer`를 돌려준다. 근거 없이 유료 호출을 하거나 모델이 지어낼 여지를 없앤다. 앱은 `hasPassages`로 자기 문구를 띄운다.
+- **인용 해석:** 답에서 `[1]`, `[1, 2]`, `[1][2]`를 찾는다. 넘긴 구절 id에 있는 것만 처음 나온 순서로, 중복 없이 `citations`에 넣는다. 없는 id(예: 모델이 지어낸 `[9]`)는 넣지 않는다.
+- **실제 출력 확인(규칙 8):** macOS 앱에서 실제 MiniLM 엔진으로 하네스 코퍼스를 색인하고, 프롬프트를 기록하는 가짜 `generate`로 `ask`를 두 번 부른다. 프롬프트 내용과 토큰 수, 두 번째 호출의 id가 다시 1부터인지, 인용이 실제 청크로 이어지는지 본다.
+- **업그레이드 경로:** 새 Dart API이고 디스크의 DB·파일 형식을 읽거나 바꾸지 않는다. 기존 Upgrade E2E가 그대로 돈다.
+
+**실제 출력 확인 결과 (2026-11-03, 로컬 macOS, MiniLM, 하네스 코퍼스 9개 문서)**
+- 기본 프롬프트는 구절 5개에 435·442토큰이었다(엔진 토크나이저 기준). 지시문은 약 60토큰이다. 구절 본문은 한 번씩만 들어가고, `[n] 파일 이름` 줄이 붙는다.
+- 두 번 부르면 두 번 모두 id가 1부터 시작했다. `generate`는 질문마다 한 번씩, 모두 두 번 불렸다. 인용 `[2][1]`, `[1, 3]`, 지어낸 `[9]`가 섞인 답에서 `citations`는 `2, 1, 3`이었다. 인용한 구절의 `sourceId`로 `getSourceDocument`를 부르니 그 본문이 들어 있었다.
+- `inCollection('manuals').ask`는 그 컬렉션의 문서만 받았다. `prepareAsk(topK: 2, tokenBudget: 300)`은 구절 2개, 217토큰이었다.
+- 예산 5토큰이면 들어가는 구절이 없어서 `generate`를 부르지 않고 빈 답을 돌려줬다.
+- **기존 버그 발견 (M4 범위 밖):** 문서가 없는 DB나 컬렉션에서 하이브리드 검색을 하면 `RagError.invalidInput("HNSW cache parity failed after rebuilding collection ...")`이 난다. `searchHybridWithContext`, `RagSearchTool`, `ask`가 모두 같다. 이 검사는 0.21.0부터 배포된 Rust 코드에 있다. 가이드에 적고 후보 목록에 넣었다.
+
 **제외**
 - 특정 LLM 공급자 통합, 대화 기록 관리, 에이전트 루프
 
@@ -141,7 +129,7 @@
 - 가짜 생성 함수로 질문 → 답 + 인용이 테스트로 검증된다.
 - PR 하나, CI 통과.
 
-**손대는 파일:** `lib/mobile_rag.dart`, 새 파일 `lib/services/ask.dart`(가칭), `lib/mobile_rag_engine.dart`(export), `test/unit/**`, `CHANGELOG.md`, `docs/guides/` 새 문서
+**손대는 파일:** `lib/mobile_rag.dart`, 새 파일 `lib/services/ask.dart`, `lib/mobile_rag_engine.dart`(export), `test/unit/**`, `CHANGELOG.md`, 새 문서 `docs/guides/ask.md`, `docs/guides/llm_tools.md`("Without tool calling" 절을 `ask` 안내로 바꿈), `README.md`(가이드 링크 한 줄), `docs/milestones.md`
 
 ### M5. iPhone 실기기 측정 (KoEn)
 
@@ -165,6 +153,7 @@
 
 착수하려면 위 형식으로 옮겨 적고 합의를 받는다.
 
+- 빈 DB·컬렉션 검색 오류: 문서가 없을 때 하이브리드 검색이 결과 0개 대신 `HNSW cache parity failed` 오류를 낸다(`source_rag.rs`의 HNSW 활성화, M4 확인 중 발견). 0.22.3에서도 같은지는 아직 재지 않았다. Rust 수정이라 다음 `rag_engine_flutter` 배포가 필요하다.
 - 성능 후보: `vector_math` 8-lane dot, HNSW 증분 삽입, prune 거리 캐싱, ef 상한, 짧은 문단 병합
 - `lib/src/rust/api/mmap_store.dart` 잔존 파일 정리
 - query/document 접두어 설정 (e5-small 계열을 권장 모델로 추가할 때)
@@ -172,6 +161,10 @@
 - 레거시 자산 확인 비용 절감: 전체 sha256 대신 크기 + 앞뒤 1MiB만 해시한다(#118 fingerprint와 같은 방식). 시뮬레이터에서 KoEn 매 시작 약 250ms와, 확인 중 모델 크기의 약 2배 순간 메모리를 줄인다. M5 실측을 본 뒤 판단한다.
 
 ## 완료
+
+### M6. fingerprint 이전 검증 — 완료 (#124, 2026-11-03)
+
+0.22.3의 3칸 fingerprint를 4칸으로 늘리기 전에, 가장 짧은 저장 청크 3개를 지금 모델로 다시 임베딩해 저장된 벡터와 코사인 0.95 이상인지 본다. 하네스(0.22.3 DB, 로컬 macOS)에서 같은 모델은 1.0000, KoEn은 0.0289였고, s1~s4·b1~b4가 모두 통과했다. 구현 중 알게 된 점: 0.22.3은 청크별 fingerprint 태그를 비워 두고, 벡터는 `chunks.embedding`이 아니라 `.vec` MMAP 파일에 Q8_0으로 있다. Rust 표본 조회 함수가 더해져 다음 `rag_engine_flutter` 배포가 필요하다.
 
 ### M7. LLM JSON 보완 — 완료 (#123, 2026-11-03)
 

@@ -173,15 +173,6 @@ contents.add({
 
 ## Without tool calling
 
-For models without tool calling, search first and put the JSON in the prompt.
-Ask the model to cite passage ids:
-
-```dart
-final result = await MobileRag.instance.searchHybridWithContext(question);
-final prompt = '''
-Answer using only the passages below. Cite passage ids like [1].
-
-${jsonEncode(result.toLlmJson()['results'])}
-
-Question: $question''';
-```
+For models without tool calling, `MobileRag.ask` searches first, builds the
+prompt and reads the citations from the answer; see the
+[Ask guide](ask.md).

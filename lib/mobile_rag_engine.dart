@@ -51,6 +51,7 @@ export 'services/rag_engine.dart';
 export 'services/context_builder.dart';
 export 'services/source_rag_service.dart';
 export 'services/llm_tool.dart';
+export 'services/ask.dart';
 export 'services/embedding_service.dart';
 export 'services/mobile_rag_vector_store.dart';
 export 'services/benchmark_service.dart';

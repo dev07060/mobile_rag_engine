@@ -32,6 +32,8 @@ import 'package:mobile_rag_engine/services/context_builder.dart';
 import 'package:mobile_rag_engine/model_pack.dart';
 import 'package:mobile_rag_engine/src/model_pack/model_pack_resolver.dart';
 import 'package:mobile_rag_engine/services/source_rag_service.dart';
+import 'package:mobile_rag_engine/services/ask.dart';
+import 'package:mobile_rag_engine/services/llm_tool.dart';
 // Explicitly import SourceEntry so it can be used in types
 import 'package:mobile_rag_engine/src/rust/api/migration_meta.dart'
     show MigrationAxes;
@@ -545,6 +547,53 @@ class MobileRag {
   String formatPrompt(String query, RagSearchResult result) =>
       _engine!.formatPrompt(query, result);
 
+  /// Searches for [question] and builds the prompt for an LLM, without calling
+  /// one. Use it to stream the answer with your own SDK, then pass the
+  /// complete answer to [RagAskPrompt.answer].
+  ///
+  /// Searches like [searchHybridWithContext] for [topK] passages within
+  /// [tokenBudget] engine tokens. Citation ids start at 1 for every question.
+  /// The prompt is empty when nothing was found.
+  Future<RagAskPrompt> prepareAsk(
+    String question, {
+    int topK = 5,
+    int tokenBudget = 1500,
+    RagPromptBuilder buildPrompt = defaultAskPrompt,
+  }) => prepareAskWith(
+    _askTool(topK, tokenBudget),
+    question,
+    buildPrompt: buildPrompt,
+  );
+
+  /// Answers [question] from the stored documents with your LLM.
+  ///
+  /// Runs [prepareAsk], sends the prompt to [generate], and returns the answer
+  /// with the passages it cites. [generate] is not called when nothing was
+  /// found; the answer then has no passages and empty text.
+  Future<RagAnswer> ask(
+    String question, {
+    required RagGenerate generate,
+    int topK = 5,
+    int tokenBudget = 1500,
+    RagPromptBuilder buildPrompt = defaultAskPrompt,
+  }) => askWith(
+    _askTool(topK, tokenBudget),
+    question,
+    generate: generate,
+    buildPrompt: buildPrompt,
+  );
+
+  RagSearchTool _askTool(int topK, int tokenBudget) => RagSearchTool(
+    search: (query, k) => _engine!.searchHybridWithContext(
+      query,
+      topK: k,
+      tokenBudget: tokenBudget,
+    ),
+    listSources: listSources,
+    defaultTopK: topK,
+    maxTopK: topK,
+  );
+
   /// Clear all data (database and index files) and reset the engine.
   ///
   /// This is a destructive operation!
@@ -773,4 +822,52 @@ class CollectionRag {
 
   String formatPrompt(String query, RagSearchResult result) =>
       _engine.formatPrompt(query, result);
+
+  /// Searches for [question] and builds the prompt for an LLM, without calling
+  /// one. Use it to stream the answer with your own SDK, then pass the
+  /// complete answer to [RagAskPrompt.answer].
+  ///
+  /// Searches like [searchHybridWithContext] for [topK] passages within
+  /// [tokenBudget] engine tokens. Citation ids start at 1 for every question.
+  /// The prompt is empty when nothing was found.
+  Future<RagAskPrompt> prepareAsk(
+    String question, {
+    int topK = 5,
+    int tokenBudget = 1500,
+    RagPromptBuilder buildPrompt = defaultAskPrompt,
+  }) => prepareAskWith(
+    _askTool(topK, tokenBudget),
+    question,
+    buildPrompt: buildPrompt,
+  );
+
+  /// Answers [question] from the stored documents with your LLM.
+  ///
+  /// Runs [prepareAsk], sends the prompt to [generate], and returns the answer
+  /// with the passages it cites. [generate] is not called when nothing was
+  /// found; the answer then has no passages and empty text.
+  Future<RagAnswer> ask(
+    String question, {
+    required RagGenerate generate,
+    int topK = 5,
+    int tokenBudget = 1500,
+    RagPromptBuilder buildPrompt = defaultAskPrompt,
+  }) => askWith(
+    _askTool(topK, tokenBudget),
+    question,
+    generate: generate,
+    buildPrompt: buildPrompt,
+  );
+
+  RagSearchTool _askTool(int topK, int tokenBudget) => RagSearchTool(
+    search: (query, k) => _engine.searchHybridWithContext(
+      query,
+      topK: k,
+      tokenBudget: tokenBudget,
+      collectionId: _collectionId,
+    ),
+    listSources: listSources,
+    defaultTopK: topK,
+    maxTopK: topK,
+  );
 }
