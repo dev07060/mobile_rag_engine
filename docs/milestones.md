@@ -19,7 +19,7 @@
 
 ## 현재 상태 (2026-11-03)
 
-- main: `9bd4231` (#124 머지). 진행 중: M4.
+- main: `9060c1e` (#125 머지). 진행 중: M8.
 - 마지막 배포: `mobile_rag_engine` 0.22.3. 그 뒤 변경은 모두 `## Unreleased`에 쌓여 있다.
   - 512 토큰 truncation (#115)
   - HNSW 빌드와 검색 속도, 한국어 BM25, 한국어 청킹 속도 (#116)
@@ -93,43 +93,29 @@
 | b4 | **FAIL (맹점 3)** | 예산 300토큰에 출력 717토큰 (한도 470 = 300 + 결과당 40 + 50) |
 
 
-### M4. `rag.ask` 생성 브리지
+### M8. 빈 DB·컬렉션 검색 오류
 
-- **담당:** 이 대화의 세션, 브랜치 `feat/m4-rag-ask`
-- **상태:** 진행 중 (2026-11-03 착수).
+- **담당:** 이 대화의 세션, 브랜치 `fix/m8-empty-collection-search`
+- **상태:** 진행 중 (2026-11-03 착수, 사용자: "먼저 하자고 제안한거 하자고").
 
-**목표:** 사용자가 넘긴 생성 함수(`Future<String> Function(prompt)` 또는 스트림)를 받아 검색 → 컨텍스트 조립 → 생성 → 인용 포함 답을 돌려주는 얇은 함수. LLM SDK는 넣지 않는다.
+**목표:** 문서가 없는 DB나 컬렉션에서 하이브리드 검색이 결과 0개 대신 `RagError.invalidInput("HNSW cache parity failed after rebuilding collection ...")`을 내는 문제를 고친다. M4 확인 중 발견했다. 설치 직후 문서를 넣기 전에 묻는 앱에서 `ask`·`RagSearchTool`·`searchHybridWithContext`가 모두 실패한다.
 
-**포함**
-- `ask(question, generate: ...)` API와 결과 타입(답, 사용한 청크/인용)
-- 스트리밍 여부는 착수할 때 이 문서에 먼저 정한다.
-- 가짜 생성 함수로 하는 단위 테스트, `CHANGELOG.md` 한 줄, 가이드
+**원인 (착수 때 확인):** 적격 청크가 0개면 HNSW 재구성이 인덱스를 비워 두고(`None`) 끝난다. 바로 뒤의 일치 검사(`loaded_hnsw_has_db_parity`)는 노드 수가 `Some(0)`이기를 기대해서 실패한다. 하이브리드 검색 자체는 인덱스가 없으면 벡터 검색을 건너뛰므로, 검사만 통과하면 결과 0개가 나온다.
 
-**착수 때 정한 방식 (2026-11-03)**
-- **API:** `MobileRag.ask(question, generate: ...)`와 `CollectionRag.ask`. `generate`는 `Future<String> Function(String prompt)`이다. 결과 `RagAnswer`에는 답(`text`), 모델에 넘긴 구절(`passages`), 답에서 인용한 구절(`citations`), 보낸 `prompt`가 들어간다.
-- **스트리밍은 API에 넣지 않는다.** 대신 `prepareAsk(question)`이 검색과 프롬프트 조립까지만 하고 `RagAskPrompt`(prompt, passages)를 돌려준다. 앱은 자기 SDK로 스트리밍한 뒤 완성된 답을 `RagAskPrompt.answer(text)`에 넘긴다. SDK마다 스트림 모양(토큰 조각, 누적 문자열, 이벤트)이 달라서, 한 모양을 고르면 브리지가 얇지 않게 된다. `ask`는 `prepareAsk` + `generate` + `answer`일 뿐이다.
-- **검색:** `RagSearchTool.fromMobileRag`와 같다. 하이브리드 검색, `topK` 5, `tokenBudget` 1500. 구절은 M7의 `toLlmJson` 결과(인용 id는 매 `ask`마다 1부터, 소스 이름 포함)에서 만든다.
-- **기본 프롬프트:** JSON이 아닌 일반 텍스트다. 지시문(구절만 근거로 답하고, `[1]`처럼 인용하고, 없으면 없다고 말하고, 질문의 언어로 답한다), `[n] 소스 이름` + 본문 목록, 질문 순이다. `source_id`·`chunk_id`·`score`는 모델에 필요 없으므로 넣지 않는다. `buildPrompt: (question, passages) => String`으로 바꿀 수 있다.
-- **구절이 없으면** `generate`를 부르지 않는다. `text`가 빈 문자열이고 `passages`가 빈 `RagAnswer`를 돌려준다. 근거 없이 유료 호출을 하거나 모델이 지어낼 여지를 없앤다. 앱은 `hasPassages`로 자기 문구를 띄운다.
-- **인용 해석:** 답에서 `[1]`, `[1, 2]`, `[1][2]`를 찾는다. 넘긴 구절 id에 있는 것만 처음 나온 순서로, 중복 없이 `citations`에 넣는다. 없는 id(예: 모델이 지어낸 `[9]`)는 넣지 않는다.
-- **실제 출력 확인(규칙 8):** macOS 앱에서 실제 MiniLM 엔진으로 하네스 코퍼스를 색인하고, 프롬프트를 기록하는 가짜 `generate`로 `ask`를 두 번 부른다. 프롬프트 내용과 토큰 수, 두 번째 호출의 id가 다시 1부터인지, 인용이 실제 청크로 이어지는지 본다.
-- **업그레이드 경로:** 새 Dart API이고 디스크의 DB·파일 형식을 읽거나 바꾸지 않는다. 기존 Upgrade E2E가 그대로 돈다.
+**착수 때 정한 방식**
+- 일치 검사는 "적격 청크 0개이고 인덱스 없음"도 일치로 본다.
+- 문서를 모두 지운 컬렉션은 디스크에 옛 HNSW 파일이 남는다. 이미 빈 상태로 활성화된 컬렉션은 다음 검색에서 그 파일을 다시 읽고 버리고 재구성하지 않도록, 활성 캐시 확인에서 "인덱스 없음 + 적격 0개"를 유효로 본다. 빈 BM25는 지금도 매번 0행 SELECT로 다시 만들지만 비용이 작아 그대로 둔다.
+- 0.22.3에서도 같은 오류가 나는지 pub의 0.22.3으로 만든 macOS 앱에서 확인한다.
+- 업그레이드 경로: 디스크 형식은 바뀌지 않는다. 0.22.3이 남긴 빈 DB와 옛 HNSW 파일은 위 확인으로 다룬다.
 
-**실제 출력 확인 결과 (2026-11-03, 로컬 macOS, MiniLM, 하네스 코퍼스 9개 문서)**
-- 기본 프롬프트는 구절 5개에 435·442토큰이었다(엔진 토크나이저 기준). 지시문은 약 60토큰이다. 구절 본문은 한 번씩만 들어가고, `[n] 파일 이름` 줄이 붙는다.
-- 두 번 부르면 두 번 모두 id가 1부터 시작했다. `generate`는 질문마다 한 번씩, 모두 두 번 불렸다. 인용 `[2][1]`, `[1, 3]`, 지어낸 `[9]`가 섞인 답에서 `citations`는 `2, 1, 3`이었다. 인용한 구절의 `sourceId`로 `getSourceDocument`를 부르니 그 본문이 들어 있었다.
-- `inCollection('manuals').ask`는 그 컬렉션의 문서만 받았다. `prepareAsk(topK: 2, tokenBudget: 300)`은 구절 2개, 217토큰이었다.
-- 예산 5토큰이면 들어가는 구절이 없어서 `generate`를 부르지 않고 빈 답을 돌려줬다.
-- **기존 버그 발견 (M4 범위 밖):** 문서가 없는 DB나 컬렉션에서 하이브리드 검색을 하면 `RagError.invalidInput("HNSW cache parity failed after rebuilding collection ...")`이 난다. `searchHybridWithContext`, `RagSearchTool`, `ask`가 모두 같다. 이 검사는 0.21.0부터 배포된 Rust 코드에 있다. 가이드에 적고 후보 목록에 넣었다.
-
-**제외**
-- 특정 LLM 공급자 통합, 대화 기록 관리, 에이전트 루프
+**제외:** 빈 BM25 재구성 최적화, HNSW 전역 단일 슬롯 구조 변경.
 
 **완료 기준**
-- 가짜 생성 함수로 질문 → 답 + 인용이 테스트로 검증된다.
-- PR 하나, CI 통과.
+- Rust 테스트: 처음부터 빈 컬렉션, 문서를 모두 지운 컬렉션(재시작 포함), 다시 문서를 넣으면 검색됨.
+- 실제 앱(path 의존성)에서 빈 DB·빈 컬렉션의 `searchHybridWithContext`와 `ask`가 오류 없이 결과 0개, `generate` 미호출.
+- 규칙 8의 네 항목. PR 하나, CI 통과.
 
-**손대는 파일:** `lib/mobile_rag.dart`, 새 파일 `lib/services/ask.dart`, `lib/mobile_rag_engine.dart`(export), `test/unit/**`, `CHANGELOG.md`, 새 문서 `docs/guides/ask.md`, `docs/guides/llm_tools.md`("Without tool calling" 절을 `ask` 안내로 바꿈), `README.md`(가이드 링크 한 줄), `docs/milestones.md`
+**손대는 파일:** `rust_builder/rust/src/api/source_rag.rs`(일치 검사, 활성화, 테스트), `docs/guides/ask.md`(빈 DB 안내), `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `docs/milestones.md`
 
 ### M5. iPhone 실기기 측정 (KoEn)
 
@@ -153,7 +139,7 @@
 
 착수하려면 위 형식으로 옮겨 적고 합의를 받는다.
 
-- 빈 DB·컬렉션 검색 오류: 문서가 없을 때 하이브리드 검색이 결과 0개 대신 `HNSW cache parity failed` 오류를 낸다(`source_rag.rs`의 HNSW 활성화, M4 확인 중 발견). 0.22.3에서도 같은지는 아직 재지 않았다. Rust 수정이라 다음 `rag_engine_flutter` 배포가 필요하다.
+- Windows `Native Tests`의 `ingest_ffi_traffic_test.dart` "Peak-RSS delta"가 가끔 실패한다(파일 경로가 UTF-8 경로보다 2MB 이상 적게 써야 하는데 0.7~0.8MB 차이만 났다. 11/1 `ci/quickstart-e2e`, 11/3 #125). 측정값이 흔들리는 테스트라 기준이나 측정 방식을 손봐야 한다.
 - 성능 후보: `vector_math` 8-lane dot, HNSW 증분 삽입, prune 거리 캐싱, ef 상한, 짧은 문단 병합
 - `lib/src/rust/api/mmap_store.dart` 잔존 파일 정리
 - query/document 접두어 설정 (e5-small 계열을 권장 모델로 추가할 때)
@@ -161,6 +147,10 @@
 - 레거시 자산 확인 비용 절감: 전체 sha256 대신 크기 + 앞뒤 1MiB만 해시한다(#118 fingerprint와 같은 방식). 시뮬레이터에서 KoEn 매 시작 약 250ms와, 확인 중 모델 크기의 약 2배 순간 메모리를 줄인다. M5 실측을 본 뒤 판단한다.
 
 ## 완료
+
+### M4. `rag.ask` 생성 브리지 — 완료 (#125, 2026-11-03)
+
+`MobileRag.ask(question, generate: ...)`·`CollectionRag.ask`와 스트리밍용 `prepareAsk`/`RagAskPrompt.answer`. 구절 5개 기본 프롬프트는 실제 MiniLM 엔진에서 약 440토큰이었고, 인용 id는 질문마다 1부터, 지어낸 id는 `citations`에서 빠진다. 들어갈 구절이 없으면 `generate`를 부르지 않는다. 확인 중 빈 DB 검색 오류를 발견해 M8로 적었다.
 
 ### M6. fingerprint 이전 검증 — 완료 (#124, 2026-11-03)
 

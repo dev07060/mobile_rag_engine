@@ -61,9 +61,8 @@ If no passage fits the token budget, `generate` is not called. The answer has
 empty `text` and `hasPassages` is false, so you can show your own message
 without paying for an LLM call.
 
-Searching a database or collection with no documents currently throws a
-`RagError` from the search itself, as `searchHybridWithContext` and
-`RagSearchTool` do. Check that documents exist before asking.
+The same happens when the database or collection has no documents yet, for
+example right after installing.
 
 ## Streaming
 

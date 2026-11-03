@@ -340,7 +340,9 @@ fn loaded_hnsw_has_db_parity(
 ) -> Result<bool, RagError> {
     let expected = eligible_hnsw_point_count(conn, collection_id)?;
     let actual = loaded_hnsw_node_count();
-    if actual == Some(expected) {
+    // A rebuild of a collection without eligible chunks leaves no index
+    // loaded; that matches the DB, and vector search skips a missing index.
+    if actual == Some(expected) || (expected == 0 && actual.is_none()) {
         return Ok(true);
     }
 
@@ -1595,12 +1597,11 @@ fn activate_collection_for_hybrid_search_inner(
     }
 
     let active_hnsw_generation_for_collection = active_hnsw_generation(&collection_id);
-    let active_cache_is_valid =
-        if is_hnsw_index_loaded() && active_hnsw_generation_for_collection.is_some() {
-            loaded_hnsw_is_current(&conn, &collection_id, active_hnsw_generation_for_collection)?
-        } else {
-            false
-        };
+    // An empty collection is active without a loaded index; checking it again
+    // avoids reloading (and rejecting) a stale file on every search.
+    let active_cache_is_valid = active_hnsw_generation_for_collection.is_some()
+        && (is_hnsw_index_loaded() || eligible_hnsw_point_count(&conn, &collection_id)? == 0)
+        && loaded_hnsw_is_current(&conn, &collection_id, active_hnsw_generation_for_collection)?;
 
     if !active_cache_is_valid {
         clear_hnsw_index();
@@ -5447,6 +5448,77 @@ mod tests {
         // And it settles again.
         activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
         assert_eq!(rebuilds(), after_append);
+
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        teardown_test_db(db_path);
+    }
+
+    /// A collection without documents activates with empty indexes, so a
+    /// search finds nothing instead of failing the HNSW parity check.
+    #[test]
+    fn activate_accepts_a_collection_without_documents() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_activate_empty_collection.db");
+        let collection = "empty-collection";
+        let base_path = db_path
+            .with_extension("empty-hnsw")
+            .to_string_lossy()
+            .into_owned();
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        assert!(bm25_hit_ids("anchor").is_empty());
+        assert_eq!(loaded_hnsw_node_count(), None);
+
+        // Activating again stays quiet.
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        teardown_test_db(db_path);
+    }
+
+    /// Deleting the last source leaves the persisted HNSW file of the old
+    /// documents behind; activation must reject it and still succeed.
+    #[test]
+    fn activate_accepts_a_collection_whose_documents_were_all_deleted() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_activate_emptied_collection.db");
+        let collection = "emptied-collection";
+        let base_path = seed_persisted_hnsw(&db_path, collection, "emptied-hnsw");
+        assert!(std::path::Path::new(&format!("{base_path}.hnsw")).exists());
+
+        for source in list_sources_in_collection(collection.to_string()).unwrap() {
+            delete_source_in_collection(collection.to_string(), source.id).unwrap();
+        }
+
+        // In the same process, and after a restart with the old file on disk.
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        assert!(bm25_hit_ids("anchor").is_empty());
+        forget_in_memory_indexes();
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        assert!(bm25_hit_ids("anchor").is_empty());
+        assert_eq!(loaded_hnsw_node_count(), None);
+
+        // Later searches neither reload the old file nor rebuild the HNSW.
+        // (An empty BM25 index counts as unloaded and is rebuilt from zero
+        // rows, which costs one empty query.)
+        let before = activation_metrics::activation_timing_stats();
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        let after = activation_metrics::activation_timing_stats();
+        assert_eq!(after.hnsw_load_count, before.hnsw_load_count);
+        assert_eq!(after.hnsw_rebuild_count, before.hnsw_rebuild_count);
+
+        // Adding a document again makes it searchable.
+        add_completed_source(
+            collection,
+            "source b",
+            vec![stale_chunk(0, "platypusgem back", stale_axis(3))],
+        );
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        assert_eq!(bm25_hit_ids("platypusgem").len(), 1);
+        assert_eq!(loaded_hnsw_node_count(), Some(1));
 
         let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
         teardown_test_db(db_path);
