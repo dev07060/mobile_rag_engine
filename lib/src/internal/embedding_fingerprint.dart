@@ -7,6 +7,7 @@
 library;
 
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -33,6 +34,33 @@ String vabqProfileWireName(VabqProfile profile) => switch (profile) {
 String embeddingQuantizationFingerprintAxis(VabqProfile profile) =>
     'f32+vabq:${vabqProfileWireName(profile)}';
 
+/// Lowest cosine similarity at which re-embedding a stored chunk counts as the
+/// same model. Releases before model identities stored only the model file
+/// name, so a three-component fingerprint is extended only when sampled
+/// chunks re-embed to their stored vectors.
+const double sameModelMinCosine = 0.95;
+
+/// Whether [current], the loaded model's embedding of a stored chunk's text,
+/// reproduces [stored], the embedding saved for that chunk.
+bool reproducesStoredEmbedding(List<double> stored, List<double> current) =>
+    stored.length == current.length &&
+    embeddingCosine(stored, current) >= sameModelMinCosine;
+
+/// Cosine similarity of [a] and [b]; 0 when either has no length.
+double embeddingCosine(List<double> a, List<double> b) {
+  if (a.length != b.length) {
+    throw ArgumentError('dimensions differ: ${a.length} != ${b.length}');
+  }
+  var dot = 0.0, normA = 0.0, normB = 0.0;
+  for (var i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  if (normA == 0 || normB == 0) return 0;
+  return dot / (math.sqrt(normA) * math.sqrt(normB));
+}
+
 /// Wire format produced by [computeEmbeddingFingerprint].
 ///
 /// `{modelBasename}|{dim}|{quant}|{modelIdentity}`
@@ -44,7 +72,8 @@ String embeddingQuantizationFingerprintAxis(VabqProfile profile) =>
 /// `model_qint8_arm64.onnx` exports, and a file replaced in place. Without
 /// it the fingerprint is the three-component form that earlier releases
 /// stored; the engine extends a stored three-component value in place when
-/// the model file name, dimension and quantization still match.
+/// the model file name, dimension and quantization still match and the
+/// loaded model reproduces stored embeddings ([reproducesStoredEmbedding]).
 String computeEmbeddingFingerprint({
   required String modelBasename,
   required int dim,

@@ -41,7 +41,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1207541452;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 924972673;
 
 // Section: executor
 
@@ -4672,6 +4672,43 @@ fn wire__crate__api__hybrid_search__rrf_config_default_impl(
         },
     )
 }
+fn wire__crate__api__migration_meta__sample_embeddings_for_fingerprint_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sample_embeddings_for_fingerprint",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_fingerprint = <String>::sse_decode(&mut deserializer);
+            let api_limit = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::error::RagError>((move || {
+                    let output_ok = crate::api::migration_meta::sample_embeddings_for_fingerprint(
+                        api_fingerprint,
+                        api_limit,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__source_rag__save_collection_hnsw_index_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -6018,6 +6055,18 @@ impl SseDecode for crate::api::ingest_session::EmbeddingRequest {
     }
 }
 
+impl SseDecode for crate::api::migration_meta::EmbeddingSample {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_embeddingText = <String>::sse_decode(deserializer);
+        let mut var_embedding = <Vec<f32>>::sse_decode(deserializer);
+        return crate::api::migration_meta::EmbeddingSample {
+            embedding_text: var_embeddingText,
+            embedding: var_embedding,
+        };
+    }
+}
+
 impl SseDecode for f32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -6247,6 +6296,20 @@ impl SseDecode for Vec<crate::api::ingest_session::EmbeddingRequest> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::ingest_session::EmbeddingRequest>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::migration_meta::EmbeddingSample> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::migration_meta::EmbeddingSample>::sse_decode(
                 deserializer,
             ));
         }
@@ -7092,26 +7155,27 @@ fn pde_ffi_dispatcher_primary_impl(
 122 => wire__crate__api__source_rag__rebuild_chunk_hnsw_index_for_collection_impl(port, ptr, rust_vec_len, data_len),
 123 => wire__crate__api__simple_rag__rebuild_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
 127 => wire__crate__api__hybrid_search__rrf_config_default_impl(port, ptr, rust_vec_len, data_len),
-128 => wire__crate__api__source_rag__save_collection_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
-129 => wire__crate__api__hnsw_index__save_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
-130 => wire__crate__api__source_rag__search_chunks_impl(port, ptr, rust_vec_len, data_len),
-131 => wire__crate__api__source_rag__search_chunks_in_collection_impl(port, ptr, rust_vec_len, data_len),
-132 => wire__crate__api__hnsw_index__search_hnsw_impl(port, ptr, rust_vec_len, data_len),
-133 => wire__crate__api__hnsw_index__search_hnsw_slice_impl(port, ptr, rust_vec_len, data_len),
-134 => wire__crate__api__hybrid_search__search_hybrid_impl(port, ptr, rust_vec_len, data_len),
-135 => wire__crate__api__hybrid_search__search_hybrid_simple_impl(port, ptr, rust_vec_len, data_len),
-136 => wire__crate__api__hybrid_search__search_hybrid_weighted_impl(port, ptr, rust_vec_len, data_len),
-137 => wire__crate__api__source_rag__search_meta_hybrid_impl(port, ptr, rust_vec_len, data_len),
-138 => wire__crate__api__simple_rag__search_similar_impl(port, ptr, rust_vec_len, data_len),
-141 => wire__crate__api__compression_utils__sentence_hash_impl(port, ptr, rust_vec_len, data_len),
-142 => wire__crate__api__compression_utils__should_compress_impl(port, ptr, rust_vec_len, data_len),
-143 => wire__crate__api__compression_utils__split_sentences_impl(port, ptr, rust_vec_len, data_len),
-147 => wire__crate__api__source_rag__update_chunk_embedding_impl(port, ptr, rust_vec_len, data_len),
-148 => wire__crate__api__source_rag__update_chunk_reembedded_impl(port, ptr, rust_vec_len, data_len),
-149 => wire__crate__api__source_rag__update_source_status_impl(port, ptr, rust_vec_len, data_len),
-150 => wire__crate__api__user_intent__user_intent_get_query_impl(port, ptr, rust_vec_len, data_len),
-151 => wire__crate__api__user_intent__user_intent_intent_type_impl(port, ptr, rust_vec_len, data_len),
-152 => wire__crate__api__migration_meta__write_embedding_fingerprint_impl(port, ptr, rust_vec_len, data_len),
+128 => wire__crate__api__migration_meta__sample_embeddings_for_fingerprint_impl(port, ptr, rust_vec_len, data_len),
+129 => wire__crate__api__source_rag__save_collection_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
+130 => wire__crate__api__hnsw_index__save_hnsw_index_impl(port, ptr, rust_vec_len, data_len),
+131 => wire__crate__api__source_rag__search_chunks_impl(port, ptr, rust_vec_len, data_len),
+132 => wire__crate__api__source_rag__search_chunks_in_collection_impl(port, ptr, rust_vec_len, data_len),
+133 => wire__crate__api__hnsw_index__search_hnsw_impl(port, ptr, rust_vec_len, data_len),
+134 => wire__crate__api__hnsw_index__search_hnsw_slice_impl(port, ptr, rust_vec_len, data_len),
+135 => wire__crate__api__hybrid_search__search_hybrid_impl(port, ptr, rust_vec_len, data_len),
+136 => wire__crate__api__hybrid_search__search_hybrid_simple_impl(port, ptr, rust_vec_len, data_len),
+137 => wire__crate__api__hybrid_search__search_hybrid_weighted_impl(port, ptr, rust_vec_len, data_len),
+138 => wire__crate__api__source_rag__search_meta_hybrid_impl(port, ptr, rust_vec_len, data_len),
+139 => wire__crate__api__simple_rag__search_similar_impl(port, ptr, rust_vec_len, data_len),
+142 => wire__crate__api__compression_utils__sentence_hash_impl(port, ptr, rust_vec_len, data_len),
+143 => wire__crate__api__compression_utils__should_compress_impl(port, ptr, rust_vec_len, data_len),
+144 => wire__crate__api__compression_utils__split_sentences_impl(port, ptr, rust_vec_len, data_len),
+148 => wire__crate__api__source_rag__update_chunk_embedding_impl(port, ptr, rust_vec_len, data_len),
+149 => wire__crate__api__source_rag__update_chunk_reembedded_impl(port, ptr, rust_vec_len, data_len),
+150 => wire__crate__api__source_rag__update_source_status_impl(port, ptr, rust_vec_len, data_len),
+151 => wire__crate__api__user_intent__user_intent_get_query_impl(port, ptr, rust_vec_len, data_len),
+152 => wire__crate__api__user_intent__user_intent_intent_type_impl(port, ptr, rust_vec_len, data_len),
+153 => wire__crate__api__migration_meta__write_embedding_fingerprint_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -7171,23 +7235,23 @@ fn pde_ffi_dispatcher_sync_impl(
             rust_vec_len,
             data_len,
         ),
-        139 => wire__crate__api__semantic_chunker__semantic_chunk_impl(ptr, rust_vec_len, data_len),
-        140 => wire__crate__api__semantic_chunker__semantic_chunk_with_overlap_impl(
+        140 => wire__crate__api__semantic_chunker__semantic_chunk_impl(ptr, rust_vec_len, data_len),
+        141 => wire__crate__api__semantic_chunker__semantic_chunk_with_overlap_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        144 => wire__crate__api__activation_metrics__take_activation_timing_stats_impl(
+        145 => wire__crate__api__activation_metrics__take_activation_timing_stats_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        145 => wire__crate__api__query_metrics__take_query_content_read_stats_impl(
+        146 => wire__crate__api__query_metrics__take_query_content_read_stats_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        146 => wire__crate__api__tokenizer__tokenize_impl(ptr, rust_vec_len, data_len),
+        147 => wire__crate__api__tokenizer__tokenize_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -7682,6 +7746,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ingest_session::EmbeddingRequ
     for crate::api::ingest_session::EmbeddingRequest
 {
     fn into_into_dart(self) -> crate::api::ingest_session::EmbeddingRequest {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::migration_meta::EmbeddingSample {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.embedding_text.into_into_dart().into_dart(),
+            self.embedding.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::migration_meta::EmbeddingSample
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::migration_meta::EmbeddingSample>
+    for crate::api::migration_meta::EmbeddingSample
+{
+    fn into_into_dart(self) -> crate::api::migration_meta::EmbeddingSample {
         self
     }
 }
@@ -8593,6 +8678,14 @@ impl SseEncode for crate::api::ingest_session::EmbeddingRequest {
     }
 }
 
+impl SseEncode for crate::api::migration_meta::EmbeddingSample {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.embedding_text, serializer);
+        <Vec<f32>>::sse_encode(self.embedding, serializer);
+    }
+}
+
 impl SseEncode for f32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -8764,6 +8857,16 @@ impl SseEncode for Vec<crate::api::ingest_session::EmbeddingRequest> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::ingest_session::EmbeddingRequest>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::migration_meta::EmbeddingSample> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::migration_meta::EmbeddingSample>::sse_encode(item, serializer);
         }
     }
 }
