@@ -118,7 +118,7 @@ against these hashes and lengths on first launch:
 Use a Model Pack rather than `modelAsset`/`tokenizerAsset`. In
 `mobile_rag_engine` 0.22.3 and earlier, those parameters copy the tokenizer to a
 fixed file name and skip the copy when that file already exists, so an app that
-previously ran MiniLM would keep MiniLM's tokenizer. Later versions refresh a
+previously ran MiniLM would keep MiniLM's tokenizer. 0.23.0 and later refresh a
 stale copy, but they load and hash the bundled files on every launch to check.
 A Model Pack is stored under its hashes, is always the one you bundled, and
 skips that check once installed.
@@ -157,7 +157,7 @@ await MobileRag.initialize(
 );
 ```
 
-**Later releases** also hash the model file. After the switch they lock search
+**0.23.0 and later** also hash the model file. After the switch they lock search
 and ingestion until the stored chunks are embedded again. This also holds when
 one app update both upgrades from 0.22.3 and switches the model. A 0.22.3
 database records only the file name and dimension. So on its first launch the

@@ -19,7 +19,7 @@
 
 ## 현재 상태 (2026-11-03)
 
-- main: `9060c1e` (#125 머지). 진행 중: M8.
+- main: `70ef27f` (#126 머지). 진행 중: R1 배포.
 - 마지막 배포: `mobile_rag_engine` 0.22.3. 그 뒤 변경은 모두 `## Unreleased`에 쌓여 있다.
   - 512 토큰 truncation (#115)
   - HNSW 빌드와 검색 속도, 한국어 BM25, 한국어 청킹 속도 (#116)
@@ -93,29 +93,31 @@
 | b4 | **FAIL (맹점 3)** | 예산 300토큰에 출력 717토큰 (한도 470 = 300 + 결과당 40 + 50) |
 
 
-### M8. 빈 DB·컬렉션 검색 오류
+### R1. 배포 (`rag_engine_flutter` 0.22.0 + `mobile_rag_engine` 0.23.0)
 
-- **담당:** 이 대화의 세션, 브랜치 `fix/m8-empty-collection-search`
-- **상태:** 진행 중 (2026-11-03 착수, 사용자: "먼저 하자고 제안한거 하자고").
+- **담당:** 이 대화의 세션, 브랜치 `release/0.23.0`
+- **상태:** 진행 중 (2026-11-03, 사용자: "배포 진행하자"). main `70ef27f` 기준.
 
-**목표:** 문서가 없는 DB나 컬렉션에서 하이브리드 검색이 결과 0개 대신 `RagError.invalidInput("HNSW cache parity failed after rebuilding collection ...")`을 내는 문제를 고친다. M4 확인 중 발견했다. 설치 직후 문서를 넣기 전에 묻는 앱에서 `ask`·`RagSearchTool`·`searchHybridWithContext`가 모두 실패한다.
+**버전:** minor 올림. 깨지는 변경: `currentEmbeddingFingerprint` 4칸, `flutter_rust_bridge` 2.13.0 고정, `MobileRag`/`CollectionRag`에 메서드 추가(`implements`한 클래스).
 
-**원인 (착수 때 확인):** 적격 청크가 0개면 HNSW 재구성이 인덱스를 비워 두고(`None`) 끝난다. 바로 뒤의 일치 검사(`loaded_hnsw_has_db_parity`)는 노드 수가 `Some(0)`이기를 기대해서 실패한다. 하이브리드 검색 자체는 인덱스가 없으면 벡터 검색을 건너뛰므로, 검사만 통과하면 결과 0개가 나온다.
+**담는 변경:** 0.22.3 뒤 `## Unreleased` 전부. #115(512토큰), #116(HNSW·한국어 BM25·청킹 속도), #117(FRB 2.13), #118(모델 해시 fingerprint), #120(레거시 자산 갱신), #121(LLM JSON·도구), #123(M7), #124(M6), #125(M4), #126(M8).
 
-**착수 때 정한 방식**
-- 일치 검사는 "적격 청크 0개이고 인덱스 없음"도 일치로 본다.
-- 문서를 모두 지운 컬렉션은 디스크에 옛 HNSW 파일이 남는다. 이미 빈 상태로 활성화된 컬렉션은 다음 검색에서 그 파일을 다시 읽고 버리고 재구성하지 않도록, 활성 캐시 확인에서 "인덱스 없음 + 적격 0개"를 유효로 본다. 빈 BM25는 지금도 매번 0행 SELECT로 다시 만들지만 비용이 작아 그대로 둔다.
-- 0.22.3에서도 같은 오류가 나는지 pub의 0.22.3으로 만든 macOS 앱에서 확인한다.
-- 업그레이드 경로: 디스크 형식은 바뀌지 않는다. 0.22.3이 남긴 빈 DB와 옛 HNSW 파일은 위 확인으로 다룬다.
+**손대는 파일**
+- `rust_builder/pubspec.yaml`(0.22.0), `rust_builder/CHANGELOG.md`: 제목을 0.22.0으로, Chunking 중복 항목 합치기, FRB 항목의 "FFI API is unchanged"를 #118·M6 함수 추가에 맞게 고침.
+- `pubspec.yaml`(0.23.0, `rag_engine_flutter: 0.22.0`), `CHANGELOG.md`(제목, "Requires `rag_engine_flutter: 0.22.0`").
+- 버전 표기: `README.md`, `docs/guides/quick_start.md`, `.github/workflows/quickstart_e2e.yml`, `docs/guides/ask.md`·`llm_tools.md`("release after 0.22.3" → "0.23.0 or later"), `docs/guides/model_setup.md`("Later releases/versions" → "0.23.0 and later").
+- lockfile: `pubspec.lock`, `example/pubspec.lock`.
+- 바꾸지 않음: `upgrade_e2e.yml`의 기준 버전 0.22.3과 PR 템플릿. 배포 뒤 기준을 0.23.0으로 올릴지는 따로 정한다(후보).
 
-**제외:** 빈 BM25 재구성 최적화, HNSW 전역 단일 슬롯 구조 변경.
+**순서** (pub publish는 되돌릴 수 없으므로 사용자가 직접 한다)
+1. main `70ef27f`의 Precompile Binaries 성공을 확인하고, 배포할 트리의 crate hash가 그 `precompiled_<hash>` 릴리스와 같은지 본다(배포 커밋은 Rust 소스를 건드리지 않는다).
+2. 작업 트리에 위 변경을 만들고 `rag_engine_flutter` dry-run을 통과시킨다.
+3. 사용자: `rust_builder/`에서 `flutter pub publish` (0.22.0).
+4. pub.dev 반영 뒤 루트 `flutter pub get`·dry-run 확인, 사용자: 루트 `flutter pub publish` (0.23.0). 두 배포 사이에 제약을 바꾸지 않는다.
+5. 그 뒤 커밋·푸시·PR. 사용자가 머지한다.
+6. 머지 커밋에 태그 `v0.23.0`, pub 모드 Quick Start E2E(`quickstart_e2e.yml`, version 0.23.0)와 `no_rust_repro.yml`(0.23.0) 실행.
 
-**완료 기준**
-- Rust 테스트: 처음부터 빈 컬렉션, 문서를 모두 지운 컬렉션(재시작 포함), 다시 문서를 넣으면 검색됨.
-- 실제 앱(path 의존성)에서 빈 DB·빈 컬렉션의 `searchHybridWithContext`와 `ask`가 오류 없이 결과 0개, `generate` 미호출.
-- 규칙 8의 네 항목. PR 하나, CI 통과.
-
-**손대는 파일:** `rust_builder/rust/src/api/source_rag.rs`(일치 검사, 활성화, 테스트), `docs/guides/ask.md`(빈 DB 안내), `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `docs/milestones.md`
+**완료 기준:** 두 패키지가 pub.dev에 있고, pub 모드 Quick Start E2E와 no-Rust 재현이 0.23.0으로 통과. PR 하나, CI 통과.
 
 ### M5. iPhone 실기기 측정 (KoEn)
 
@@ -139,6 +141,7 @@
 
 착수하려면 위 형식으로 옮겨 적고 합의를 받는다.
 
+- Upgrade E2E 기준 버전: `upgrade_e2e.yml`의 `H1_BASE_VERSION`과 PR 템플릿이 0.22.3이다. 0.23.0 배포 뒤 0.23.0으로 올릴지, 0.22.3을 유지하고 0.23.0을 하나 더 돌릴지 정한다.
 - Windows `Native Tests`의 `ingest_ffi_traffic_test.dart` "Peak-RSS delta"가 가끔 실패한다(파일 경로가 UTF-8 경로보다 2MB 이상 적게 써야 하는데 0.7~0.8MB 차이만 났다. 11/1 `ci/quickstart-e2e`, 11/3 #125). 측정값이 흔들리는 테스트라 기준이나 측정 방식을 손봐야 한다.
 - 성능 후보: `vector_math` 8-lane dot, HNSW 증분 삽입, prune 거리 캐싱, ef 상한, 짧은 문단 병합
 - `lib/src/rust/api/mmap_store.dart` 잔존 파일 정리
@@ -147,6 +150,10 @@
 - 레거시 자산 확인 비용 절감: 전체 sha256 대신 크기 + 앞뒤 1MiB만 해시한다(#118 fingerprint와 같은 방식). 시뮬레이터에서 KoEn 매 시작 약 250ms와, 확인 중 모델 크기의 약 2배 순간 메모리를 줄인다. M5 실측을 본 뒤 판단한다.
 
 ## 완료
+
+### M8. 빈 DB·컬렉션 검색 오류 — 완료 (#126, 2026-11-03)
+
+문서가 없는 DB·컬렉션에서 하이브리드 검색이 `HNSW cache parity failed`로 실패하던 문제. 빈 컬렉션의 HNSW 재구성은 인덱스를 두지 않는데 일치 검사가 노드 0개 인덱스를 기대했다. 0.22.3에서도 같았다(pub 0.22.3 앱에서 확인). 이미 빈 상태로 활성화된 컬렉션은 다음 검색에서 옛 HNSW 파일을 다시 읽거나 재구성하지 않는다. 실제 앱에서 빈 DB·빈 컬렉션·문서를 모두 지운 컬렉션 모두 결과 0개, `ask`는 `generate`를 부르지 않았다.
 
 ### M4. `rag.ask` 생성 브리지 — 완료 (#125, 2026-11-03)
 
@@ -195,13 +202,3 @@
 ### M1. 한국어 임베딩 레시피 — 완료 (#119, 2026-11-02)
 
 `docs/guides/model_setup.md`에 KoEn-E5-Tiny 레시피를 추가했다. nDCG@10 MiniLM 0.014~0.059 → KoEn 0.762~0.866. iOS 시뮬레이터 엔진 실행 결과는 `docs/perf/multilingual-embedding/README.md` §5. 엔진 코드는 고치지 않았다.
-
-## 보류
-
-### R1. 다음 배포 (`mobile_rag_engine` 0.23.0 + `rag_engine_flutter` 0.22.0)
-
-- **상태:** 보류 (2026-11-02, 규칙 5). 진행 중인 코드 작업과 열린 PR은 없다.
-- 사용자가 배포를 다시 요청하면 그 시점의 main 기준으로 범위를 새로 적는다. 2026-11-02에 정리한 할 일은 남겨 둔다.
-  - 버전: 루트 `pubspec.yaml`, `rust_builder/pubspec.yaml`, README·`docs/guides/quick_start.md`·`.github/workflows/quickstart_e2e.yml`의 버전 표기, lockfile
-  - CHANGELOG: 두 파일의 `## Unreleased`를 버전 제목으로 바꾸고, `rust_builder/CHANGELOG.md`의 Chunking 중복 항목을 합치고, FRB 항목의 "FFI API is unchanged"를 #118에 맞게 고친다.
-  - 순서: `rag_engine_flutter` 배포 → 루트 고정 → `mobile_rag_engine` 배포 → 태그 → pub 모드 Quick Start E2E. 배포는 사용자가 직접 한다.
