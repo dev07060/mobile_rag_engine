@@ -17,10 +17,11 @@ Use it when you need a **Flutter local RAG engine** for private notes, document
 Q&A, chat with PDF, offline assistants, or enterprise apps where user data must
 stay on the device.
 
-> **Retrieval only.** This package finds and assembles the relevant context.
-> Generating an answer with an LLM is your app's separate step.
+> **No LLM inside.** This package finds and assembles the relevant context.
+> To generate an answer, pass your own LLM call to `ask` (see the
+> [Ask guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/ask.md)).
 
-> **This README describes 0.22.3.** Still on 0.20.x? It has no Model Pack
+> **This README describes 0.23.0.** Still on 0.20.x? It has no Model Pack
 > `setup` command or `RagModelPack`, and it always builds the Rust core from
 > source; follow the
 > [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md)
@@ -133,7 +134,7 @@ user's (often OneDrive-synced) Documents folder; other platforms are unchanged.
 
 ```yaml
 dependencies:
-  mobile_rag_engine: ^0.22.3
+  mobile_rag_engine: ^0.23.0
 ```
 
 ### 2. Install the verified Model Pack

@@ -5,7 +5,7 @@ builds a prompt with numbered passages, calls a generation function you
 supply, and returns the answer with the passages it cites. The package does
 not call any LLM itself; you pass your own SDK or HTTP call.
 
-> Requires the release after `mobile_rag_engine` 0.22.3.
+> Requires `mobile_rag_engine` 0.23.0 or later.
 
 ## Ask
 

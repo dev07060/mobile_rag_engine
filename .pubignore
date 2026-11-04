@@ -92,3 +92,6 @@ flutter_*.log
 .playwright-cli/
 .playwright-mcp/
 .ruby-lsp/
+
+# CI-only upgrade harness (run from the repo by upgrade_e2e.yml)
+tool/upgrade_e2e/
