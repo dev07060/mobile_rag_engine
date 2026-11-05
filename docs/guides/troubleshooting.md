@@ -132,9 +132,13 @@ OnnxRuntimeException: Failed to create session
 - [ ] Verify model is compatible with ONNX Runtime
 
 ```dart
-// The engine copies modelAsset to <appDocumentsDirectory>/<basename>.
+// The engine copies modelAsset to <app storage directory>/<basename>:
+// the application documents directory, or the application support
+// directory on Windows (0.22.0 and later).
 // Verify the resolved file the engine actually loads.
-final dir = await getApplicationDocumentsDirectory();
+final dir = Platform.isWindows
+    ? await getApplicationSupportDirectory()
+    : await getApplicationDocumentsDirectory();
 final file = File('${dir.path}/model.onnx');
 if (!await file.exists()) {
   throw Exception('Model file not found at expected path: ${file.path}');
