@@ -23,7 +23,7 @@
 ## 현재 상태 (2026-11-06)
 
 - main: `11744c9` (#127 머지). **새 배포는 보류**(규칙 5). 다음 배포는 내부 점검으로 문제를 모두 고친 뒤에 한다.
-- 마지막 배포: `mobile_rag_engine` 0.23.0과 `rag_engine_flutter` 0.22.0 (pub.dev, 2026-11-04). 태그 `v0.23.0`과 발행 뒤 pub 모드 확인은 R1에 남아 있다.
+- 마지막 배포: `mobile_rag_engine` 0.23.0과 `rag_engine_flutter` 0.22.0 (pub.dev, 2026-11-04). R1 완료(태그 `v0.23.0`, pub 모드 확인 통과, 2026-11-06).
 - 2026-11-06 내부 점검(`docs/reports/2026-11-06-hotfix-retrospective.md`)의 수정 묶음을 Q1~Q5로 적었다. Q1의 문서 부분은 #130.
 - 아래 목록은 0.23.0에 담긴 변경이다(0.22.3 뒤 `Unreleased`였던 것).
   - 512 토큰 truncation (#115)
@@ -97,32 +97,6 @@
 | b3 | **FAIL (맹점 4)** | 두 번 호출한 인용 id가 둘 다 `{1, 2, 3}` |
 | b4 | **FAIL (맹점 3)** | 예산 300토큰에 출력 717토큰 (한도 470 = 300 + 결과당 40 + 50) |
 
-
-### R1. 배포 (`rag_engine_flutter` 0.22.0 + `mobile_rag_engine` 0.23.0)
-
-- **담당:** 이 대화의 세션, 브랜치 `release/0.23.0`
-- **상태:** 발행됨 (pub.dev 2026-11-04, #127 머지). 남은 것은 순서 6(태그 `v0.23.0`, pub 모드 Quick Start E2E, `no_rust_repro.yml`). 이후 새 배포는 보류(규칙 5). (2026-11-03 사용자: "배포 진행하자". main `70ef27f` 기준.)
-
-**버전:** minor 올림. 깨지는 변경: `currentEmbeddingFingerprint` 4칸, `flutter_rust_bridge` 2.13.0 고정, `MobileRag`/`CollectionRag`에 메서드 추가(`implements`한 클래스).
-
-**담는 변경:** 0.22.3 뒤 `## Unreleased` 전부. #115(512토큰), #116(HNSW·한국어 BM25·청킹 속도), #117(FRB 2.13), #118(모델 해시 fingerprint), #120(레거시 자산 갱신), #121(LLM JSON·도구), #123(M7), #124(M6), #125(M4), #126(M8).
-
-**손대는 파일**
-- `rust_builder/pubspec.yaml`(0.22.0), `rust_builder/CHANGELOG.md`: 제목을 0.22.0으로, Chunking 중복 항목 합치기, FRB 항목의 "FFI API is unchanged"를 #118·M6 함수 추가에 맞게 고침.
-- `pubspec.yaml`(0.23.0, `rag_engine_flutter: 0.22.0`), `CHANGELOG.md`(제목, "Requires `rag_engine_flutter: 0.22.0`").
-- 버전 표기: `README.md`, `docs/guides/quick_start.md`, `.github/workflows/quickstart_e2e.yml`, `docs/guides/ask.md`·`llm_tools.md`("release after 0.22.3" → "0.23.0 or later"), `docs/guides/model_setup.md`("Later releases/versions" → "0.23.0 and later").
-- lockfile: `pubspec.lock`, `example/pubspec.lock`.
-- 바꾸지 않음: `upgrade_e2e.yml`의 기준 버전 0.22.3과 PR 템플릿. 배포 뒤 기준을 0.23.0으로 올릴지는 따로 정한다(후보).
-
-**순서** (pub publish는 되돌릴 수 없으므로 사용자가 직접 한다)
-1. main `70ef27f`의 Precompile Binaries 성공을 확인하고, 배포할 트리의 crate hash가 그 `precompiled_<hash>` 릴리스와 같은지 본다(배포 커밋은 Rust 소스를 건드리지 않는다).
-2. 작업 트리에 위 변경을 만들고 `rag_engine_flutter` dry-run을 통과시킨다.
-3. 사용자: `rust_builder/`에서 `flutter pub publish` (0.22.0).
-4. pub.dev 반영 뒤 루트 `flutter pub get`·dry-run 확인, 사용자: 루트 `flutter pub publish` (0.23.0). 두 배포 사이에 제약을 바꾸지 않는다.
-5. 그 뒤 커밋·푸시·PR. 사용자가 머지한다.
-6. 머지 커밋에 태그 `v0.23.0`, pub 모드 Quick Start E2E(`quickstart_e2e.yml`, version 0.23.0)와 `no_rust_repro.yml`(0.23.0) 실행.
-
-**완료 기준:** 두 패키지가 pub.dev에 있고, pub 모드 Quick Start E2E와 no-Rust 재현이 0.23.0으로 통과. PR 하나, CI 통과.
 
 ### M5. iPhone 실기기 측정 (KoEn)
 
@@ -264,6 +238,14 @@
 - 레거시 자산 확인 비용 절감: 전체 sha256 대신 크기 + 앞뒤 1MiB만 해시한다(#118 fingerprint와 같은 방식). 시뮬레이터에서 KoEn 매 시작 약 250ms와, 확인 중 모델 크기의 약 2배 순간 메모리를 줄인다. M5 실측을 본 뒤 판단한다.
 
 ## 완료
+
+### R1. 배포 (`rag_engine_flutter` 0.22.0 + `mobile_rag_engine` 0.23.0) — 완료 (#127, 2026-11-06)
+
+pub.dev 발행 2026-11-04(`mobile_rag_engine` 0.23.0, `rag_engine_flutter` 0.22.0). 2026-11-06 순서 6을 마쳤다.
+- 머지 커밋 `11744c9`에 태그 `v0.23.0`을 달았다.
+- pub 모드 Quick Start E2E(0.23.0)가 android·ios·macos·windows 모두 통과했다(run 42075253762).
+- `no_rust_repro.yml`(0.23.0, Rust 숨김/설치 양쪽)이 12개 job 모두 통과했다(run 42075259650). `ios / Rust installed`는 GitHub macOS 러너를 배정받지 못해 한 번 취소됐고, 다시 실행해 통과했다.
+- 이 확인은 asset을 번들하는 Quick Start를 따르므로 A1(asset 없이 배포)은 다루지 않는다(Q1).
 
 ### M8. 빈 DB·컬렉션 검색 오류 — 완료 (#126, 2026-11-03)
 
