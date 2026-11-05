@@ -140,7 +140,8 @@
 **포함**
 - A1 코드: 모델 asset 없이 배포하고 실행 중에 모델을 내려받는 경로를 다시 지원한다. 대상 파일이 있고 asset이 번들되지 않았으면 그 파일을 쓰거나, `MobileRag.initialize`에 준비된 파일 경로 옵션(`RagConfig.preparedModelPath`/`preparedTokenizerPath`)을 공개한다. 방식은 착수 때 이 문서에 먼저 정한다. 고친 뒤 `release_build.md`의 안내를 되살린다.
 - A5: `flutter_onnxruntime` 하한을 App Store 업로드 결함(ITMS-90208)이 고쳐진 버전 이상으로 올리고, lockfile 두 개를 갱신한다. 착수 때 해당 패키지 CHANGELOG로 버전을 다시 확인한다.
-- 문서 버전 표기: `troubleshooting.md`의 `^0.22.2` 안내, 배포되는 example이 `.pubignore`로 빠진 `assets/`를 선언하는 문제.
+- 문서 버전 표기: `troubleshooting.md`의 `^0.22.2` 안내(→ `^0.23.0`).
+- 착수 때 뺀 것: 배포되는 example이 `.pubignore`로 빠진 `assets/`를 선언하는 문제. 배포 아카이브는 `example/ios`·`example/macos`도 빼므로 pub cache의 example은 원래 빌드용이 아니라 읽기용이다. 고칠 실익이 없다.
 
 **제외:** Q2~Q5 항목. 모델 다운로드 기능 자체(내려받기는 앱이 한다).
 
