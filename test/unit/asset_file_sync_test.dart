@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_rag_engine/src/internal/asset_file_sync.dart';
 
@@ -13,7 +13,8 @@ void main() {
   Future<ByteData> loadAsset(String key) async {
     loads++;
     final bytes = assets[key];
-    if (bytes == null) throw StateError('missing asset $key');
+    // rootBundle.load reports an asset that is not in the bundle this way.
+    if (bytes == null) throw FlutterError('Unable to load asset: "$key".');
     return ByteData.sublistView(Uint8List.fromList(bytes));
   }
 
@@ -127,5 +128,51 @@ void main() {
 
     final names = dir.listSync().map((e) => e.uri.pathSegments.last).toSet();
     expect(names, {'model.onnx', 'model.onnx$assetStampSuffix'});
+  });
+
+  group('asset not in the bundle', () {
+    test('uses a file the app placed at the target path', () async {
+      // Release builds that leave the model out of the bundle and download it.
+      File('${dir.path}/model.onnx').writeAsBytesSync([7, 7, 7]);
+
+      expect(await sync('assets/model.onnx', 'model.onnx'), isFalse);
+
+      expect(read('model.onnx'), [7, 7, 7]);
+      expect(
+        File('${dir.path}/model.onnx$assetStampSuffix').existsSync(),
+        isFalse,
+      );
+    });
+
+    test('keeps a copy stamped by an earlier bundled build', () async {
+      assets['assets/model.onnx'] = [1, 2, 3];
+      await sync('assets/model.onnx', 'model.onnx');
+      assets.remove('assets/model.onnx');
+
+      expect(await sync('assets/model.onnx', 'model.onnx'), isFalse);
+
+      expect(read('model.onnx'), [1, 2, 3]);
+    });
+
+    test('fails when there is no file either', () async {
+      await expectLater(
+        sync('assets/model.onnx', 'model.onnx'),
+        throwsA(isA<FlutterError>()),
+      );
+      expect(File('${dir.path}/model.onnx').existsSync(), isFalse);
+    });
+
+    test('does not hide other load errors', () async {
+      File('${dir.path}/model.onnx').writeAsBytesSync([7, 7, 7]);
+
+      await expectLater(
+        syncAssetToFile(
+          'assets/model.onnx',
+          '${dir.path}/model.onnx',
+          loadAsset: (_) async => throw StateError('bundle read failed'),
+        ),
+        throwsStateError,
+      );
+    });
   });
 }

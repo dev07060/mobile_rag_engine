@@ -24,6 +24,8 @@
 /// ```
 library;
 
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:mobile_rag_engine/src/internal/defaults.dart';
 import 'package:mobile_rag_engine/services/rag_config.dart';
@@ -99,6 +101,15 @@ class MobileRag {
   ///
   /// - [tokenizerAsset] - Path to tokenizer.json in assets (e.g., `'assets/tokenizer.json'`)
   /// - [modelAsset] - Path to ONNX model file in assets (e.g., `'assets/model.onnx'`)
+  /// - [modelPack] - A verified Model Pack ([RagModelPack.asset]) instead of
+  ///   [tokenizerAsset]/[modelAsset]
+  /// - [tokenizerPath], [modelPath] - Files your app already placed on disk,
+  ///   for example a model downloaded on first launch so it is not in the app
+  ///   bundle. They are loaded where they are, without an asset copy. Pass both,
+  ///   and none of the asset or Model Pack options. Keep the model's file name
+  ///   when you replace it with an update of the same model: the embedding
+  ///   fingerprint includes the file name and a hash of its content, so a
+  ///   different model locks search until `reembedAll()` or `clearAndRestart()`.
   /// - [databaseName] - SQLite database file name (default: `'rag.sqlite'`)
   /// - [maxChunkChars] - Maximum characters per chunk (default: [kDefaultMaxChunkChars])
   /// - [overlapChars] - Overlap between chunks for context continuity (default: [kDefaultOverlapChars])
@@ -133,6 +144,8 @@ class MobileRag {
     String? tokenizerAsset,
     String? modelAsset,
     RagModelPack? modelPack,
+    String? tokenizerPath,
+    String? modelPath,
     String? databaseName,
     int maxChunkChars = kDefaultMaxChunkChars,
     int overlapChars = kDefaultOverlapChars,
@@ -147,18 +160,52 @@ class MobileRag {
     }
 
     final hasLegacyAssets = tokenizerAsset != null || modelAsset != null;
-    if (modelPack != null && hasLegacyAssets) {
+    final hasFilePaths = tokenizerPath != null || modelPath != null;
+    final sourceCount =
+        (modelPack != null ? 1 : 0) +
+        (hasLegacyAssets ? 1 : 0) +
+        (hasFilePaths ? 1 : 0);
+    if (sourceCount > 1) {
       throw ArgumentError(
-        'Specify either modelPack or tokenizerAsset/modelAsset, not both.',
+        'Specify only one of modelPack, tokenizerAsset/modelAsset, or '
+        'tokenizerPath/modelPath.',
       );
     }
-    if (modelPack == null && (tokenizerAsset == null || modelAsset == null)) {
+    if (sourceCount == 0) {
       throw ArgumentError(
-        'Specify modelPack or both tokenizerAsset and modelAsset.',
+        'Specify modelPack, both tokenizerAsset and modelAsset, or both '
+        'tokenizerPath and modelPath.',
       );
+    }
+    if (hasLegacyAssets && (tokenizerAsset == null || modelAsset == null)) {
+      throw ArgumentError('Specify both tokenizerAsset and modelAsset.');
+    }
+    if (hasFilePaths && (tokenizerPath == null || modelPath == null)) {
+      throw ArgumentError('Specify both tokenizerPath and modelPath.');
     }
     final RagConfig config;
-    if (modelPack != null) {
+    if (hasFilePaths) {
+      for (final (name, path) in [
+        ('tokenizerPath', tokenizerPath!),
+        ('modelPath', modelPath!),
+      ]) {
+        if (!await File(path).exists()) {
+          throw ArgumentError.value(path, name, 'File does not exist');
+        }
+      }
+      config = RagConfig(
+        tokenizerAsset: '',
+        modelAsset: '',
+        preparedTokenizerPath: tokenizerPath,
+        preparedModelPath: modelPath,
+        databaseName: databaseName,
+        maxChunkChars: maxChunkChars,
+        overlapChars: overlapChars,
+        embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
+        threadLevel: threadLevel,
+        deferIndexWarmup: deferIndexWarmup,
+      );
+    } else if (modelPack != null) {
       final resolved = await const RagModelPackResolver().resolve(modelPack);
       config = RagConfig.fromPreparedFiles(
         tokenizerPath: resolved.tokenizerPath,

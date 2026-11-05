@@ -6,6 +6,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show FlutterError;
 import 'package:flutter/services.dart';
 
 /// Copies [assetPath] to [filePath] unless the existing copy already holds the
@@ -23,15 +24,29 @@ import 'package:flutter/services.dart';
 /// Writes go through a temporary file and a rename, then the stamp, so an
 /// interrupted copy is never stamped.
 ///
+/// When the asset is not in the bundle (`rootBundle.load` throws a
+/// [FlutterError]) but [filePath] already exists, the existing file is used
+/// as it is, as up to 0.22.3: apps that leave the model out of their release
+/// bundle and download it to this path themselves keep working. The embedding
+/// fingerprint's model-content hash still locks the database if that file is
+/// a different model. Without the asset and without the file, the error is
+/// rethrown.
+///
 /// Returns whether the file was (re)written.
 Future<bool> syncAssetToFile(
   String assetPath,
   String filePath, {
   Future<ByteData> Function(String key)? loadAsset,
 }) async {
-  final data = await (loadAsset ?? rootBundle.load)(assetPath);
-  final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
   final file = File(filePath);
+  final ByteData data;
+  try {
+    data = await (loadAsset ?? rootBundle.load)(assetPath);
+  } on FlutterError {
+    if (await _lengthOrNull(file) != null) return false;
+    rethrow;
+  }
+  final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
   final stampFile = File('$filePath$assetStampSuffix');
 
   // A model-sized SHA-256 takes long enough to drop frames on the UI isolate.
