@@ -43,8 +43,9 @@ Yes, but it's **3-5x slower than real devices**. Always run performance tests on
 Several options available:
 
 1. **Use MiniLM instead** (~23MB, English only) — this is the default
-2. **Download at runtime** - Download BGE-m3 on first app launch
-3. **Accept the size** - iOS allows 4GB, Android Play allows 150MB AAB
+2. **Accept the size** - iOS allows 4GB, Android Play allows 150MB AAB
+
+Downloading the model at runtime instead of bundling it is not supported in 0.23.0 (see [Release Build Guide](release_build.md)).
 
 See [Model Setup Guide](model_setup.md#production-deployment-strategies) for details.
 
