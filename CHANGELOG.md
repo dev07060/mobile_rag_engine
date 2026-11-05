@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+* **Shipping without the bundled model works again**:
+  - Apps that leave the model out of their release bundle and download it themselves failed in `MobileRag.initialize` with `Unable to load asset` in 0.23.0, because the engine read the bundled asset on every launch before looking at the copied file. When an asset is not in the bundle and the file it would be copied to exists, that file is used as it is, as up to 0.22.3. If it is a different model, the embedding fingerprint still locks search until `reembedAll()` or `clearAndRestart()`.
+  - `MobileRag.initialize(tokenizerPath:, modelPath:)` loads files your app placed on disk, without copying from assets. Use it instead of `tokenizerAsset`/`modelAsset` or `modelPack`, not together with them. See the [Release Build guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/release_build.md).
+* **Dependencies**: requires `flutter_onnxruntime` 1.8.3 or later, up from 1.8.0. 1.8.0 to 1.8.2 are rejected by App Store Connect (ITMS-90208), and 1.8.0 can crash with out-of-memory on iPhone A18 and Mac M4 devices. Apps whose lockfile still had 1.8.0 now move to a fixed version when they upgrade.
+
 ## Known problems in earlier 0.22.x releases
 Versions 0.22.0 to 0.22.2 shipped within two days and each had problems that a fresh app would hit. They were found after publishing and fixed in the next release. Use 0.22.3 or later.
 
