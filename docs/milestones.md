@@ -126,7 +126,19 @@
 ### Q1. 0.23.0 회귀와 의존성
 
 - **담당:** 이 대화의 세션, 브랜치 `feat/q1-asset-regression`(#128·#129·#130·#131 위에 쌓음)
-- **상태:** 진행 중 (2026-11-06 사용자: "착수해줘"). 문서 부분은 #130으로 먼저 열었다.
+- **상태:** PR 열림 (2026-11-06 사용자: "착수해줘"). 문서 부분은 #130으로 먼저 열었다.
+
+**확인 결과 (2026-11-06, 로컬 macOS release 빌드, MiniLM Model Pack 파일, 같은 데이터 컨테이너에서 차례로 실행):**
+
+| 단계 | 패키지 | 설정 | 결과 |
+|---|---|---|---|
+| p0 | pub 0.23.0 | asset 번들, 색인 | 청크 1개, 검색 1건, fingerprint `…|sha256:e9246dc3…` |
+| p1 | pub 0.23.0 | asset 뺌 | **실패** `Unable to load asset: "assets/mobile_rag/tokenizer.json"` (A1 재현) |
+| p2 | 수정본 | asset 뺌 | 성공. 같은 fingerprint, 잠금 없음, 검색 1건, 모델 파일 다시 쓰지 않음 |
+| p3 | 수정본 | `tokenizerPath`/`modelPath` | 성공. 같은 fingerprint, 잠금 없음, 검색 1건 |
+| p4 | 수정본 | asset 다시 번들 | 성공. 0.23.0의 `.asset-stamp`가 맞아 다시 복사하지 않음 |
+
+수정본 단계는 `flutter_onnxruntime` 1.9.0으로 빌드했다. 로컬 Xcode 27.1에서 확인용 앱에 두 가지를 우회했다(아래 후보 참고). pod 배포 대상을 14.0으로 고정했고, arm64만 빌드했다. Rust는 crate hash가 0.23.0과 같아 서명된 precompiled binary를 썼다.
 
 **착수 때 정한 방식 (2026-11-06)**
 - **A1은 두 가지를 함께 한다.**
@@ -243,6 +255,7 @@
 - `lib/src/rust/api/mmap_store.dart` 잔존 파일 정리
 - query/document 접두어 설정 (e5-small 계열을 권장 모델로 추가할 때)
 - `AssembledContext.estimatedTokens` → `exactTokens` 이름 변경 (다음 breaking 배포 때)
+- Xcode 27 + Flutter 3.35.5 (2026-11-06 Q1 확인 중 발견, 빈 `flutter create` 앱도 같다): (1) pod 배포 대상 macOS 10.15를 Xcode 27이 거부한다(12.0 이상). `setup`은 Podfile `platform`만 올리므로 pod target까지 맞추는 `post_install`을 넣을지 Q5에서 정한다. (2) Flutter의 release lipo 검사가 `ARCHS="arm64 x86_64"`를 아키텍처 하나로 읽어 universal macOS release 빌드가 실패한다. Flutter 쪽 문제라 문서(troubleshooting)에 우회법만 적을지 정한다. CI의 `macos-latest`가 Xcode 27로 바뀌면 macOS job이 함께 깨진다.
 - 2026-11-06 점검의 낮음 항목: 부팅마다 기본 컬렉션 청크 전체를 UPDATE하는 backfill, 0.12 이하 DB의 dedup 해시 형식, `.vec` offset 정체성과 남는 `*.tmp-*` 파일, 동시 하이브리드 검색, Apple 정적 SQLite 심볼 노출(회고 2절 "낮음").
 - 레거시 자산 확인 비용 절감: 전체 sha256 대신 크기 + 앞뒤 1MiB만 해시한다(#118 fingerprint와 같은 방식). 시뮬레이터에서 KoEn 매 시작 약 250ms와, 확인 중 모델 크기의 약 2배 순간 메모리를 줄인다. M5 실측을 본 뒤 판단한다.
 
