@@ -13,29 +13,11 @@ The ONNX embedding model is the single largest contributor to your app's downloa
 | all-MiniLM-L6-v2 (INT8) | ~23 MB | Moderate |
 | BGE-m3 (INT8) | ~542 MB | **Exceeds Play Store 150 MB limit** |
 
-**For development**, bundle the model in `assets/` for quick iteration.
-**For production releases**, download the model at runtime to keep your bundle small.
+**Bundle the model in `assets/` in every build, including release builds.** In 0.23.0 there is no supported way to ship without the model in your bundle and download it at runtime.
 
-`MobileRag.initialize` only accepts asset paths today (`tokenizerAsset`, `modelAsset`), but the engine resolves `modelAsset` to `<appDocumentsDirectory>/<basename>` and skips the asset copy if that file already exists. You can use this to ship without the model in your bundle:
+> **0.23.0: shipping without the bundled model fails.** Up to 0.22.3, you could leave `assets/model.onnx` out of `pubspec.yaml`, download the model to `<app storage directory>/model.onnx` yourself, and call `MobileRag.initialize(modelAsset: 'assets/model.onnx')`: the engine skipped the asset copy because the file already existed. Since 0.23.0, the engine reads the bundled asset on every launch to check that the copy is current, so this setup fails in `MobileRag.initialize` with `Unable to load asset`. If you bundle the model in debug builds and remove it only for release, debug runs keep working and only the release build fails. If your app uses this setup, keep the model in `assets/` when you upgrade to 0.23.0, or stay on 0.22.3. `RagModelPack.asset(...)` also needs the model bundled.
 
-```dart
-// 1. Before initialize, write the downloaded model to the destination filename
-//    used by MobileRag (matches the basename of modelAsset).
-final dir = await getApplicationDocumentsDirectory();
-final modelFile = File('${dir.path}/model.onnx');
-if (!await modelFile.exists()) {
-  await downloadModel(modelFile); // your CDN / Hugging Face fetch
-}
-
-// 2. Initialize as usual. The asset copy is skipped because the file exists.
-//    Do NOT list assets/model.onnx in pubspec.yaml when shipping this flow.
-await MobileRag.initialize(
-  tokenizerAsset: 'assets/tokenizer.json', // small (~750KB), safe to bundle
-  modelAsset: 'assets/model.onnx',         // basename only is significant here
-);
-```
-
-> See [Model Setup Guide — Production Deployment Strategies](model_setup.md#production-deployment-strategies) for complete examples including download-on-first-launch and hybrid approaches.
+To keep the download size down today, choose a smaller model (see the table above and the [Model Setup Guide](model_setup.md)).
 
 ---
 
