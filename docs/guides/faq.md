@@ -43,7 +43,7 @@ Yes, but it's **3-5x slower than real devices**. Always run performance tests on
 Several options available:
 
 1. **Use MiniLM instead** (~23MB, English only) — this is the default
-2. **Download at runtime** - Download BGE-m3 on first app launch
+2. **Download at runtime** - Download BGE-m3 on first app launch and pass it with `tokenizerPath`/`modelPath` (releases after 0.23.0; 0.23.0 needs the model bundled). See [Release Build Guide](release_build.md).
 3. **Accept the size** - iOS allows 4GB, Android Play allows 150MB AAB
 
 See [Model Setup Guide](model_setup.md#production-deployment-strategies) for details.

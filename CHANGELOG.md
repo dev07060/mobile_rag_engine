@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+* **Shipping without the bundled model works again**:
+  - Apps that leave the model out of their release bundle and download it themselves failed in `MobileRag.initialize` with `Unable to load asset` in 0.23.0, because the engine read the bundled asset on every launch before looking at the copied file. When an asset is not in the bundle and a non-empty file exists where it would be copied, that file is used as it is, as up to 0.22.3, and a message is logged. If the model file is a different model, the embedding fingerprint still locks search until `reembedAll()` or `clearAndRestart()`. The tokenizer file is not checked this way, so keep it in step with the model.
+  - `MobileRag.initialize(tokenizerPath:, modelPath:)` loads files your app placed on disk, without copying from assets. Use it instead of `tokenizerAsset`/`modelAsset` or `modelPack`, not together with them. See the [Release Build guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/release_build.md).
+* **Dependencies**: requires `flutter_onnxruntime` 1.8.3 or later, up from 1.8.0. 1.8.0 can crash with out-of-memory on iPhone A18 and Mac M4 devices (fixed in 1.8.1), and apps built through Swift Package Manager with 1.8.0 to 1.8.2 are rejected by App Store Connect (ITMS-90208, fixed in 1.8.3). Apps whose lockfile still had one of these versions now move to a fixed version when they upgrade. On iOS and macOS, a `Podfile.lock` written with an earlier `flutter_onnxruntime` pins an older `onnxruntime-objc` (1.24.2 with 1.8.0, 1.23.0 with 1.8.1 to 1.8.4), so `pod install` can fail with "CocoaPods's specs repository is too out-of-date to satisfy dependencies". Run `pod update onnxruntime-objc onnxruntime-c` in `ios/` and `macos/` once.
+
+## Known problems in earlier 0.22.x releases
+Versions 0.22.0 to 0.22.2 shipped within two days and each had problems that a fresh app would hit. They were found after publishing and fixed in the next release. Use 0.22.3 or later.
+
+| Version | Problem | Fixed in |
+|---|---|---|
+| 0.22.0 | A new iOS or macOS app that follows the README Installation steps fails in `pod install` (deployment target and static linkage were not set up). | 0.22.1 |
+| 0.22.0, 0.22.1 | Release builds and store submission: Android release APKs abort on the first embedding (R8), iOS and macOS release or archive builds fail with `Failed to lookup symbol 'frb_get_rust_content_hash'`, the Android library is not 16 KB aligned, and iOS apps have no privacy manifest. Debug builds were unaffected. | 0.22.2 |
+| 0.22.0 to 0.22.2 | Search results could be wrong without any error: after deleting a document and adding another, deleted text could match and new text could be missed. Also DOCX text extraction, hard-wrapped text chunking, and `database is locked` after `closeDbPool()`. | 0.22.3 |
+
+If you are on one of these versions, upgrade to 0.22.3 or later. The first launch after upgrading to 0.22.3 rebuilds the vector index once.
+
 ## 0.23.0
 * Requires `rag_engine_flutter: 0.22.0`.
 * **Breaking**:

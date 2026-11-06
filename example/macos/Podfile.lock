@@ -3,13 +3,13 @@ PODS:
     - FlutterMacOS
   - flutter_onnxruntime (0.0.1):
     - FlutterMacOS
-    - onnxruntime-objc (= 1.24.2)
+    - onnxruntime-objc (= 1.28.0)
   - FlutterMacOS (1.0.0)
-  - onnxruntime-c (1.24.2)
-  - onnxruntime-objc (1.24.2):
-    - onnxruntime-objc/Core (= 1.24.2)
-  - onnxruntime-objc/Core (1.24.2):
-    - onnxruntime-c (= 1.24.2)
+  - onnxruntime-c (1.28.0)
+  - onnxruntime-objc (1.28.0):
+    - onnxruntime-objc/Core (= 1.28.0)
+  - onnxruntime-objc/Core (1.28.0):
+    - onnxruntime-c (= 1.28.0)
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -71,12 +71,12 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   file_picker: e716a70a9fe5fd9e09ebc922d7541464289443af
-  flutter_onnxruntime: b195bce8c50601372e976ed9726508b576ebff82
+  flutter_onnxruntime: cda5c0b52f874536079e65c24d392815ddfdbe94
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
-  onnxruntime-c: b58bafbc58707d165404665e46a7467a16e8e0e4
-  onnxruntime-objc: 99e0fe4b6d606970c6c1350c194c7629ef6e6fc9
+  onnxruntime-c: 1cf87aaca94f53ab33bb9729104ec0a5b88291e9
+  onnxruntime-objc: f98b9629e1f78020afc354e33a5afd947654c76d
   path_provider_foundation: 0b743cbb62d8e47eab856f09262bb8c1ddcfe6ba
-  rag_engine_flutter: a9b5919020d1c7fb0e097bfcf6f8abb423e89a22
+  rag_engine_flutter: 3b0e7f26cd0b5976e7c711c9429059e0dac105e4
   sqlite3: a51c07cf16e023d6c48abd5e5791a61a47354921
   sqlite3_flutter_libs: f9114e4bbe1f2e03dd543373c53d23245982ca13
 
