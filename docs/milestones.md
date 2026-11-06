@@ -256,6 +256,7 @@
 - query/document 접두어 설정 (e5-small 계열을 권장 모델로 추가할 때)
 - `AssembledContext.estimatedTokens` → `exactTokens` 이름 변경 (다음 breaking 배포 때)
 - Xcode 27 + Flutter 3.35.5 (2026-11-06 Q1 확인 중 발견, 빈 `flutter create` 앱도 같다): (1) pod 배포 대상 macOS 10.15를 Xcode 27이 거부한다(12.0 이상). `setup`은 Podfile `platform`만 올리므로 pod target까지 맞추는 `post_install`을 넣을지 Q5에서 정한다. (2) Flutter의 release lipo 검사가 `ARCHS="arm64 x86_64"`를 아키텍처 하나로 읽어 universal macOS release 빌드가 실패한다. Flutter 쪽 문제라 문서(troubleshooting)에 우회법만 적을지 정한다. CI의 `macos-latest`가 Xcode 27로 바뀌면 macOS job이 함께 깨진다.
+- 2026-11-07 추가 점검(회고 6절): C1 Xcode 27 Rust 소스 빌드 strip 문제(Q5에 넣을지 정한다, `rag_engine_flutter` 배포 필요), C2 Xcode 27 ↔ Flutter 3.47 요구와 CI Flutter 고정값(Q5), C3 직접 만든 Model Pack에서 setup이 멈추고 `--repair`가 모델을 덮어쓰는 문제(Q5), C4~C6과 낮음 문서 항목(새 문서 묶음 후보), inf/NaN 벡터 panic과 테스트 0개를 돌리는 Integration Tests job(가능성 있음, 착수 때 재현).
 - 2026-11-06 점검의 낮음 항목: 부팅마다 기본 컬렉션 청크 전체를 UPDATE하는 backfill, 0.12 이하 DB의 dedup 해시 형식, `.vec` offset 정체성과 남는 `*.tmp-*` 파일, 동시 하이브리드 검색, Apple 정적 SQLite 심볼 노출(회고 2절 "낮음").
 - 레거시 자산 확인 비용 절감: 전체 sha256 대신 크기 + 앞뒤 1MiB만 해시한다(#118 fingerprint와 같은 방식). 시뮬레이터에서 KoEn 매 시작 약 250ms와, 확인 중 모델 크기의 약 2배 순간 메모리를 줄인다. M5 실측을 본 뒤 판단한다.
 

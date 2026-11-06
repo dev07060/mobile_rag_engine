@@ -161,3 +161,66 @@ Q2와 Q3는 둘 다 `source_rag.rs`를 건드리므로 동시에 진행하지 �
 3. **기존 문서 경로를 회귀 목록으로 둔다.** 가이드에 있는 코드 예제(특히 `release_build.md`의 운영 배포 흐름)를 E2E 시나리오나 최소한 단위 테스트로 묶는다. A1은 가이드를 아무도 실행하지 않아서 생겼다.
 4. **발행 전에 `pub publish --dry-run` 아카이브를 path 의존성으로 설치해 E2E를 돌린다.** 발행 뒤 pub 모드 확인은 최종 점검으로만 둔다(#129의 규칙 5-3과 같은 방향).
 5. **R1 순서 6은 2026-11-06에 마쳤다.** 태그 `v0.23.0`, pub 모드 Quick Start E2E(4개 플랫폼)와 `no_rust_repro.yml`(12개 job)이 0.23.0으로 통과했다. 배포 아카이브 자체에는 문제가 없다.
+
+## 6. 추가 점검 (2026-11-07, Q1 진행 중)
+
+Q1 작업 중에 드러난 문제를 출발점으로 8개 갈래를 다시 훑었다. 갈래는 Rust 소스 빌드, Xcode 27, `flutter_onnxruntime` 범위, Q1 리뷰, Rust 메모리 안전, Model Pack·setup, 문서 예제, CI다. 발견 47건을 37건으로 합쳤고, 건마다 검증자 둘이 따로 반박을 시도했다. 결과는 확인 15건, 가능성 있음 21건, 반박 1건이다. 아래 '확인'은 검증자 둘이 모두 직접 확인한 것이다.
+
+**Q1 범위라 #132에서 바로 고친 것:**
+- 문서 예제가 토크나이저를 내려받지 않았다.
+- fallback이 0바이트 파일도 모델로 썼다(이제 빈 파일은 쓰지 않고 로그를 남긴다).
+- "파일 이름을 유지하라"는 문구가 이름만 같으면 안 잠기는 것처럼 읽혔다.
+- CHANGELOG의 ITMS-90208 근거: 1.8.3의 수정은 SPM 빌드에만 해당한다.
+- 기존 `Podfile.lock`(`onnxruntime-objc` 1.24.2/1.23.0) 때문에 `pod install`이 실패한다(example 갱신, 안내 추가).
+
+**새로 확인된 것 (높음·중간)**
+
+| # | 내용 | 확인 | 묶음 제안 |
+|---|---|---|---|
+| C1 | **Xcode 27에서 Rust 소스 빌드(release/profile)가 실패한다(rustc < 1.98).** rustup이 있으면 Cargokit이 소스에서 빌드하는데, release 프로필의 기본 `strip=debuginfo`가 build-override에도 적용된다. 그러면 rustc 1.91의 objcopy가 Xcode 27 ld의 chained-fixup proc-macro dylib을 망가뜨려 `E0463 dyn_stack_macros`가 난다(rust-lang/rust#157750). 배포된 0.23.0에서도 재현됐다. 수정: `rust_builder/rust/Cargo.toml`에 `[profile.release.build-override] strip = "none"`. crate hash가 바뀌므로 `rag_engine_flutter` 배포가 필요하다. 우회: `rustup update`, `cargokit_options.yaml`의 `use_precompiled_binaries: true`. | 재현 2회 | Q5 (Rust 배포) |
+| C2 | **Xcode 27에는 Flutter 3.47.0 이상이 필요하다.** 3.44.8/3.44.9는 lipo 검사만 고쳤고 배포 대상 거부는 3.47.0에서야 고쳤다. iOS도 macOS와 같이 깨진다. setup과 `--check`는 통과해서 사용자는 원인을 모른다. CI는 Flutter 3.38.7에 고정돼 있고 Xcode를 고르지 않으므로, runner 기본값이 Xcode 27이 되면 Apple job이 모두 함께 깨진다(현재 stable 3.47.9). | 확인 | Q5 (문서 + CI 고정값) |
+| C3 | **직접 만든 Model Pack(예: KoEn)을 쓰면 setup이 호스트 설정 전에 멈춘다.** 오류 메시지가 `--repair`를 권하는데, 그대로 따르면 사용자의 모델이 MiniLM으로 덮어써진다. | 재현 2회 | Q5 (B14와 같은 파일) |
+| C4 | **모델 교체 복구 안내가 틀렸다.** `faq.md`, `troubleshooting.md`, `index_management.md`는 `regenerateAllEmbeddings()`나 DB 삭제 후 재초기화를 권한다. 하지만 어느 쪽도 fingerprint 잠금을 풀지 않는다(`reembedAll()`/`clearAndRestart()`만 푼다). 문서의 오류 형식(`StateError`)도 실제(`embeddingFingerprintMismatch`)와 다르다. | 확인 | 새 문서 묶음 |
+| C5 | **`docs/test/unit_testing.md`의 mock 설정으로는 모든 테스트가 setUp에서 실패한다.** `mock.engine` stub이 없다. | 재현 | 새 문서 묶음 |
+| C6 | **저장 파일과 백업 안내가 틀렸다.** 실제 구성은 `rag.vec`, WAL, `<base>.hnsw`이고 `.dirty` 파일은 없다. Android·Windows·macOS 경로도 틀리거나 빠졌다. `rag.sqlite`만 백업하면 검색이 조용히 비거나 틀린다. | 확인 | 새 문서 묶음 |
+
+**새로 확인된 것 (낮음):**
+- tokenizers의 `http` feature는 쓰이지 않는데 ring/rustls/ureq가 매 소스 빌드에 들어간다(빼면 crate hash가 바뀐다).
+- Windows에서 1.8.x로 빌드한 앱은 `flutter clean` 전까지 ORT 1.22.0 CMake cache가 남는다.
+- README의 "Android API 21+"는 틀렸다(ORT AAR은 minSdk 24).
+- iOS에서 모델 복사본이 iCloud 백업 대상 디렉터리에 있다.
+- 문서 쪽:
+  - FAQ가 Windows를 미지원으로 적는다.
+  - Quick Start가 "Flutter 3.9+"라고 적지만 실제 하한은 Dart 3.9.2(≈Flutter 3.35)다.
+  - 한국어 모델 권장이 문서마다 다르다.
+  - README 예제 클래스가 컴파일되지 않는다.
+
+**가능성 있음 (재현까지는 못 함, 중간):**
+- Rust MSRV(실효 1.84)가 선언돼 있지 않고, `rustup default stable` 안내로는 갱신되지 않는다.
+- Flutter 3.44+는 SwiftPM이 기본이라 ORT는 SPM fork로, `rag_engine_flutter`는 CocoaPods로 들어간다. 이 혼합 경로를 아무것도 빌드하지 않는다.
+- ORT 1.28은 SME 기기에서 KleidiAI MatMul 메모리 증가가 남아 있다(우회 옵션을 앱이 넘길 수 없다).
+- 저장된 벡터 하나가 inf이면 그 컬렉션의 이후 모든 비하이브리드 검색이 PanicException으로 실패한다(재현됨). NaN 질의도 panic한다.
+- 필수 체크인 "Integration Tests (macOS)"가 매 PR에서 테스트를 0개 실행한다(루트에 `integration_test/`가 없고 `|| true`).
+- E2E 경로 필터가 대부분의 `lib/` 변경과 pubspec만 바꾸는 PR을 건너뛴다(B15 확장).
+
+**가능성 있음 (낮음):**
+- 음수 `topK`가 `u32::MAX`로 바뀐다.
+- `.vec`가 sparse grow라 디스크가 가득 차면 SIGBUS가 난다.
+- setup 쪽:
+  - `--output`을 정규화하지 않는다.
+  - 중단된 setup이 asset 폴더에 `*.tmp-*`를 남긴다.
+  - 다운로더가 모델 전체를 메모리에 올린다.
+- 루트 `ios/`, `android/` 잔재.
+
+**반박된 것:** Xcode 27 대응으로 setup에 pod 배포 대상 `post_install`을 넣자는 제안. Flutter 3.47+에서는 필요 없고 오히려 잘못된 고정이다.
+
+**점검이 다루지 못한 영역 (critic):**
+- AGP 9 / new DSL에서의 `rag_engine_flutter` Gradle 플러그인(AGP 7.3 classpath, 레거시 variants API).
+- precompiled `.so`의 16 KB 정렬 실측.
+- ORT pod의 privacy manifest와 서드파티 라이선스 고지.
+- hot restart와 dispose 후 재초기화.
+- 0.1x~0.21 DB의 마이그레이션.
+- 큰 코퍼스와 저메모리 기기.
+- 32-bit 실행.
+- 모델별 최대 시퀀스 길이(512 고정).
+- Windows VC++ 런타임 의존성.
