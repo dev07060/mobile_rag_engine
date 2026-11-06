@@ -106,10 +106,9 @@ class MobileRag {
   /// - [tokenizerPath], [modelPath] - Files your app already placed on disk,
   ///   for example a model downloaded on first launch so it is not in the app
   ///   bundle. They are loaded where they are, without an asset copy. Pass both,
-  ///   and none of the asset or Model Pack options. Keep the model's file name
-  ///   when you replace it with an update of the same model: the embedding
-  ///   fingerprint includes the file name and a hash of its content, so a
-  ///   different model locks search until `reembedAll()` or `clearAndRestart()`.
+  ///   and none of the asset or Model Pack options. The embedding fingerprint
+  ///   includes the model's file name and a hash of the file, so any change to
+  ///   either locks search until `reembedAll()` or `clearAndRestart()`.
   /// - [databaseName] - SQLite database file name (default: `'rag.sqlite'`)
   /// - [maxChunkChars] - Maximum characters per chunk (default: [kDefaultMaxChunkChars])
   /// - [overlapChars] - Overlap between chunks for context continuity (default: [kDefaultOverlapChars])

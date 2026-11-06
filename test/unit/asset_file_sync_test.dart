@@ -154,6 +154,15 @@ void main() {
       expect(read('model.onnx'), [1, 2, 3]);
     });
 
+    test('does not use an empty file, such as an aborted download', () async {
+      File('${dir.path}/model.onnx').writeAsBytesSync([]);
+
+      await expectLater(
+        sync('assets/model.onnx', 'model.onnx'),
+        throwsA(isA<FlutterError>()),
+      );
+    });
+
     test('fails when there is no file either', () async {
       await expectLater(
         sync('assets/model.onnx', 'model.onnx'),

@@ -145,7 +145,7 @@
   - (a) 회귀 복구: `syncAssetToFile`이 asset을 읽다가 번들에 없다는 오류(`FlutterError`)가 나고 대상 파일이 이미 있으면, 0.22.3처럼 그 파일을 그대로 쓴다. 대상 파일이 없으면 지금처럼 실패한다. 다른 모델 파일이 놓여 있으면 fingerprint의 모델 해시(#118)가 잠그므로 안전장치는 남는다.
   - (b) 명시적 경로: `MobileRag.initialize(tokenizerPath:, modelPath:)`를 더한다. 앱이 준비한 파일을 asset 복사 없이 쓴다. `modelPack`, `tokenizerAsset`/`modelAsset`과 함께 쓰면 `ArgumentError`. 내부적으로 `RagConfig.preparedTokenizerPath`/`preparedModelPath`를 쓴다(차원 기대값 없음). fingerprint의 모델 이름은 파일 경로의 basename이라, 0.22.x 문서 방식(`<저장 디렉터리>/model.onnx`)에서 (b)로 옮겨도 잠기지 않는다.
   - 문서(`release_build.md`, `faq.md`)는 (b)를 권장하도록 되살리고, (a)는 기존 앱 호환으로 적는다.
-- **A5:** `flutter_onnxruntime` 하한을 `^1.8.3`으로 올린다(1.8.3에서 ITMS-90208, 1.8.1에서 A18/M4 OOM 수정, 해당 CHANGELOG로 확인). 두 lockfile은 새 사용자가 받는 최신(1.9.0)으로 맞춰 CI가 그 버전을 검사하게 한다.
+- **A5:** `flutter_onnxruntime` 하한을 `^1.8.3`으로 올린다(1.8.1에서 A18/M4 OOM 수정, 1.8.3에서 ITMS-90208 수정, 해당 CHANGELOG로 확인). 2026-11-07 점검: 1.8.3의 ITMS-90208 수정은 SPM 빌드에만 해당한다(1.8.2와 1.8.3의 podspec이 같다). CocoaPods 사용자에게 실질적인 이유는 1.8.0의 OOM이다. 두 lockfile은 새 사용자가 받는 최신(1.9.0)으로 맞춰 CI가 그 버전을 검사하게 한다.
 
 **목표:** 0.23.0에서 새로 생긴 회귀와, 지금 pub 사용자에게 영향을 주는 의존성·문서 문제를 고친다.
 

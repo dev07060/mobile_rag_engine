@@ -6,7 +6,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart' show FlutterError;
+import 'package:flutter/foundation.dart' show FlutterError, debugPrint;
 import 'package:flutter/services.dart';
 
 /// Copies [assetPath] to [filePath] unless the existing copy already holds the
@@ -25,12 +25,13 @@ import 'package:flutter/services.dart';
 /// interrupted copy is never stamped.
 ///
 /// When the asset is not in the bundle (`rootBundle.load` throws a
-/// [FlutterError]) but [filePath] already exists, the existing file is used
-/// as it is, as up to 0.22.3: apps that leave the model out of their release
-/// bundle and download it to this path themselves keep working. The embedding
-/// fingerprint's model-content hash still locks the database if that file is
-/// a different model. Without the asset and without the file, the error is
-/// rethrown.
+/// [FlutterError]) but a non-empty file already exists at [filePath], that
+/// file is used as it is, as up to 0.22.3: apps that leave the model out of
+/// their release bundle and download it to this path themselves keep working.
+/// The engine logs that it did so. The embedding fingerprint's model-content
+/// hash still locks the database if the model file is a different model; a
+/// tokenizer file is not covered by the fingerprint. Without the asset and
+/// without a non-empty file, the error is rethrown.
 ///
 /// Returns whether the file was (re)written.
 Future<bool> syncAssetToFile(
@@ -43,8 +44,13 @@ Future<bool> syncAssetToFile(
   try {
     data = await (loadAsset ?? rootBundle.load)(assetPath);
   } on FlutterError {
-    if (await _lengthOrNull(file) != null) return false;
-    rethrow;
+    final length = await _lengthOrNull(file);
+    if (length == null || length == 0) rethrow;
+    debugPrint(
+      '[mobile_rag_engine] "$assetPath" is not in the app bundle; using the '
+      'existing file at $filePath ($length bytes) as it is.',
+    );
+    return false;
   }
   final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
   final stampFile = File('$filePath$assetStampSuffix');
