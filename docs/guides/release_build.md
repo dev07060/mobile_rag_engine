@@ -19,17 +19,28 @@ The ONNX embedding model is the single largest contributor to your app's downloa
 - **Releases after 0.23.0:** download the model and tokenizer to files of your choice, then pass their paths. Nothing is copied from assets, and the model does not need to be in `pubspec.yaml`.
 
   ```dart
-  final dir = await getApplicationSupportDirectory();
-  final modelFile = File('${dir.path}/models/model.onnx');
-  if (!await modelFile.exists()) {
-    await downloadModel(modelFile); // your CDN / Hugging Face fetch
+  final support = await getApplicationSupportDirectory();
+  final dir = await Directory('${support.path}/models').create(recursive: true);
+  final tokenizerFile = File('${dir.path}/tokenizer.json');
+  final modelFile = File('${dir.path}/model.onnx');
+
+  for (final (file, url) in [(tokenizerFile, tokenizerUrl), (modelFile, modelUrl)]) {
+    if (!await file.exists()) {
+      // Download to a temporary file and rename it, so an interrupted
+      // download never leaves a partial file at the path the engine loads.
+      final partial = File('${file.path}.part');
+      await download(url, partial); // your CDN / Hugging Face fetch
+      await partial.rename(file.path);
+    }
   }
 
   await MobileRag.initialize(
-    tokenizerPath: '${dir.path}/models/tokenizer.json',
+    tokenizerPath: tokenizerFile.path,
     modelPath: modelFile.path,
   );
   ```
+
+  Check the downloaded files against a checksum you ship with the app before the rename; the engine loads whatever is at these paths.
 
   Keep the file name when you replace the model with an update of the same model. The embedding fingerprint includes the file name and a hash of the file's content, so a different model locks search until `reembedAll()` or `clearAndRestart()`.
 
