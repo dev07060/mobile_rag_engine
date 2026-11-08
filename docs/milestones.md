@@ -8,19 +8,24 @@
 2. **이 문서에 없는 작업은 PR로 올리지 않는다.** 새 작업이 생기면 먼저 이 문서에 마일스톤으로 적고 사용자 합의를 받는다.
 3. **착수 전에 담당 세션과 브랜치를 적는다.** "손대는 파일"이 겹치는 마일스톤은 동시에 진행하지 않는다.
 4. **범위를 바꿔야 하면 코드보다 이 문서를 먼저 고친다.** 예: 문서만 고치기로 한 마일스톤에서 코드 수정이 필요해진 경우.
-5. **배포는 중단한다 (2026-11-02 사용자 지시: "배포 그만하고 마일스톤으로 쌓아").** 배포 마일스톤을 만들거나 버전을 올리지 않는다. 변경 기록은 `CHANGELOG.md`의 `## Unreleased`에 쌓고, 사용자가 배포를 다시 요청하면 그때 배포 마일스톤을 적는다.
+5. **배포는 내부 점검을 끝낸 뒤에만 한다 (2026-11-06 사용자 지시: 보류하고, 내부에서 문제를 찾아 전부 고친 뒤 발행).** 0.22.0~0.22.3이 이틀 안에 연달아 나가 핫픽스가 이어진 일을 되풀이하지 않기 위해서다. 배포 마일스톤을 만들거나 버전을 올리지 않는다. 변경 기록은 `CHANGELOG.md`의 `## Unreleased`에 쌓는다. 사용자가 배포를 요청하면 그때 배포 마일스톤을 적고, 발행 전에 아래를 모두 끝낸다.
+   1. 알려진 문제와 점검에서 나온 문제를 모두 고친다(남기는 것은 이유와 함께 `Unreleased`에 적는다).
+   2. 마지막 배포 버전이 남긴 DB와 파일 상태에서의 업그레이드, 새 앱 기준 release 빌드(Android, iOS, macOS, Windows), 실제 기기 한 대 이상의 확인을 발행 전에 통과시킨다.
+   3. 발행 뒤의 pub 모드 확인은 최종 점검이다. 여기서 문제가 나오면 핫픽스가 아니라 점검이 빠뜨린 것으로 보고 원인을 기록한다.
 6. **머지는 사용자가 한다.** 세션은 "PR 열림, CI 통과"에서 멈춘다.
 7. **착수는 사용자가 마일스톤 번호로 지시할 때만 한다** (예: "M2 착수"). 순서는 아래 목록 순서를 기본으로 한다.
 8. **모든 마일스톤의 완료 기준에 아래 네 가지를 넣는다 (2026-11-03 리뷰 뒤 합의).** 기존 검증이 새로 설치한 상태와 가짜 값만 봐서 맹점이 생겼기 때문이다. 작업을 마치기 전에 세션이 직접 확인하고, PR 본문의 같은 이름 절에 결과를 적는다. CI로 강제하거나 GitHub rules를 바꾸지 않는다(2026-11-03 사용자: 혼자 관리하는 패키지라 머지 부담만 커진다).
-   1. **업그레이드 경로:** 마지막 배포 버전(0.22.3)이 남긴 DB와 파일 상태에서 시작해 확인한다.
+   1. **업그레이드 경로:** 마지막 배포 버전(0.23.0)이 남긴 DB와 파일 상태에서 시작해 확인한다. Upgrade E2E의 기준 버전은 아직 0.22.3이다(후보 목록 참고).
    2. **실제 출력:** 가짜 값이 아니라 실제 엔진 출력으로 최소 한 번 확인한다.
    3. **사용하는 쪽 관점:** 여러 번 호출할 때와 토큰 비용을 확인한다.
    4. **주변 코드:** 수정과 맞물리는 코드를 읽고, 무엇이 깨질 수 있는지 PR에 적는다.
 
-## 현재 상태 (2026-11-03)
+## 현재 상태 (2026-11-06)
 
-- main: `70ef27f` (#126 머지). 진행 중: R1 배포.
-- 마지막 배포: `mobile_rag_engine` 0.22.3. 그 뒤 변경은 모두 `## Unreleased`에 쌓여 있다.
+- main: `11744c9` (#127 머지). **새 배포는 보류**(규칙 5). 다음 배포는 내부 점검으로 문제를 모두 고친 뒤에 한다.
+- 마지막 배포: `mobile_rag_engine` 0.23.0과 `rag_engine_flutter` 0.22.0 (pub.dev, 2026-11-04). R1 완료(태그 `v0.23.0`, pub 모드 확인 통과, 2026-11-06).
+- 2026-11-06 내부 점검(`docs/reports/2026-11-06-hotfix-retrospective.md`)의 수정 묶음을 Q1~Q5로 적었다. Q1의 문서 부분은 #130.
+- 아래 목록은 0.23.0에 담긴 변경이다(0.22.3 뒤 `Unreleased`였던 것).
   - 512 토큰 truncation (#115)
   - HNSW 빌드와 검색 속도, 한국어 BM25, 한국어 청킹 속도 (#116)
   - flutter_rust_bridge 2.13 (#117)
@@ -93,32 +98,6 @@
 | b4 | **FAIL (맹점 3)** | 예산 300토큰에 출력 717토큰 (한도 470 = 300 + 결과당 40 + 50) |
 
 
-### R1. 배포 (`rag_engine_flutter` 0.22.0 + `mobile_rag_engine` 0.23.0)
-
-- **담당:** 이 대화의 세션, 브랜치 `release/0.23.0`
-- **상태:** 진행 중 (2026-11-03, 사용자: "배포 진행하자"). main `70ef27f` 기준.
-
-**버전:** minor 올림. 깨지는 변경: `currentEmbeddingFingerprint` 4칸, `flutter_rust_bridge` 2.13.0 고정, `MobileRag`/`CollectionRag`에 메서드 추가(`implements`한 클래스).
-
-**담는 변경:** 0.22.3 뒤 `## Unreleased` 전부. #115(512토큰), #116(HNSW·한국어 BM25·청킹 속도), #117(FRB 2.13), #118(모델 해시 fingerprint), #120(레거시 자산 갱신), #121(LLM JSON·도구), #123(M7), #124(M6), #125(M4), #126(M8).
-
-**손대는 파일**
-- `rust_builder/pubspec.yaml`(0.22.0), `rust_builder/CHANGELOG.md`: 제목을 0.22.0으로, Chunking 중복 항목 합치기, FRB 항목의 "FFI API is unchanged"를 #118·M6 함수 추가에 맞게 고침.
-- `pubspec.yaml`(0.23.0, `rag_engine_flutter: 0.22.0`), `CHANGELOG.md`(제목, "Requires `rag_engine_flutter: 0.22.0`").
-- 버전 표기: `README.md`, `docs/guides/quick_start.md`, `.github/workflows/quickstart_e2e.yml`, `docs/guides/ask.md`·`llm_tools.md`("release after 0.22.3" → "0.23.0 or later"), `docs/guides/model_setup.md`("Later releases/versions" → "0.23.0 and later").
-- lockfile: `pubspec.lock`, `example/pubspec.lock`.
-- 바꾸지 않음: `upgrade_e2e.yml`의 기준 버전 0.22.3과 PR 템플릿. 배포 뒤 기준을 0.23.0으로 올릴지는 따로 정한다(후보).
-
-**순서** (pub publish는 되돌릴 수 없으므로 사용자가 직접 한다)
-1. main `70ef27f`의 Precompile Binaries 성공을 확인하고, 배포할 트리의 crate hash가 그 `precompiled_<hash>` 릴리스와 같은지 본다(배포 커밋은 Rust 소스를 건드리지 않는다).
-2. 작업 트리에 위 변경을 만들고 `rag_engine_flutter` dry-run을 통과시킨다.
-3. 사용자: `rust_builder/`에서 `flutter pub publish` (0.22.0).
-4. pub.dev 반영 뒤 루트 `flutter pub get`·dry-run 확인, 사용자: 루트 `flutter pub publish` (0.23.0). 두 배포 사이에 제약을 바꾸지 않는다.
-5. 그 뒤 커밋·푸시·PR. 사용자가 머지한다.
-6. 머지 커밋에 태그 `v0.23.0`, pub 모드 Quick Start E2E(`quickstart_e2e.yml`, version 0.23.0)와 `no_rust_repro.yml`(0.23.0) 실행.
-
-**완료 기준:** 두 패키지가 pub.dev에 있고, pub 모드 Quick Start E2E와 no-Rust 재현이 0.23.0으로 통과. PR 하나, CI 통과.
-
 ### M5. iPhone 실기기 측정 (KoEn)
 
 - **상태:** 범위 초안. 합의 대기. 사용자의 실기기 연결이 필요하다.
@@ -137,19 +116,159 @@
 
 **손대는 파일:** `docs/perf/multilingual-embedding/**`, `docs/guides/model_setup.md`(비용 절), `example/integration_test/`(측정 테스트가 필요하면 새 파일)
 
+### Q0. 내부 점검 묶음 (Q1~Q5) 공통
+
+- **출처:** `docs/reports/2026-11-06-hotfix-retrospective.md`(2026-11-06 점검). 항목 번호 A1~A5, B1~B16은 그 문서의 번호다. 근거·재현 방법은 그 문서에 있다.
+- **합의:** 2026-11-06 사용자 "순서대로 도입해봐". 순서는 Q1 → Q2 → Q3 → Q4 → Q5. Q2와 Q3는 둘 다 `source_rag.rs`를 고치므로 동시에 진행하지 않는다(규칙 3).
+- **공통 완료 기준:** 규칙 8의 네 항목에 더해, 고친 항목마다 같은 원인으로 다른 곳도 깨지는지 찾아 PR의 "맞물리는 코드" 절에 적는다(회고 5절 1). 테스트 텍스트에는 한국어·일본어·중국어, NFD 한글, 전각, 이모지, 소수점을 넣는다(회고 5절 2).
+- **배포:** 이 묶음은 배포하지 않는다. 변경 기록은 `CHANGELOG.md`의 `## Unreleased`에 쌓는다(규칙 5).
+
+### Q1. 0.23.0 회귀와 의존성
+
+- **담당:** 이 대화의 세션, 브랜치 `feat/q1-asset-regression`(#128·#129·#130·#131 위에 쌓음)
+- **상태:** PR 열림 (2026-11-06 사용자: "착수해줘"). 문서 부분은 #130으로 먼저 열었다.
+
+**확인 결과 (2026-11-06, 로컬 macOS release 빌드, MiniLM Model Pack 파일, 같은 데이터 컨테이너에서 차례로 실행):**
+
+| 단계 | 패키지 | 설정 | 결과 |
+|---|---|---|---|
+| p0 | pub 0.23.0 | asset 번들, 색인 | 청크 1개, 검색 1건, fingerprint `…|sha256:e9246dc3…` |
+| p1 | pub 0.23.0 | asset 뺌 | **실패** `Unable to load asset: "assets/mobile_rag/tokenizer.json"` (A1 재현) |
+| p2 | 수정본 | asset 뺌 | 성공. 같은 fingerprint, 잠금 없음, 검색 1건, 모델 파일 다시 쓰지 않음 |
+| p3 | 수정본 | `tokenizerPath`/`modelPath` | 성공. 같은 fingerprint, 잠금 없음, 검색 1건 |
+| p4 | 수정본 | asset 다시 번들 | 성공. 0.23.0의 `.asset-stamp`가 맞아 다시 복사하지 않음 |
+
+수정본 단계는 `flutter_onnxruntime` 1.9.0으로 빌드했다. 로컬 Xcode 27.1에서 확인용 앱에 두 가지를 우회했다(아래 후보 참고). pod 배포 대상을 14.0으로 고정했고, arm64만 빌드했다. Rust는 crate hash가 0.23.0과 같아 서명된 precompiled binary를 썼다.
+
+**착수 때 정한 방식 (2026-11-06)**
+- **A1은 두 가지를 함께 한다.**
+  - (a) 회귀 복구: `syncAssetToFile`이 asset을 읽다가 번들에 없다는 오류(`FlutterError`)가 나고 대상 파일이 이미 있으면, 0.22.3처럼 그 파일을 그대로 쓴다. 대상 파일이 없으면 지금처럼 실패한다. 다른 모델 파일이 놓여 있으면 fingerprint의 모델 해시(#118)가 잠그므로 안전장치는 남는다.
+  - (b) 명시적 경로: `MobileRag.initialize(tokenizerPath:, modelPath:)`를 더한다. 앱이 준비한 파일을 asset 복사 없이 쓴다. `modelPack`, `tokenizerAsset`/`modelAsset`과 함께 쓰면 `ArgumentError`. 내부적으로 `RagConfig.preparedTokenizerPath`/`preparedModelPath`를 쓴다(차원 기대값 없음). fingerprint의 모델 이름은 파일 경로의 basename이라, 0.22.x 문서 방식(`<저장 디렉터리>/model.onnx`)에서 (b)로 옮겨도 잠기지 않는다.
+  - 문서(`release_build.md`, `faq.md`)는 (b)를 권장하도록 되살리고, (a)는 기존 앱 호환으로 적는다.
+- **A5:** `flutter_onnxruntime` 하한을 `^1.8.3`으로 올린다(1.8.1에서 A18/M4 OOM 수정, 1.8.3에서 ITMS-90208 수정, 해당 CHANGELOG로 확인). 2026-11-07 점검: 1.8.3의 ITMS-90208 수정은 SPM 빌드에만 해당한다(1.8.2와 1.8.3의 podspec이 같다). CocoaPods 사용자에게 실질적인 이유는 1.8.0의 OOM이다. 두 lockfile은 새 사용자가 받는 최신(1.9.0)으로 맞춰 CI가 그 버전을 검사하게 한다.
+
+**목표:** 0.23.0에서 새로 생긴 회귀와, 지금 pub 사용자에게 영향을 주는 의존성·문서 문제를 고친다.
+
+**포함**
+- A1 코드: 모델 asset 없이 배포하고 실행 중에 모델을 내려받는 경로를 다시 지원한다. 대상 파일이 있고 asset이 번들되지 않았으면 그 파일을 쓰거나, `MobileRag.initialize`에 준비된 파일 경로 옵션(`RagConfig.preparedModelPath`/`preparedTokenizerPath`)을 공개한다. 방식은 착수 때 이 문서에 먼저 정한다. 고친 뒤 `release_build.md`의 안내를 되살린다.
+- A5: `flutter_onnxruntime` 하한을 App Store 업로드 결함(ITMS-90208)이 고쳐진 버전 이상으로 올리고, lockfile 두 개를 갱신한다. 착수 때 해당 패키지 CHANGELOG로 버전을 다시 확인한다.
+- 문서 버전 표기: `troubleshooting.md`의 `^0.22.2` 안내(→ `^0.23.0`).
+- 착수 때 뺀 것: 배포되는 example이 `.pubignore`로 빠진 `assets/`를 선언하는 문제. 배포 아카이브는 `example/ios`·`example/macos`도 빼므로 pub cache의 example은 원래 빌드용이 아니라 읽기용이다. 고칠 실익이 없다.
+
+**제외:** Q2~Q5 항목. 모델 다운로드 기능 자체(내려받기는 앱이 한다).
+
+**완료 기준**
+- asset을 뺀 release 빌드에서 미리 둔 모델 파일로 초기화와 첫 검색이 된다(실제 앱 한 번 이상).
+- 0.23.0이 남긴 `.asset-stamp` 상태에서 업그레이드해도 다시 복사하거나 잠그지 않는다.
+- 공통 완료 기준. PR 하나, CI 통과.
+
+**손대는 파일:** `lib/src/internal/asset_file_sync.dart`, `lib/services/rag_engine.dart`(초기화), `lib/mobile_rag.dart`, `lib/services/rag_config.dart`, `pubspec.yaml`, `pubspec.lock`, `example/pubspec.lock`, `docs/guides/{release_build,troubleshooting,faq}.md`, `test/unit/**`, `CHANGELOG.md`, `docs/milestones.md`
+
+### Q2. 상태 수명주기
+
+- **상태:** 착수 대기.
+
+**목표:** 새로 설치한 상태가 아닐 때만 드러나는 상태·수명주기 버그를 고치고 하네스로 막는다.
+
+**포함**
+- A3: `clearAndRestart` 뒤 같은 문서를 다시 추가하면 `DuplicateInProgress`로 막히는 문제. 청크 0개인 `completed` source를 다시 잡을 수 있게 한다.
+- A4: 비하이브리드 `search()`가 다른 컬렉션의 로드된 HNSW로 검색하는 문제. `reembedAll` 뒤 옛 그래프도 같다.
+- B3: 중간에 끊긴 재임베딩을 같은 모델로 돌아가면 받아들이고, 다른 모델로는 빠져나갈 수 없는 문제.
+- B4: 이미 있는 문서를 다시 추가해도 generation이 올라 인덱스가 전부 다시 빌드되는 문제.
+- B5: 임베딩 worker dispose 중의 `embed()`가 영원히 기다리는 문제와 `MobileRag.initialize` 동시 호출.
+- B6: dispose 뒤에도 남는 500ms debounce 타이머.
+- B7: `clearAllData`가 다른 컬렉션의 진행 중인 ingest·warmup을 기다리지 않는 문제.
+- Upgrade E2E: 기준 버전에 0.23.0을 더하고(0.22.3은 유지할지 착수 때 정한다), `clearAndRestart` → 재추가, 컬렉션 전환 뒤 `search()` 시나리오를 넣는다.
+
+**제외:** 낮음 항목(부팅 backfill, 0.12 이하 DB 중복, `.vec` offset 정체성, 동시 하이브리드 검색). 필요하면 후보로 둔다.
+
+**완료 기준**
+- 새 하네스 시나리오가 수정 전 main에서 실패하고 수정 뒤 통과한다(H1과 같은 `KNOWN_FAILING` 방식).
+- 공통 완료 기준. PR 하나, CI 통과. Rust를 고치므로 `rag_engine_flutter` 배포가 필요하다(배포는 규칙 5).
+
+**손대는 파일:** `rust_builder/rust/src/api/{source_rag,migration_meta,ingest_session,hnsw_index}.rs`, `lib/services/{rag_engine,source_rag_service,embedding_service}.dart`, `lib/mobile_rag.dart`, `.github/workflows/upgrade_e2e.yml`, `tool/upgrade_e2e/**`, `.github/pull_request_template.md`(기준 버전), `test/**`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `docs/milestones.md`
+
+### Q3. 텍스트 경계
+
+- **상태:** 착수 대기. Q2 뒤.
+
+**목표:** 바이트·문자·토큰 경계와 비 ASCII 텍스트에서 깨지는 곳을 고친다.
+
+**포함**
+- A2: `compress_text`가 `。`에서 panic하는 문제와, `.`마다 문장을 나눠 `3.14` → `3. 14`가 되는 문제.
+- B1: markdown 청크 예산이 `Header Path:` 접두어를 세지 않아 512토큰을 넘는 문제. 테스트도 실제 임베딩 입력으로 센다.
+- B2: `reembedAll`이 색인 때와 다른 텍스트(`render_context_text` 없이 본문만)를 임베딩하는 문제.
+- B8: BM25 Unicode 정규화(NFC, 전각, 합자). 중복 검사 해시에 미치는 영향도 정한다(기존 DB 해시와의 호환).
+- B9: 한국어 bigram이 영문·숫자+조사(`RAG는`, `2024년`)와 한 음절 명사+조사를 놓치는 문제.
+- 공개 `SemanticChunk.startPos`/`endPos`의 단위(UTF-8 바이트) 문서화, markdown 헤더 오인식(`#해시태그`, `~~~`, `.MD`).
+
+**제외:** 토큰 예산 단위(B13, Q4).
+
+**완료 기준**
+- 위 항목마다 한·중·일 입력 회귀 테스트. 기존 DB의 BM25는 활성화 때 다시 빌드되므로 마이그레이션이 필요 없는지 확인한다.
+- 공통 완료 기준. PR 하나, CI 통과. Rust 변경이 있다.
+
+**손대는 파일:** `rust_builder/rust/src/api/{compression_utils,semantic_chunker,bm25_search,ingest_session,source_rag}.rs`, `lib/services/rag_engine.dart`(reembed 입력), `lib/services/source_rag_service.dart`(`.md` 판별), `test/**`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `docs/milestones.md`
+
+### Q4. 출력 계약
+
+- **상태:** 착수 대기.
+
+**목표:** 사용자와 LLM이 읽는 점수·순서·인용·예산이 문서와 같게 동작하게 한다.
+
+**포함**
+- B10: `MobileRag.search`의 `similarity`가 `sourceIds` 유무에 따라 RRF 값과 코사인으로 바뀌는 문제.
+- B11: `adjacentChunks > 0`이면 결과가 출처 순서로 정렬되어 relevanceFirst가 깨지는 문제.
+- B12: 인용 파싱이 `［１］`, `【1】`, `[1、2]`, `[1-3]`을 놓치고 코드 안의 `items[2]`를 잡는 문제.
+- B13: ask·tool 토큰 예산이 임베딩 tokenizer 단위라 UNK가 많은 언어에서 LLM 토큰과 크게 다른 문제. `PromptCompressor`의 char/4 근사. 해결 방식(예: `targetPromptTokenCounter` 연결)은 착수 때 정한다.
+
+**제외:** LLM SDK 의존성.
+
+**완료 기준:** 실제 엔진 출력으로 점수 단위·순서·인용 확인(H1-b와 같은 방식). 공통 완료 기준. PR 하나, CI 통과.
+
+**손대는 파일:** `lib/services/{source_rag_service,ask,context_builder,prompt_compressor,llm_tool}.dart`, `rust_builder/rust/src/api/source_rag.rs`(assembly 순서), `docs/guides/{ask,llm_tools}.md`, `test/**`, `CHANGELOG.md`, `docs/milestones.md`
+
+### Q5. 배포 검증 보강
+
+- **상태:** 착수 대기.
+
+**목표:** 발행 전에 배포 아카이브, release 빌드, 새 앱 설정을 실제로 확인한다(#129 규칙 5-2).
+
+**포함**
+- B14: setup의 Podfile 패치가 줄 끝 주석, `use_frameworks! linkage: :dynamic` 같은 변형에서 조용히 실패하고 `--check`가 통과하는 문제.
+- B15: `flutter pub publish --dry-run` 아카이브를 path 의존성으로 설치하는 Quick Start 모드. PR 경로 트리거에 `pubspec.yaml`, `.pubignore`, `rust_builder/{windows,cargokit,rust}/**` 추가. iOS Release 바이너리 실행 또는 FRB가 찾는 심볼 전체 검사.
+- B16: Android release arm64 빌드와 16 KB 정렬 검사, AAB 빌드.
+- DB에 기록되는 엔진 버전(`Cargo.toml` 0.8.0)을 실제 버전과 맞춘다.
+
+**제외:** 실기기 측정(M5). GitHub 필수 체크 변경(규칙 8).
+
+**완료 기준:** 새 검사가 이전 버그(예: `.pubignore`로 빠진 파일)를 재현하는지 한 번 확인한다. 공통 완료 기준. PR 하나, CI 통과.
+
+**손대는 파일:** `lib/src/model_pack/apple_host_configurator.dart`, `bin/**`, `.github/workflows/{quickstart_e2e,ci}.yml`, `tool/quickstart_e2e/**`, `rust_builder/rust/Cargo.toml`, `test/unit/apple_host_configurator_test.dart`, `docs/milestones.md`
+
 ### 아직 마일스톤으로 적지 않은 후보
 
 착수하려면 위 형식으로 옮겨 적고 합의를 받는다.
 
-- Upgrade E2E 기준 버전: `upgrade_e2e.yml`의 `H1_BASE_VERSION`과 PR 템플릿이 0.22.3이다. 0.23.0 배포 뒤 0.23.0으로 올릴지, 0.22.3을 유지하고 0.23.0을 하나 더 돌릴지 정한다.
 - Windows `Native Tests`의 `ingest_ffi_traffic_test.dart` "Peak-RSS delta"가 가끔 실패한다(파일 경로가 UTF-8 경로보다 2MB 이상 적게 써야 하는데 0.7~0.8MB 차이만 났다. 11/1 `ci/quickstart-e2e`, 11/3 #125). 측정값이 흔들리는 테스트라 기준이나 측정 방식을 손봐야 한다.
 - 성능 후보: `vector_math` 8-lane dot, HNSW 증분 삽입, prune 거리 캐싱, ef 상한, 짧은 문단 병합
 - `lib/src/rust/api/mmap_store.dart` 잔존 파일 정리
 - query/document 접두어 설정 (e5-small 계열을 권장 모델로 추가할 때)
 - `AssembledContext.estimatedTokens` → `exactTokens` 이름 변경 (다음 breaking 배포 때)
+- Xcode 27 + Flutter 3.35.5 (2026-11-06 Q1 확인 중 발견, 빈 `flutter create` 앱도 같다): (1) pod 배포 대상 macOS 10.15를 Xcode 27이 거부한다(12.0 이상). `setup`은 Podfile `platform`만 올리므로 pod target까지 맞추는 `post_install`을 넣을지 Q5에서 정한다. (2) Flutter의 release lipo 검사가 `ARCHS="arm64 x86_64"`를 아키텍처 하나로 읽어 universal macOS release 빌드가 실패한다. Flutter 쪽 문제라 문서(troubleshooting)에 우회법만 적을지 정한다. CI의 `macos-latest`가 Xcode 27로 바뀌면 macOS job이 함께 깨진다.
+- 2026-11-07 추가 점검(회고 6절): C1 Xcode 27 Rust 소스 빌드 strip 문제(Q5에 넣을지 정한다, `rag_engine_flutter` 배포 필요), C2 Xcode 27 ↔ Flutter 3.47 요구와 CI Flutter 고정값(Q5), C3 직접 만든 Model Pack에서 setup이 멈추고 `--repair`가 모델을 덮어쓰는 문제(Q5), C4~C6과 낮음 문서 항목(새 문서 묶음 후보), inf/NaN 벡터 panic과 테스트 0개를 돌리는 Integration Tests job(가능성 있음, 착수 때 재현).
+- 2026-11-06 점검의 낮음 항목: 부팅마다 기본 컬렉션 청크 전체를 UPDATE하는 backfill, 0.12 이하 DB의 dedup 해시 형식, `.vec` offset 정체성과 남는 `*.tmp-*` 파일, 동시 하이브리드 검색, Apple 정적 SQLite 심볼 노출(회고 2절 "낮음").
 - 레거시 자산 확인 비용 절감: 전체 sha256 대신 크기 + 앞뒤 1MiB만 해시한다(#118 fingerprint와 같은 방식). 시뮬레이터에서 KoEn 매 시작 약 250ms와, 확인 중 모델 크기의 약 2배 순간 메모리를 줄인다. M5 실측을 본 뒤 판단한다.
 
 ## 완료
+
+### R1. 배포 (`rag_engine_flutter` 0.22.0 + `mobile_rag_engine` 0.23.0) — 완료 (#127, 2026-11-06)
+
+pub.dev 발행 2026-11-04(`mobile_rag_engine` 0.23.0, `rag_engine_flutter` 0.22.0). 2026-11-06 순서 6을 마쳤다.
+- 머지 커밋 `11744c9`에 태그 `v0.23.0`을 달았다.
+- pub 모드 Quick Start E2E(0.23.0)가 android·ios·macos·windows 모두 통과했다(run 42075253762).
+- `no_rust_repro.yml`(0.23.0, Rust 숨김/설치 양쪽)이 12개 job 모두 통과했다(run 42075259650). `ios / Rust installed`는 GitHub macOS 러너를 배정받지 못해 한 번 취소됐고, 다시 실행해 통과했다.
+- 이 확인은 asset을 번들하는 Quick Start를 따르므로 A1(asset 없이 배포)은 다루지 않는다(Q1).
 
 ### M8. 빈 DB·컬렉션 검색 오류 — 완료 (#126, 2026-11-03)
 

@@ -36,14 +36,14 @@ PODS:
   - Flutter (1.0.0)
   - flutter_onnxruntime (0.0.1):
     - Flutter
-    - onnxruntime-objc (= 1.24.2)
+    - onnxruntime-objc (= 1.28.0)
   - integration_test (0.0.1):
     - Flutter
-  - onnxruntime-c (1.24.2)
-  - onnxruntime-objc (1.24.2):
-    - onnxruntime-objc/Core (= 1.24.2)
-  - onnxruntime-objc/Core (1.24.2):
-    - onnxruntime-c (= 1.24.2)
+  - onnxruntime-c (1.28.0)
+  - onnxruntime-objc (1.28.0):
+    - onnxruntime-objc/Core (= 1.28.0)
+  - onnxruntime-objc/Core (1.28.0):
+    - onnxruntime-c (= 1.28.0)
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -119,12 +119,12 @@ SPEC CHECKSUMS:
   DKPhotoGallery: b3834fecb755ee09a593d7c9e389d8b5d6deed60
   file_picker: b159e0c068aef54932bb15dc9fd1571818edaf49
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
-  flutter_onnxruntime: ce51ab1eeff3bc7251b14471067a23ccd9aa096b
+  flutter_onnxruntime: 2c28297d2f44247b81965c480f642002a19e0de7
   integration_test: 252f60fa39af5e17c3aa9899d35d908a0721b573
-  onnxruntime-c: b58bafbc58707d165404665e46a7467a16e8e0e4
-  onnxruntime-objc: 99e0fe4b6d606970c6c1350c194c7629ef6e6fc9
+  onnxruntime-c: 1cf87aaca94f53ab33bb9729104ec0a5b88291e9
+  onnxruntime-objc: f98b9629e1f78020afc354e33a5afd947654c76d
   path_provider_foundation: 0b743cbb62d8e47eab856f09262bb8c1ddcfe6ba
-  rag_engine_flutter: f3dbe3eeb8de973a624800ac549837972cded6b2
+  rag_engine_flutter: bba19574e25a88ee4a879d6a30e41e9b61b34d5b
   SDWebImage: e9c98383c7572d713c1a0d7dd2783b10599b9838
   sqlite3: a51c07cf16e023d6c48abd5e5791a61a47354921
   sqlite3_flutter_libs: f9114e4bbe1f2e03dd543373c53d23245982ca13

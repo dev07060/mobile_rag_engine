@@ -14,28 +14,37 @@ The ONNX embedding model is the single largest contributor to your app's downloa
 | BGE-m3 (INT8) | ~542 MB | **Exceeds Play Store 150 MB limit** |
 
 **For development**, bundle the model in `assets/` for quick iteration.
-**For production releases**, download the model at runtime to keep your bundle small.
+**For production releases**, you can download the model at runtime to keep your bundle small. How depends on the version:
 
-`MobileRag.initialize` only accepts asset paths today (`tokenizerAsset`, `modelAsset`), but the engine resolves `modelAsset` to `<appDocumentsDirectory>/<basename>` and skips the asset copy if that file already exists. You can use this to ship without the model in your bundle:
+- **Releases after 0.23.0:** download the model and tokenizer to files of your choice, then pass their paths. Nothing is copied from assets, and the model does not need to be in `pubspec.yaml`.
 
-```dart
-// 1. Before initialize, write the downloaded model to the destination filename
-//    used by MobileRag (matches the basename of modelAsset).
-final dir = await getApplicationDocumentsDirectory();
-final modelFile = File('${dir.path}/model.onnx');
-if (!await modelFile.exists()) {
-  await downloadModel(modelFile); // your CDN / Hugging Face fetch
-}
+  ```dart
+  final support = await getApplicationSupportDirectory();
+  final dir = await Directory('${support.path}/models').create(recursive: true);
+  final tokenizerFile = File('${dir.path}/tokenizer.json');
+  final modelFile = File('${dir.path}/model.onnx');
 
-// 2. Initialize as usual. The asset copy is skipped because the file exists.
-//    Do NOT list assets/model.onnx in pubspec.yaml when shipping this flow.
-await MobileRag.initialize(
-  tokenizerAsset: 'assets/tokenizer.json', // small (~750KB), safe to bundle
-  modelAsset: 'assets/model.onnx',         // basename only is significant here
-);
-```
+  for (final (file, url) in [(tokenizerFile, tokenizerUrl), (modelFile, modelUrl)]) {
+    if (!await file.exists()) {
+      // Download to a temporary file and rename it, so an interrupted
+      // download never leaves a partial file at the path the engine loads.
+      final partial = File('${file.path}.part');
+      await download(url, partial); // your CDN / Hugging Face fetch
+      await partial.rename(file.path);
+    }
+  }
 
-> See [Model Setup Guide — Production Deployment Strategies](model_setup.md#production-deployment-strategies) for complete examples including download-on-first-launch and hybrid approaches.
+  await MobileRag.initialize(
+    tokenizerPath: tokenizerFile.path,
+    modelPath: modelFile.path,
+  );
+  ```
+
+  Check the downloaded files against a checksum you ship with the app before the rename; the engine loads whatever is at these paths.
+
+  Any change to the model file's name or content locks search until `reembedAll()` or `clearAndRestart()`, because the embedding fingerprint includes the file name and a hash of the file. Re-embedding is needed even for an update of the same model, such as a re-quantized export.
+
+- **0.23.0: shipping without the bundled model fails.** Bundle the model in every build, or stay on 0.22.3. Up to 0.22.3, you could leave `assets/model.onnx` out of `pubspec.yaml`, download the model to `<app storage directory>/model.onnx` yourself (the application documents directory, or the application support directory on Windows), and call `MobileRag.initialize(modelAsset: 'assets/model.onnx')`: the engine skipped the asset copy because the file already existed. 0.23.0 reads the bundled asset on every launch to check that the copy is current, so this setup fails in `MobileRag.initialize` with `Unable to load asset`. If you bundle the model in debug builds and remove it only for release, debug runs keep working and only the release build fails. Releases after 0.23.0 accept this setup again, but new code should pass `tokenizerPath`/`modelPath`. `RagModelPack.asset(...)` always needs the model bundled.
 
 ---
 
