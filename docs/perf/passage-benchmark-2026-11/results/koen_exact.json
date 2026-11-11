@@ -1,0 +1,4307 @@
+{
+ "generated_at": "2026-11-11T22:24:25.536480Z",
+ "build_mode": "profile",
+ "manifest_asset": "assets/evalsets/wiki_article_sources_manifest_80_balanced_v1.json",
+ "source_evalset_asset": "assets/evalsets/hybrid_relevance_seed_80_balanced_v1.jsonl",
+ "chunk_gold_asset": "assets/evalsets/hybrid_passage_gold_80_balanced_v1.jsonl",
+ "dataset_id": "wiki_article_corpus_80_balanced_v1",
+ "search_top_k": 100,
+ "hydrated_top_k": 10,
+ "profiles": [
+  {
+   "name": "vector_only",
+   "vector_weight": 1.0,
+   "bm25_weight": 0.0
+  },
+  {
+   "name": "bm25_only",
+   "vector_weight": 0.0,
+   "bm25_weight": 1.0
+  },
+  {
+   "name": "default_hybrid",
+   "vector_weight": 0.2,
+   "bm25_weight": 0.8
+  },
+  {
+   "name": "sweep_0_4_0_6",
+   "vector_weight": 0.4,
+   "bm25_weight": 0.6
+  },
+  {
+   "name": "sweep_0_6_0_4",
+   "vector_weight": 0.6,
+   "bm25_weight": 0.4
+  }
+ ],
+ "model": "KoEn-E5-Tiny (exp-models/dragonkue-KoEn-E5-Tiny-ONNX, model_qint8_arm64.onnx, docs/guides/model_setup.md)",
+ "embedding_fingerprint": "model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413",
+ "chunks": 4492,
+ "engine_commit": "4e2ed87",
+ "vector_search": "exact scan (sourceIds = all 80 sources)",
+ "index": "reused from the HNSW run",
+ "aggregates": {
+  "vector_only": {
+   "overall": {
+    "total": 80,
+    "passage_recall@5": 0.925,
+    "passage_recall@10": 0.95,
+    "passage_mrr@10": 0.7628125,
+    "passage_ndcg@10": 0.8081563569435293,
+    "answerable_context@5": 0.925,
+    "answerable_context@10": 0.95,
+    "source_recall@10": 1.0,
+    "source_but_passage_miss@10": 0.05,
+    "hard_negative_passage_intrusion_rate@10": 0.0875,
+    "hard_negative_passage_above_gold_rate": 0.0,
+    "best_ngram_jaccard@10": 0.44220626506989164
+   },
+   "by_query_class": {
+    "lexical": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.921875,
+     "passage_ndcg@10": 0.9413503944778032,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0625,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.3788559561167214
+    },
+    "semantic": {
+     "total": 16,
+     "passage_recall@5": 0.625,
+     "passage_recall@10": 0.75,
+     "passage_mrr@10": 0.2963541666666667,
+     "passage_ndcg@10": 0.40360151187647175,
+     "answerable_context@5": 0.625,
+     "answerable_context@10": 0.75,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.25,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.41242349914411397
+    },
+    "mixed": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.8958333333333333,
+     "passage_ndcg@10": 0.9226162191964322,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.5477773685038662
+    },
+    "hard_negative": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.953125,
+     "passage_ndcg@10": 0.9644172848795871,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.375,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.44165475185308356
+    },
+    "multilingual": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.746875,
+     "passage_ndcg@10": 0.8087963742873523,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4303197497316728
+    }
+   },
+   "by_language": {
+    "ko": {
+     "total": 32,
+     "passage_recall@5": 0.90625,
+     "passage_recall@10": 0.9375,
+     "passage_mrr@10": 0.7195312499999998,
+     "passage_ndcg@10": 0.7722619723295161,
+     "answerable_context@5": 0.90625,
+     "answerable_context@10": 0.9375,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0625,
+     "hard_negative_passage_intrusion_rate@10": 0.09375,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.42214857418484625
+    },
+    "other": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.746875,
+     "passage_ndcg@10": 0.8087963742873523,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4303197497316728
+    },
+    "en": {
+     "total": 32,
+     "passage_recall@5": 0.90625,
+     "passage_recall@10": 0.9375,
+     "passage_mrr@10": 0.8140624999999999,
+     "passage_ndcg@10": 0.8437307328856312,
+     "answerable_context@5": 0.90625,
+     "answerable_context@10": 0.9375,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0625,
+     "hard_negative_passage_intrusion_rate@10": 0.125,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4682072136240462
+    }
+   }
+  },
+  "bm25_only": {
+   "overall": {
+    "total": 80,
+    "passage_recall@5": 0.875,
+    "passage_recall@10": 0.925,
+    "passage_mrr@10": 0.7949454365079365,
+    "passage_ndcg@10": 0.8260017676461837,
+    "answerable_context@5": 0.875,
+    "answerable_context@10": 0.9,
+    "source_recall@10": 0.9875,
+    "source_but_passage_miss@10": 0.0625,
+    "hard_negative_passage_intrusion_rate@10": 0.275,
+    "hard_negative_passage_above_gold_rate": 0.025,
+    "best_ngram_jaccard@10": 0.4227140423482457
+   },
+   "by_query_class": {
+    "lexical": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.9375,
+     "passage_ndcg@10": 0.9538662191964322,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.25,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.371793809224066
+    },
+    "semantic": {
+     "total": 16,
+     "passage_recall@5": 0.375,
+     "passage_recall@10": 0.625,
+     "passage_mrr@10": 0.2351438492063492,
+     "passage_ndcg@10": 0.3242095094362702,
+     "answerable_context@5": 0.375,
+     "answerable_context@10": 0.5,
+     "source_recall@10": 0.9375,
+     "source_but_passage_miss@10": 0.3125,
+     "hard_negative_passage_intrusion_rate@10": 0.125,
+     "hard_negative_passage_above_gold_rate": 0.125,
+     "best_ngram_jaccard@10": 0.3296975234999683
+    },
+    "mixed": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.9583333333333333,
+     "passage_ndcg@10": 0.96875,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0625,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.5477773685038662
+    },
+    "hard_negative": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.9583333333333333,
+     "passage_ndcg@10": 0.96875,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.875,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.44165475185308356
+    },
+    "multilingual": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.8854166666666667,
+     "passage_ndcg@10": 0.9144331095982161,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0625,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.42264675866024426
+    }
+   },
+   "by_language": {
+    "ko": {
+     "total": 32,
+     "passage_recall@5": 0.875,
+     "passage_recall@10": 0.96875,
+     "passage_mrr@10": 0.7490823412698412,
+     "passage_ndcg@10": 0.8010545869167973,
+     "answerable_context@5": 0.875,
+     "answerable_context@10": 0.90625,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.03125,
+     "hard_negative_passage_intrusion_rate@10": 0.375,
+     "hard_negative_passage_above_gold_rate": 0.03125,
+     "best_ngram_jaccard@10": 0.42942091983084
+    },
+    "other": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.8854166666666667,
+     "passage_ndcg@10": 0.9144331095982161,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0625,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.42264675866024426
+    },
+    "en": {
+     "total": 32,
+     "passage_recall@5": 0.8125,
+     "passage_recall@10": 0.84375,
+     "passage_mrr@10": 0.7955729166666667,
+     "passage_ndcg@10": 0.806733277399554,
+     "answerable_context@5": 0.8125,
+     "answerable_context@10": 0.84375,
+     "source_recall@10": 0.96875,
+     "source_but_passage_miss@10": 0.125,
+     "hard_negative_passage_intrusion_rate@10": 0.28125,
+     "hard_negative_passage_above_gold_rate": 0.03125,
+     "best_ngram_jaccard@10": 0.4160408067096518
+    }
+   }
+  },
+  "default_hybrid": {
+   "overall": {
+    "total": 80,
+    "passage_recall@5": 0.925,
+    "passage_recall@10": 0.9625,
+    "passage_mrr@10": 0.8169246031746031,
+    "passage_ndcg@10": 0.8525161193307774,
+    "answerable_context@5": 0.925,
+    "answerable_context@10": 0.9625,
+    "source_recall@10": 1.0,
+    "source_but_passage_miss@10": 0.0375,
+    "hard_negative_passage_intrusion_rate@10": 0.2125,
+    "hard_negative_passage_above_gold_rate": 0.0,
+    "best_ngram_jaccard@10": 0.4395657193667118
+   },
+   "by_query_class": {
+    "lexical": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.9375,
+     "passage_ndcg@10": 0.9538662191964322,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.125,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.371793809224066
+    },
+    "semantic": {
+     "total": 16,
+     "passage_recall@5": 0.625,
+     "passage_recall@10": 0.8125,
+     "passage_mrr@10": 0.33462301587301585,
+     "passage_ndcg@10": 0.44859815826102256,
+     "answerable_context@5": 0.625,
+     "answerable_context@10": 0.8125,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.1875,
+     "hard_negative_passage_intrusion_rate@10": 0.0625,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4139559085922984
+    },
+    "mixed": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.96875,
+     "passage_ndcg@10": 0.9769331095982161,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0625,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.5477773685038662
+    },
+    "hard_negative": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.9583333333333333,
+     "passage_ndcg@10": 0.96875,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.8125,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.44165475185308356
+    },
+    "multilingual": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.8854166666666667,
+     "passage_ndcg@10": 0.9144331095982161,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.42264675866024426
+    }
+   },
+   "by_language": {
+    "ko": {
+     "total": 32,
+     "passage_recall@5": 0.90625,
+     "passage_recall@10": 0.96875,
+     "passage_mrr@10": 0.7709573412698412,
+     "passage_ndcg@10": 0.8193652704665,
+     "answerable_context@5": 0.90625,
+     "answerable_context@10": 0.96875,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.03125,
+     "hard_negative_passage_intrusion_rate@10": 0.34375,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.42938816301742283
+    },
+    "other": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.8854166666666667,
+     "passage_ndcg@10": 0.9144331095982161,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.42264675866024426
+    },
+    "en": {
+     "total": 32,
+     "passage_recall@5": 0.90625,
+     "passage_recall@10": 0.9375,
+     "passage_mrr@10": 0.8286458333333333,
+     "passage_ndcg@10": 0.8547084730613356,
+     "answerable_context@5": 0.90625,
+     "answerable_context@10": 0.9375,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0625,
+     "hard_negative_passage_intrusion_rate@10": 0.1875,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.458202756069234
+    }
+   }
+  },
+  "sweep_0_4_0_6": {
+   "overall": {
+    "total": 80,
+    "passage_recall@5": 0.925,
+    "passage_recall@10": 0.9875,
+    "passage_mrr@10": 0.8341765873015874,
+    "passage_ndcg@10": 0.871388804144306,
+    "answerable_context@5": 0.925,
+    "answerable_context@10": 0.9875,
+    "source_recall@10": 1.0,
+    "source_but_passage_miss@10": 0.0125,
+    "hard_negative_passage_intrusion_rate@10": 0.175,
+    "hard_negative_passage_above_gold_rate": 0.0,
+    "best_ngram_jaccard@10": 0.4477065008046937
+   },
+   "by_query_class": {
+    "lexical": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.96875,
+     "passage_ndcg@10": 0.9769331095982161,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0625,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.371793809224066
+    },
+    "semantic": {
+     "total": 16,
+     "passage_recall@5": 0.625,
+     "passage_recall@10": 0.9375,
+     "passage_mrr@10": 0.4573412698412698,
+     "passage_ndcg@10": 0.5703611878508621,
+     "answerable_context@5": 0.625,
+     "answerable_context@10": 0.9375,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0625,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4469868247107792
+    },
+    "mixed": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.96875,
+     "passage_ndcg@10": 0.9769331095982161,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.5477773685038662
+    },
+    "hard_negative": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.953125,
+     "passage_ndcg@10": 0.9644172848795871,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.8125,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.44165475185308356
+    },
+    "multilingual": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.8229166666666667,
+     "passage_ndcg@10": 0.8682993287946483,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4303197497316728
+    }
+   },
+   "by_language": {
+    "ko": {
+     "total": 32,
+     "passage_recall@5": 0.90625,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.791046626984127,
+     "passage_ndcg@10": 0.8413153823340586,
+     "answerable_context@5": 0.90625,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.28125,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4337496128819215
+    },
+    "other": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.8229166666666667,
+     "passage_ndcg@10": 0.8682993287946483,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4303197497316728
+    },
+    "en": {
+     "total": 32,
+     "passage_recall@5": 0.90625,
+     "passage_recall@10": 0.96875,
+     "passage_mrr@10": 0.8829365079365079,
+     "passage_ndcg@10": 0.9030069636293822,
+     "answerable_context@5": 0.90625,
+     "answerable_context@10": 0.96875,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.03125,
+     "hard_negative_passage_intrusion_rate@10": 0.15625,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4703567642639758
+    }
+   }
+  },
+  "sweep_0_6_0_4": {
+   "overall": {
+    "total": 80,
+    "passage_recall@5": 0.925,
+    "passage_recall@10": 0.9875,
+    "passage_mrr@10": 0.8278125,
+    "passage_ndcg@10": 0.8666455092196383,
+    "answerable_context@5": 0.925,
+    "answerable_context@10": 0.9875,
+    "source_recall@10": 1.0,
+    "source_but_passage_miss@10": 0.0125,
+    "hard_negative_passage_intrusion_rate@10": 0.1625,
+    "hard_negative_passage_above_gold_rate": 0.0,
+    "best_ngram_jaccard@10": 0.4493967079610025
+   },
+   "by_query_class": {
+    "lexical": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.96875,
+     "passage_ndcg@10": 0.9769331095982161,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0625,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.3788559561167214
+    },
+    "semantic": {
+     "total": 16,
+     "passage_recall@5": 0.625,
+     "passage_recall@10": 0.9375,
+     "passage_mrr@10": 0.42552083333333335,
+     "passage_ndcg@10": 0.5466447132275241,
+     "answerable_context@5": 0.625,
+     "answerable_context@10": 0.9375,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0625,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4483757135996681
+    },
+    "mixed": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.9375,
+     "passage_ndcg@10": 0.9538662191964322,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.5477773685038662
+    },
+    "hard_negative": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.953125,
+     "passage_ndcg@10": 0.9644172848795871,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.75,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.44165475185308356
+    },
+    "multilingual": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.8541666666666667,
+     "passage_ndcg@10": 0.8913662191964322,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4303197497316728
+    }
+   },
+   "by_language": {
+    "ko": {
+     "total": 32,
+     "passage_recall@5": 0.90625,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.7739583333333333,
+     "passage_ndcg@10": 0.8282912470568758,
+     "answerable_context@5": 0.90625,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.25,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4337496128819215
+    },
+    "other": {
+     "total": 16,
+     "passage_recall@5": 1.0,
+     "passage_recall@10": 1.0,
+     "passage_mrr@10": 0.8541666666666667,
+     "passage_ndcg@10": 0.8913662191964322,
+     "answerable_context@5": 1.0,
+     "answerable_context@10": 1.0,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.0,
+     "hard_negative_passage_intrusion_rate@10": 0.0,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.4303197497316728
+    },
+    "en": {
+     "total": 32,
+     "passage_recall@5": 0.90625,
+     "passage_recall@10": 0.96875,
+     "passage_mrr@10": 0.8684895833333334,
+     "passage_ndcg@10": 0.8926394163940039,
+     "answerable_context@5": 0.90625,
+     "answerable_context@10": 0.96875,
+     "source_recall@10": 1.0,
+     "source_but_passage_miss@10": 0.03125,
+     "hard_negative_passage_intrusion_rate@10": 0.15625,
+     "hard_negative_passage_above_gold_rate": 0.0,
+     "best_ngram_jaccard@10": 0.47458228215474796
+    }
+   }
+  }
+ },
+ "query_outcomes": [
+  {
+   "item_id": "p5-expanded-0001",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0012"
+  },
+  {
+   "item_id": "p5-expanded-0001",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0012"
+  },
+  {
+   "item_id": "p5-expanded-0001",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0012"
+  },
+  {
+   "item_id": "p5-expanded-0001",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0012"
+  },
+  {
+   "item_id": "p5-expanded-0001",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0012"
+  },
+  {
+   "item_id": "p5-expanded-0002",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_ko_tech_0016"
+  },
+  {
+   "item_id": "p5-expanded-0002",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_ko_tech_0016"
+  },
+  {
+   "item_id": "p5-expanded-0002",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_ko_tech_0016"
+  },
+  {
+   "item_id": "p5-expanded-0002",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 9,
+   "top1_source_key": "src_ko_tech_0016"
+  },
+  {
+   "item_id": "p5-expanded-0002",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 10,
+   "top1_source_key": "src_ko_tech_0016"
+  },
+  {
+   "item_id": "p5-expanded-0003",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0031"
+  },
+  {
+   "item_id": "p5-expanded-0003",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0031"
+  },
+  {
+   "item_id": "p5-expanded-0003",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0031"
+  },
+  {
+   "item_id": "p5-expanded-0003",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0031"
+  },
+  {
+   "item_id": "p5-expanded-0003",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0031"
+  },
+  {
+   "item_id": "p5-expanded-0004",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0060"
+  },
+  {
+   "item_id": "p5-expanded-0004",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0060"
+  },
+  {
+   "item_id": "p5-expanded-0004",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0060"
+  },
+  {
+   "item_id": "p5-expanded-0004",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0060"
+  },
+  {
+   "item_id": "p5-expanded-0004",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0060"
+  },
+  {
+   "item_id": "p5-expanded-0005",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0067"
+  },
+  {
+   "item_id": "p5-expanded-0005",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_tech_0067"
+  },
+  {
+   "item_id": "p5-expanded-0005",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_tech_0067"
+  },
+  {
+   "item_id": "p5-expanded-0005",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_tech_0067"
+  },
+  {
+   "item_id": "p5-expanded-0005",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0067"
+  },
+  {
+   "item_id": "p5-expanded-0006",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_tech_0100"
+  },
+  {
+   "item_id": "p5-expanded-0006",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_tech_0100"
+  },
+  {
+   "item_id": "p5-expanded-0006",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_tech_0100"
+  },
+  {
+   "item_id": "p5-expanded-0006",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_tech_0100"
+  },
+  {
+   "item_id": "p5-expanded-0006",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_tech_0100"
+  },
+  {
+   "item_id": "p5-expanded-0007",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_tech_0159"
+  },
+  {
+   "item_id": "p5-expanded-0007",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 2,
+   "gold_passage_rank": 7,
+   "top1_source_key": "src_ko_finance_0182"
+  },
+  {
+   "item_id": "p5-expanded-0007",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_tech_0159"
+  },
+  {
+   "item_id": "p5-expanded-0007",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_tech_0159"
+  },
+  {
+   "item_id": "p5-expanded-0007",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_tech_0159"
+  },
+  {
+   "item_id": "p5-expanded-0008",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0184"
+  },
+  {
+   "item_id": "p5-expanded-0008",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0184"
+  },
+  {
+   "item_id": "p5-expanded-0008",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0184"
+  },
+  {
+   "item_id": "p5-expanded-0008",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0184"
+  },
+  {
+   "item_id": "p5-expanded-0008",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0184"
+  },
+  {
+   "item_id": "p5-expanded-0009",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0232"
+  },
+  {
+   "item_id": "p5-expanded-0009",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0232"
+  },
+  {
+   "item_id": "p5-expanded-0009",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0232"
+  },
+  {
+   "item_id": "p5-expanded-0009",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0232"
+  },
+  {
+   "item_id": "p5-expanded-0009",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0232"
+  },
+  {
+   "item_id": "p5-expanded-0010",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_tech_0244"
+  },
+  {
+   "item_id": "p5-expanded-0010",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0244"
+  },
+  {
+   "item_id": "p5-expanded-0010",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0244"
+  },
+  {
+   "item_id": "p5-expanded-0010",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0244"
+  },
+  {
+   "item_id": "p5-expanded-0010",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_tech_0244"
+  },
+  {
+   "item_id": "p5-expanded-0011",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0058"
+  },
+  {
+   "item_id": "p5-expanded-0011",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0058"
+  },
+  {
+   "item_id": "p5-expanded-0011",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0058"
+  },
+  {
+   "item_id": "p5-expanded-0011",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0058"
+  },
+  {
+   "item_id": "p5-expanded-0011",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0058"
+  },
+  {
+   "item_id": "p5-expanded-0012",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_finance_0106"
+  },
+  {
+   "item_id": "p5-expanded-0012",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 5,
+   "top1_source_key": "src_ko_finance_0106"
+  },
+  {
+   "item_id": "p5-expanded-0012",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 4,
+   "top1_source_key": "src_ko_finance_0106"
+  },
+  {
+   "item_id": "p5-expanded-0012",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_finance_0106"
+  },
+  {
+   "item_id": "p5-expanded-0012",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_finance_0106"
+  },
+  {
+   "item_id": "p5-expanded-0013",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0117"
+  },
+  {
+   "item_id": "p5-expanded-0013",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0117"
+  },
+  {
+   "item_id": "p5-expanded-0013",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0117"
+  },
+  {
+   "item_id": "p5-expanded-0013",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0117"
+  },
+  {
+   "item_id": "p5-expanded-0013",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0117"
+  },
+  {
+   "item_id": "p5-expanded-0014",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0122"
+  },
+  {
+   "item_id": "p5-expanded-0014",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0122"
+  },
+  {
+   "item_id": "p5-expanded-0014",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0122"
+  },
+  {
+   "item_id": "p5-expanded-0014",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0122"
+  },
+  {
+   "item_id": "p5-expanded-0014",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0122"
+  },
+  {
+   "item_id": "p5-expanded-0015",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0133"
+  },
+  {
+   "item_id": "p5-expanded-0015",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0133"
+  },
+  {
+   "item_id": "p5-expanded-0015",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0133"
+  },
+  {
+   "item_id": "p5-expanded-0015",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0133"
+  },
+  {
+   "item_id": "p5-expanded-0015",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0133"
+  },
+  {
+   "item_id": "p5-expanded-0016",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0161"
+  },
+  {
+   "item_id": "p5-expanded-0016",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0161"
+  },
+  {
+   "item_id": "p5-expanded-0016",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0161"
+  },
+  {
+   "item_id": "p5-expanded-0016",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0161"
+  },
+  {
+   "item_id": "p5-expanded-0016",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0161"
+  },
+  {
+   "item_id": "p5-expanded-0017",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 8,
+   "top1_source_key": "src_ko_finance_0178"
+  },
+  {
+   "item_id": "p5-expanded-0017",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 10,
+   "top1_source_key": "src_ko_finance_0178"
+  },
+  {
+   "item_id": "p5-expanded-0017",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 7,
+   "top1_source_key": "src_ko_finance_0178"
+  },
+  {
+   "item_id": "p5-expanded-0017",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 7,
+   "top1_source_key": "src_ko_finance_0178"
+  },
+  {
+   "item_id": "p5-expanded-0017",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 8,
+   "top1_source_key": "src_ko_finance_0178"
+  },
+  {
+   "item_id": "p5-expanded-0018",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0182"
+  },
+  {
+   "item_id": "p5-expanded-0018",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0182"
+  },
+  {
+   "item_id": "p5-expanded-0018",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0182"
+  },
+  {
+   "item_id": "p5-expanded-0018",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0182"
+  },
+  {
+   "item_id": "p5-expanded-0018",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0182"
+  },
+  {
+   "item_id": "p5-expanded-0019",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0206"
+  },
+  {
+   "item_id": "p5-expanded-0019",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0206"
+  },
+  {
+   "item_id": "p5-expanded-0019",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0206"
+  },
+  {
+   "item_id": "p5-expanded-0019",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0206"
+  },
+  {
+   "item_id": "p5-expanded-0019",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0206"
+  },
+  {
+   "item_id": "p5-expanded-0020",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 4,
+   "top1_source_key": "src_ko_finance_0230"
+  },
+  {
+   "item_id": "p5-expanded-0020",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0230"
+  },
+  {
+   "item_id": "p5-expanded-0020",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_finance_0230"
+  },
+  {
+   "item_id": "p5-expanded-0020",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_finance_0230"
+  },
+  {
+   "item_id": "p5-expanded-0020",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_finance_0230"
+  },
+  {
+   "item_id": "p5-expanded-0021",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0010"
+  },
+  {
+   "item_id": "p5-expanded-0021",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0010"
+  },
+  {
+   "item_id": "p5-expanded-0021",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0010"
+  },
+  {
+   "item_id": "p5-expanded-0021",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0010"
+  },
+  {
+   "item_id": "p5-expanded-0021",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0010"
+  },
+  {
+   "item_id": "p5-expanded-0022",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 5,
+   "top1_source_key": "src_ko_policy_0050"
+  },
+  {
+   "item_id": "p5-expanded-0022",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0050"
+  },
+  {
+   "item_id": "p5-expanded-0022",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0050"
+  },
+  {
+   "item_id": "p5-expanded-0022",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0050"
+  },
+  {
+   "item_id": "p5-expanded-0022",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_policy_0050"
+  },
+  {
+   "item_id": "p5-expanded-0023",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0059"
+  },
+  {
+   "item_id": "p5-expanded-0023",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0059"
+  },
+  {
+   "item_id": "p5-expanded-0023",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0059"
+  },
+  {
+   "item_id": "p5-expanded-0023",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0059"
+  },
+  {
+   "item_id": "p5-expanded-0023",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0059"
+  },
+  {
+   "item_id": "p5-expanded-0024",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0074"
+  },
+  {
+   "item_id": "p5-expanded-0024",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0074"
+  },
+  {
+   "item_id": "p5-expanded-0024",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0074"
+  },
+  {
+   "item_id": "p5-expanded-0024",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0074"
+  },
+  {
+   "item_id": "p5-expanded-0024",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0074"
+  },
+  {
+   "item_id": "p5-expanded-0025",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 5,
+   "top1_source_key": "src_ko_policy_0078"
+  },
+  {
+   "item_id": "p5-expanded-0025",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_policy_0078"
+  },
+  {
+   "item_id": "p5-expanded-0025",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_policy_0078"
+  },
+  {
+   "item_id": "p5-expanded-0025",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_policy_0078"
+  },
+  {
+   "item_id": "p5-expanded-0025",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_policy_0078"
+  },
+  {
+   "item_id": "p5-expanded-0026",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0081"
+  },
+  {
+   "item_id": "p5-expanded-0026",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0081"
+  },
+  {
+   "item_id": "p5-expanded-0026",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0081"
+  },
+  {
+   "item_id": "p5-expanded-0026",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0081"
+  },
+  {
+   "item_id": "p5-expanded-0026",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0081"
+  },
+  {
+   "item_id": "p5-expanded-0027",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_policy_0154"
+  },
+  {
+   "item_id": "p5-expanded-0027",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_policy_0154"
+  },
+  {
+   "item_id": "p5-expanded-0027",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_policy_0154"
+  },
+  {
+   "item_id": "p5-expanded-0027",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_policy_0154"
+  },
+  {
+   "item_id": "p5-expanded-0027",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_policy_0154"
+  },
+  {
+   "item_id": "p5-expanded-0028",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0165"
+  },
+  {
+   "item_id": "p5-expanded-0028",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_policy_0165"
+  },
+  {
+   "item_id": "p5-expanded-0028",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_policy_0165"
+  },
+  {
+   "item_id": "p5-expanded-0028",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0165"
+  },
+  {
+   "item_id": "p5-expanded-0028",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0165"
+  },
+  {
+   "item_id": "p5-expanded-0029",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 4,
+   "top1_source_key": "src_ko_policy_0268"
+  },
+  {
+   "item_id": "p5-expanded-0029",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_policy_0268"
+  },
+  {
+   "item_id": "p5-expanded-0029",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_policy_0268"
+  },
+  {
+   "item_id": "p5-expanded-0029",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 4,
+   "top1_source_key": "src_ko_policy_0268"
+  },
+  {
+   "item_id": "p5-expanded-0029",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 4,
+   "top1_source_key": "src_ko_policy_0268"
+  },
+  {
+   "item_id": "p5-expanded-0030",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 4,
+   "top1_source_key": "src_ko_policy_0292"
+  },
+  {
+   "item_id": "p5-expanded-0030",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0292"
+  },
+  {
+   "item_id": "p5-expanded-0030",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_policy_0292"
+  },
+  {
+   "item_id": "p5-expanded-0030",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_policy_0292"
+  },
+  {
+   "item_id": "p5-expanded-0030",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_policy_0292"
+  },
+  {
+   "item_id": "p5-expanded-0031",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 4,
+   "top1_source_key": "src_ko_support_0013"
+  },
+  {
+   "item_id": "p5-expanded-0031",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_support_0013"
+  },
+  {
+   "item_id": "p5-expanded-0031",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_support_0013"
+  },
+  {
+   "item_id": "p5-expanded-0031",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0013"
+  },
+  {
+   "item_id": "p5-expanded-0031",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0013"
+  },
+  {
+   "item_id": "p5-expanded-0032",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_ko_support_0017"
+  },
+  {
+   "item_id": "p5-expanded-0032",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 9,
+   "top1_source_key": "src_ko_support_0017"
+  },
+  {
+   "item_id": "p5-expanded-0032",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 9,
+   "top1_source_key": "src_ko_support_0017"
+  },
+  {
+   "item_id": "p5-expanded-0032",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 7,
+   "top1_source_key": "src_ko_support_0017"
+  },
+  {
+   "item_id": "p5-expanded-0032",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 8,
+   "top1_source_key": "src_ko_support_0017"
+  },
+  {
+   "item_id": "p5-expanded-0033",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_support_0084"
+  },
+  {
+   "item_id": "p5-expanded-0033",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0084"
+  },
+  {
+   "item_id": "p5-expanded-0033",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0084"
+  },
+  {
+   "item_id": "p5-expanded-0033",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_support_0084"
+  },
+  {
+   "item_id": "p5-expanded-0033",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_support_0084"
+  },
+  {
+   "item_id": "p5-expanded-0034",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0104"
+  },
+  {
+   "item_id": "p5-expanded-0034",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0104"
+  },
+  {
+   "item_id": "p5-expanded-0034",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0104"
+  },
+  {
+   "item_id": "p5-expanded-0034",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0104"
+  },
+  {
+   "item_id": "p5-expanded-0034",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0104"
+  },
+  {
+   "item_id": "p5-expanded-0035",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0124"
+  },
+  {
+   "item_id": "p5-expanded-0035",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0124"
+  },
+  {
+   "item_id": "p5-expanded-0035",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0124"
+  },
+  {
+   "item_id": "p5-expanded-0035",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0124"
+  },
+  {
+   "item_id": "p5-expanded-0035",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0124"
+  },
+  {
+   "item_id": "p5-expanded-0036",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0148"
+  },
+  {
+   "item_id": "p5-expanded-0036",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0148"
+  },
+  {
+   "item_id": "p5-expanded-0036",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0148"
+  },
+  {
+   "item_id": "p5-expanded-0036",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0148"
+  },
+  {
+   "item_id": "p5-expanded-0036",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0148"
+  },
+  {
+   "item_id": "p5-expanded-0037",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 5,
+   "top1_source_key": "src_ko_support_0172"
+  },
+  {
+   "item_id": "p5-expanded-0037",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 4,
+   "top1_source_key": "src_ko_support_0172"
+  },
+  {
+   "item_id": "p5-expanded-0037",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_support_0172"
+  },
+  {
+   "item_id": "p5-expanded-0037",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_support_0172"
+  },
+  {
+   "item_id": "p5-expanded-0037",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_ko_support_0172"
+  },
+  {
+   "item_id": "p5-expanded-0038",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0188"
+  },
+  {
+   "item_id": "p5-expanded-0038",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0188"
+  },
+  {
+   "item_id": "p5-expanded-0038",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0188"
+  },
+  {
+   "item_id": "p5-expanded-0038",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0188"
+  },
+  {
+   "item_id": "p5-expanded-0038",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0188"
+  },
+  {
+   "item_id": "p5-expanded-0039",
+   "profile": "vector_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0224"
+  },
+  {
+   "item_id": "p5-expanded-0039",
+   "profile": "bm25_only",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0224"
+  },
+  {
+   "item_id": "p5-expanded-0039",
+   "profile": "default_hybrid",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0224"
+  },
+  {
+   "item_id": "p5-expanded-0039",
+   "profile": "sweep_0_4_0_6",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0224"
+  },
+  {
+   "item_id": "p5-expanded-0039",
+   "profile": "sweep_0_6_0_4",
+   "language": "ko",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_ko_support_0224"
+  },
+  {
+   "item_id": "p5-expanded-0040",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 4,
+   "top1_source_key": "src_ko_support_0240"
+  },
+  {
+   "item_id": "p5-expanded-0040",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_support_0240"
+  },
+  {
+   "item_id": "p5-expanded-0040",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_support_0240"
+  },
+  {
+   "item_id": "p5-expanded-0040",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_support_0240"
+  },
+  {
+   "item_id": "p5-expanded-0040",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_ko_support_0240"
+  },
+  {
+   "item_id": "p5-expanded-0041",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0083"
+  },
+  {
+   "item_id": "p5-expanded-0041",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0083"
+  },
+  {
+   "item_id": "p5-expanded-0041",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0083"
+  },
+  {
+   "item_id": "p5-expanded-0041",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0083"
+  },
+  {
+   "item_id": "p5-expanded-0041",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0083"
+  },
+  {
+   "item_id": "p5-expanded-0042",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_en_tech_0127"
+  },
+  {
+   "item_id": "p5-expanded-0042",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 3,
+   "gold_passage_rank": 8,
+   "top1_source_key": "src_en_tech_0271"
+  },
+  {
+   "item_id": "p5-expanded-0042",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 3,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_en_tech_0271"
+  },
+  {
+   "item_id": "p5-expanded-0042",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0127"
+  },
+  {
+   "item_id": "p5-expanded-0042",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0127"
+  },
+  {
+   "item_id": "p5-expanded-0043",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0131"
+  },
+  {
+   "item_id": "p5-expanded-0043",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0131"
+  },
+  {
+   "item_id": "p5-expanded-0043",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0131"
+  },
+  {
+   "item_id": "p5-expanded-0043",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0131"
+  },
+  {
+   "item_id": "p5-expanded-0043",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0131"
+  },
+  {
+   "item_id": "p5-expanded-0044",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0167"
+  },
+  {
+   "item_id": "p5-expanded-0044",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0167"
+  },
+  {
+   "item_id": "p5-expanded-0044",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0167"
+  },
+  {
+   "item_id": "p5-expanded-0044",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0167"
+  },
+  {
+   "item_id": "p5-expanded-0044",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0167"
+  },
+  {
+   "item_id": "p5-expanded-0045",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0179"
+  },
+  {
+   "item_id": "p5-expanded-0045",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0179"
+  },
+  {
+   "item_id": "p5-expanded-0045",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0179"
+  },
+  {
+   "item_id": "p5-expanded-0045",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0179"
+  },
+  {
+   "item_id": "p5-expanded-0045",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0179"
+  },
+  {
+   "item_id": "p5-expanded-0046",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0187"
+  },
+  {
+   "item_id": "p5-expanded-0046",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0187"
+  },
+  {
+   "item_id": "p5-expanded-0046",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0187"
+  },
+  {
+   "item_id": "p5-expanded-0046",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0187"
+  },
+  {
+   "item_id": "p5-expanded-0046",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0187"
+  },
+  {
+   "item_id": "p5-expanded-0047",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0199"
+  },
+  {
+   "item_id": "p5-expanded-0047",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0199"
+  },
+  {
+   "item_id": "p5-expanded-0047",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0199"
+  },
+  {
+   "item_id": "p5-expanded-0047",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0199"
+  },
+  {
+   "item_id": "p5-expanded-0047",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0199"
+  },
+  {
+   "item_id": "p5-expanded-0048",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0211"
+  },
+  {
+   "item_id": "p5-expanded-0048",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0211"
+  },
+  {
+   "item_id": "p5-expanded-0048",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0211"
+  },
+  {
+   "item_id": "p5-expanded-0048",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0211"
+  },
+  {
+   "item_id": "p5-expanded-0048",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0211"
+  },
+  {
+   "item_id": "p5-expanded-0049",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0227"
+  },
+  {
+   "item_id": "p5-expanded-0049",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0227"
+  },
+  {
+   "item_id": "p5-expanded-0049",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0227"
+  },
+  {
+   "item_id": "p5-expanded-0049",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0227"
+  },
+  {
+   "item_id": "p5-expanded-0049",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0227"
+  },
+  {
+   "item_id": "p5-expanded-0050",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0271"
+  },
+  {
+   "item_id": "p5-expanded-0050",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0271"
+  },
+  {
+   "item_id": "p5-expanded-0050",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0271"
+  },
+  {
+   "item_id": "p5-expanded-0050",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0271"
+  },
+  {
+   "item_id": "p5-expanded-0050",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_tech_0271"
+  },
+  {
+   "item_id": "p5-expanded-0051",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0114"
+  },
+  {
+   "item_id": "p5-expanded-0051",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0114"
+  },
+  {
+   "item_id": "p5-expanded-0051",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0114"
+  },
+  {
+   "item_id": "p5-expanded-0051",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0114"
+  },
+  {
+   "item_id": "p5-expanded-0051",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0114"
+  },
+  {
+   "item_id": "p5-expanded-0052",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 10,
+   "top1_source_key": "src_en_finance_0142"
+  },
+  {
+   "item_id": "p5-expanded-0052",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_en_finance_0142"
+  },
+  {
+   "item_id": "p5-expanded-0052",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 4,
+   "top1_source_key": "src_en_finance_0142"
+  },
+  {
+   "item_id": "p5-expanded-0052",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_en_finance_0142"
+  },
+  {
+   "item_id": "p5-expanded-0052",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_en_finance_0142"
+  },
+  {
+   "item_id": "p5-expanded-0053",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0153"
+  },
+  {
+   "item_id": "p5-expanded-0053",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0153"
+  },
+  {
+   "item_id": "p5-expanded-0053",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0153"
+  },
+  {
+   "item_id": "p5-expanded-0053",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0153"
+  },
+  {
+   "item_id": "p5-expanded-0053",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0153"
+  },
+  {
+   "item_id": "p5-expanded-0054",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0169"
+  },
+  {
+   "item_id": "p5-expanded-0054",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0169"
+  },
+  {
+   "item_id": "p5-expanded-0054",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0169"
+  },
+  {
+   "item_id": "p5-expanded-0054",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0169"
+  },
+  {
+   "item_id": "p5-expanded-0054",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0169"
+  },
+  {
+   "item_id": "p5-expanded-0055",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0213"
+  },
+  {
+   "item_id": "p5-expanded-0055",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0213"
+  },
+  {
+   "item_id": "p5-expanded-0055",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0213"
+  },
+  {
+   "item_id": "p5-expanded-0055",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0213"
+  },
+  {
+   "item_id": "p5-expanded-0055",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0213"
+  },
+  {
+   "item_id": "p5-expanded-0056",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0225"
+  },
+  {
+   "item_id": "p5-expanded-0056",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0225"
+  },
+  {
+   "item_id": "p5-expanded-0056",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0225"
+  },
+  {
+   "item_id": "p5-expanded-0056",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0225"
+  },
+  {
+   "item_id": "p5-expanded-0056",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0225"
+  },
+  {
+   "item_id": "p5-expanded-0057",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 5,
+   "top1_source_key": "src_en_finance_0237"
+  },
+  {
+   "item_id": "p5-expanded-0057",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_en_finance_0237"
+  },
+  {
+   "item_id": "p5-expanded-0057",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 3,
+   "top1_source_key": "src_en_finance_0237"
+  },
+  {
+   "item_id": "p5-expanded-0057",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_en_finance_0237"
+  },
+  {
+   "item_id": "p5-expanded-0057",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_en_finance_0237"
+  },
+  {
+   "item_id": "p5-expanded-0058",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0245"
+  },
+  {
+   "item_id": "p5-expanded-0058",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0245"
+  },
+  {
+   "item_id": "p5-expanded-0058",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0245"
+  },
+  {
+   "item_id": "p5-expanded-0058",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0245"
+  },
+  {
+   "item_id": "p5-expanded-0058",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0245"
+  },
+  {
+   "item_id": "p5-expanded-0059",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0275"
+  },
+  {
+   "item_id": "p5-expanded-0059",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0275"
+  },
+  {
+   "item_id": "p5-expanded-0059",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0275"
+  },
+  {
+   "item_id": "p5-expanded-0059",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0275"
+  },
+  {
+   "item_id": "p5-expanded-0059",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0275"
+  },
+  {
+   "item_id": "p5-expanded-0060",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_en_finance_0295"
+  },
+  {
+   "item_id": "p5-expanded-0060",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0295"
+  },
+  {
+   "item_id": "p5-expanded-0060",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0295"
+  },
+  {
+   "item_id": "p5-expanded-0060",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0295"
+  },
+  {
+   "item_id": "p5-expanded-0060",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_finance_0295"
+  },
+  {
+   "item_id": "p5-expanded-0061",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0105"
+  },
+  {
+   "item_id": "p5-expanded-0061",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0105"
+  },
+  {
+   "item_id": "p5-expanded-0061",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0105"
+  },
+  {
+   "item_id": "p5-expanded-0061",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0105"
+  },
+  {
+   "item_id": "p5-expanded-0061",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0105"
+  },
+  {
+   "item_id": "p5-expanded-0062",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0125"
+  },
+  {
+   "item_id": "p5-expanded-0062",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": -1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_en_finance_0153"
+  },
+  {
+   "item_id": "p5-expanded-0062",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 2,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_en_policy_0105"
+  },
+  {
+   "item_id": "p5-expanded-0062",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0125"
+  },
+  {
+   "item_id": "p5-expanded-0062",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0125"
+  },
+  {
+   "item_id": "p5-expanded-0063",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0129"
+  },
+  {
+   "item_id": "p5-expanded-0063",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0129"
+  },
+  {
+   "item_id": "p5-expanded-0063",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0129"
+  },
+  {
+   "item_id": "p5-expanded-0063",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0129"
+  },
+  {
+   "item_id": "p5-expanded-0063",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0129"
+  },
+  {
+   "item_id": "p5-expanded-0064",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0177"
+  },
+  {
+   "item_id": "p5-expanded-0064",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0177"
+  },
+  {
+   "item_id": "p5-expanded-0064",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0177"
+  },
+  {
+   "item_id": "p5-expanded-0064",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0177"
+  },
+  {
+   "item_id": "p5-expanded-0064",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0177"
+  },
+  {
+   "item_id": "p5-expanded-0065",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0197"
+  },
+  {
+   "item_id": "p5-expanded-0065",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0197"
+  },
+  {
+   "item_id": "p5-expanded-0065",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0197"
+  },
+  {
+   "item_id": "p5-expanded-0065",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0197"
+  },
+  {
+   "item_id": "p5-expanded-0065",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0197"
+  },
+  {
+   "item_id": "p5-expanded-0066",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0205"
+  },
+  {
+   "item_id": "p5-expanded-0066",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0205"
+  },
+  {
+   "item_id": "p5-expanded-0066",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0205"
+  },
+  {
+   "item_id": "p5-expanded-0066",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0205"
+  },
+  {
+   "item_id": "p5-expanded-0066",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0205"
+  },
+  {
+   "item_id": "p5-expanded-0067",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_en_policy_0209"
+  },
+  {
+   "item_id": "p5-expanded-0067",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_en_policy_0209"
+  },
+  {
+   "item_id": "p5-expanded-0067",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 10,
+   "top1_source_key": "src_en_policy_0209"
+  },
+  {
+   "item_id": "p5-expanded-0067",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 7,
+   "top1_source_key": "src_en_policy_0209"
+  },
+  {
+   "item_id": "p5-expanded-0067",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 6,
+   "top1_source_key": "src_en_policy_0209"
+  },
+  {
+   "item_id": "p5-expanded-0068",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_en_policy_0217"
+  },
+  {
+   "item_id": "p5-expanded-0068",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0217"
+  },
+  {
+   "item_id": "p5-expanded-0068",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0217"
+  },
+  {
+   "item_id": "p5-expanded-0068",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0217"
+  },
+  {
+   "item_id": "p5-expanded-0068",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0217"
+  },
+  {
+   "item_id": "p5-expanded-0069",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0241"
+  },
+  {
+   "item_id": "p5-expanded-0069",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0241"
+  },
+  {
+   "item_id": "p5-expanded-0069",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0241"
+  },
+  {
+   "item_id": "p5-expanded-0069",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0241"
+  },
+  {
+   "item_id": "p5-expanded-0069",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0241"
+  },
+  {
+   "item_id": "p5-expanded-0070",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0283"
+  },
+  {
+   "item_id": "p5-expanded-0070",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0283"
+  },
+  {
+   "item_id": "p5-expanded-0070",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0283"
+  },
+  {
+   "item_id": "p5-expanded-0070",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0283"
+  },
+  {
+   "item_id": "p5-expanded-0070",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_policy_0283"
+  },
+  {
+   "item_id": "p5-expanded-0071",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0112"
+  },
+  {
+   "item_id": "p5-expanded-0071",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0112"
+  },
+  {
+   "item_id": "p5-expanded-0071",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0112"
+  },
+  {
+   "item_id": "p5-expanded-0071",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0112"
+  },
+  {
+   "item_id": "p5-expanded-0071",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0112"
+  },
+  {
+   "item_id": "p5-expanded-0072",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_en_support_0140"
+  },
+  {
+   "item_id": "p5-expanded-0072",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_en_support_0140"
+  },
+  {
+   "item_id": "p5-expanded-0072",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_en_support_0140"
+  },
+  {
+   "item_id": "p5-expanded-0072",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_en_support_0140"
+  },
+  {
+   "item_id": "p5-expanded-0072",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_en_support_0140"
+  },
+  {
+   "item_id": "p5-expanded-0073",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_en_support_0164"
+  },
+  {
+   "item_id": "p5-expanded-0073",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0164"
+  },
+  {
+   "item_id": "p5-expanded-0073",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0164"
+  },
+  {
+   "item_id": "p5-expanded-0073",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0164"
+  },
+  {
+   "item_id": "p5-expanded-0073",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 2,
+   "top1_source_key": "src_en_support_0164"
+  },
+  {
+   "item_id": "p5-expanded-0074",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0183"
+  },
+  {
+   "item_id": "p5-expanded-0074",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0183"
+  },
+  {
+   "item_id": "p5-expanded-0074",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0183"
+  },
+  {
+   "item_id": "p5-expanded-0074",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0183"
+  },
+  {
+   "item_id": "p5-expanded-0074",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0183"
+  },
+  {
+   "item_id": "p5-expanded-0075",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0261"
+  },
+  {
+   "item_id": "p5-expanded-0075",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0261"
+  },
+  {
+   "item_id": "p5-expanded-0075",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0261"
+  },
+  {
+   "item_id": "p5-expanded-0075",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0261"
+  },
+  {
+   "item_id": "p5-expanded-0075",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0261"
+  },
+  {
+   "item_id": "p5-expanded-0076",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0269"
+  },
+  {
+   "item_id": "p5-expanded-0076",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0269"
+  },
+  {
+   "item_id": "p5-expanded-0076",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0269"
+  },
+  {
+   "item_id": "p5-expanded-0076",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0269"
+  },
+  {
+   "item_id": "p5-expanded-0076",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "lexical",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0269"
+  },
+  {
+   "item_id": "p5-expanded-0077",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 4,
+   "top1_source_key": "src_en_support_0273"
+  },
+  {
+   "item_id": "p5-expanded-0077",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 2,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_en_finance_0153"
+  },
+  {
+   "item_id": "p5-expanded-0077",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": -1,
+   "top1_source_key": "src_en_support_0273"
+  },
+  {
+   "item_id": "p5-expanded-0077",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 9,
+   "top1_source_key": "src_en_support_0273"
+  },
+  {
+   "item_id": "p5-expanded-0077",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "semantic",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 8,
+   "top1_source_key": "src_en_support_0273"
+  },
+  {
+   "item_id": "p5-expanded-0078",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0281"
+  },
+  {
+   "item_id": "p5-expanded-0078",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0281"
+  },
+  {
+   "item_id": "p5-expanded-0078",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0281"
+  },
+  {
+   "item_id": "p5-expanded-0078",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0281"
+  },
+  {
+   "item_id": "p5-expanded-0078",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "mixed",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0281"
+  },
+  {
+   "item_id": "p5-expanded-0079",
+   "profile": "vector_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0289"
+  },
+  {
+   "item_id": "p5-expanded-0079",
+   "profile": "bm25_only",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0289"
+  },
+  {
+   "item_id": "p5-expanded-0079",
+   "profile": "default_hybrid",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0289"
+  },
+  {
+   "item_id": "p5-expanded-0079",
+   "profile": "sweep_0_4_0_6",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0289"
+  },
+  {
+   "item_id": "p5-expanded-0079",
+   "profile": "sweep_0_6_0_4",
+   "language": "en",
+   "query_class": "hard_negative",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0289"
+  },
+  {
+   "item_id": "p5-expanded-0080",
+   "profile": "vector_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0293"
+  },
+  {
+   "item_id": "p5-expanded-0080",
+   "profile": "bm25_only",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0293"
+  },
+  {
+   "item_id": "p5-expanded-0080",
+   "profile": "default_hybrid",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0293"
+  },
+  {
+   "item_id": "p5-expanded-0080",
+   "profile": "sweep_0_4_0_6",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0293"
+  },
+  {
+   "item_id": "p5-expanded-0080",
+   "profile": "sweep_0_6_0_4",
+   "language": "other",
+   "query_class": "multilingual",
+   "gold_source_rank": 1,
+   "gold_passage_rank": 1,
+   "top1_source_key": "src_en_support_0293"
+  }
+ ]
+}
