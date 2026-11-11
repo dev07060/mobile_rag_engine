@@ -176,7 +176,7 @@
 ### S1. 검색 누락과 재등록 (짧은 문서가 검색에서 빠짐, `clearAndRestart` 뒤 재등록 불가)
 
 - **담당:** 세션 "S1 검색 누락과 재등록", 브랜치 `feats/s1-search-missing-short-docs-7eae01` (worktree `.claude/worktrees/s1-search-missing-short-docs-7eae01`, D1 브랜치 끝에서 땄다)
-- **상태:** PR 준비 중. 2026-11-12 사용자 "S1 착수".
+- **상태:** PR 열림 (#134, 2026-11-12). 머지 대기. #133 위에 쌓여 있어 #133을 먼저 머지한다. 2026-11-12 사용자 "S1 착수".
 - **출처:** D1 실행 결과(위 D1 절)와 후보 목록의 [높음], [중간] `clearAndRestart` 항목. 재현에 쓴 테스트와 출력은 D1 세션의 메모(`d1-docs-verification/`)에 있다.
 - **순서:** Q2·Q3와 `rust_builder/rust/src/api/{source_rag,ingest_session,migration_meta,hnsw_index}.rs`가 겹친다. S1을 먼저 하고 Q2는 그 위에서 진행한다(규칙 3). D1(#133)과는 `docs/milestones.md`와 아래 문서 두 개만 겹치므로 #133 머지 뒤에 브랜치를 딴다.
 
