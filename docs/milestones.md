@@ -406,12 +406,12 @@
 - **[낮음] 2026-11-12 D1에서 본 것:** (1) `mobile_rag_engine.dart`가 `RagError`만 `show`로 내보내, 앱이 `when`/`maybeWhen`과 `RagErrorUi.userFriendlyMessage`를 쓸 수 없다. (2) `pubspec.yaml`의 `flutter: ">=3.9.0"`이 실제 하한(Dart 3.9.2 = Flutter 3.35.3)과 다르다. (3) `name` 없이 넣은 문서는 `RagPassage.sourceName`이 null이라 `ask.md`와 README의 인용 출력 예제가 "null"을 찍는다. (4) `DocumentParser.parse`를 `MobileRag.initialize` 전에 부르면 `flutter_rust_bridge has not been initialized`가 난다.
 - **[중간] Xcode 27에서 macOS profile/release 빌드의 Rust 소스 빌드가 실패한다 (2026-11-12 S1 실행 중 발견, 고치지 않음).** `flutter drive --profile -d macos`(cargokit이 `--features vector_faer,vector_quant_i8 --release`로 빌드)에서 `error[E0463]: can't find crate for dyn_stack_macros`(다시 하면 `interpol`)로 멈춘다. 같은 `cargo build` 명령을 셸에서 돌리면 성공하므로 Xcode 빌드 환경에서 호스트용 proc-macro를 못 쓰는 문제로 보인다. debug 빌드(faer 없음)는 된다. 회고 C1(Xcode 27 strip)과 함께 Q5에서 볼지 정한다.
 - **[낮음] 80-query passage 평가의 6월 기록(`passage_recall@10` 0.925, `vector_only` 0.95)은 지금과 같은 조건의 수치가 아니다 (2026-11-12 S1 조사).** 평가셋 세 파일(질의 80개, 정답 passage)은 6월 artifact와 같다. 다른 점은 다음과 같다.
-  - **모델:** 지금 `example/assets/backup_onnx/model.onnx`는 MiniLM Model Pack과 같은 모델이다(fingerprint `sha256:e9246dc3…`). 6월 artifact에는 모델 정보가 없다. 6월에는 벡터만으로 한국어 질의 30/32를 맞혔다. 지금은 MiniLM으로 exact scan을 해도 11/32이고, `docs/perf/multilingual-embedding`의 측정에서도 MiniLM은 한국어 nDCG@10이 0.014다. 그래서 6월에는 다른(다국어) 모델이 `assets/model.onnx`에 있었을 가능성이 높다. 영어 질의는 지금도 30/32로 6월과 같다.
-  - **청킹:** 같은 문서의 청크 id가 다르다(6월 id 최소 4932개, 지금 4667개). 6월 뒤의 512 토큰 truncation(#115)과 한국어 청킹 변경(#116)이 들어 있다.
+  - **모델:** 6월은 1024차원 모델이다. 6월 실행이 남긴 DB(`com.example.mobileRagEngineExample` 컨테이너의 `hybrid_passage_relevance_80_balanced.sqlite`, 2026-06-13)의 fingerprint가 `model.onnx|1024|f32`이고, 사용자는 BGE-m3였다고 기억한다(2026-11-12). 지금 `example/assets/backup_onnx/model.onnx`는 MiniLM Model Pack과 같은 384차원 모델이다(`sha256:e9246dc3…`). 그래서 6월에는 벡터만으로 한국어 질의 30/32를 맞혔고, 지금 MiniLM은 exact scan으로도 11/32다. 영어 질의는 둘 다 30/32다.
+  - **청킹:** 청크 수가 다르다(6월 DB 4937개, 지금 4667개). 6월 뒤의 512 토큰 truncation(#115)과 한국어 청킹 변경(#116)이 들어 있다.
   - **빌드 모드:** 6월은 profile, 지금은 debug(Xcode 27 profile 빌드 실패, 위 후보).
   - **검색은 원인이 아니다:** S1 수정 뒤 HNSW `vector_only`의 정답 순위가 80개 질의 모두 exact scan(`sourceIds`에 전체 소스)과 같다(52/80). 수정 전에는 38/80이었다.
 
-  6월 수치를 기준선으로 계속 쓰려면, 어떤 모델로 잰 것인지 정하고 지금 코드로 다시 재서 README와 `docs/local-rag-engine.md`의 0.925를 바꿀지 정한다.
+  README와 `docs/local-rag-engine.md`의 0.925는 기본 Model Pack(MiniLM)이 아니라 BGE-m3로 잰 값이다. 지금 코드에서 기본 모델로 다시 재서 바꿀지, 모델을 함께 적을지 정한다.
 - Windows `Native Tests`의 `ingest_ffi_traffic_test.dart` "Peak-RSS delta"가 가끔 실패한다(파일 경로가 UTF-8 경로보다 2MB 이상 적게 써야 하는데 0.7~0.8MB 차이만 났다. 11/1 `ci/quickstart-e2e`, 11/3 #125). 측정값이 흔들리는 테스트라 기준이나 측정 방식을 손봐야 한다.
 - 성능 후보: `vector_math` 8-lane dot, HNSW 증분 삽입, prune 거리 캐싱, ef 상한, 짧은 문단 병합
 - `lib/src/rust/api/mmap_store.dart` 잔존 파일 정리
