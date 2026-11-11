@@ -5250,13 +5250,13 @@ mod tests {
         let ids = chunk_ids_of(source);
         activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
 
+        // Next launch: nothing in memory, the version 1 file on disk. Unmap
+        // first: Windows refuses to write a file with a live mapping.
+        forget_in_memory_indexes();
         let mut bytes = std::fs::read(&file_path).unwrap();
         assert_eq!(bytes[4], 2, "new files are written as version 2");
         bytes[4] = 1;
         std::fs::write(&file_path, &bytes).unwrap();
-
-        // Next launch: nothing in memory, the version 1 file on disk.
-        forget_in_memory_indexes();
         assert!(!load_collection_hnsw_index(collection.to_string(), base_path.clone()).unwrap());
         activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
         assert_eq!(std::fs::read(&file_path).unwrap()[4], 2, "the file was rebuilt");
