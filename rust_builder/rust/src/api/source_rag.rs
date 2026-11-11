@@ -1007,8 +1007,10 @@ pub fn update_source_status(source_id: i64, status: String) -> Result<(), RagErr
 
 /// Claim a source for ingestion by atomically transitioning status to `processing`.
 ///
-/// Returns true when claimed successfully. Only `pending` and `failed` sources
-/// can be claimed. Sources already in `processing`/`completed` return false.
+/// Returns true when claimed successfully. `pending` and `failed` sources can
+/// be claimed, and so can a `completed` source with no chunks (for example
+/// after `acknowledge_and_clear_embeddings`). `processing` sources and
+/// `completed` sources with chunks return false.
 pub fn claim_source_for_ingestion(source_id: i64) -> Result<bool, RagError> {
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     let collection_id: Option<String> = conn
@@ -1019,12 +1021,19 @@ pub fn claim_source_for_ingestion(source_id: i64) -> Result<bool, RagError> {
         )
         .optional()
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    // A 'completed' source without chunks is claimable too: that is what
+    // `clearAndRestart()` (acknowledge_and_clear_embeddings) leaves behind,
+    // and the duplicate decision already treats it as ResetAndResume. Before
+    // S1 the claim refused it, so re-adding the same content returned
+    // "Source ingestion already in progress" and never produced chunks.
     let updated = conn
         .execute(
             "UPDATE sources
              SET status = 'processing'
              WHERE id = ?1
-               AND COALESCE(status, 'completed') IN ('pending', 'failed')",
+               AND (COALESCE(status, 'completed') IN ('pending', 'failed')
+                    OR (COALESCE(status, 'completed') = 'completed'
+                        AND NOT EXISTS (SELECT 1 FROM chunks WHERE source_id = ?1)))",
             params![source_id],
         )
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
@@ -4257,8 +4266,29 @@ mod tests {
         );
         assert!(!claim_source_for_ingestion(source.source_id).unwrap());
 
+        add_chunks(
+            source.source_id,
+            vec![ChunkData {
+                content: "claim chunk".to_string(),
+                chunk_index: 0,
+                start_pos: 0,
+                end_pos: 11,
+                chunk_type: "text".to_string(),
+                embedding: vec![1.0, 0.0, 0.0, 0.0],
+            }],
+        )
+        .unwrap();
         update_source_status(source.source_id, "completed".to_string()).unwrap();
         assert!(!claim_source_for_ingestion(source.source_id).unwrap());
+
+        // A completed source whose chunks were deleted (clearAndRestart) can
+        // be ingested again.
+        clear_source_chunks(source.source_id).unwrap();
+        assert!(claim_source_for_ingestion(source.source_id).unwrap());
+        assert_eq!(
+            get_source_status(source.source_id).unwrap(),
+            Some("processing".to_string())
+        );
 
         update_source_status(source.source_id, "failed".to_string()).unwrap();
         assert!(claim_source_for_ingestion(source.source_id).unwrap());
@@ -5191,6 +5221,49 @@ mod tests {
         assert_index_reflects_c(&c_ids);
 
         let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        teardown_test_db(db_path);
+    }
+
+    // S1 A-4: a `.hnsw` file written by 0.23.0 (format version 1) can hold
+    // nodes the old builder left unreachable. Opening it after the upgrade
+    // must rebuild the graph instead of reusing it.
+    #[test]
+    fn activate_rebuilds_a_version_1_hnsw_file_from_an_older_release() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_activate_rebuilds_v1_hnsw.db");
+        let collection = "hnsw-v1-upgrade";
+        let base_path = db_path
+            .with_extension("hnsw-v1")
+            .to_string_lossy()
+            .into_owned();
+        let file_path = format!("{base_path}.hnsw");
+        let _ = std::fs::remove_file(&file_path);
+        let source = add_completed_source(
+            collection,
+            "source",
+            vec![
+                stale_chunk(0, "alpha", stale_axis(0)),
+                stale_chunk(1, "bravo", stale_axis(1)),
+            ],
+        );
+        let ids = chunk_ids_of(source);
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+
+        let mut bytes = std::fs::read(&file_path).unwrap();
+        assert_eq!(bytes[4], 2, "new files are written as version 2");
+        bytes[4] = 1;
+        std::fs::write(&file_path, &bytes).unwrap();
+
+        // Next launch: nothing in memory, the version 1 file on disk.
+        forget_in_memory_indexes();
+        assert!(!load_collection_hnsw_index(collection.to_string(), base_path.clone()).unwrap());
+        activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
+        assert_eq!(std::fs::read(&file_path).unwrap()[4], 2, "the file was rebuilt");
+        assert_eq!(loaded_hnsw_node_count(), Some(2));
+        assert_eq!(hnsw_top_id(stale_axis(1)), ids[1]);
+
+        let _ = std::fs::remove_file(&file_path);
         teardown_test_db(db_path);
     }
 

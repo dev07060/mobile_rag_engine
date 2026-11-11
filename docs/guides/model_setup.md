@@ -175,9 +175,10 @@ if (rag.embeddingFingerprintLock != null) {
 
 `reembedAll` keeps your documents and resumes after an app restart. If you
 would rather re-ingest from your own sources, call `clearAllData()` and add
-the documents again. `clearAndRestart(...)` also removes the lock, but it keeps
-the rows that `listSources()` returns, and a document whose content matches a
-kept source is then reported as a duplicate; see
+the documents again. `clearAndRestart(...)` also removes the lock, deletes the
+stored chunks and keeps the rows that `listSources()` returns; add the
+documents again afterwards (on 0.23.0 and earlier, remove the kept sources
+first). See
 [Data Migration & Re-embedding](../features/index_management.md#3-data-migration--re-embedding).
 
 ### Cost

@@ -31,6 +31,13 @@ fn cosine_distance(a: &[f32], b: &[f32]) -> f32 {
     1.0 - sim.max(-1.0).min(1.0)
 }
 
+/// `.hnsw` file format version. The byte layout has not changed since 1;
+/// version 2 marks graphs built with the neighbour selection heuristic and the
+/// reachability pass (S1). Files written as version 1 by 0.23.0 and earlier can
+/// leave nodes unreachable, so loading rejects them and the caller rebuilds
+/// the index from the database.
+const HNSW_FILE_VERSION: u8 = 2;
+
 #[derive(Clone)]
 pub struct Node {
     pub id: i64,
@@ -181,6 +188,33 @@ impl HnswBuilder {
         1.0 - sim.clamp(-1.0, 1.0)
     }
 
+    /// Cosine distance between two stored nodes.
+    fn node_distance(&self, a: usize, b: usize) -> f32 {
+        self.distance_to(&self.nodes[a].vector, self.node_norm(a), b)
+    }
+
+    /// Neighbour selection heuristic (Malkov & Yashunin, Algorithm 4).
+    /// `candidates` are sorted by distance to the base node. A candidate is kept
+    /// only if it is closer to the base than to every neighbour kept so far, so
+    /// the list spans directions instead of filling up with one dense cluster.
+    /// Without it a node far from a cluster lost every incoming link when the
+    /// cluster's lists were pruned, and search could not reach it (S1).
+    fn select_neighbors(&self, candidates: &[DistNode], m: usize) -> Vec<usize> {
+        let mut selected: Vec<usize> = Vec::with_capacity(m);
+        for candidate in candidates {
+            if selected.len() >= m {
+                break;
+            }
+            let diverse = selected
+                .iter()
+                .all(|&kept| self.node_distance(candidate.index, kept) > candidate.dist);
+            if diverse {
+                selected.push(candidate.index);
+            }
+        }
+        selected
+    }
+
     fn random_layer(&self) -> usize {
         let mut rng = rand::thread_rng();
         let r: f32 = rng.gen_range(0.0001..1.0);
@@ -264,14 +298,10 @@ impl HnswBuilder {
         for lc in (0..=start_layer).rev() {
             let m_max = if lc == 0 { self.m0 } else { self.m };
             // search_layer returns the results sorted by distance.
-            let mut best_n = self.search_layer(&vector, vector_norm, &eps, self.ef_construction, lc);
-            best_n.truncate(m_max);
+            let candidates = self.search_layer(&vector, vector_norm, &eps, self.ef_construction, lc);
+            new_connections[lc] = self.select_neighbors(&candidates, m_max);
 
-            for n in &best_n {
-                new_connections[lc].push(n.index);
-            }
-
-            eps = best_n.into_iter().map(|n| n.index).collect();
+            eps = candidates.into_iter().map(|n| n.index).collect();
         }
 
         // Add node
@@ -301,9 +331,7 @@ impl HnswBuilder {
                         })
                         .collect();
                     dists.sort_by(|a, b| a.dist.partial_cmp(&b.dist).unwrap());
-                    dists.truncate(m_max);
-                    self.nodes[n_idx].connections[lc] =
-                        dists.into_iter().map(|d| d.index).collect();
+                    self.nodes[n_idx].connections[lc] = self.select_neighbors(&dists, m_max);
                 }
             }
         }
@@ -311,6 +339,64 @@ impl HnswBuilder {
         if layer > curr_max_layer {
             self.max_layer = layer;
             self.entry_point = Some(new_idx);
+        }
+    }
+
+    /// Links every node that a search from the entry point cannot reach.
+    ///
+    /// The selection heuristic keeps far nodes linked in almost every case,
+    /// but a node whose few incoming links are all pruned by later inserts
+    /// still drops out of the graph. Call this once after the last `insert`.
+    /// For each unreachable node it searches layer 0 from the entry point
+    /// (which only visits reachable nodes) and appends the node to the list of
+    /// the closest node found, so a query near it walks through that node.
+    /// That list may then hold `m0 + 1` or more links; the file format stores
+    /// the count per node. Returns the number of links added.
+    pub fn connect_unreachable_nodes(&mut self) -> usize {
+        let Some(entry) = self.entry_point else {
+            return 0;
+        };
+        if self.norms.len() != self.nodes.len() {
+            self.norms = self.nodes.iter().map(|n| l2_norm_f32(&n.vector)).collect();
+        }
+        let mut reachable = vec![false; self.nodes.len()];
+        self.mark_reachable_from(entry, &mut reachable);
+
+        let mut added = 0;
+        for index in 0..self.nodes.len() {
+            if reachable[index] {
+                continue;
+            }
+            let norm = self.node_norm(index);
+            let vector = self.nodes[index].vector.clone();
+            let anchor = self
+                .search_layer(&vector, norm, &[entry], self.ef_construction, 0)
+                .into_iter()
+                .map(|n| n.index)
+                .find(|&found| reachable[found]);
+            let anchor = anchor.unwrap_or(entry);
+            self.nodes[anchor].connections[0].push(index);
+            added += 1;
+            self.mark_reachable_from(index, &mut reachable);
+        }
+        added
+    }
+
+    fn mark_reachable_from(&self, start: usize, reachable: &mut [bool]) {
+        if reachable[start] {
+            return;
+        }
+        reachable[start] = true;
+        let mut stack = vec![start];
+        while let Some(index) = stack.pop() {
+            for layer in &self.nodes[index].connections {
+                for &neighbor in layer {
+                    if !reachable[neighbor] {
+                        reachable[neighbor] = true;
+                        stack.push(neighbor);
+                    }
+                }
+            }
         }
     }
 
@@ -363,7 +449,7 @@ impl HnswBuilder {
 
             // Header
             writer.write_all(b"HNSW")?;
-            writer.write_u8(1)?; // version
+            writer.write_u8(HNSW_FILE_VERSION)?;
             writer.write_u32::<LittleEndian>(self.entry_point.unwrap_or(0) as u32)?;
             writer.write_u8(self.max_layer as u8)?;
             writer.write_u32::<LittleEndian>(self.nodes.len() as u32)?;
@@ -459,8 +545,10 @@ impl MmapHnswSearcher {
         }
 
         let version = cursor.read_u8()?;
-        if version != 1 {
-            anyhow::bail!("Invalid HNSW file: unsupported version");
+        if version != HNSW_FILE_VERSION {
+            anyhow::bail!(
+                "Invalid HNSW file: unsupported version {version} (expected {HNSW_FILE_VERSION})"
+            );
         }
 
         let entry_point = cursor.read_u32::<LittleEndian>()?;
@@ -807,6 +895,10 @@ mod tests {
         for (i, v) in corpus.iter().enumerate() {
             builder.insert(i as i64, v.clone());
         }
+        let repaired = builder.connect_unreachable_nodes();
+        if repaired > 0 {
+            println!("build_index: linked {repaired} unreachable node(s) of {}", corpus.len());
+        }
         builder
     }
 
@@ -840,8 +932,20 @@ mod tests {
             .ok()
             .and_then(|value| value.parse().ok())
             .unwrap_or(5_000);
-        let corpus = lcg_vectors(n, RECALL_DIM, 7);
-        let queries = lcg_vectors(RECALL_QUERIES, RECALL_DIM, 99);
+        // HNSW_BENCH_CLUSTERS=k builds k dense clusters (like k documents of
+        // n/k chunks each) instead of uniform random vectors.
+        let clusters: usize = std::env::var("HNSW_BENCH_CLUSTERS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0);
+        let (corpus, queries) = if clusters == 0 {
+            (lcg_vectors(n, RECALL_DIM, 7), lcg_vectors(RECALL_QUERIES, RECALL_DIM, 99))
+        } else {
+            let centres = lcg_vectors(clusters, RECALL_DIM, 21);
+            let noise = lcg_vectors(n + RECALL_QUERIES, RECALL_DIM, 22);
+            let point = |i: usize| mix(&centres[i % clusters], 1.33, &noise[i], 1.0);
+            ((0..n).map(point).collect(), (n..n + RECALL_QUERIES).map(point).collect())
+        };
 
         let started = std::time::Instant::now();
         let builder = build_index(&corpus);
@@ -858,7 +962,7 @@ mod tests {
             .sum::<f32>()
             / RECALL_QUERIES as f32;
         println!(
-            "hnsw_build_benchmark n={n} build={build:?} search={search:?} recall@10={mean_recall}"
+            "hnsw_build_benchmark n={n} clusters={clusters} build={build:?} search={search:?} recall@10={mean_recall}"
         );
     }
 
@@ -885,6 +989,166 @@ mod tests {
             / RECALL_QUERIES as f32;
         println!("custom_hnsw mmap (Q8_0) recall@10 = {mean_recall}");
         assert!(mean_recall >= 0.95, "mmap recall@10 {mean_recall} < 0.95");
+    }
+
+    // One dense cluster (like the chunks of one large PDF) plus a few vectors
+    // far from it (like short documents stored next to it). Cluster members sit
+    // at cosine ~0.8 from a shared centre; outliers at ~0.4, which is the
+    // similarity the D1 repro saw between the refund sentence and the PDF.
+    const CLUSTER_SIZE: usize = 1800;
+    const OUTLIERS: usize = 6;
+
+    fn mix(a: &[f32], wa: f32, b: &[f32], wb: f32) -> Vec<f32> {
+        let v: Vec<f32> = a.iter().zip(b).map(|(x, y)| wa * x + wb * y).collect();
+        let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+        v.into_iter().map(|x| x / norm).collect()
+    }
+
+    /// Returns (corpus, outlier ids). `outliers_first` mirrors adding the short
+    /// documents before the large one; otherwise they are inserted last.
+    fn clustered_with_outliers(outliers_first: bool) -> (Vec<Vec<f32>>, Vec<i64>) {
+        let centre = &lcg_vectors(1, RECALL_DIM, 11)[0];
+        let cluster: Vec<Vec<f32>> = lcg_vectors(CLUSTER_SIZE, RECALL_DIM, 12)
+            .iter()
+            .map(|noise| mix(centre, 1.33, noise, 1.0))
+            .collect();
+        let outliers: Vec<Vec<f32>> = lcg_vectors(OUTLIERS, RECALL_DIM, 13)
+            .iter()
+            .map(|noise| mix(centre, 0.44, noise, 1.0))
+            .collect();
+        let (corpus, first_outlier): (Vec<Vec<f32>>, usize) = if outliers_first {
+            (outliers.into_iter().chain(cluster).collect(), 0)
+        } else {
+            (cluster.into_iter().chain(outliers).collect(), CLUSTER_SIZE)
+        };
+        let ids = (first_outlier..first_outlier + OUTLIERS).map(|i| i as i64).collect();
+        (corpus, ids)
+    }
+
+    fn layer0_nodes_without_incoming_links(builder: &HnswBuilder) -> usize {
+        let mut incoming = vec![0usize; builder.nodes.len()];
+        for node in &builder.nodes {
+            for &neighbor in &node.connections[0] {
+                incoming[neighbor] += 1;
+            }
+        }
+        (0..builder.nodes.len())
+            .filter(|&index| incoming[index] == 0 && Some(index) != builder.entry_point)
+            .count()
+    }
+
+    /// Nodes that a layer-0 walk from the nodes reachable on the upper layers
+    /// can never visit. Search descends through the upper layers, so a node is
+    /// findable only if it is reachable from the entry point over all layers.
+    fn nodes_unreachable_from_entry_point(builder: &HnswBuilder) -> Vec<usize> {
+        let Some(entry) = builder.entry_point else {
+            return Vec::new();
+        };
+        let mut seen = vec![false; builder.nodes.len()];
+        let mut stack = vec![entry];
+        seen[entry] = true;
+        while let Some(index) = stack.pop() {
+            for layer in &builder.nodes[index].connections {
+                for &neighbor in layer {
+                    if !seen[neighbor] {
+                        seen[neighbor] = true;
+                        stack.push(neighbor);
+                    }
+                }
+            }
+        }
+        (0..builder.nodes.len()).filter(|&index| !seen[index]).collect()
+    }
+
+    // S1 A-1: a short document next to a 1820-chunk PDF was missing from
+    // vector search (D1, 2026-11-12). Each outlier, queried with its own
+    // vector, must come back first from the builder and from the saved file,
+    // and every node must be reachable from the entry point.
+    #[test]
+    fn far_vectors_next_to_a_dense_cluster_are_their_own_top_result() {
+        configure_active_vabq_profile(None, RECALL_DIM as i32).unwrap();
+        let directory = tempdir().unwrap();
+        let mut failures = Vec::new();
+        for outliers_first in [true, false] {
+            let (corpus, outlier_ids) = clustered_with_outliers(outliers_first);
+            let builder = build_index(&corpus);
+            let unreachable = nodes_unreachable_from_entry_point(&builder);
+            let unreachable_outliers = unreachable
+                .iter()
+                .filter(|&&index| outlier_ids.contains(&(index as i64)))
+                .count();
+
+            let path = directory.path().join(format!("clustered-{outliers_first}.hnsw"));
+            builder.save_to_disk(path.to_str().unwrap()).unwrap();
+            let searcher = MmapHnswSearcher::new(path.to_str().unwrap()).unwrap();
+
+            let mut missing = Vec::new();
+            for &id in &outlier_ids {
+                let query = &corpus[id as usize];
+                let from_builder = builder.search(query, PRODUCTION_EF).first().map(|r| r.0);
+                let active = active_quantized_query(query).unwrap();
+                let from_file = searcher
+                    .search(&active, PRODUCTION_EF)
+                    .unwrap()
+                    .first()
+                    .map(|r| r.0);
+                if from_builder != Some(id) || from_file != Some(id) {
+                    missing.push((id, from_builder, from_file));
+                }
+            }
+            println!(
+                "clustered fixture outliers_first={outliers_first}: layer-0 nodes without incoming links = {}, nodes unreachable from entry point = {} (outliers {unreachable_outliers}/{OUTLIERS}), outliers not their own top-1 = {}/{OUTLIERS}",
+                layer0_nodes_without_incoming_links(&builder),
+                unreachable.len(),
+                missing.len()
+            );
+            if !missing.is_empty() || !unreachable.is_empty() {
+                failures.push(format!(
+                    "outliers_first={outliers_first}: unreachable={}, outliers missed (id, builder top, file top)={missing:?}",
+                    unreachable.len()
+                ));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    // S1 A-3: every stored node, queried with its own vector, is in its own
+    // top 10. The uniform-random recall tests above cannot see unreachable
+    // nodes, so this uses the clustered + outlier fixture.
+    #[test]
+    fn every_node_of_a_clustered_corpus_finds_itself_in_its_top_10() {
+        configure_active_vabq_profile(None, RECALL_DIM as i32).unwrap();
+        let mut failures = Vec::new();
+        for outliers_first in [true, false] {
+            let (corpus, _) = clustered_with_outliers(outliers_first);
+            let builder = build_index(&corpus);
+            let directory = tempdir().unwrap();
+            let path = directory.path().join("self-recall.hnsw");
+            builder.save_to_disk(path.to_str().unwrap()).unwrap();
+            let searcher = MmapHnswSearcher::new(path.to_str().unwrap()).unwrap();
+
+            let mut not_found = Vec::new();
+            for (id, query) in corpus.iter().enumerate() {
+                let active = active_quantized_query(query).unwrap();
+                let hits = searcher.search(&active, PRODUCTION_EF).unwrap();
+                if !hits.iter().take(K).any(|(hit, _)| *hit == id as i64) {
+                    not_found.push(id);
+                }
+            }
+            println!(
+                "clustered self-recall outliers_first={outliers_first}: {} of {} nodes missing from their own top 10",
+                not_found.len(),
+                corpus.len()
+            );
+            if !not_found.is_empty() {
+                failures.push(format!(
+                    "outliers_first={outliers_first}: {} nodes not in their own top 10, first: {:?}",
+                    not_found.len(),
+                    &not_found[..not_found.len().min(10)]
+                ));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
     }
 
     #[test]
@@ -937,6 +1201,13 @@ mod tests {
         let mut bad_version = good.clone();
         bad_version[4] = 9;
         assert!(MmapHnswSearcher::new(write("version.hnsw", &bad_version).to_str().unwrap()).is_err());
+
+        // Version 1 files (0.23.0 and earlier) have the same layout but were
+        // built without the reachability guarantees, so they must be rebuilt.
+        assert_eq!(good[4], HNSW_FILE_VERSION);
+        let mut version_1 = good.clone();
+        version_1[4] = 1;
+        assert!(MmapHnswSearcher::new(write("version-1.hnsw", &version_1).to_str().unwrap()).is_err());
 
         assert!(MmapHnswSearcher::new(write("tiny.hnsw", &good[..10]).to_str().unwrap()).is_err());
 

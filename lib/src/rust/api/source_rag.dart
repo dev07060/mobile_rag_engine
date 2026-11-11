@@ -50,8 +50,10 @@ Future<void> updateSourceStatus({
 
 /// Claim a source for ingestion by atomically transitioning status to `processing`.
 ///
-/// Returns true when claimed successfully. Only `pending` and `failed` sources
-/// can be claimed. Sources already in `processing`/`completed` return false.
+/// Returns true when claimed successfully. `pending` and `failed` sources can
+/// be claimed, and so can a `completed` source with no chunks (for example
+/// after `acknowledge_and_clear_embeddings`). `processing` sources and
+/// `completed` sources with chunks return false.
 Future<bool> claimSourceForIngestion({required PlatformInt64 sourceId}) =>
     RustLib.instance.api.crateApiSourceRagClaimSourceForIngestion(
       sourceId: sourceId,

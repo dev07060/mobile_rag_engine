@@ -821,6 +821,66 @@ mod tests {
         teardown_test_db(db_path);
     }
 
+    // S1 B-1: clearAndRestart() deletes every chunk and keeps the source rows
+    // as 'completed'. Adding the same content again must ingest it.
+    #[test]
+    fn test_prepare_same_content_after_clearing_embeddings_reingests() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_ingest_reingest_after_clear.db");
+
+        let content = "Refunds are accepted within 14 days of purchase.".to_string();
+        let prepare = |content: String| {
+            prepare_source_ingestion(
+                "__default__".to_string(),
+                content,
+                None,
+                Some("refund.txt".to_string()),
+                IngestStrategy::Recursive,
+                120,
+                0,
+            )
+            .unwrap()
+        };
+        let first = prepare(content.clone());
+        {
+            let session_opaque = first.session.unwrap();
+            let mut session = session_opaque.blocking_write();
+            drain_session_with_fake_embeddings(&mut session);
+            session.finalize().unwrap();
+        }
+        assert_eq!(get_source_chunk_count(first.source_id).unwrap(), 1);
+
+        let deleted = crate::api::migration_meta::acknowledge_and_clear_embeddings(
+            crate::api::migration_meta::EMBEDDING_CLEAR_CONFIRMATION.to_string(),
+            "model-b".to_string(),
+        )
+        .unwrap();
+        assert_eq!(deleted, 1);
+        assert_eq!(
+            get_source_status(first.source_id).unwrap(),
+            Some("completed".to_string())
+        );
+        assert_eq!(get_source_chunk_count(first.source_id).unwrap(), 0);
+
+        let second = prepare(content);
+        assert_eq!(second.source_id, first.source_id);
+        assert_eq!(second.state, PreparedSourceState::ResumeReady);
+        assert_eq!(second.total_chunks, 1);
+        let session_opaque = second.session.unwrap();
+        {
+            let mut session = session_opaque.blocking_write();
+            assert_eq!(drain_session_with_fake_embeddings(&mut session), 1);
+            session.finalize().unwrap();
+        }
+        assert_eq!(
+            get_source_status(first.source_id).unwrap(),
+            Some("completed".to_string())
+        );
+        assert_eq!(get_source_chunk_count(first.source_id).unwrap(), 1);
+
+        teardown_test_db(db_path);
+    }
+
     #[test]
     fn test_abort_clears_partial_chunks_and_marks_failed() {
         let _guard = test_guard();

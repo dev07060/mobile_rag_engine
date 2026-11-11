@@ -79,6 +79,10 @@ where
         warn!("[hnsw] No points provided");
         return Ok(0);
     }
+    let repaired = builder.connect_unreachable_nodes();
+    if repaired > 0 {
+        debug!("[hnsw] Linked {} node(s) unreachable from the entry point", repaired);
+    }
 
     let mut builder_guard = HNSW_BUILDER.write().unwrap();
     *builder_guard = Some(builder);
