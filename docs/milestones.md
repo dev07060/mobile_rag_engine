@@ -173,6 +173,46 @@
 7. **D1이 가정한 것과 달랐던 점.** `troubleshooting.md`의 Windows 저장 경로 예시는 이미 `getApplicationSupportDirectory`를 쓰고 있어 고치지 않았다. 앱은 `RagError`의 종류를 `when`/`maybeWhen`으로 구분할 수 없어서(후보 목록), 문서는 오류를 잡는 대신 `isEmbeddingFingerprintLocked`를 확인하게 했다.
 - **실행하지 않고 읽기만 한 것:** iOS·Android·Windows의 저장 경로(`path_provider` 코드), `pod update onnxruntime-objc onnxruntime-c`(각 `flutter_onnxruntime` 버전의 podspec 고정값만 확인), 크래시 뒤 `.dirty` 마커로 재빌드하는 경로(코드).
 
+### S1. 검색 누락과 재등록 (짧은 문서가 검색에서 빠짐, `clearAndRestart` 뒤 재등록 불가)
+
+- **상태:** 범위 초안. 합의 대기 (2026-11-12 사용자 "S1 범위 적어").
+- **출처:** D1 실행 결과(위 D1 절)와 후보 목록의 [높음], [중간] `clearAndRestart` 항목. 재현에 쓴 테스트와 출력은 D1 세션의 메모(`d1-docs-verification/`)에 있다.
+- **순서:** Q2·Q3와 `rust_builder/rust/src/api/{source_rag,ingest_session,migration_meta,hnsw_index}.rs`가 겹친다. S1을 먼저 하고 Q2는 그 위에서 진행한다(규칙 3). D1(#133)과는 `docs/milestones.md`와 아래 문서 두 개만 겹치므로 #133 머지 뒤에 브랜치를 딴다.
+
+**배경**
+- **A. 짧은 문서가 벡터 검색에 나오지 않는다.** 환불 문장 하나와 1820 청크 PDF를 넣으면, 단독일 때 similarity 0.7295로 1위이던 문장이 `search(topK: 50)`에 없다. `sourceIds`를 준 exact scan은 찾는다. main의 Rust 코어는 배포된 `rag_engine_flutter` 0.22.0과 같으므로 0.23.0 사용자도 같을 가능성이 높다(배포 바이너리로는 재현하지 않았다).
+  - 코드로 본 추정 원인(실행으로 확정하지 않음): `custom_hnsw.rs`의 `insert`는 새 노드의 이웃을 가장 가까운 M개로 고르고, 역방향 링크는 이웃의 연결이 `m_max`를 넘으면 가까운 순으로 자른다. 한 문서의 청크가 수십 개 이상 모여 있으면 멀리 있는 노드로 들어오는 링크가 모두 잘려, 나가는 링크만 있고 들어오는 링크가 없는 노드가 된다. 다양성을 보는 이웃 선택(HNSW 논문의 heuristic)이나 연결 보장이 없다.
+- **B. `clearAndRestart()` 뒤에 같은 문서를 다시 넣을 수 없다.** `acknowledge_and_clear_embeddings`는 `chunks`만 지우고 `sources.status`는 `completed`로 둔다. 다시 넣으면 `decide_duplicate_decision`이 "completed, 청크 0개"를 `ResetAndResume`으로 보내지만, `claim_source_for_ingestion`은 `pending`·`failed`만 잡으므로 실패하고 "Source ingestion already in progress"가 돌아온다. 청크가 0개인 `completed` 소스는 어떤 경로로 생겼든 같은 결과다.
+
+**목표:** 저장된 청크는 문서 크기 구성과 관계없이 벡터 검색으로 찾을 수 있고, `clearAndRestart()` 뒤에 같은 문서를 `addDocument`로 다시 넣을 수 있다.
+
+**포함**
+- **A-1. 원인 확정.** D1의 재현(짧은 문서 + `sample_eng.pdf`)을 Rust 테스트로 옮긴다: 한 군집 1800개와 떨어진 벡터 몇 개로 인덱스를 만들고, 떨어진 벡터 자신을 질의로 넣어 top-1로 나오는지 본다. main에서 실패하는지와, 들어오는 링크가 0개인 노드 수를 기록한다. 추정이 틀리면 이 절을 먼저 고친다(규칙 4).
+- **A-2. 수정.** 방법은 A-1 결과로 정하고, 아래 순서로 검토한다.
+  1. 이웃 선택과 역방향 가지치기를 다양성 heuristic으로 바꾼다.
+  2. 빌드 뒤 들어오는 링크가 없는 노드를 찾아 연결을 보장한다.
+  3. 청크 수가 적은 컬렉션은 HNSW 대신 exact scan을 쓴다(i8 scan이 f32보다 빠르고 recall@10 손실이 거의 없다는 PR6 측정이 있다). 기준 청크 수는 측정으로 정한다.
+- **A-3. 회귀 방지.** A-1의 테스트를 CI에 둔다. 기존 recall 테스트(`builder_recall_at_10_matches_exact_search`, `mmap_recall_at_10_survives_save_and_load`)는 고르게 퍼진 난수 벡터만 써서 이 경우를 못 잡았다. 군집 + 외톨이 벡터 fixture를 더하고, "모든 노드가 자기 자신을 질의로 넣으면 top-10 안에 나온다"를 검사한다. Dart 쪽은 D1의 실제 엔진 재현(짧은 문서 + 큰 PDF)을 통합 테스트로 둔다.
+- **A-4. 기존 인덱스.** 저장된 `.hnsw` 파일은 고쳐진 코드로 다시 만들어져야 한다. 인덱스 형식 버전을 올리거나 재빌드 조건을 넣어, 업그레이드한 앱이 옛 그래프를 그대로 쓰지 않게 한다.
+- **B-1. 수정.** `clearAndRestart()` 뒤 같은 내용을 `addDocument`하면 청크가 만들어지게 한다. `claim_source_for_ingestion`이 청크 0개인 `completed` 소스를 잡게 할지, clear가 소스 상태를 바꿀지는 Dart 쪽 `decideDuplicateSourceIngestion`과 함께 읽고 정한다. 잠금 해제 → 재등록 → 검색을 Rust 테스트와 실제 엔진 실행으로 확인한다.
+- **문서.** `index_management.md` 3절과 `model_setup.md` 4번의 `removeSource` 우회 안내를 고쳐진 동작에 맞춰 줄인다. `CHANGELOG.md`의 `## Unreleased`에 두 수정을 적는다.
+
+**제외**
+- 하이브리드 가중치와 불용어 문제(후보 목록 [중간]). `feat/ask-search-weights` 작업과 겹칠 수 있어 따로 정한다.
+- 후보 목록 [낮음] 네 가지(`RagError` export, `pubspec.yaml`의 Flutter 하한, `sourceName` null, `DocumentParser.parse` 초기화 순서).
+- HNSW 증분 삽입, ef 상한 같은 성능 후보.
+- 배포와 버전 올리기(규칙 5). A의 수정은 Rust 코어를 바꾸므로 `rag_engine_flutter` 배포가 있어야 pub 사용자에게 닿는다. 배포 시점은 사용자가 정한다.
+
+**완료 기준**
+- A-1의 테스트가 수정 전 main에서 실패하고 수정 뒤 통과한다. 두 결과를 이 절과 PR 본문에 적는다.
+- 실제 엔진(macOS)에서 짧은 문서 + `sample_eng.pdf` 뒤 `search`와 `searchHybrid`가 환불 문장을 돌려준다. 순서를 바꾼 경우와 짧은 문서 6개인 경우도 확인한다.
+- 기존 recall·속도 기준이 나빠지지 않는다: Rust recall 테스트, `hnsw_build_benchmark`, 80-query passage 평가(`passage_recall@10` 0.925)를 수정 전후로 비교해 적는다. 빌드 시간이 늘면 수치와 함께 적는다.
+- B-1: MiniLM으로 만든 DB를 KoEn으로 열고 `clearAndRestart()` 뒤 같은 문서 5개를 다시 넣어 `isDuplicate: false`와 검색 결과를 확인한다.
+- 규칙 8의 네 항목. 업그레이드 경로는 0.23.0이 남긴 DB와 `.hnsw` 파일에서 시작해, 업그레이드 뒤 첫 실행에 짧은 문서가 검색되는지 확인한다(A-4).
+- PR 하나, CI 통과. `Cargo.toml` 버전과 `pubspec.yaml` 버전은 올리지 않는다.
+
+**손대는 파일:** `rust_builder/rust/src/api/{custom_hnsw,hnsw_index,source_rag,ingest_session,migration_meta}.rs`, `lib/services/source_rag_service.dart`(중복 판정, 필요하면), `test/**`와 `example/integration_test/`(새 테스트), `docs/features/index_management.md`, `docs/guides/model_setup.md`, `CHANGELOG.md`, `docs/milestones.md`
+
 ### Q0. 내부 점검 묶음 (Q1~Q5) 공통
 
 - **출처:** `docs/reports/2026-11-06-hotfix-retrospective.md`(2026-11-06 점검). 항목 번호 A1~A5, B1~B16은 그 문서의 번호다. 근거·재현 방법은 그 문서에 있다.
@@ -307,12 +347,12 @@
 
 착수하려면 위 형식으로 옮겨 적고 합의를 받는다.
 
-- **[높음] 큰 문서와 함께 넣은 짧은 문서가 벡터 검색에 나오지 않는다 (2026-11-12 D1 실행 중 발견, 코드는 고치지 않음).** README 상단 예제의 형태다.
+- **[높음] 큰 문서와 함께 넣은 짧은 문서가 벡터 검색에 나오지 않는다 (2026-11-12 D1 실행 중 발견, 코드는 고치지 않음).** → S1 범위 초안으로 옮겼다. README 상단 예제의 형태다.
   - 재현(macOS, MiniLM Model Pack): `addDocument('Refunds are accepted within 14 days of purchase.')` 뒤 `addDocumentFromFile(example/assets/sample_data/sample_eng.pdf)`(1820 청크). `search('How long is the refund period?', topK: 50)`과 `searchHybrid(topK: 50)`에 환불 문장이 없다. 짧은 문서만 있을 때는 similarity 0.7295로 1위인데, PDF를 넣은 뒤에는 1위가 0.4377인 PDF 청크다.
   - 같은 결과: PDF를 먼저 넣어도, PDF 본문을 `addDocument(String)`으로 넣어도, `rebuildIndex()`를 불러도, `dispose` 후 다시 `initialize`해도, 짧은 문서를 더 넣어도, 짧은 문서가 6개여도(다른 질의로 다른 짧은 문서도 못 찾는다).
   - 데이터는 있다: `search(..., sourceIds: [1])`(exact scan)은 환불 문장을 돌려준다. 5 청크짜리 PDF와 함께일 때는 정상이다.
   - 추정(확인하지 않음): 한 문서의 청크가 빽빽이 모여 있을 때 멀리 떨어진 벡터로 들어오는 HNSW 링크가 모두 잘려 그래프에서 도달할 수 없게 된다. BM25는 "refund"와 "Refunds"가 달라 이 질의에서 맞지 않았다.
-- **[중간] `clearAndRestart()` 뒤에 같은 문서를 다시 넣을 수 없다 (2026-11-12 D1).** `sources` 행이 남아 `addDocument`가 `isDuplicate: true, chunkCount: 0, message: "Source ingestion already in progress"`를 돌려준다. API 주석("`sources` 테이블을 남겨 `addDocument`로 다시 넣을 수 있다")과 다르다. 문서에는 `removeSource` 우회 절차를 적었다.
+- **[중간] `clearAndRestart()` 뒤에 같은 문서를 다시 넣을 수 없다 (2026-11-12 D1).** → S1 범위 초안으로 옮겼다. `sources` 행이 남아 `addDocument`가 `isDuplicate: true, chunkCount: 0, message: "Source ingestion already in progress"`를 돌려준다. API 주석("`sources` 테이블을 남겨 `addDocument`로 다시 넣을 수 있다")과 다르다. 문서에는 `removeSource` 우회 절차를 적었다.
 - **[중간] 기본 하이브리드 가중치(벡터 0.2, BM25 0.8)에서 불용어만 맞은 청크가 정답보다 앞선다 (2026-11-12 D1).** 6 청크 코퍼스에서 "How long is the refund period?"의 정답(벡터 1위, BM25 불일치)이 `searchHybrid` 5위(0.0033)이고, "the"/"is"만 겹친 청크 넷이 0.016 안팎으로 앞선다. `ask`는 이 검색의 상위 5개만 쓴다. main 체크아웃의 `feat/ask-search-weights` 작업과 겹치는지 확인한다.
 - **[낮음] 2026-11-12 D1에서 본 것:** (1) `mobile_rag_engine.dart`가 `RagError`만 `show`로 내보내, 앱이 `when`/`maybeWhen`과 `RagErrorUi.userFriendlyMessage`를 쓸 수 없다. (2) `pubspec.yaml`의 `flutter: ">=3.9.0"`이 실제 하한(Dart 3.9.2 = Flutter 3.35.3)과 다르다. (3) `name` 없이 넣은 문서는 `RagPassage.sourceName`이 null이라 `ask.md`와 README의 인용 출력 예제가 "null"을 찍는다. (4) `DocumentParser.parse`를 `MobileRag.initialize` 전에 부르면 `flutter_rust_bridge has not been initialized`가 난다.
 - Windows `Native Tests`의 `ingest_ffi_traffic_test.dart` "Peak-RSS delta"가 가끔 실패한다(파일 경로가 UTF-8 경로보다 2MB 이상 적게 써야 하는데 0.7~0.8MB 차이만 났다. 11/1 `ci/quickstart-e2e`, 11/3 #125). 측정값이 흔들리는 테스트라 기준이나 측정 방식을 손봐야 한다.
