@@ -119,7 +119,7 @@
 ### D1. 문서 정비 (README 첫 화면 + 틀린 안내 수정)
 
 - **담당:** 세션 "D1 문서 정비", 브랜치 `docs/readme-first-screen` (worktree `.claude/worktrees/readme-restructure`)
-- **상태:** 진행 중 (2026-11-11 사용자 합의 "D1 착수는 새 세션에서 하자", 같은 날 착수).
+- **상태:** PR 열림 (#133, 2026-11-12). 머지 대기. 2026-11-11 사용자 합의 "D1 착수는 새 세션에서 하자"로 착수했다.
 - **출처:** 2026-11-11 README 검토와 설치 경로 점검, 회고(`docs/reports/2026-11-06-hotfix-retrospective.md`) 6절의 C4~C6과 "낮음" 문서 항목(지금까지 "새 문서 묶음 후보"로만 남아 있었다).
 - **순서:** I1과 `docs/guides/{troubleshooting,faq}.md`가 겹친다. D1을 먼저 머지하고 I1을 그 위에서 진행한다(규칙 3).
 
