@@ -2,129 +2,58 @@
 
 **Build local, on-device RAG in Flutter with a Dart package.**
 
-Mobile RAG Engine is a Flutter package for local Retrieval-Augmented Generation
-(RAG): ingest local documents, chunk and embed them on-device, then run hybrid
-semantic + keyword search through a Dart API. No server, no API cost, no network
-round-trip for retrieval.
+Add your app's documents, search them with hybrid semantic + keyword retrieval,
+and hand the result to any LLM. Chunking, embedding, storage and search all run
+on the device: no server, no API cost, no network round-trip for retrieval.
 
 ![pub package](https://img.shields.io/pub/v/mobile_rag_engine)
-![flutter](https://img.shields.io/badge/Flutter-3.9%2B-blue)
-![rust](https://img.shields.io/badge/Core-Rust-orange)
+![flutter](https://img.shields.io/badge/Flutter-3.35.3%2B-blue)
 ![platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS%20%7C%20Windows-lightgrey)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Use it when you need a **Flutter local RAG engine** for private notes, document
-Q&A, chat with PDF, offline assistants, or enterprise apps where user data must
-stay on the device.
+```dart
+final rag = MobileRag.instance; // after MobileRag.initialize, see Installation
 
-> **No LLM inside.** This package finds and assembles the relevant context.
-> To generate an answer, pass your own LLM call to `ask` (see the
-> [Ask guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/ask.md)).
+// 1. Add documents. They are chunked and embedded on the device.
+await rag.addDocument('Refunds are accepted within 14 days of purchase.');
+await rag.addDocumentFromFile('/path/to/manual.pdf');
 
-> **This README describes 0.23.0.** Still on 0.20.x? It has no Model Pack
-> `setup` command or `RagModelPack`, and it always builds the Rust core from
-> source; follow the
-> [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md)
-> instead.
+// 2. Search. The result is context that is ready to send to an LLM.
+final result = await rag.search(
+  'How long is the refund period?',
+  tokenBudget: 2000,
+);
+print(result.context.text);
 
----
+// 3. Or get an answer with citations from the LLM you choose.
+final answer = await rag.ask(
+  'How long is the refund period?',
+  generate: (prompt) => myLlm.complete(prompt), // any Future<String>
+);
+print(answer.text); // "Within 14 days of purchase [1]."
+```
+
+Use it for private notes, document Q&A, chat with PDF, offline assistants, or
+enterprise apps where user data must stay on the device.
 
 ## Why this package?
 
-### No Rust Toolchain Required (0.21.0+)
-
-Starting with 0.21.0, the Rust core (`rag_engine_flutter`) ships as signed,
-pre-compiled binaries for **Android** (arm64-v8a, armeabi-v7a, x86_64, x86),
-**iOS** (device and simulator), **macOS** (arm64, x86_64), and, from 0.22.0,
-**Windows** (x64).
-[Cargokit](https://github.com/irondash/cargokit) downloads the binary for your
-target during `flutter build`, verifies its signature, and links it, so you do
-not need Rust, Cargo, or `rustup`.
-
-- The first build of each platform downloads the binary from this repository's
-  GitHub releases, so the build machine needs access to `github.com`.
-- If `rustup` **is** installed, Cargokit builds the Rust core from source
-  instead. That path needs Rust stable, and its first build takes longer.
-- A binary whose signature does not verify is ignored rather than linked.
-
-### Performance
-
-| Feature | Pure Dart | **Mobile RAG Engine (Rust)** |
-|:---|:---:|:---:|
-| **Tokenization** | Slow | HuggingFace `tokenizers` (Rust) |
-| **Vector Search** | O(n) | HNSW Index — sub-linear retrieval |
-| **Memory Usage** | High | Copy-minimized Rust core, `Float32List` zero-copy transport |
-
-> Numbers vary by device and corpus. See [`benchmark_service`](https://github.com/dev07060/mobile_rag_engine/blob/main/lib/services/benchmark_service.dart) and the `0.18.0` retrieval-hot-path notes in [CHANGELOG.md](https://github.com/dev07060/mobile_rag_engine/blob/main/CHANGELOG.md) for measured deltas on your own hardware.
-
-### Supported and Verified Scope
-
-| Area | Current status | Evidence / boundary |
-|:-----|:---------------|:--------------------|
-| **Local Flutter RAG retrieval** | Supported | Dart facade over a Rust core for ingest, chunking, embedding, SQLite storage, HNSW vector search, BM25 keyword search, RRF fusion, and context assembly |
-| **Offline / on-device operation** | Supported | Models and user documents stay local after you bundle the ONNX model and tokenizer assets |
-| **Hybrid source retrieval** | Verified on benchmark fixtures | 80-source balanced profile run: `source_recall@10 = 1.000` for shipped `default_hybrid` |
-| **Passage/context retrieval** | Verified on benchmark fixtures | 80-query passage run: `passage_recall@10 = 0.925`, `answerable_context@10 = 0.938`; semantic passage misses remain the main improvement area |
-| **Text-layer PDF-to-RAG** | Verified on sample scope | `sample_eng.pdf` and `sample_kor.pdf` profile run: 8/8 PDF-derived queries reached source, passage, and answerable context at top-10 |
-| **Scanned/image-only PDFs** | Detected, not OCR-processed | OCR-required PDFs are surfaced as extraction errors so your app can route to an OCR layer; OCR is not bundled in this package |
-| **Large, table-heavy, OCR-heavy PDFs** | Still being validated | Do not treat the PDF smoke result as broad PDF robustness or mobile latency/memory proof |
-
-For the implementation-oriented guide, see
-[Flutter Local RAG Engine Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/local-rag-engine.md).
-
-### 100% Offline & Private
-
-Data never leaves the user's device. Perfect for privacy-focused apps (journals, secure chats, enterprise tools).
-
----
-
-## Features
-
-### End-to-End RAG Pipeline
+- **Offline and private.** Documents, embeddings and the search index stay on
+  the user's device. Retrieval needs no server and costs nothing per query.
+- **Hybrid search with measured quality.** HNSW vector search and BM25 keyword
+  search are fused into one ranking. On an 80-query benchmark fixture,
+  the right passage is in the top 10 for 92.5% of queries (see
+  [Supported and verified scope](#supported-and-verified-scope)).
+- **Works with any LLM.** There is no LLM inside. `search` returns context
+  within a token budget, and `ask` takes your own generation function, so a
+  cloud SDK, an on-device model or a local server all fit. See the
+  [Ask guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/ask.md).
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/dev07060/mobile_rag_engine/main/assets/readme-sources/package_introduction.png" width="860" alt="End-to-End RAG Pipeline">
 </p>
 
 > **One package, complete pipeline.** From PDF, DOCX, Markdown and plain text to LLM-ready context.
-
-### Key Features
-
-| Category | Features |
-|:---------|:---------|
-| **Document Input** | Text-layer PDF, DOCX, Markdown and plain text (up to 50 MB per file); file-path and UTF-8 ingest fast paths |
-| **Chunking** | Plain-text paragraph/line chunking with heading-aware split and tokenizer hard guard; Markdown structure-aware chunking with header-path metadata |
-| **Search** | HNSW vector + BM25 keyword hybrid search with RRF fusion; metadata-first search with explicit context/chunk hydration |
-| **Storage** | SQLite persistence, HNSW Index persistence (fast startup), connection pooling, resumable indexing |
-| **Collections** | Collection-scoped ingest/search/rebuild via `inCollection('id')` |
-| **Performance** | Rust core, HuggingFace `tokenizers`, thread control, memory optimized |
-| **Context** | Engine-tokenizer exact context budget, adjacent chunk expansion, single source mode |
-
-**Support boundaries:**
-
-- **PDF**: text-layer PDFs are verified on a small sample set (see the table above). Large or table-heavy PDFs are still being validated. Scanned or image-only PDFs need an OCR layer before indexing, and AES-encrypted PDFs are rejected.
-- **DOCX**: body text, tables, text boxes, headers, footers and footnotes are extracted as plain text. Table cells are separated by ` | `; other layout such as columns and styling is not kept.
-- **Other formats** (HTML, RTF, PPTX, XLSX, images): not supported. Extract the text in your app and pass it to `addDocument`.
-
----
-
-## Requirements
-
-| Platform | Minimum Version |
-|:---------|:----------------|
-| **iOS** | 16.0+ |
-| **Android** | API 21+ (Android 5.0 Lollipop) |
-| **macOS** | 14.0+ |
-| **Windows** | Windows 10+ (x64), from 0.22.0 |
-| **Build host** | No Rust needed (see [No Rust Toolchain Required](#no-rust-toolchain-required-0210)); network access to `github.com` on the first build |
-
-Windows on ARM64 and Linux are not supported. Windows builds need Visual Studio
-with the "Desktop development with C++" workload, as for any Flutter Windows
-app. On Windows, the engine stores its database, index files, and copied model
-assets in the app support directory (`%APPDATA%\<company>\<app>`) instead of the
-user's (often OneDrive-synced) Documents folder; other platforms are unchanged.
-
-> ONNX Runtime is provided through [`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime). CocoaPods builds on both iOS and macOS need static framework linkage (`use_frameworks! :linkage => :static`) and deployment targets of iOS 16.0+ and macOS 14.0+, while `flutter create` generates iOS 13.0 / macOS 10.15 with dynamic frameworks. From 0.22.1, the `setup` command below applies these settings for you; on 0.22.0, set them by hand as shown in the [Quick Start](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/quick_start.md). Android release builds need ONNX Runtime classes kept from R8; from 0.22.2 (`rag_engine_flutter` 0.21.1) the package ships that rule, the iOS/macOS release linker settings, 16 KB Android page alignment and an iOS privacy manifest (see [Troubleshooting](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md) for earlier versions).
 
 ---
 
@@ -139,17 +68,21 @@ dependencies:
 
 ### 2. Install the verified Model Pack
 
+> **This preset is English-only.** For Korean documents, follow the
+> [KoEn-E5-Tiny recipe](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#korean-documents-koen-e5-tiny)
+> instead of the command below; English MiniLM scores close to random on
+> Korean text.
+
 ```bash
 dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en
 dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en --check
 ```
 
 It writes `assets/mobile_rag/model.onnx`, `tokenizer.json`, and
-`model-pack.json`. From 0.22.1 it also raises the iOS and macOS host settings
-the native dependencies need (Podfile platform, static framework linkage and the
-Runner deployment target) and prints each change; existing higher targets are
-kept, and `--skip-host-config` turns this off. Add the directory to your app
-assets:
+`model-pack.json`. It also raises the iOS and macOS host settings the native
+dependencies need (Podfile platform, static framework linkage and the Runner
+deployment target) and prints each change; existing higher targets are kept,
+and `--skip-host-config` turns this off. Add the directory to your app assets:
 
 ```yaml
 flutter:
@@ -157,7 +90,7 @@ flutter:
     - assets/mobile_rag/
 ```
 
-Then initialize with one manifest:
+### 3. Initialize once
 
 ```dart
 await MobileRag.initialize(
@@ -167,40 +100,12 @@ await MobileRag.initialize(
 );
 ```
 
-The first success is add documents, rebuild the index, and get non-empty
-chunks/context from search. LLM generation remains your app's separate step.
+The first success is to add a document and get non-empty context back from
+`search`, as in the example at the top. `search` waits for a pending index
+update, so you do not need to call `rebuildIndex()` first.
 
-The Model Pack preset is English-only (`all-MiniLM-L6-v2`). For Korean, CJK,
-or other multilingual documents, use a multilingual ONNX model through the
-original two-asset initializer, which remains available as an advanced path;
-see the
+For other languages and model choices, see the
 [Model Setup Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md).
-
----
-
-## Quick Index
-
-### Features
-*   [Adjacent Chunk Retrieval](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/adjacent_chunk_retrieval.md) - Fetch surrounding context.
-*   [Index Management](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/index_management.md) - Stats, persistence, and recovery.
-*   [Markdown Chunker](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/markdown_chunker.md) - Structure-aware text splitting.
-*   [Multi-Collection](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/multi_collection.md) - Isolate ingest/search/rebuild by category.
-*   [Prompt Compression](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/prompt_compression.md) - Reduce token usage.
-*   [Search by Source](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/search_by_source.md) - Filter results by document.
-*   [Search Strategies](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/search_strategies.md) - Tune ranking and retrieval.
-
-### Guides
-*   [Flutter Local RAG Engine Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/local-rag-engine.md) - Build local/on-device RAG in Flutter with Dart APIs.
-*   [Quick Start](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/quick_start.md) - Setup in 5 minutes.
-*   [Model Setup](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md) - Choosing and downloading models.
-*   [LLM Tools](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/llm_tools.md) - Search results as JSON and as a tool for any LLM.
-*   [Ask](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/ask.md) - Answer a question with your own LLM and get the cited passages.
-*   [Release Build](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/release_build.md) - Bundle size optimization for production.
-*   [Troubleshooting](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md) - Common fixes.
-*   [FAQ](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/faq.md) - Frequently asked questions.
-
-### Testing
-*   [Unit Testing](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/test/unit_testing.md) - Mocking for isolated tests.
 
 ---
 
@@ -227,32 +132,56 @@ if (!MobileRag.instance.isIndexReady) {
 ### Adding Documents and Searching
 
 ```dart
-class MySearchScreen extends StatelessWidget {
-  Future<void> _search() async {
-    // 1. Add Documents (auto-chunked & embedded). Indexing is auto-managed
-    //    (debounced ~500ms) — only call rebuildIndex() if you need it now.
-    await MobileRag.instance.addDocument(
-      'Flutter is a UI toolkit for building apps.',
-    );
+import 'dart:io';
 
-    // File / UTF-8 fast paths are useful for large local documents.
-    await MobileRag.instance.addDocumentFromFile('/path/to/manual.pdf');
-    final noteBytes = await File('/path/to/notes.md').readAsBytes();
-    await MobileRag.instance.addDocumentUtf8(noteBytes, name: 'notes.md');
+import 'package:mobile_rag_engine/mobile_rag_engine.dart';
 
-    // 2. Search with LLM-ready context
-    final result = await MobileRag.instance.search(
-      'What is Flutter?',
-      tokenBudget: 2000,
-    );
-    print(result.context.text); // Ready to send to LLM
-  }
+Future<String> addAndSearch() async {
+  // 1. Add documents (chunked and embedded automatically). The index is
+  //    updated in the background, and a search waits for a pending update.
+  await MobileRag.instance.addDocument(
+    'Flutter is a UI toolkit for building apps.',
+  );
+
+  // File / UTF-8 fast paths are useful for large local documents.
+  await MobileRag.instance.addDocumentFromFile('/path/to/manual.pdf');
+  final noteBytes = await File('/path/to/notes.md').readAsBytes();
+  await MobileRag.instance.addDocumentUtf8(noteBytes, name: 'notes.md');
+
+  // 2. Search with LLM-ready context
+  final result = await MobileRag.instance.search(
+    'What is Flutter?',
+    tokenBudget: 2000,
+  );
+  return result.context.text; // Ready to send to an LLM
 }
 ```
 
+### Answering with Your LLM
+
+`ask` searches, builds a prompt with numbered passages, calls the function you
+pass, and returns the answer with the passages it cites.
+
+```dart
+final answer = await MobileRag.instance.ask(
+  'What is Flutter?',
+  generate: (prompt) => myLlm.complete(prompt), // Future<String>
+);
+
+print(answer.text);
+for (final passage in answer.citations) {
+  print('[${passage.id}] ${passage.sourceName}: ${passage.text}');
+}
+```
+
+See the [Ask guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/ask.md)
+for custom prompts and the no-result case, and
+[LLM Tools](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/llm_tools.md)
+to expose search as a tool instead.
+
 ### Handling File Picker Fallback
 
-`addDocumentFromFile` is the fastest path because the Rust core reads and chunks the file directly. Some platform pickers (cloud-backed pickers, content URIs without a stable local path, etc.) return data that is not exposed as a real filesystem path. In those cases, fall back to UTF-8 or parsed-text ingestion:
+`addDocumentFromFile` is the fastest path because the native core reads and chunks the file directly. Some platform pickers (cloud-backed pickers, content URIs without a stable local path, etc.) return data that is not exposed as a real filesystem path. In those cases, fall back to UTF-8 or parsed-text ingestion:
 
 ```dart
 try {
@@ -314,7 +243,7 @@ try {
 }
 ```
 
-### Multi-Collection (v1)
+### Multi-Collection
 
 Use collection scopes when you want independent rebuild boundaries per category.
 
@@ -333,10 +262,114 @@ print(travelHits.length);
 ```
 
 If you do not specify a collection, the engine uses the default `__default__`
-collection for backward compatibility.
+collection.
 
 > **Advanced Usage:** For fine-grained control, use the high-level metadata lane (`searchMeta`, `assembleContext`, `hydrateChunks`, `getChunkExcerpts`) and the public API reference. Most apps should stay on the `MobileRag` facade.
 
+---
+
+## Features
+
+| Category | Features |
+|:---------|:---------|
+| **Document Input** | Text-layer PDF, DOCX, Markdown and plain text (up to 50 MB per file); file-path and UTF-8 ingest fast paths |
+| **Chunking** | Plain-text paragraph/line chunking with heading-aware split and tokenizer hard guard; Markdown structure-aware chunking with header-path metadata |
+| **Search** | HNSW vector + BM25 keyword hybrid search with RRF fusion; metadata-first search with explicit context/chunk hydration |
+| **Storage** | SQLite persistence, HNSW Index persistence (fast startup), connection pooling, resumable indexing |
+| **Collections** | Collection-scoped ingest/search/rebuild via `inCollection('id')` |
+| **Context** | Engine-tokenizer exact context budget, adjacent chunk expansion, single source mode |
+| **LLM bridge** | `ask` with your own generation function and cited passages; search results as JSON and as a tool definition |
+| **Native core** | Tokenization, chunking, storage and search run in a compiled native core with thread control; HuggingFace `tokenizers` |
+
+**Support boundaries:**
+
+- **PDF**: text-layer PDFs are verified on a small sample set (see the table below). Large or table-heavy PDFs are still being validated. Scanned or image-only PDFs need an OCR layer before indexing, and AES-encrypted PDFs are rejected.
+- **DOCX**: body text, tables, text boxes, headers, footers and footnotes are extracted as plain text. Table cells are separated by ` | `; other layout such as columns and styling is not kept.
+- **Other formats** (HTML, RTF, PPTX, XLSX, images): not supported. Extract the text in your app and pass it to `addDocument`.
+
+### Supported and Verified Scope
+
+| Area | Current status | Evidence / boundary |
+|:-----|:---------------|:--------------------|
+| **Local Flutter RAG retrieval** | Supported | Dart facade over a native core for ingest, chunking, embedding, SQLite storage, HNSW vector search, BM25 keyword search, RRF fusion, and context assembly |
+| **Offline / on-device operation** | Supported | Models and user documents stay local after you bundle the ONNX model and tokenizer assets |
+| **Hybrid source retrieval** | Verified on benchmark fixtures | 80-source balanced profile run: `source_recall@10 = 1.000` for shipped `default_hybrid` |
+| **Passage/context retrieval** | Verified on benchmark fixtures | 80-query passage run: `passage_recall@10 = 0.925`, `answerable_context@10 = 0.938`; semantic passage misses remain the main improvement area |
+| **Text-layer PDF-to-RAG** | Verified on sample scope | `sample_eng.pdf` and `sample_kor.pdf` profile run: 8/8 PDF-derived queries reached source, passage, and answerable context at top-10 |
+| **Scanned/image-only PDFs** | Detected, not OCR-processed | OCR-required PDFs are surfaced as extraction errors so your app can route to an OCR layer; OCR is not bundled in this package |
+| **Large, table-heavy, OCR-heavy PDFs** | Still being validated | Do not treat the PDF smoke result as broad PDF robustness or mobile latency/memory proof |
+
+Numbers vary by device and corpus. To measure on your own hardware, see
+[`benchmark_service`](https://github.com/dev07060/mobile_rag_engine/blob/main/lib/services/benchmark_service.dart).
+For the implementation-oriented guide, see
+[Flutter Local RAG Engine Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/local-rag-engine.md).
+
+---
+
+## Requirements
+
+| Platform | Minimum Version |
+|:---------|:----------------|
+| **iOS** | 16.0+ |
+| **Android** | API 24+ (Android 7.0), the minimum of the ONNX Runtime Android library |
+| **macOS** | 14.0+ |
+| **Windows** | Windows 10+ (x64) |
+| **Flutter** | 3.35.3+ (Dart 3.9.2) |
+| **Build host** | Network access to `github.com` on the first build of each platform |
+
+Windows on ARM64 and Linux are not supported. Windows builds need Visual Studio
+with the "Desktop development with C++" workload, as for any Flutter Windows
+app. On Windows, the engine stores its database, index files, and copied model
+assets in the app support directory (`%APPDATA%\<company>\<app>`) instead of the
+user's (often OneDrive-synced) Documents folder.
+
+**Build host.** The native core ships as signed, pre-compiled binaries for
+Android (arm64-v8a, armeabi-v7a, x86_64, x86), iOS (device and simulator),
+macOS (arm64, x86_64) and Windows (x64). `flutter build` downloads the binary
+for your target from this repository's GitHub releases, verifies its signature,
+and links it, so no extra toolchain is needed. If `rustup` is installed on the
+build machine, the core is built from source instead; that path needs Rust
+stable and its first build takes longer.
+
+**ONNX Runtime** is provided through
+[`flutter_onnxruntime`](https://pub.dev/packages/flutter_onnxruntime).
+CocoaPods builds on iOS and macOS need static framework linkage
+(`use_frameworks! :linkage => :static`) and deployment targets of iOS 16.0+ and
+macOS 14.0+, while `flutter create` generates iOS 13.0 / macOS 10.15 with
+dynamic frameworks. The `setup` command above applies these settings for you.
+The package also ships the Android R8 keep rule for ONNX Runtime, the iOS/macOS
+release linker settings, 16 KB Android page alignment and an iOS privacy
+manifest. If a build fails, see
+[Troubleshooting](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md).
+
+Upgrading from 0.20.x or earlier? See
+[CHANGELOG.md](https://github.com/dev07060/mobile_rag_engine/blob/main/CHANGELOG.md).
+
+---
+
+## Documentation
+
+### Guides
+*   [Quick Start](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/quick_start.md) - Setup in 5 minutes.
+*   [Model Setup](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md) - Choosing and downloading models.
+*   [Ask](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/ask.md) - Answer a question with your own LLM and get the cited passages.
+*   [LLM Tools](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/llm_tools.md) - Search results as JSON and as a tool for any LLM.
+*   [Flutter Local RAG Engine Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/local-rag-engine.md) - Build local/on-device RAG in Flutter with Dart APIs.
+*   [Release Build](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/release_build.md) - Bundle size optimization for production.
+*   [Troubleshooting](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md) - Common fixes.
+*   [FAQ](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/faq.md) - Frequently asked questions.
+
+### Features
+*   [Adjacent Chunk Retrieval](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/adjacent_chunk_retrieval.md) - Fetch surrounding context.
+*   [Index Management](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/index_management.md) - Stats, persistence, and recovery.
+*   [Markdown Chunker](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/markdown_chunker.md) - Structure-aware text splitting.
+*   [Multi-Collection](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/multi_collection.md) - Isolate ingest/search/rebuild by category.
+*   [Prompt Compression](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/prompt_compression.md) - Reduce token usage.
+*   [Search by Source](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/search_by_source.md) - Filter results by document.
+*   [Search Strategies](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/features/search_strategies.md) - Tune ranking and retrieval.
+
+### Testing
+*   [Unit Testing](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/test/unit_testing.md) - Mocking for isolated tests.
 
 ---
 

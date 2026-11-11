@@ -116,6 +116,63 @@
 
 **손대는 파일:** `docs/perf/multilingual-embedding/**`, `docs/guides/model_setup.md`(비용 절), `example/integration_test/`(측정 테스트가 필요하면 새 파일)
 
+### D1. 문서 정비 (README 첫 화면 + 틀린 안내 수정)
+
+- **담당:** 세션 "D1 문서 정비", 브랜치 `docs/readme-first-screen` (worktree `.claude/worktrees/readme-restructure`)
+- **상태:** 진행 중 (2026-11-11 사용자 합의 "D1 착수는 새 세션에서 하자", 같은 날 착수).
+- **출처:** 2026-11-11 README 검토와 설치 경로 점검, 회고(`docs/reports/2026-11-06-hotfix-retrospective.md`) 6절의 C4~C6과 "낮음" 문서 항목(지금까지 "새 문서 묶음 후보"로만 남아 있었다).
+- **순서:** I1과 `docs/guides/{troubleshooting,faq}.md`가 겹친다. D1을 먼저 머지하고 I1을 그 위에서 진행한다(규칙 3).
+
+**목표:** 처음 온 사람이 첫 화면에서 무엇을 하는 패키지인지와 쓰는 코드를 보게 하고, 따라 하면 실패하거나 틀린 결과가 나오는 문서 안내를 고친다.
+
+**포함**
+- **README 첫 화면:** 한 줄 소개 바로 아래에 문서 추가 → 검색 → `ask` 예제. "Why"는 세 줄(오프라인, 하이브리드 검색, LLM 무관). 검증 범위 표와 요구사항은 아래로 옮긴다.
+- **README에서 빼는 것:** `Core-Rust` 배지, "No Rust Toolchain Required" 절, 상단의 0.20.x 안내문, 본문의 "0.2x.y부터" 표기, 근거 없는 "Pure Dart 대 Rust" 표. 빌드 때 `github.com` 접근이 필요하다는 것과 `rustup`이 있으면 소스에서 빌드한다는 것은 Requirements에 남긴다.
+- **README의 틀린 내용:** Android 최소 버전(API 21 → ONNX Runtime이 요구하는 값. 착수 때 AAR에서 확인한다), Flutter 하한(3.9 → Dart 3.9.2에 맞는 값), 컴파일되지 않는 `MySearchScreen` 예제. `quick_start.md`의 같은 표기도 함께 고친다.
+- **영어 전용 안내:** 기본 Model Pack이 영어 전용이라는 안내를 Installation의 설치 명령 바로 위에 둔다. 한국어는 KoEn-E5-Tiny 절차로 보낸다.
+- **한국어 모델 권장 통일:** `faq.md`의 "Does it support Korean?" 답을 BGE-m3(542MB)에서 `model_setup.md`와 같은 KoEn-E5-Tiny로 바꾼다.
+- **모델 교체 복구 안내 (C4):** `faq.md`, `troubleshooting.md`, `index_management.md`의 `regenerateAllEmbeddings()` 안내를 실제로 잠금을 푸는 `reembedAll()`/`clearAndRestart()`로 고치고, 오류 형식을 `embeddingFingerprintMismatch`로 맞춘다.
+- **저장 파일과 백업 안내 (C6):** `faq.md`와 `index_management.md`의 파일 구성(`rag.vec`, WAL, `<base>.hnsw`), 플랫폼별 경로, 백업 대상을 실제와 맞춘다. `.dirty` 설명을 고친다.
+- **단위 테스트 문서 (C5):** `docs/test/unit_testing.md`의 mock 설정을 그대로 따라 하면 통과하게 고친다.
+- **지원 플랫폼 표기:** `faq.md`의 "iOS, Android, macOS만"과 `troubleshooting.md`의 "Android, iOS and macOS용 바이너리"에 Windows를 넣는다. `troubleshooting.md`의 Windows 저장 경로 예시(`getApplicationDocumentsDirectory`)를 AppSupport로 고친다.
+- **`pod install` 실패 안내:** 기존 `Podfile.lock`이 옛 `onnxruntime-objc`를 고정해 실패하는 경우의 `pod update onnxruntime-objc onnxruntime-c`를 `troubleshooting.md`의 "iOS: Pod Install Failed"에 넣는다(지금은 CHANGELOG에만 있다).
+- **`faq.md`의 LLM 연동 답:** `ask`를 먼저 보여 주고 `formatPrompt` 방식은 직접 조립하는 경우로 둔다.
+- **pub.dev 토픽:** `pubspec.yaml`의 `flutter`를 `embeddings`로 바꾼다. 다음 배포 때 반영된다.
+
+**제외**
+- 패키지 코드 변경. `setup`의 메시지·한국어 프리셋·로컬 파일 설치·언어 불일치 경고는 따로 적는다.
+- I1의 항목(정적 링크와 vendored 라이브러리 충돌, 웹 빌드, 모델 파일을 git 밖에 두기, 문서 나누는 요령, Foundation Models 예시).
+- Xcode 27 안내(C1, C2): Q5에서 정한다.
+- 새 스크린샷과 `pubspec.yaml`의 `screenshots`. 지금 `sample_app.png`는 답변이 모두 "정보 없음"이라 위로 올리지 않는다. 새 화면을 찍은 뒤 따로 적는다.
+- `SemanticChunk.startPos`/`endPos` 단위 문서화(Q3에 있다).
+
+**완료 기준**
+- README 상단 예제와 고친 문서의 코드 예제를 실제 엔진으로 한 번씩 실행해 통과를 확인한다(회고 5절 3번: 가이드를 아무도 실행하지 않아 A1이 생겼다). 단위 테스트 문서의 예제는 그대로 옮겨 `flutter test`로 통과시킨다.
+- 모델 교체 안내는 MiniLM으로 만든 DB를 다른 모델로 열어 잠금을 재현한 뒤, 문서의 절차만으로 풀리는지 확인한다.
+- 백업 안내는 문서가 말한 파일만 옮긴 뒤 검색 결과가 같은지 확인한다.
+- README와 문서 안의 링크와 앵커가 모두 열린다.
+- 규칙 8의 네 항목. 문서만 바뀌므로 업그레이드 경로는 "해당 없음"과 이유를 적는다. PR 하나, CI 통과.
+
+**손대는 파일:** `README.md`, `pubspec.yaml`(topics), `docs/guides/{faq,troubleshooting,quick_start}.md`, `docs/features/index_management.md`, `docs/test/unit_testing.md`, `docs/milestones.md`, `docs/guides/model_setup.md`(2026-11-12 추가, 아래 "범위 변경")
+
+**범위 변경 (2026-11-12, 규칙 4):** `docs/guides/model_setup.md`를 손대는 파일에 넣었다. 두 곳만 고친다.
+- 모델 비교 표의 깨진 앵커(`#korean-koen-e5-tiny` → `#korean-documents-koen-e5-tiny`). FAQ와 README가 한국어 사용자를 이 문서로 보낸다.
+- "Switching an existing database" 절의 `clearAndRestart` 안내. 그대로 따르면 문서를 다시 넣을 수 없다(아래 실행 결과 3번).
+
+**실행 결과 (2026-11-12, 로컬 macOS, Xcode 27.1, Flutter 3.35.5, 새 `flutter create` 앱 + 이 브랜치 path 의존성 + `rust_builder` 소스 빌드, MiniLM Model Pack과 KoEn-E5-Tiny):**
+1. **버전 표기.** `onnxruntime-android` 1.23.0(`flutter_onnxruntime` 1.8.3~1.8.4)과 1.28.0(1.9.0) AAR의 매니페스트가 모두 `minSdkVersion="24"`다. Dart 3.9.2는 Flutter 3.35.3부터 들어 있다(3.35.0~3.35.2는 Dart 3.9.0). 문서를 Android API 24, Flutter 3.35.3으로 고쳤다.
+2. **README 예제.** 상단 예제, "Adding Documents and Searching", `ask`, `searchMeta`, 컬렉션 예제를 실제 엔진으로 실행해 통과했다. 단, 상단 예제의 PDF 자리에 `sample_eng.pdf`(1820 청크)를 넣으면 환불 문장이 검색되지 않는다. 코드 문제라 후보 목록에 적었다(아래 후보 "큰 문서와 함께 넣은 짧은 문서"). 통과한 실행은 5 청크짜리 텍스트 PDF를 썼다.
+3. **모델 교체 (C4).** MiniLM으로 만든 DB를 KoEn으로 열면 `initialize`는 성공하고 `search`와 `addDocument`가 `RagError.embeddingFingerprintMismatch(stored, current, 5)`를 던진다.
+   - `reembedAll()`: 잠금이 풀리고 5개 문서가 그대로 검색된다. 이어서 한국어 문서를 넣고 한국어로 검색해 맞는 문서가 1위로 나왔다.
+   - `clearAllData()`: 잠금이 풀리고 다시 넣은 문서가 검색된다.
+   - `clearAndRestart()`: 잠금은 풀리지만 `sources` 5행이 남아, 같은 문서를 다시 넣으면 `isDuplicate: true, chunkCount: 0`("Source ingestion already in progress")이 돌아오고 검색 결과가 0개다. `listSources()`의 소스를 `removeSource`로 지운 뒤 넣으면 된다(실행 확인). 문서는 "처음부터"를 `clearAllData()`로 안내하고, `clearAndRestart()`에는 이 절차를 붙였다. 코드 쪽은 후보 목록에 적었다.
+   - `regenerateAllEmbeddings()`: 오류 없이 끝나지만 잠금이 그대로다(C4 확인).
+4. **저장 파일과 백업 (C6).** 실제 파일은 `<이름>.sqlite`, 열려 있는 동안의 `-wal`/`-shm`, `<이름>.vec`, `<이름>_hnsw.hnsw`와 컬렉션별 `<이름>_hnsw_<8 hex>.hnsw`다. 회고는 `.dirty` 파일이 없다고 했지만, 인덱스 갱신이 밀려 있는 동안에는 `<이름>.dirty`(컬렉션은 `<이름>.<8 hex>.dirty`)가 있고 재빌드 뒤 지워진다. 문서를 그렇게 고쳤다. 엔진이 열려 있을 때 `.sqlite`는 4 KB였고 내용은 `-wal`에 있었다. `MobileRag.dispose()` 뒤에는 `-wal`이 합쳐져 사라졌다. FAQ의 백업 코드가 옮긴 파일(`.sqlite`, `.vec`)만으로 다른 이름의 DB를 열어, 질의 3개의 결과(본문과 similarity 소수 6자리)와 컬렉션 검색 결과가 같음을 확인했다. `.sqlite`만 옮기면 회고의 설명처럼 조용히 비는 것이 아니라 `initialize`가 `RagError.invalidInput(... missing or invalid persisted embedding)`으로 실패한다.
+5. **단위 테스트 문서 (C5).** 문서의 예제를 그대로 옮긴 테스트 4개가 `flutter test`로 통과했다. `mock.engine` stub을 빼면 3개가 `type 'Null' is not a subtype of type 'RagEngine'`으로 실패한다(재현).
+6. **링크.** 바뀐 문서 7개의 링크와 앵커 74개(외부 14개 포함)가 모두 열린다.
+7. **D1이 가정한 것과 달랐던 점.** `troubleshooting.md`의 Windows 저장 경로 예시는 이미 `getApplicationSupportDirectory`를 쓰고 있어 고치지 않았다. 앱은 `RagError`의 종류를 `when`/`maybeWhen`으로 구분할 수 없어서(후보 목록), 문서는 오류를 잡는 대신 `isEmbeddingFingerprintLocked`를 확인하게 했다.
+- **실행하지 않고 읽기만 한 것:** iOS·Android·Windows의 저장 경로(`path_provider` 코드), `pod update onnxruntime-objc onnxruntime-c`(각 `flutter_onnxruntime` 버전의 podspec 고정값만 확인), 크래시 뒤 `.dirty` 마커로 재빌드하는 경로(코드).
+
 ### Q0. 내부 점검 묶음 (Q1~Q5) 공통
 
 - **출처:** `docs/reports/2026-11-06-hotfix-retrospective.md`(2026-11-06 점검). 항목 번호 A1~A5, B1~B16은 그 문서의 번호다. 근거·재현 방법은 그 문서에 있다.
@@ -250,6 +307,14 @@
 
 착수하려면 위 형식으로 옮겨 적고 합의를 받는다.
 
+- **[높음] 큰 문서와 함께 넣은 짧은 문서가 벡터 검색에 나오지 않는다 (2026-11-12 D1 실행 중 발견, 코드는 고치지 않음).** README 상단 예제의 형태다.
+  - 재현(macOS, MiniLM Model Pack): `addDocument('Refunds are accepted within 14 days of purchase.')` 뒤 `addDocumentFromFile(example/assets/sample_data/sample_eng.pdf)`(1820 청크). `search('How long is the refund period?', topK: 50)`과 `searchHybrid(topK: 50)`에 환불 문장이 없다. 짧은 문서만 있을 때는 similarity 0.7295로 1위인데, PDF를 넣은 뒤에는 1위가 0.4377인 PDF 청크다.
+  - 같은 결과: PDF를 먼저 넣어도, PDF 본문을 `addDocument(String)`으로 넣어도, `rebuildIndex()`를 불러도, `dispose` 후 다시 `initialize`해도, 짧은 문서를 더 넣어도, 짧은 문서가 6개여도(다른 질의로 다른 짧은 문서도 못 찾는다).
+  - 데이터는 있다: `search(..., sourceIds: [1])`(exact scan)은 환불 문장을 돌려준다. 5 청크짜리 PDF와 함께일 때는 정상이다.
+  - 추정(확인하지 않음): 한 문서의 청크가 빽빽이 모여 있을 때 멀리 떨어진 벡터로 들어오는 HNSW 링크가 모두 잘려 그래프에서 도달할 수 없게 된다. BM25는 "refund"와 "Refunds"가 달라 이 질의에서 맞지 않았다.
+- **[중간] `clearAndRestart()` 뒤에 같은 문서를 다시 넣을 수 없다 (2026-11-12 D1).** `sources` 행이 남아 `addDocument`가 `isDuplicate: true, chunkCount: 0, message: "Source ingestion already in progress"`를 돌려준다. API 주석("`sources` 테이블을 남겨 `addDocument`로 다시 넣을 수 있다")과 다르다. 문서에는 `removeSource` 우회 절차를 적었다.
+- **[중간] 기본 하이브리드 가중치(벡터 0.2, BM25 0.8)에서 불용어만 맞은 청크가 정답보다 앞선다 (2026-11-12 D1).** 6 청크 코퍼스에서 "How long is the refund period?"의 정답(벡터 1위, BM25 불일치)이 `searchHybrid` 5위(0.0033)이고, "the"/"is"만 겹친 청크 넷이 0.016 안팎으로 앞선다. `ask`는 이 검색의 상위 5개만 쓴다. main 체크아웃의 `feat/ask-search-weights` 작업과 겹치는지 확인한다.
+- **[낮음] 2026-11-12 D1에서 본 것:** (1) `mobile_rag_engine.dart`가 `RagError`만 `show`로 내보내, 앱이 `when`/`maybeWhen`과 `RagErrorUi.userFriendlyMessage`를 쓸 수 없다. (2) `pubspec.yaml`의 `flutter: ">=3.9.0"`이 실제 하한(Dart 3.9.2 = Flutter 3.35.3)과 다르다. (3) `name` 없이 넣은 문서는 `RagPassage.sourceName`이 null이라 `ask.md`와 README의 인용 출력 예제가 "null"을 찍는다. (4) `DocumentParser.parse`를 `MobileRag.initialize` 전에 부르면 `flutter_rust_bridge has not been initialized`가 난다.
 - Windows `Native Tests`의 `ingest_ffi_traffic_test.dart` "Peak-RSS delta"가 가끔 실패한다(파일 경로가 UTF-8 경로보다 2MB 이상 적게 써야 하는데 0.7~0.8MB 차이만 났다. 11/1 `ci/quickstart-e2e`, 11/3 #125). 측정값이 흔들리는 테스트라 기준이나 측정 방식을 손봐야 한다.
 - 성능 후보: `vector_math` 8-lane dot, HNSW 증분 삽입, prune 거리 캐싱, ef 상한, 짧은 문단 병합
 - `lib/src/rust/api/mmap_store.dart` 잔존 파일 정리

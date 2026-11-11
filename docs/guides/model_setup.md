@@ -174,9 +174,11 @@ if (rag.embeddingFingerprintLock != null) {
 ```
 
 `reembedAll` keeps your documents and resumes after an app restart. If you
-would rather re-ingest from your own sources, call
-`clearAndRestart(confirm: ClearAndRestartConfirmation.iUnderstandThisDeletesAllOnDeviceEmbeddings)`
-instead; it deletes the stored embeddings but keeps the `sources` table.
+would rather re-ingest from your own sources, call `clearAllData()` and add
+the documents again. `clearAndRestart(...)` also removes the lock, but it keeps
+the rows that `listSources()` returns, and a document whose content matches a
+kept source is then reported as a duplicate; see
+[Data Migration & Re-embedding](../features/index_management.md#3-data-migration--re-embedding).
 
 ### Cost
 
@@ -196,7 +198,7 @@ measured on a phone yet.
 | Model | Dimensions | Size (ONNX) | Max Tokens | Languages | Best For |
 |:------|:----------:|:-----------:|:----------:|:----------|:---------|
 | [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (INT8) | **384** | ~23 MB | 256 | English | English-only apps, lightweight & fast |
-| [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX) (INT8) | **384** | ~37 MB | 512 | Korean, English | Korean apps ([recipe](#korean-koen-e5-tiny)) |
+| [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX) (INT8) | **384** | ~37 MB | 512 | Korean, English | Korean apps ([recipe](#korean-documents-koen-e5-tiny)) |
 | [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~542 MB | 8,194 | 100+ (multilingual) | Korean, CJK, mixed-language apps |
 
 > **Dimension Matters**: The embedding dimension affects your vector index. Once you choose a model, all documents must use the same dimension. Switching models requires re-embedding all documents.

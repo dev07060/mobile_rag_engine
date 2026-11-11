@@ -32,11 +32,17 @@ import 'package:mobile_rag_engine/mobile_rag_engine.dart';
 import 'package:mocktail/mocktail.dart';
 
 class MockMobileRag extends Mock implements MobileRag {}
+
+class MockRagEngine extends Mock implements RagEngine {}
 ```
 
 ### 2. Inject the Mock
 
 Use `setUp` and `tearDown` to ensure a clean state for every test.
+
+`setMockInstance` reads the mock's `engine` getter, so stub it before you
+inject the mock. Without the stub, every test fails in `setUp` with
+`type 'Null' is not a subtype of type 'RagEngine'`.
 
 ```dart
 void main() {
@@ -44,6 +50,8 @@ void main() {
 
   setUp(() {
     mockRag = MockMobileRag();
+    // setMockInstance reads `engine`, so it needs a stub first.
+    when(() => mockRag.engine).thenReturn(MockRagEngine());
     // Inject the mock
     MobileRag.setMockInstance(mockRag);
   });
@@ -59,7 +67,7 @@ void main() {
 
 ## Testing Scenarios
 
-> **Type note:** ID-bearing fields such as `chunkId`, `sourceId`, and the counters on `SourceStats` are typed as `PlatformInt64` in the generated FFI. On the supported platforms (iOS / Android / macOS) this is an `int` alias, so the `int` literals in the snippets below compile as-is. If you ever target the web, switch to `BigInt`-backed literals.
+> **Type note:** ID-bearing fields such as `chunkId`, `sourceId`, and the counters on `SourceStats` are typed as `PlatformInt64` in the generated FFI. On the supported platforms (iOS / Android / macOS / Windows) this is an `int` alias, so the `int` literals in the snippets below compile as-is. If you ever target the web, switch to `BigInt`-backed literals.
 
 ### Scenario 1: Mocking Search Results
 
@@ -149,8 +157,7 @@ test('Handles engine errors gracefully', () async {
 If your app uses `RagEngine` instances directly (instead of the `MobileRag` singleton), you can mock that too.
 
 ```dart
-class MockRagEngine extends Mock implements RagEngine {}
-
+// MockRagEngine is the class declared in "Create a Mock Class" above.
 test('Direct engine usage', () async {
   final mockEngine = MockRagEngine();
   
@@ -167,8 +174,9 @@ test('Direct engine usage', () async {
 ## Integration Testing
 
 If you need to test the **real** engine performance or accuracy:
-1.  Run tests on a physical device or emulator (not the host machine).
-2.  Use `integration_test` package.
-3.  Ensure `assets/` are included in the test build.
+1.  Use the `integration_test` package and run on a device, an emulator or a
+    desktop target, for example `flutter test integration_test -d macos`.
+    Plain `flutter test` runs in the Dart VM without the native libraries.
+2.  Ensure the model assets are included in the test build.
 
 Mocking is strictly for **Unit Tests** where the native environment is unavailable.
