@@ -175,7 +175,8 @@
 
 ### S1. 검색 누락과 재등록 (짧은 문서가 검색에서 빠짐, `clearAndRestart` 뒤 재등록 불가)
 
-- **상태:** 범위 초안. 합의 대기 (2026-11-12 사용자 "S1 범위 적어").
+- **담당:** 세션 "S1 검색 누락과 재등록", 브랜치 `feats/s1-search-missing-short-docs-7eae01` (worktree `.claude/worktrees/s1-search-missing-short-docs-7eae01`, D1 브랜치 끝에서 땄다)
+- **상태:** PR 열림 (#134, 2026-11-12). 머지 대기. #133 위에 쌓여 있어 #133을 먼저 머지한다. 2026-11-12 사용자 "S1 착수".
 - **출처:** D1 실행 결과(위 D1 절)와 후보 목록의 [높음], [중간] `clearAndRestart` 항목. 재현에 쓴 테스트와 출력은 D1 세션의 메모(`d1-docs-verification/`)에 있다.
 - **순서:** Q2·Q3와 `rust_builder/rust/src/api/{source_rag,ingest_session,migration_meta,hnsw_index}.rs`가 겹친다. S1을 먼저 하고 Q2는 그 위에서 진행한다(규칙 3). D1(#133)과는 `docs/milestones.md`와 아래 문서 두 개만 겹치므로 #133 머지 뒤에 브랜치를 딴다.
 
@@ -212,6 +213,90 @@
 - PR 하나, CI 통과. `Cargo.toml` 버전과 `pubspec.yaml` 버전은 올리지 않는다.
 
 **손대는 파일:** `rust_builder/rust/src/api/{custom_hnsw,hnsw_index,source_rag,ingest_session,migration_meta}.rs`, `lib/services/source_rag_service.dart`(중복 판정, 필요하면), `test/**`와 `example/integration_test/`(새 테스트), `docs/features/index_management.md`, `docs/guides/model_setup.md`, `CHANGELOG.md`, `docs/milestones.md`
+
+**범위 변경 (2026-11-12, 규칙 4, 실행 결과를 보고 고쳤다)**
+- **A의 원인:** 추정이 맞았다. 다만 들어오는 링크가 0개인 노드만이 아니었다. 같은 짧은 문서들끼리만 서로 이어져 군집에서 들어가는 길이 없는 작은 덩어리가 생겼고, 도달할 수는 있어도 먼 노드에서 들어오는 링크 하나뿐이라 검색 빔이 지나가지 않는 노드도 있었다(아래 A-1 결과).
+- **완료 기준의 `searchHybrid`:** 기본 가중치(벡터 0.2, BM25 0.8)에서는 고친 뒤에도 환불 문장이 top 50에 없다. 벡터 검색은 1위로 돌려주지만, BM25가 "How/long/is/the/period"로 맞힌 PDF 청크 약 180개가 RRF에서 벡터 1위(0.2/61)보다 앞선다. 이것은 후보 목록의 [중간] 하이브리드 가중치 문제이고 S1 제외 항목이다. 완료 기준을 "`search`가 돌려주고, 같은 가중치(0.5/0.5) `searchHybrid`의 융합 후보에 들어온다"로 바꿨다. 기본 가중치 순위는 기록만 한다.
+- **B의 `isDuplicate`:** 같은 소스 행을 다시 쓰는 재개 경로라 `isDuplicate: true`, `message: "Source resumed and completed"`와 새 청크가 돌아온다. 실패한 소스를 다시 넣을 때와 같은 기존 계약이다. 이 값을 false로 바꾸면 실패 재개 경로도 함께 바뀌므로 바꾸지 않았다. 완료 기준을 "`isDuplicate: false`"에서 "청크가 만들어지고(`chunkCount` > 0) 검색된다"로 바꿨다.
+- **손대는 파일 추가:** `lib/src/rust/api/source_rag.dart`(`claim_source_for_ingestion` doc 주석이 바뀌어 `flutter_rust_bridge_codegen generate`로 다시 만들었다. 바뀐 것은 주석뿐이다).
+- **A-4 방식:** `.hnsw` 파일 헤더의 버전 바이트만 1에서 2로 올렸다(파일 배치는 그대로). DB의 `migration_meta.hnsw_format_version` 축은 올리지 않았다. 올리면 0.23.0으로 되돌린 앱이 `UnsupportedMigrationVersion`으로 DB를 열지 못한다. 지금 방식에서는 0.23.0이 v2 파일을 거부하고 한 번 다시 만든다.
+
+**실행 결과 (2026-11-12, 로컬 macOS, Xcode 27.1, Flutter 3.35.5)**
+1. **A-1 (Rust, 수정 전 `390cd19`):** 군집 1800개(중심과 cos 약 0.8) + 떨어진 벡터 6개(cos 약 0.4)로 만든 인덱스에서, 떨어진 벡터를 자기 벡터로 검색해도 1위가 아니었다.
+
+   | 넣는 순서 | 들어오는 링크 0개 노드 | 진입점에서 도달 불가 노드 | 1위가 아닌 외톨이 |
+   |---|---|---|---|
+   | 외톨이 먼저 | 6 | 7 | 5/6 |
+   | 외톨이 나중 | 11 | 10 | 6/6 |
+
+   "모든 노드가 자기 자신을 질의로 넣으면 top-10 안에 나온다"는 1806개 중 15개, 14개가 실패했다. 수정 뒤에는 모든 값이 0이고 두 테스트가 통과한다.
+2. **A-2 수정:** 이웃 선택과 역방향 가지치기에 HNSW 논문의 heuristic(Algorithm 4)을 쓰고, 빌드 끝에 진입점에서 도달할 수 없는 노드를 가장 가까운 도달 가능 노드에 잇는다(`connect_unreachable_nodes`). heuristic만으로는 외톨이 나중 순서에서 1개가 남았고, 도달 보장만으로는 외톨이 먼저 순서에서 5/6이 여전히 1위가 아니었다. 그래서 둘 다 넣었다. 작은 컬렉션 exact scan(방법 3)은 쓰지 않았다.
+3. **Rust 테스트:** `cargo test --lib -- --test-threads=1` 257개 통과(무시 13). 기존 recall@10: builder 0.984 → 0.99, mmap(Q8_0) 0.978 → 0.984.
+4. **빌드 시간 (`hnsw_build_benchmark`, release + `vector_faer`):** 수정 전(`390cd19`)과 수정 후를 같은 조건에서 번갈아 돌렸다(2000/군집은 3회, 균일 5000은 12회, 20000은 1회).
+
+   | 데이터 | 빌드 시간 전 → 후 | 검색 1회 전 → 후 | recall@10 전 → 후 |
+   |---|---|---|---|
+   | 균일 난수 2000 | 0.43~0.46초 → 0.51~0.53초 (+약 17%) | 약 155µs → 약 155µs | 0.98 → 0.98 |
+   | 균일 난수 5000 | 1.49~1.69초 → 5.30~6.31초 (약 3.6배) | 약 230µs → 약 230µs | 0.85 → 0.85 |
+   | 균일 난수 20000 | 18.4초 → 68.8초 (약 3.7배) | 0.81ms → 0.99ms | 0.56 → 0.57 |
+   | 군집 20개 × 100 (2000) | 0.29초 → 0.22초 | 22µs → 63µs | 0.72~0.83 → 1.0 |
+   | 군집 20개 × 250 (5000) | 0.75초 → 0.55초 | 37µs → 56µs | 0.77~0.86 → 1.0 |
+
+   균일 난수는 heuristic이 거의 아무것도 걸러내지 않는 최악의 경우다. 모든 가지치기가 O(M²) 거리 계산을 하므로 1000개를 넘는 크기(M0=40)에서 빌드가 약 3.6배 느려졌다. 문서처럼 뭉친 데이터에서는 빌드가 오히려 빨라졌고 recall@10이 1.0이 됐다. 대신 검색 1회는 20~40µs 늘었다(이전 그래프가 탐색을 일찍 끝내던 만큼이다). 실제 문서 1820 청크 PDF의 재빌드 시간은 따로 재지 않았다.
+5. **실제 엔진 A (새 macOS 앱, MiniLM Model Pack, `example/integration_test/short_document_recall_test.dart`):**
+   - pub.dev 0.23.0: 환불 문장 + `sample_eng.pdf`(1821 청크) 뒤 `search(topK: 50)`에 없음(topSim 0.4377). `.hnsw` 파일 헤더 v1.
+   - 같은 앱 컨테이너를 이 브랜치로 열고 문서를 더 넣지 않은 채 첫 `search`: 환불 문장이 vector 1위(sim 0.7295). 파일은 v1에서 v2로 다시 만들어졌다.
+   - 이 브랜치에서 새로 만든 DB: 짧은 문서 → PDF, PDF → 짧은 문서, 다시 연 뒤 모두 vector 1위(sim 0.7295). 짧은 문서 6개 + PDF에서는 다섯 질의가 각자의 문서를 vector 1위로 찾았고, HNSW 질의만 2위였다(sim 0.3375).
+   - `searchHybrid` 순위(0.2/0.8, 0.5/0.5): 환불 질의 -1, 32~35. 나머지 네 질의는 0, 0(HNSW 질의는 2, 1).
+6. **실제 엔진 B:** MiniLM으로 만든 DB(문서 5개)를 KoEn-E5-Tiny로 열면 잠김(remaining=5). `clearAndRestart()` 뒤 sources=5, chunks=0. 같은 5개를 `addDocument`하면 각각 chunks=1, "Source resumed and completed". 질의 5개가 모두 맞는 문서를 1위로 돌려준다. 수정 전에는 "Source ingestion already in progress", chunks=0이었다(D1 실행 결과 3번, Rust 테스트도 수정 전 `DuplicateInProgress`로 실패).
+7. **80-query passage 평가** (`hybrid_passage_relevance_measure_test.dart`, 80 balanced, `example/assets/backup_onnx/model.onnx`):
+
+   | 가중치 | passage_recall@10 전 → 후 | answerable_context@10 전 → 후 | passage_mrr@10 전 → 후 |
+   |---|---|---|---|
+   | default_hybrid (0.2/0.8) | 0.9125 → 0.9375 | 0.8875 → 0.9125 | 0.660 → 0.763 |
+   | vector_only | 0.475 → 0.650 | 0.400 → 0.600 | 0.369 → 0.468 |
+   | bm25_only | 0.900 → 0.900 | 0.875 → 0.875 | 0.791 → 0.791 |
+   | 0.4/0.6 | 0.800 → 0.925 | 0.788 → 0.825 | 0.579 → 0.725 |
+   | 0.6/0.4 | 0.6125 → 0.8125 | 0.450 → 0.6875 | 0.499 → 0.627 |
+
+   Xcode 27에서는 `flutter drive --profile`이 cargokit의 Rust 빌드에서 실패해서 두 번 모두 debug 모드로 돌렸다. 같은 조건에서 전후만 비교한 수치다. 6월 profile 기록(0.925, vector_only 0.95)과 절대값을 비교하면 안 된다.
+- **실행하지 않고 읽기만 한 것:** Android·iOS·Windows의 같은 경로(Rust 코드는 같다), `hnsw_streaming_rebuild`가 꺼진 플랫폼의 수집 경로(`build_hnsw_index`도 같은 함수를 거친다), 0.23.0으로 되돌렸을 때 v2 파일을 거부하고 다시 만드는 경로(0.23.0의 `version != 1` 검사를 읽었다).
+
+### B1. 기본 모델 passage 평가 재측정 (MiniLM, KoEn-E5-Tiny)
+
+- **상태:** 범위 초안. 합의 대기 (2026-11-12 사용자: 같은 질의셋으로 MiniLM과 KoEn을 같은 조건에서 재는 것이 필요하다).
+- **출처:** S1 조사(후보 목록의 "6월 기록은 같은 조건의 수치가 아니다"). README와 `docs/local-rag-engine.md`의 `passage_recall@10 = 0.925`는 BGE-m3(1024차원)로 잰 값이다. 6월에 시험한 1024차원 모델은 BGE-m3뿐이다(사용자 확인).
+- **순서:** S1(#134) 머지 뒤 main에서 잰다. S1 전후로 벡터 결과가 크게 다르다(`vector_only` 38/80 → 52/80).
+
+**배경:** 기본 Model Pack(MiniLM)으로 S1 브랜치에서 잰 값(debug)은 다음과 같다.
+- default_hybrid 0.9375: 영어 30/32, 한국어 29/32로 BGE-m3 6월 기록(0.925)과 비슷하다.
+- vector_only 0.650: 영어 30/32, 한국어 11/32다. 한국어는 영어 전용 모델의 한계다.
+
+문서는 한국어 사용자를 KoEn-E5-Tiny로 보내지만, 이 질의셋으로 KoEn을 잰 적이 없다.
+
+**목표:** 지금 코드와 패키지가 권장하는 두 모델로 80-query passage 평가를 같은 조건에서 재고, 어떤 모델과 조건의 수치인지 함께 남긴다.
+
+**포함**
+- 80 balanced 질의셋(`wiki_article_sources_manifest_80_balanced_v1.json` 등 세 파일)으로 두 모델을 잰다. 다섯 가중치 프로필 전부를 재고, 언어별·질의 종류별 결과도 남긴다.
+  - MiniLM: `stable-minilm-l6-v2-arm64-en` Model Pack
+  - KoEn-E5-Tiny: `docs/guides/model_setup.md` 절차
+- 같은 조건: 같은 main 커밋, 같은 빌드 모드, 새 DB.
+  - 빌드 모드는 profile을 우선으로 한다. Xcode 27에서 profile Rust 빌드가 실패하면(후보 목록) 우회해서 재거나, debug로 재고 그렇게 적는다.
+- 기준선이 같은 조건인지 확인하려고 vector_only는 exact scan 결과도 함께 잰다. 6월 기록과 맞춰 보려면 BGE-m3도 같은 조건으로 한 번 잰다. BGE-m3 파일이 로컬에 없으면 받아서 쓴다.
+- 결과 기록: `docs/perf/`에 새 보고서를 두고 artifact JSON을 넣는다. 모델, fingerprint, 커밋, 빌드 모드, 청크 수를 적는다.
+
+**제외**
+- README와 `docs/local-rag-engine.md`의 수치 변경. 결과를 본 뒤 따로 정한다.
+- 모델 추가, 기본 모델 변경, e5 계열의 `query:`/`passage:` 접두어 지원(후보 목록에 따로 있다). KoEn은 지금 엔진 그대로(접두어 없이) 잰다.
+- 하이브리드 가중치 조정(후보 목록 [중간]).
+- 측정 하네스를 저장소에 넣는 일. 하네스와 평가셋은 지금 gitignore 대상이다. 넣을지는 따로 정한다.
+
+**완료 기준**
+- 두 모델(가능하면 BGE-m3까지)의 다섯 프로필 결과가 같은 조건으로 보고서에 있고, 각 수치에 모델과 조건이 붙어 있다.
+- vector_only가 exact scan과 같은지 확인한 결과가 있다.
+- 규칙 8의 네 항목. 측정만 하므로 업그레이드 경로는 "해당 없음"과 이유를 적는다. PR 하나, CI 통과.
+
+**손대는 파일:** `docs/perf/` 아래 새 보고서와 artifact, `docs/milestones.md`
 
 ### Q0. 내부 점검 묶음 (Q1~Q5) 공통
 
@@ -355,6 +440,14 @@
 - **[중간] `clearAndRestart()` 뒤에 같은 문서를 다시 넣을 수 없다 (2026-11-12 D1).** → S1 범위 초안으로 옮겼다. `sources` 행이 남아 `addDocument`가 `isDuplicate: true, chunkCount: 0, message: "Source ingestion already in progress"`를 돌려준다. API 주석("`sources` 테이블을 남겨 `addDocument`로 다시 넣을 수 있다")과 다르다. 문서에는 `removeSource` 우회 절차를 적었다.
 - **[중간] 기본 하이브리드 가중치(벡터 0.2, BM25 0.8)에서 불용어만 맞은 청크가 정답보다 앞선다 (2026-11-12 D1).** 6 청크 코퍼스에서 "How long is the refund period?"의 정답(벡터 1위, BM25 불일치)이 `searchHybrid` 5위(0.0033)이고, "the"/"is"만 겹친 청크 넷이 0.016 안팎으로 앞선다. `ask`는 이 검색의 상위 5개만 쓴다. main 체크아웃의 `feat/ask-search-weights` 작업과 겹치는지 확인한다.
 - **[낮음] 2026-11-12 D1에서 본 것:** (1) `mobile_rag_engine.dart`가 `RagError`만 `show`로 내보내, 앱이 `when`/`maybeWhen`과 `RagErrorUi.userFriendlyMessage`를 쓸 수 없다. (2) `pubspec.yaml`의 `flutter: ">=3.9.0"`이 실제 하한(Dart 3.9.2 = Flutter 3.35.3)과 다르다. (3) `name` 없이 넣은 문서는 `RagPassage.sourceName`이 null이라 `ask.md`와 README의 인용 출력 예제가 "null"을 찍는다. (4) `DocumentParser.parse`를 `MobileRag.initialize` 전에 부르면 `flutter_rust_bridge has not been initialized`가 난다.
+- **[중간] Xcode 27에서 macOS profile/release 빌드의 Rust 소스 빌드가 실패한다 (2026-11-12 S1 실행 중 발견, 고치지 않음).** `flutter drive --profile -d macos`(cargokit이 `--features vector_faer,vector_quant_i8 --release`로 빌드)에서 `error[E0463]: can't find crate for dyn_stack_macros`(다시 하면 `interpol`)로 멈춘다. 같은 `cargo build` 명령을 셸에서 돌리면 성공하므로 Xcode 빌드 환경에서 호스트용 proc-macro를 못 쓰는 문제로 보인다. debug 빌드(faer 없음)는 된다. 회고 C1(Xcode 27 strip)과 함께 Q5에서 볼지 정한다.
+- **[낮음] (→ B1 범위 초안으로 옮겼다) 80-query passage 평가의 6월 기록(`passage_recall@10` 0.925, `vector_only` 0.95)은 지금과 같은 조건의 수치가 아니다 (2026-11-12 S1 조사).** 평가셋 세 파일(질의 80개, 정답 passage)은 6월 artifact와 같다. 다른 점은 다음과 같다.
+  - **모델:** 6월은 1024차원 모델이다. 6월 실행이 남긴 DB(`com.example.mobileRagEngineExample` 컨테이너의 `hybrid_passage_relevance_80_balanced.sqlite`, 2026-06-13)의 fingerprint가 `model.onnx|1024|f32`이고, 사용자는 BGE-m3였다고 기억한다(2026-11-12). 지금 `example/assets/backup_onnx/model.onnx`는 MiniLM Model Pack과 같은 384차원 모델이다(`sha256:e9246dc3…`). 그래서 6월에는 벡터만으로 한국어 질의 30/32를 맞혔고, 지금 MiniLM은 exact scan으로도 11/32다. 영어 질의는 둘 다 30/32다.
+  - **청킹:** 청크 수가 다르다(6월 DB 4937개, 지금 4667개). 6월 뒤의 512 토큰 truncation(#115)과 한국어 청킹 변경(#116)이 들어 있다.
+  - **빌드 모드:** 6월은 profile, 지금은 debug(Xcode 27 profile 빌드 실패, 위 후보).
+  - **검색은 원인이 아니다:** S1 수정 뒤 HNSW `vector_only`의 정답 순위가 80개 질의 모두 exact scan(`sourceIds`에 전체 소스)과 같다(52/80). 수정 전에는 38/80이었다.
+
+  README와 `docs/local-rag-engine.md`의 0.925는 기본 Model Pack(MiniLM)이 아니라 BGE-m3로 잰 값이다. 지금 코드에서 기본 모델로 다시 재서 바꿀지, 모델을 함께 적을지 정한다.
 - Windows `Native Tests`의 `ingest_ffi_traffic_test.dart` "Peak-RSS delta"가 가끔 실패한다(파일 경로가 UTF-8 경로보다 2MB 이상 적게 써야 하는데 0.7~0.8MB 차이만 났다. 11/1 `ci/quickstart-e2e`, 11/3 #125). 측정값이 흔들리는 테스트라 기준이나 측정 방식을 손봐야 한다.
 - 성능 후보: `vector_math` 8-lane dot, HNSW 증분 삽입, prune 거리 캐싱, ef 상한, 짧은 문단 병합
 - `lib/src/rust/api/mmap_store.dart` 잔존 파일 정리

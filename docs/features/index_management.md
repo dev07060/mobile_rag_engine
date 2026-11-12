@@ -76,9 +76,12 @@ Add your documents again afterwards.
 
 **Drop only the embeddings: `clearAndRestart()`.** It deletes the chunks and
 their vectors and removes the lock, but keeps the rows that `listSources()`
-returns. Adding a document whose content matches a kept source returns
-`isDuplicate: true` with no chunks, so remove the kept sources before you add
-the documents again:
+returns. Add the documents again with `addDocument`: a document whose content
+matches a kept source is embedded again into that source. The result has the
+new `chunkCount` and the message "Source resumed and completed";
+`isDuplicate` is `true` because the existing source row is reused. Sources you
+do not add again stay in `listSources()` without chunks; remove them with
+`removeSource` if you no longer need them.
 
 ```dart
 if (rag.isEmbeddingFingerprintLocked) {
@@ -86,12 +89,14 @@ if (rag.isEmbeddingFingerprintLocked) {
     confirm:
         ClearAndRestartConfirmation.iUnderstandThisDeletesAllOnDeviceEmbeddings,
   );
-  for (final source in await rag.listSources()) {
-    await rag.removeSource(source.id.toInt());
-  }
   // Now add the documents again.
 }
 ```
+
+With `mobile_rag_engine` 0.23.0 and earlier, a document whose content matches
+a kept source comes back with no chunks ("Source ingestion already in
+progress"). There, call `removeSource(source.id.toInt())`
+for each source in `listSources()` before adding the documents again.
 
 `reembedAll()` and `clearAndRestart()` throw `StateError` when there is no
 lock. `engine.regenerateAllEmbeddings()` and `rebuildIndex()` do not remove
