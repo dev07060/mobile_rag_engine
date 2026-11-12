@@ -85,6 +85,17 @@ runs on pushes to `main` that change the crate.
 
 README and other public-facing documentation changes should be reviewed as their own release scope. Do not fold incidental README rewrites into a publish commit unless the release explicitly includes public documentation updates.
 
+## Recording Measurements
+
+Every performance or retrieval-quality number (benchmarks, recall and passage evaluations, latency, memory, device runs) must be recorded together with the conditions it was measured under. Write them next to the number wherever it appears: reports under `docs/perf/`, PR descriptions, `docs/milestones.md`, `CHANGELOG.md`, `README.md`. Measurement output files must carry the model and fingerprint too.
+
+- **Embedding model:** name and fingerprint (`model.onnx|<dim>|…|sha256:…`) or file hash
+- **Engine:** commit, build mode (debug/profile/release) and enabled Rust features
+- **Environment:** device, OS, and Xcode, Flutter and rustc versions
+- **Data:** dataset, chunk count, date, and whether other work was running on the machine
+
+A number without its model is not comparable. The README once showed `passage_recall@10 = 0.925` without a model name; it had been measured with BGE-m3, not the default MiniLM Model Pack. See [`docs/perf/passage-benchmark-2026-11/README.md`](docs/perf/passage-benchmark-2026-11/README.md) for the expected "conditions" table. When quoting an older number that has no model recorded, say so.
+
 ## Troubleshooting
 
 ### Error: "Content hash on Dart side is different from Rust side"

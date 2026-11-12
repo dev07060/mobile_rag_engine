@@ -19,6 +19,11 @@
    2. **실제 출력:** 가짜 값이 아니라 실제 엔진 출력으로 최소 한 번 확인한다.
    3. **사용하는 쪽 관점:** 여러 번 호출할 때와 토큰 비용을 확인한다.
    4. **주변 코드:** 수정과 맞물리는 코드를 읽고, 무엇이 깨질 수 있는지 PR에 적는다.
+9. **성능·품질 측정에는 환경과 임베딩 모델을 반드시 남긴다 (2026-11-12 사용자 지시).** README의 `passage_recall@10 = 0.925`가 모델 이름 없이 기본값처럼 적혀 있었는데, 실제로는 BGE-m3로 잰 값이어서 기본 모델이 나빠진 것처럼 보였다(B1). 수치를 쓰는 모든 곳(보고서, PR 본문, 이 문서의 결과 절, CHANGELOG, README)에 아래를 함께 적는다. 형식은 [`docs/perf/passage-benchmark-2026-11/README.md`](perf/passage-benchmark-2026-11/README.md)의 "조건" 표를 따른다. 측정 결과 파일에도 모델과 fingerprint를 넣는다. 모델이 적혀 있지 않은 과거 수치를 인용할 때는 "모델 미기재"라고 밝힌다.
+   1. 임베딩 모델 이름과 fingerprint(`model.onnx|차원|…|sha256:…`) 또는 파일 해시
+   2. 엔진 커밋, 빌드 모드(debug/profile/release)와 켜진 Rust feature
+   3. 기기, OS, Xcode/Flutter/rustc 버전
+   4. 데이터셋, 청크 수, 측정일, 다른 작업이 함께 돌았는지
 
 ## 현재 상태 (2026-11-06)
 
@@ -264,9 +269,10 @@
 
 ### B1. 기본 모델 passage 평가 재측정 (MiniLM, KoEn-E5-Tiny)
 
-- **상태:** 범위 초안. 합의 대기 (2026-11-12 사용자: 같은 질의셋으로 MiniLM과 KoEn을 같은 조건에서 재는 것이 필요하다).
+- **담당:** 세션 "S1 검색 누락과 재등록"(S1에 이어 같은 세션에서 진행, 2026-11-12 사용자 "진행해"), 브랜치 `feats/b1-passage-remeasure` (`4e2ed87`에서 땄다)
+- **상태:** PR 열림 (#135, 2026-11-12). 머지 대기. #133 → #134 → #135 순서로 머지한다. 2026-11-12 사용자 "착수해줘".
 - **출처:** S1 조사(후보 목록의 "6월 기록은 같은 조건의 수치가 아니다"). README와 `docs/local-rag-engine.md`의 `passage_recall@10 = 0.925`는 BGE-m3(1024차원)로 잰 값이다. 6월에 시험한 1024차원 모델은 BGE-m3뿐이다(사용자 확인).
-- **순서:** S1(#134) 머지 뒤 main에서 잰다. S1 전후로 벡터 결과가 크게 다르다(`vector_only` 38/80 → 52/80).
+- **순서:** S1(#134) 머지 뒤 main에서 재기로 했으나, #133과 #134가 열려 있는 동안 착수했다(규칙 4로 고침). 그래서 #134 브랜치 끝 `4e2ed87`의 코드로 잰다. `cf37f76` 뒤로 바뀐 것은 문서와 테스트뿐이라 엔진 코드는 머지될 것과 같다. S1 전후로 벡터 결과가 크게 다르다(`vector_only` 38/80 → 52/80).
 
 **배경:** 기본 Model Pack(MiniLM)으로 S1 브랜치에서 잰 값(debug)은 다음과 같다.
 - default_hybrid 0.9375: 영어 30/32, 한국어 29/32로 BGE-m3 6월 기록(0.925)과 비슷하다.
@@ -296,7 +302,64 @@
 - vector_only가 exact scan과 같은지 확인한 결과가 있다.
 - 규칙 8의 네 항목. 측정만 하므로 업그레이드 경로는 "해당 없음"과 이유를 적는다. PR 하나, CI 통과.
 
-**손대는 파일:** `docs/perf/` 아래 새 보고서와 artifact, `docs/milestones.md`
+**손대는 파일:** `docs/perf/passage-benchmark-2026-11/`(새 보고서와 `results/`), `docs/milestones.md`
+
+**범위 변경 (2026-11-12, 규칙 4)**
+- **담당 세션:** 새 세션을 띄울 수 없는 상태(Remote Control)라 S1 세션이 이어서 진행했다. 이 세션은 자기 worktree 밖에 쓸 수 없어서, worktree `s1-search-missing-short-docs-7eae01`에서 브랜치를 `feats/b1-passage-remeasure`로 바꿔 작업했다.
+- **artifact:** 원본 JSON(각 약 3.5 MB, 코퍼스 미리보기 포함)은 넣지 않았다. 메타데이터, 집계, 질의별 정답 순위만 담은 요약(각 약 110 KB)을 넣었다. 폴더 이름은 `results/`다. `artifacts/`는 `.gitignore`에 걸린다. 원본은 공유 메모 폴더에 있다.
+- **BGE-m3:** 내려받지 않았다. 6월 예제 앱 컨테이너(`com.example.mobileRagEngineExample`)에 남아 있던 같은 파일(569 MB, 토크나이저 Unigram 250,002)을 복사해 썼다.
+
+**결과 (2026-11-12, `4e2ed87`, profile, 로컬 Mac)** — 자세한 표는 [`docs/perf/passage-benchmark-2026-11/README.md`](perf/passage-benchmark-2026-11/README.md)
+
+| `passage_recall@10` | MiniLM | KoEn-E5-Tiny | BGE-m3 | 6월 BGE-m3 |
+|---|---|---|---|---|
+| default_hybrid | 0.9375 | 0.9625 | 0.975 | 0.925 |
+| vector_only | 0.650 (한국어 11/32) | 0.950 | 0.975 | 0.950 |
+
+- **같은 조건:** 세 모델 모두 vector_only의 질의별 정답 순위가 exact scan과 80개 전부 같다.
+- **빌드 모드:** MiniLM은 debug 값과 profile 값이 같았다.
+- **profile 빌드 우회:** Xcode 27 profile 빌드는 링커 래퍼(`-no_fixup_chains`)와 arm64 단일 빌드로 우회했다. 원인은 후보 목록의 Xcode 27 항목에 적었다.
+- **남은 결정:** README 수치를 어떻게 바꿀지는 B1 제외 항목이라 따로 정한다.
+
+### D2. 검색 품질 수치를 모델별로 고치기 (README, `docs/local-rag-engine.md`)
+
+- **상태:** 범위 초안. 합의 대기 (2026-11-12 사용자 "위 수치도 마일스톤에 작성해줘").
+- **출처:** B1 결과(#135, `docs/perf/passage-benchmark-2026-11/README.md`).
+- **순서:** #133 → #134(S1) → #135(B1) 머지 뒤에 main에서 브랜치를 딴다. README는 D1(#133)도 고치므로 D1 머지 뒤여야 한다(규칙 3).
+
+**배경**
+- README "Verified scope" 표(297행)와 `docs/local-rag-engine.md`(72행)는 `passage_recall@10 = 0.925`, `answerable_context@10 = 0.938`을 모델 이름 없이 "shipped default hybrid profile"의 값으로 적고 있다.
+- 이 값은 2026-06-12에 BGE-m3(569 MB)로 잰 것이다. 기본 Model Pack(MiniLM)의 값이 아니다.
+- B1 측정(`4e2ed87`, profile, 같은 80 질의, 모델마다 새 DB)은 다음과 같다.
+
+| 모델 | default_hybrid `passage_recall@10` | `answerable_context@10` | vector_only `passage_recall@10` |
+|---|---|---|---|
+| MiniLM (기본 Model Pack, 23 MB) | 0.9375 | 0.9125 | 0.650 (영어 30/32, 한국어 11/32) |
+| KoEn-E5-Tiny (한국어 권장, 38 MB) | 0.9625 | 0.975 | 0.950 |
+| BGE-m3 (569 MB) | 0.975 | 0.9875 | 0.975 |
+
+- **S1 수정 포함:** 이 수치는 S1의 HNSW 수정이 들어간 엔진의 값이다. 배포된 `rag_engine_flutter` 0.22.0(지금 pub 사용자)에는 그 수정이 없다. S1 수정 전 코드에서 MiniLM은 default_hybrid 0.9125, vector_only 0.475였다(debug, S1 실행 결과 7번).
+
+**목표:** 문서의 검색 품질 수치에 어떤 모델과 조건으로 잰 값인지 붙이고, 지금 코드의 기본 모델 값을 보여 준다.
+
+**포함**
+- README 297행과 `docs/local-rag-engine.md` 72행의 0.925/0.938을 모델별 수치로 바꾼다.
+  - 기본 MiniLM과 한국어 KoEn-E5-Tiny는 꼭 넣는다. BGE-m3는 참고로 넣을지 착수 때 정한다.
+- 수치마다 조건을 짧게 붙인다(80 질의, 영어 32·한국어 32·다국어 16, profile, 측정일). 자세한 내용은 B1 보고서로 링크한다.
+- MiniLM이 영어 전용이라 한국어 벡터 검색이 약하다는 점과 한국어는 KoEn을 쓰라는 안내를 같은 줄이나 바로 아래에 둔다. README에 이미 있는 영어 전용 안내(D1)와 문구를 맞춘다.
+- 배포 버전과의 관계를 적는다. 이 수치는 S1 수정이 들어간 다음 `rag_engine_flutter` 배포부터의 값이다. 문서를 언제 바꿀지(지금 바꾸고 버전을 적을지, 배포 때 바꿀지)는 착수 전에 정한다. 규칙 5의 "배포 전까지 문서는 배포된 버전 기준 안내를 유지한다"와 맞춰야 한다.
+
+**제외**
+- 새 측정. B1 수치를 쓴다. 코드가 바뀌어 다시 재야 하면 마일스톤을 먼저 고친다.
+- 하이브리드 가중치 조정(후보 목록 [중간]). B1에서 KoEn·BGE-m3는 벡터 비중을 높일수록 좋아졌지만 이 마일스톤에서는 다루지 않는다.
+- 측정 하네스를 저장소에 넣는 일, 다른 문서의 수치(`docs/perf/` 아래 과거 보고서는 그대로 둔다).
+
+**완료 기준**
+- 바꾼 두 곳의 수치가 B1 보고서의 값과 같고, 각 수치에 모델이 적혀 있다.
+- 링크와 앵커가 열린다.
+- 규칙 8의 네 항목. 문서만 바뀌므로 업그레이드 경로는 "해당 없음"과 이유를 적는다. PR 하나, CI 통과.
+
+**손대는 파일:** `README.md`, `docs/local-rag-engine.md`, `docs/milestones.md`
 
 ### Q0. 내부 점검 묶음 (Q1~Q5) 공통
 
@@ -440,7 +503,15 @@
 - **[중간] `clearAndRestart()` 뒤에 같은 문서를 다시 넣을 수 없다 (2026-11-12 D1).** → S1 범위 초안으로 옮겼다. `sources` 행이 남아 `addDocument`가 `isDuplicate: true, chunkCount: 0, message: "Source ingestion already in progress"`를 돌려준다. API 주석("`sources` 테이블을 남겨 `addDocument`로 다시 넣을 수 있다")과 다르다. 문서에는 `removeSource` 우회 절차를 적었다.
 - **[중간] 기본 하이브리드 가중치(벡터 0.2, BM25 0.8)에서 불용어만 맞은 청크가 정답보다 앞선다 (2026-11-12 D1).** 6 청크 코퍼스에서 "How long is the refund period?"의 정답(벡터 1위, BM25 불일치)이 `searchHybrid` 5위(0.0033)이고, "the"/"is"만 겹친 청크 넷이 0.016 안팎으로 앞선다. `ask`는 이 검색의 상위 5개만 쓴다. main 체크아웃의 `feat/ask-search-weights` 작업과 겹치는지 확인한다.
 - **[낮음] 2026-11-12 D1에서 본 것:** (1) `mobile_rag_engine.dart`가 `RagError`만 `show`로 내보내, 앱이 `when`/`maybeWhen`과 `RagErrorUi.userFriendlyMessage`를 쓸 수 없다. (2) `pubspec.yaml`의 `flutter: ">=3.9.0"`이 실제 하한(Dart 3.9.2 = Flutter 3.35.3)과 다르다. (3) `name` 없이 넣은 문서는 `RagPassage.sourceName`이 null이라 `ask.md`와 README의 인용 출력 예제가 "null"을 찍는다. (4) `DocumentParser.parse`를 `MobileRag.initialize` 전에 부르면 `flutter_rust_bridge has not been initialized`가 난다.
-- **[중간] Xcode 27에서 macOS profile/release 빌드의 Rust 소스 빌드가 실패한다 (2026-11-12 S1 실행 중 발견, 고치지 않음).** `flutter drive --profile -d macos`(cargokit이 `--features vector_faer,vector_quant_i8 --release`로 빌드)에서 `error[E0463]: can't find crate for dyn_stack_macros`(다시 하면 `interpol`)로 멈춘다. 같은 `cargo build` 명령을 셸에서 돌리면 성공하므로 Xcode 빌드 환경에서 호스트용 proc-macro를 못 쓰는 문제로 보인다. debug 빌드(faer 없음)는 된다. 회고 C1(Xcode 27 strip)과 함께 Q5에서 볼지 정한다.
+- **[중간] Xcode 27에서 macOS profile/release 빌드의 Rust 소스 빌드가 실패한다 (2026-11-12 S1 실행 중 발견, B1에서 원인 확인, 고치지 않음).**
+  - **증상:** cargokit이 `--features vector_faer,vector_quant_i8 --release`로 빌드하면 `error[E0463]: can't find crate for dyn_stack_macros`(또는 `paste`)로 멈춘다. debug 빌드는 faer가 없어 이 proc-macro들을 만들지 않으므로 된다.
+  - **원인:** Xcode가 넘기는 `MACOSX_DEPLOYMENT_TARGET`이 12.0 이상이면 링커가 proc-macro dylib을 chained fixups 형식으로 만들고, rustc 1.91.1이 그 dylib의 메타데이터를 읽지 못한다.
+    - Xcode 환경 변수 706개를 반씩 나눠 확인했다. 셸에서 `MACOSX_DEPLOYMENT_TARGET`만 줘도 11.0은 통과, 12.0·13.0·14.0은 실패한다.
+    - 링커에 `-Wl,-no_fixup_chains`를 붙이는 래퍼(`CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER`)를 주면 14.0에서도 통과한다.
+  - **Xcode 27과의 관계:** Xcode 27은 pod의 배포 대상을 12.0 아래로 허용하지 않아서, 앱이 Xcode 27로 빌드되려면 이 조건에 걸린다.
+  - **두 번째 문제:** 링커 래퍼를 줘도 universal(`ARCHS = arm64 x86_64`) 빌드는 Flutter의 lipo 검사(아래 후보 (2))에서 다시 멈춘다. B1 측정은 앱의 `Runner/Configs/Release.xcconfig`에 `ARCHS = arm64`를 넣어 우회했다.
+  - **영향:** 배포된 패키지는 rustup이 없으면 precompiled binary를 쓰므로 이 문제를 피한다. rustup이 설치된 Mac에서 소스로 빌드하는 사용자는 profile/release 빌드에서 이 문제를 만난다.
+  - **할 일:** 고칠 곳을 정한다. 후보는 cargokit의 linker 설정, `-no_fixup_chains`, rustc 버전 확인이다. 회고 C1과 함께 Q5에서 볼지 정한다.
 - **[낮음] (→ B1 범위 초안으로 옮겼다) 80-query passage 평가의 6월 기록(`passage_recall@10` 0.925, `vector_only` 0.95)은 지금과 같은 조건의 수치가 아니다 (2026-11-12 S1 조사).** 평가셋 세 파일(질의 80개, 정답 passage)은 6월 artifact와 같다. 다른 점은 다음과 같다.
   - **모델:** 6월은 1024차원 모델이다. 6월 실행이 남긴 DB(`com.example.mobileRagEngineExample` 컨테이너의 `hybrid_passage_relevance_80_balanced.sqlite`, 2026-06-13)의 fingerprint가 `model.onnx|1024|f32`이고, 사용자는 BGE-m3였다고 기억한다(2026-11-12). 지금 `example/assets/backup_onnx/model.onnx`는 MiniLM Model Pack과 같은 384차원 모델이다(`sha256:e9246dc3…`). 그래서 6월에는 벡터만으로 한국어 질의 30/32를 맞혔고, 지금 MiniLM은 exact scan으로도 11/32다. 영어 질의는 둘 다 30/32다.
   - **청킹:** 청크 수가 다르다(6월 DB 4937개, 지금 4667개). 6월 뒤의 512 토큰 truncation(#115)과 한국어 청킹 변경(#116)이 들어 있다.
