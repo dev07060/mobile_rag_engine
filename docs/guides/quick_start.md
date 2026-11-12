@@ -6,8 +6,8 @@ Get started with `mobile_rag_engine` in 5 minutes.
 
 ## Prerequisites
 
-- Flutter 3.9+
-- iOS 16.0+ / Android API 21+ / macOS 14.0+ / Windows 10+ x64 (0.22.0+).
+- Flutter 3.35.3+ (Dart 3.9.2)
+- iOS 16.0+ / Android API 24+ (Android 7.0) / macOS 14.0+ / Windows 10+ x64 (0.22.0+).
   Linux and Windows on ARM64 are not supported.
 - No Rust toolchain: 0.21.0+ downloads a signed, pre-compiled native core
   during the first `flutter build` of each platform, so the build machine needs

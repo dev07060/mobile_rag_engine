@@ -21,7 +21,8 @@ which downloads the model files manually and initializes with
 
 ### First build fails in Cargokit
 
-0.21.0+ ships signed, pre-compiled native binaries for Android, iOS and macOS.
+0.21.0+ ships signed, pre-compiled native binaries for Android, iOS and macOS,
+and 0.22.0+ also for Windows x64.
 Cargokit uses them **only when `rustup` is not installed**; with `rustup` on
 `PATH` it builds the Rust core from source.
 
@@ -173,32 +174,51 @@ Missing Input: token_type_ids
 
 ---
 
-### "Embedding dimension mismatch"
+### Search fails after changing the model (`embeddingFingerprintMismatch`)
 
-**Symptom:**
+**Symptom:** After the app ships a different embedding model (or a different
+export of the same model), `search`, `addDocument` and the other search and
+ingest calls throw:
 ```
-StateError: Embedding dimension mismatch: expected 384, got 1024
+RagError.embeddingFingerprintMismatch(field0: model.onnx|384|f32+vabq:none|sha256:e924..., field1: model.onnx|384|f32+vabq:none|sha256:fd68..., field2: 5)
 ```
+`field0` is the model that produced the stored vectors, `field1` is the model
+loaded now, and `field2` is the number of chunks still to re-embed.
 
-**Cause:** Mixing embeddings from different models (for example after model swap)
+**Cause:** The stored vectors were produced by another model and cannot be
+compared with the new model's query vectors. 0.23.0 and later detect this in
+`MobileRag.initialize` from the model file's name, dimension and content hash,
+and lock search and ingestion instead of returning wrong results.
+`MobileRag.initialize` itself succeeds.
 
-**Solution:**
-1. Re-embed all stored chunks after changing model
-2. Use one of the recovery paths:
-   - clear/rebuild flow (fresh vectors)
-   - `regenerateAllEmbeddings()` (in-place regeneration)
-3. Ensure old and new vectors are not mixed in the same index/database
+**Solution:** Check the lock after `initialize`, then either keep the
+documents or start over.
 
 ```dart
-// Clear existing data by removing DB file
-final dbPath = MobileRag.instance.dbPath;
-// ... delete file at dbPath ...
-await MobileRag.initialize(...); // Re-initialize
-
-// Advanced recovery: regenerate embeddings in-place.
-await MobileRag.instance.engine.regenerateAllEmbeddings();
-await MobileRag.instance.engine.rebuildIndex(force: true);
+final rag = MobileRag.instance;
+if (rag.isEmbeddingFingerprintLocked) {
+  // Keeps every document. Embeds the stored chunks again with the new model
+  // and resumes after an app restart.
+  await rag.reembedAll(
+    onProgress: (p) => debugPrint('re-embedding ${p.done}/${p.total}'),
+  );
+}
 ```
+
+```dart
+if (rag.isEmbeddingFingerprintLocked) {
+  // Or delete every document, chunk and index, then add the documents again.
+  await rag.clearAllData();
+}
+```
+
+`regenerateAllEmbeddings()` and `rebuildIndex()` do **not** remove the lock.
+See
+[Data Migration & Re-embedding](../features/index_management.md#3-data-migration--re-embedding)
+for `clearAndRestart()`.
+
+Releases before 0.23.0 identify the model by file name and dimension only;
+see [Switching an existing database from MiniLM](model_setup.md#4-switching-an-existing-database-from-minilm).
 
 ---
 
@@ -380,10 +400,33 @@ Runner target. On earlier versions, in Xcode's Runner target build settings:
 
 ---
 
-### iOS: Pod Install Failed
+### iOS / macOS: Pod Install Failed
+
+**`pod install` fails on `onnxruntime-objc` after upgrading**
+
+**Symptom:** After you upgrade `mobile_rag_engine` or `flutter_onnxruntime`,
+`flutter build` or `pod install` stops with one of:
+```
+[!] CocoaPods could not find compatible versions for pod "onnxruntime-objc"
+[!] CocoaPods's specs repository is too out-of-date to satisfy dependencies.
+```
+
+**Cause:** Each `flutter_onnxruntime` release depends on one exact
+`onnxruntime-objc` version (1.24.2 in 1.8.0, 1.23.0 in 1.8.1 to 1.8.4, 1.28.0
+in 1.9.0). The `Podfile.lock` written before the upgrade still pins the
+earlier one.
+
+**Solution:** Update only the two ONNX Runtime pods, once, in each host
+directory your app has:
+```bash
+cd ios && pod update onnxruntime-objc onnxruntime-c && cd ..
+cd macos && pod update onnxruntime-objc onnxruntime-c && cd ..
+```
+
+**Other `pod install` failures**
 
 ```bash
-cd ios
+cd ios   # or macos
 pod deintegrate
 pod cache clean --all
 pod install --repo-update
