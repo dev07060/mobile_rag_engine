@@ -24,6 +24,10 @@ use std::sync::RwLock;
 static INVERTED_INDEX: Lazy<RwLock<InvertedIndex>> =
     Lazy::new(|| RwLock::new(InvertedIndex::new()));
 
+/// Snowball English (Porter2) stemmer for ASCII word tokens.
+static ENGLISH_STEMMER: Lazy<rust_stemmers::Stemmer> =
+    Lazy::new(|| rust_stemmers::Stemmer::create(rust_stemmers::Algorithm::English));
+
 #[derive(Clone, Debug)]
 struct DocMeta {
     length: usize,
@@ -313,6 +317,19 @@ fn push_hangul_bigrams(word: &str, out: &mut Vec<String>) {
     }
 }
 
+/// Snowball English stem of a lowercase word made only of ASCII letters
+/// ("refunds" -> "refund", "policies" -> "polici"). Any other token (Hangul,
+/// CJK, digits, mixed like "iphone15") is returned unchanged.
+fn stem_english(word: String) -> String {
+    if !word.is_empty() && word.bytes().all(|b| b.is_ascii_lowercase()) {
+        ENGLISH_STEMMER.stem(&word).into_owned()
+    } else {
+        word
+    }
+}
+
+/// BM25 tokens for indexing and for queries. Both sides go through this
+/// function, so English words are stemmed the same way on each side.
 pub(crate) fn tokenize_for_bm25(text: &str) -> Vec<String> {
     use unicode_segmentation::UnicodeSegmentation;
 
@@ -322,7 +339,7 @@ pub(crate) fn tokenize_for_bm25(text: &str) -> Vec<String> {
     for word in text.unicode_words().filter(|s| keep_bm25_token(s)) {
         let word = word.to_lowercase();
         push_hangul_bigrams(&word, &mut tokens);
-        tokens.push(word);
+        tokens.push(stem_english(word));
     }
     tokens
 }
@@ -461,6 +478,116 @@ mod tests {
         let results = index.search("lazy cat", 10);
         assert!(!results.is_empty());
         assert_eq!(results[0].0, 2);
+    }
+
+    // BM25 search time with stemmed tokens. Run with:
+    // cargo test --release --lib bm25_search_benchmark -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn bm25_search_benchmark() {
+        let words = [
+            "refund", "refunds", "policy", "policies", "shipping", "warranty",
+            "device", "devices", "period", "periods", "day", "days", "order",
+            "orders", "section", "manual", "running", "connected", "generously",
+            "검색엔진은", "벡터를", "인덱스에서",
+        ];
+        let mut seed = 12345u64;
+        let mut index = InvertedIndex::new();
+        for id in 0..20_000_i64 {
+            let mut text = String::new();
+            while text.len() < 500 {
+                seed = seed
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                text.push_str(words[(seed >> 33) as usize % words.len()]);
+                text.push(' ');
+            }
+            index.add_document(id, &text);
+        }
+        let query = "How long is the refund period for devices?";
+        let started = std::time::Instant::now();
+        for _ in 0..100 {
+            index.search(query, 40);
+        }
+        println!(
+            "bm25_search_benchmark docs=20000 per_search={:?} terms={}",
+            started.elapsed() / 100,
+            index.postings.len()
+        );
+    }
+
+    #[test]
+    fn english_words_match_their_inflected_forms() {
+        let mut index = InvertedIndex::new();
+        index.add_document(1, "Refunds are accepted within 14 days.");
+        index.add_document(2, "Our shipping policies changed.");
+        index.add_document(3, "Unrelated text about devices.");
+
+        assert_eq!(index.search("refund", 10).first().map(|r| r.0), Some(1));
+        assert_eq!(index.search("policy", 10).first().map(|r| r.0), Some(2));
+        assert_eq!(index.search("device", 10).first().map(|r| r.0), Some(3));
+    }
+
+    /// W1 review: unrelated English words must not match each other just
+    /// because one looks like the other plus "s"/"es".
+    #[test]
+    fn unrelated_words_do_not_match_as_plural_forms() {
+        let mut index = InvertedIndex::new();
+        index.add_document(1, "Write your notes here.");
+        index.add_document(2, "The cares of the world.");
+        index.add_document(3, "Planes land on time.");
+        index.add_document(4, "Read the news today.");
+        index.add_document(5, "Filler text without the words.");
+
+        for (query, wrong_doc) in [("not", 1), ("car", 2), ("plan", 3), ("new", 4)] {
+            let ids: Vec<i64> = index.search(query, 100).iter().map(|r| r.0).collect();
+            assert!(
+                !ids.contains(&wrong_doc),
+                "query {query:?} must not match doc {wrong_doc}; got {ids:?}"
+            );
+        }
+
+        index.add_document(6, "Do not panic.");
+        let ids: Vec<i64> = index.search("notes", 100).iter().map(|r| r.0).collect();
+        assert!(!ids.contains(&6), "\"notes\" must not match \"not\"; got {ids:?}");
+    }
+
+    /// W1 review: a word's forms are one term. A document holding the rare
+    /// form ("refunds") must not get that form's higher IDF when the query
+    /// uses the common one ("refund"): at equal length and frequency both
+    /// documents score the same.
+    #[test]
+    fn word_forms_share_one_idf() {
+        let mut index = InvertedIndex::new();
+        index.add_document(1, "Refunds take five business days.");
+        index.add_document(2, "Refund takes five business days.");
+        for id in 3..40_i64 {
+            index.add_document(id, "The refund desk opens daily at nine.");
+        }
+        for id in 40..80_i64 {
+            index.add_document(id, "Unrelated filler about shipping boxes.");
+        }
+
+        let results = index.search("refund", 100);
+        let score = |doc: i64| results.iter().find(|r| r.0 == doc).map(|r| r.1);
+        let (rare, common) = (score(1), score(2));
+        assert!(rare.is_some() && common.is_some(), "got {results:?}");
+        assert!(
+            (rare.unwrap() - common.unwrap()).abs() < 1e-9,
+            "\"Refunds\" ({rare:?}) and \"Refund\" ({common:?}) must score the same"
+        );
+    }
+
+    #[test]
+    fn stemming_leaves_other_scripts_and_mixed_tokens_alone() {
+        let tokens = tokenize_for_bm25("Refunds 환불은 iPhone15 v2 running");
+        assert!(tokens.contains(&"refund".to_string()));
+        assert!(tokens.contains(&"run".to_string()));
+        assert!(tokens.contains(&"환불은".to_string()));
+        assert!(tokens.contains(&"iphone15".to_string()));
+        assert!(tokens.contains(&"v2".to_string()));
+        // A known limit of Snowball English, documented in the guides.
+        assert_eq!(tokenize_for_bm25("university"), tokenize_for_bm25("universe"));
     }
 
     #[test]

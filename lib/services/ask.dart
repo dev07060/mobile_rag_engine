@@ -138,15 +138,22 @@ String defaultAskPrompt(String question, List<RagPassage> passages) {
   return buffer.toString();
 }
 
-final _citation = RegExp(r'\[(\d+(?:\s*,\s*\d+)*)\]');
+const _citationIds = r'(\d+(?:\s*,\s*\d+)*)';
 
-/// Passages of [passages] cited in [text] as `[1]`, `[1, 2]` or `[1][2]`, in
-/// order of first citation and without repeats.
+/// `[1]`, plus the CJK corner brackets `「1」` and `『1』` that models answering
+/// in Korean, Japanese or Chinese often use for citations. Those brackets also
+/// quote words (`「결전」`), so only digits count, and only ids that were given
+/// to the model.
+final _citation = RegExp('\\[$_citationIds\\]|「$_citationIds」|『$_citationIds』');
+
+/// Passages of [passages] cited in [text] as `[1]`, `[1, 2]`, `[1][2]` or
+/// `「1」`, in order of first citation and without repeats.
 List<RagPassage> citedPassages(String text, List<RagPassage> passages) {
   final byId = {for (final p in passages) p.id: p};
   final cited = <String, RagPassage>{};
   for (final match in _citation.allMatches(text)) {
-    for (final id in match.group(1)!.split(',')) {
+    final ids = match.group(1) ?? match.group(2) ?? match.group(3)!;
+    for (final id in ids.split(',')) {
       final passage = byId[id.trim()];
       if (passage != null) cited.putIfAbsent(passage.id, () => passage);
     }

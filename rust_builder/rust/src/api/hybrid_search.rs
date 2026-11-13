@@ -1167,4 +1167,78 @@ mod tests {
         close_db_pool();
         let _ = std::fs::remove_file(db_path);
     }
+
+    /// Milestone W1 (docs/milestones.md), the README example. A short
+    /// document is the clear vector top-1, but its only rare word is the
+    /// plural of the question's ("Refunds" vs "refund"). 200 other chunks
+    /// match only common words of the question ("how", "is", "the").
+    /// `prepareAsk` searches with topK 5 and the default weights (vector 0.2,
+    /// BM25 0.8). Before W1 the document had no BM25 hit and could not reach
+    /// the top 5; with English stemming "refund" and "Refunds" are one token.
+    #[test]
+    fn plural_query_word_keeps_short_vector_top1_in_hybrid_top5() {
+        clear_hnsw_index();
+        bm25_clear_index();
+
+        const DIM: usize = 8;
+        let query_vec = {
+            let mut v = vec![0.0_f32; DIM];
+            v[0] = 1.0;
+            v
+        };
+        let mut points = vec![(1_i64, query_vec.clone())];
+        bm25_add_document(
+            1,
+            "Refunds are accepted within 14 days of purchase.".to_string(),
+        );
+        for i in 0..200_i64 {
+            let id = 100 + i;
+            // Far from the query: weight on the other axes only.
+            let mut v = vec![0.0_f32; DIM];
+            v[1 + (i as usize % (DIM - 1))] = 1.0;
+            v[0] = 0.05;
+            points.push((id, v));
+            bm25_add_document(
+                id,
+                format!("This is how the device stores section {} of the manual.", i),
+            );
+        }
+        build_hnsw_index(points).unwrap();
+
+        let query = "How long is the refund period?".to_string();
+        let search = |vector_weight: f64, bm25_weight: f64| {
+            let config = RrfConfig {
+                k: 60,
+                vector_weight,
+                bm25_weight,
+            };
+            compute_hybrid_rrf_scores(query.clone(), &query_vec, 5, Some(config), None)
+                .unwrap()
+                .0
+        };
+
+        let hybrid = search(0.2, 0.8);
+        let position = hybrid.iter().position(|r| r.0 == 1);
+        assert_eq!(
+            position,
+            Some(0),
+            "vector top-1 matching the inflected form must lead the hybrid top 5; got {:?}",
+            hybrid
+        );
+        let doc1 = &hybrid[0];
+        assert_eq!((doc1.2, doc1.3), (1, 1), "vector rank 1 and BM25 rank 1");
+
+        // Stemming is part of tokenization, so keyword-only search matches
+        // the inflected form too.
+        let bm25_only = search(0.0, 1.0);
+        assert_eq!(
+            bm25_only.first().map(|r| r.0),
+            Some(1),
+            "BM25-only must match \"Refunds\" for \"refund\"; got {:?}",
+            bm25_only
+        );
+
+        clear_hnsw_index();
+        bm25_clear_index();
+    }
 }

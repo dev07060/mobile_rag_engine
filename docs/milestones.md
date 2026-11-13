@@ -24,13 +24,18 @@
    2. 엔진 커밋, 빌드 모드(debug/profile/release)와 켜진 Rust feature
    3. 기기, OS, Xcode/Flutter/rustc 버전
    4. 데이터셋, 청크 수, 측정일, 다른 작업이 함께 돌았는지
+10. **범용 패키지다. 한 앱만을 위해 고치지 않는다 (2026-11-09 사용자: "현재 프로젝트에만 맞추어 수정할 순 없어").** 특정 앱 연동에서 나온 항목은 착수 전에 범용과 앱 전용으로 나눠 이 문서에 적는다.
+   1. 패키지에는 다른 앱도 쓰는 장치만 넣는다. 예: 인자를 열기, 결과에 신호를 더 돌려주기, 기본으로 꺼진 선택 옵션.
+   2. 값과 규칙은 앱에 둔다. 예: 가중치 값, 거르는 기준값, 신호 조합 방식, 한 데이터에 맞춘 휴리스틱.
+   3. 기본 동작과 기본값은 바꾸지 않는다. 바꾸려면 성격이 다른 문서 묶음 여러 개와 모델 여러 개로 측정한 근거를 PR에 적는다. 앱 하나의 측정은 사례 한 건이지 기본값의 근거가 아니다.
+   4. 문서의 재현 예시에 특정 플러그인이나 앱을 쓸 수는 있지만, 설명은 그 원인 일반으로 쓴다.
 
 ## 현재 상태 (2026-11-13)
 
 - main: `3505825` (#135 머지). **새 배포는 보류**(규칙 5). 다음 배포는 내부 점검으로 문제를 모두 고친 뒤에 한다.
 - 0.23.0 배포 뒤 main에 머지된 것: Q1 (#132, 2026-11-09)와 D1 (#133)·S1 (#134)·B1 (#135) (셋 다 2026-11-12). 아직 배포하지 않았다. 코드 변경(Q1, S1)은 `CHANGELOG.md`의 `## Unreleased`에 있고, D1과 B1은 문서와 측정만 바꿨다.
   - S1은 Rust 코어를 바꿨다. 다음 `rag_engine_flutter` 배포가 있어야 pub 사용자에게 닿는다.
-- PR 열림: D2 (#136, README와 `docs/local-rag-engine.md`의 검색 품질 수치를 B1의 모델별 값으로 고친다).
+- 열린 PR 없음. D2 (#136)는 2026-11-13에 머지됐다.
 
 2026-11-06 기준으로 적었던 내용:
 - 마지막 배포: `mobile_rag_engine` 0.23.0과 `rag_engine_flutter` 0.22.0 (pub.dev, 2026-11-04). R1 완료(태그 `v0.23.0`, pub 모드 확인 통과, 2026-11-06).
@@ -329,7 +334,7 @@
 ### D2. 검색 품질 수치를 모델별로 고치기 (README, `docs/local-rag-engine.md`)
 
 - **담당:** 세션 "D2 수치 모델별", 브랜치 `claude/d2-metrics-by-model-eed8b3` (worktree `.claude/worktrees/d2-metrics-by-model-eed8b3`, main `3505825`에서 땄다)
-- **상태:** PR 열림 (#136, 2026-11-13). 머지 대기. 2026-11-13 사용자 "새 세션 하나 파서 D2 진행". BGE-m3는 `docs/local-rag-engine.md`에만 참고 한 줄로 넣고 README에는 넣지 않았다(이유는 PR 본문). 범위 초안은 2026-11-12 사용자 "위 수치도 마일스톤에 작성해줘"로 적었다.
+- **상태:** 머지 완료 (#136, 2026-11-13). 2026-11-13 사용자 "새 세션 하나 파서 D2 진행". BGE-m3는 `docs/local-rag-engine.md`에만 참고 한 줄로 넣고 README에는 넣지 않았다(이유는 PR 본문). 범위 초안은 2026-11-12 사용자 "위 수치도 마일스톤에 작성해줘"로 적었다.
 - **시점 (2026-11-13 합의):** 문서는 지금 바꾼다. 수치가 S1 수정이 들어간 코드의 값이고, 그 수정은 다음 `rag_engine_flutter` 배포부터 pub 사용자에게 닿는다는 점을 한 줄로 적는다. 배포 버전 번호는 적지 않는다.
 - **출처:** B1 결과(#135, `docs/perf/passage-benchmark-2026-11/README.md`).
 - **순서:** #133 → #134(S1) → #135(B1) 머지 뒤에 main에서 브랜치를 딴다. README는 D1(#133)도 고치므로 D1 머지 뒤여야 한다(규칙 3).
@@ -367,6 +372,133 @@
 - 규칙 8의 네 항목. 문서만 바뀌므로 업그레이드 경로는 "해당 없음"과 이유를 적는다. PR 하나, CI 통과.
 
 **손대는 파일:** `README.md`, `docs/local-rag-engine.md`, `docs/milestones.md`
+
+### W1. 하이브리드 순위 (흔한 단어만 맞은 청크가 정답을 밀어냄, `ask` 가중치 인자)
+
+- **담당:** 세션 "W1 어간 처리 재작업"(2026-11-13~), worktree `.claude/worktrees/w1-stemmer-rework-195896`(브랜치 `claude/w1-stemmer-rework-195896`, PR #137 끝 `529e5ea`에서 땄다). 커밋은 PR #137의 브랜치 `claude/w1-hybrid-ranking-95dfb8`에 fast-forward로 올린다. 처음 담당은 세션 "W1 하이브리드 순위"(worktree `.claude/worktrees/w1-hybrid-ranking-95dfb8`, W1 초안 커밋 `9f88185`에서 땄다. 그 아래는 main `a6992cc`)였다.
+- **상태:** PR #137 열림, 재작업(S1) 반영 (2026-11-13). 착수는 사용자 "새 세션에서 W1 착수", 재작업은 사용자 "새 세션으로 진행"(2026-11-13). 범위 초안은 2026-11-13 사용자 "가중치 초안 써줘"로 적었다.
+
+**범위 변경: 손으로 짠 복수형 규칙을 표준 어간 처리로 바꾼다 (2026-11-13, 규칙 4)**
+- **이유:** PR #137 검토에서 `bm25_search.rs`의 `plural_forms`가 무관한 낱말을 서로 맞추는 것이 나왔다(`not`↔`notes`, `car`→`cares`, `plan`→`planes`, `times`→`tim`, `new`→`news`). 또 `score_groups`가 형태마다 그 형태의 IDF로 점수를 매겨 최댓값을 취하므로, 질의의 흔한 낱말("not")이 문서의 드문 형태("notes")의 높은 IDF를 받는다. 사용자는 이를 오류로 판단했고, 손으로 짠 규칙 대신 표준 알고리즘을 쓰기로 했다.
+- **바뀌는 것:** 손으로 짠 `plural_forms`와 형태별 IDF 최댓값을 버린다. 영어 어간 처리는 표준 Snowball English(Porter2)를 `rust-stemmers` 크레이트로 쓴다. **새 Rust 의존성이 생긴다.**
+- **후보 둘을 같은 조건으로 잰다.**
+  - (S1) 색인과 질의 양쪽에서 ASCII 영문 토큰을 Snowball English로 어간 처리한다. 한글·CJK 토큰과 Hangul bigram은 그대로다. 형태 확장 코드와 "두 가중치가 모두 0이 아닐 때만" 스위치를 지운다. **BM25 색인 토큰이 바뀐다**(`bm25_only`도 바뀐다). BM25 색인은 디스크에 저장되지 않고 활성화 때 `chunks` 테이블에서 메모리로 다시 만들어지므로(`rebuild_chunk_bm25_index_for_collection_inner`) 저장 데이터 마이그레이션은 없다.
+  - (S2) 색인은 그대로 두고 하이브리드 질의에서만, 같은 Snowball 어간을 가진 색인 내 형태를 한 묶음으로 찾는다. 묶음의 IDF는 묶음 전체의 문서 수로 계산한다(Lucene `SynonymQuery` 방식).
+- **고르는 기준:** (S1)이 README 예제를 고치고 default_hybrid `passage_recall@10`이 세 모델 모두 PR #137의 값(0.9375 / 0.950 / 0.975) 이상이면 (S1). 아니면 (S2)를 본다. 둘 다 PR #137 값보다 낮으면 푸시 전에 수치를 보이고 묻는다. (S1)의 `bm25_only` 변화는 실패로 보지 않고 수치만 적는다.
+- **추가 완료 기준:** 위 오탐(`not`/`notes`, `car`/`cares`, `plan`/`planes`)이 서로 맞지 않는다는 Rust 테스트와, 질의의 흔한 낱말이 다른 형태의 높은 IDF를 받지 않는다는 Rust 테스트(수정 전 코드에서 실패 확인). 표준 어간 처리의 알려진 오탐(예: university/universe)과 영어 전용이라는 점을 가이드에 적는다. BM25 한 번의 시간과 색인 빌드 시간을 잰다.
+- **그대로 두는 것:** `prepareAsk`/`ask`의 가중치 인자, 인용 괄호, `test/unit/ask_test.dart`, `short_document_recall_test.dart`의 `prepareAsk` 단계, 규칙 10·I1·후보 줄, `ask.md`의 "Short documents next to a large one" 절(복수형 문장만 고친다). `MobileRag.useEngineForTest`는 범위 밖에서 들어간 공개 테스트용 API라 PR 본문에 "받아들일지 결정 필요"로 적는다.
+- **출처:** 후보 목록의 "[중간] 기본 하이브리드 가중치에서 불용어만 맞은 청크가 정답보다 앞선다"(D1), S1 PR(#134) 본문의 "`searchHybrid` with the default weights still does not return the refund sentence", 메인 체크아웃 브랜치 `feat/ask-search-weights`의 커밋 안 된 작업(2026-11-09).
+- **순서:** D2(#136) 머지 뒤 main에서 브랜치를 딴다. Q4와 `lib/services/ask.dart`가 겹치므로 Q4보다 먼저 한다(규칙 3). Q2·Q3과는 Rust 파일이 겹치지 않는다.
+
+**배경**
+- **README 첫 화면 예제가 `ask`에서 정답을 못 찾는다.**
+  - 예제는 환불 문장 하나와 PDF를 넣고 `rag.ask('How long is the refund period?')`를 부른다.
+  - `ask`와 `prepareAsk`는 `searchHybridWithContext`를 기본 가중치(벡터 0.2, BM25 0.8)로 부르고 상위 5개만 프롬프트에 넣는다.
+  - S1 뒤 실측(MiniLM, 1821 청크): 환불 문장은 벡터 1위(0.7295)인데 `searchHybrid(topK: 50)`에 없다. 0.5/0.5로 바꿔도 32~35위다.
+  - `rag.search`(예제 2번)는 S1 뒤 1위로 나온다. 깨지는 것은 3번(`ask`)이다.
+- **원인 (코드로 확인, `hybrid_search.rs`의 RRF와 `bm25_search.rs`의 토큰화):**
+  - 결합은 순위만 쓴다: `vector_weight / (60 + 벡터 순위) + bm25_weight / (60 + BM25 순위)`.
+  - BM25 목록에는 질의 단어가 하나라도 맞은 청크가 모두 들어온다. 토큰화는 한 글자 `a`·`i`만 빼므로 "how", "is", "the"만 맞은 청크도 순위를 받는다.
+  - 기본 가중치에서는 BM25 r위(벡터 순위 없음)가 `0.8 / (60 + r)`이고 벡터 1위(BM25 불일치)가 `0.2 / 61`이다. r이 184 이하이면 BM25 쪽이 앞선다. 큰 문서가 있으면 흔한 단어만 맞은 청크 180여 개가 정답 앞에 선다.
+  - 질의의 "refund"와 문서의 "Refunds"는 다른 토큰이라 BM25에서 맞지 않는다(어간 처리 없음).
+- **가중치만으로는 풀리지 않는다.** 0.5/0.5에서도 32~35위다. B1 측정에서 가중치의 좋은 값은 모델마다 반대였다.
+
+  | `passage_recall@10` | MiniLM | KoEn-E5-Tiny | BGE-m3 |
+  |---|---|---|---|
+  | 0.2/0.8 (기본) | 0.9375 | 0.9625 | 0.975 |
+  | 0.4/0.6 | 0.925 | 0.9875 | 1.000 |
+  | 0.6/0.4 | 0.8125 | 0.9875 | 1.000 |
+
+- **`feat/ask-search-weights`의 커밋 안 된 작업 (main `7a67b09` 기준, 파일 6개):**
+  - `prepareAsk`/`ask`에 `vectorWeight`/`bm25Weight` 인자(`MobileRag`, `CollectionRag`). 기본값은 그대로다.
+  - 인용 파싱이 `「1」`·`『1』`도 읽는다(Q4 B12의 일부).
+  - `docs/milestones.md`에 "범용 패키지" 규칙과 I1 마일스톤, 후보 몇 줄. 이 규칙의 번호 9는 main의 규칙 9(측정 기록)와 겹친다.
+
+**목표:** 벡터 검색이 분명하게 찾은 구절이, 흔한 단어만 맞은 BM25 결과에 밀려 하이브리드 상위에서 빠지지 않게 한다. `ask`에서 가중치를 바꿀 수 있게 한다.
+
+**포함**
+- **W-1. 재현 테스트부터.** 고치기 전에 실패하는 테스트를 만든다.
+  - Rust 단위 테스트: 벡터 1위이고 BM25 불일치인 문서와, 흔한 단어만 맞은 문서 200개를 넣었을 때의 결합 순위.
+  - `example/integration_test/short_document_recall_test.dart`에 `prepareAsk`(topK 5, 기본 인자) 단계를 더한다.
+- **W-2. 고칠 방식을 측정으로 정한다.** 아래 후보를 같은 조건으로 재고 하나를 고른다. 고른 이유와 버린 후보의 수치를 PR에 적는다.
+  - (a) BM25 후보 거르기: 질의 토큰 가운데 드문 것(IDF 기준)이 하나도 맞지 않은 청크를 BM25 목록에서 뺀다. 언어별 불용어 목록이 필요 없다. **권장 출발점.**
+  - (b) BM25 점수 기준 거르기: 점수가 1위 점수의 일정 비율보다 낮은 청크를 뺀다.
+  - (c) 결합 방식: 한쪽 목록에만 있는 문서의 처리(없는 쪽에 큰 순위를 주는 방식 등)를 바꾼다.
+  - (d) 영어 복수형 정도의 가벼운 어간 처리. "refund"/"Refunds"를 맞게 한다. BM25 인덱스 토큰이 바뀌므로 기존 DB의 인덱스가 어떻게 다시 만들어지는지 먼저 확인한다.
+- **W-3. `ask` 가중치 인자.** `feat/ask-search-weights`의 `lib/mobile_rag.dart`, `test/unit/ask_test.dart`, `CHANGELOG.md` 변경을 main 위로 옮긴다.
+- **W-4. 브랜치의 나머지 변경 정리.** 인용 괄호(`「1」`·`『1』`)와 `docs/milestones.md` 변경(범용 패키지 규칙을 규칙 10으로, I1, 후보 줄)을 이 PR에 함께 넣는다. 그 뒤 `feat/ask-search-weights`는 지운다. 따로 나누려면 착수 전에 정한다.
+- **W-5. 문서.** `docs/guides/ask.md`와 검색 가이드에 가중치 인자와 바뀐 동작을 적는다. `CHANGELOG.md` `## Unreleased`.
+
+**제외**
+- 기본 가중치 0.2/0.8 변경. 좋은 값이 모델마다 반대라(위 표) 모델별 기본값은 별도 후보로 남긴다.
+- 리랭커, 관련 없는 질문 거르기 신호(후보 목록), e5 계열 `query:`/`passage:` 접두어, 한국어 프리셋.
+- 언어별 불용어 목록을 넣는 일. (a)~(d)로 풀리지 않으면 마일스톤을 먼저 고친다(규칙 4).
+- 버전 변경과 배포. Rust 코어가 바뀌므로 다음 `rag_engine_flutter` 배포가 있어야 pub 사용자에게 닿는다.
+
+**완료 기준**
+- **README 예제:** 환불 문장 + `sample_eng.pdf`(MiniLM Model Pack, 새 DB)에서 `prepareAsk('How long is the refund period?')`의 구절 5개 안에 환불 문장이 있다. PDF를 먼저 넣어도, 짧은 문서가 6개여도 같다.
+- **80 질의 평가가 나빠지지 않는다.** MiniLM, KoEn-E5-Tiny, BGE-m3의 default_hybrid `passage_recall@10`이 B1 값(0.9375 / 0.9625 / 0.975)보다 낮지 않고, 언어별 수치와 `answerable_context@10`, `passage_mrr@10`도 함께 적는다. 하나라도 떨어지면 PR을 열기 전에 수치를 사용자에게 보이고 묻는다.
+  - 측정 하네스와 평가셋은 저장소에 없다(gitignore). B1 세션이 쓴 로컬 파일과 공유 메모 폴더의 원본을 쓴다.
+  - 규칙 9대로 모델 fingerprint, 커밋, 빌드 모드, 기기, 청크 수, 측정일을 적는다.
+- **성격이 다른 문서 묶음 둘 이상에서 확인한다:** 위키 문서 80개(평가셋)와 짧은 문서 + 긴 PDF(README 형태). `vector_only`와 `bm25_only` 프로필의 결과는 바뀌지 않아야 한다.
+- **검색 시간:** `searchHybrid` 한 번의 시간을 수정 전후로 잰다(1,821 청크와 평가셋 4,492 청크).
+- **`ask` 인자:** 기본 인자의 결과가 수정 전과 같은 검색 호출을 만든다는 단위 테스트, 가중치를 준 호출이 그 값으로 검색한다는 단위 테스트.
+- 규칙 8의 네 항목. 업그레이드 경로는 0.23.0이 남긴 DB에서 시작해 첫 검색이 되는지와, BM25 인덱스가 다시 만들어지는지를 본다. PR 하나, CI 통과.
+
+**손대는 파일:** `rust_builder/rust/src/api/{hybrid_search,bm25_search}.rs`, `lib/mobile_rag.dart`, `lib/services/ask.dart`, `test/unit/ask_test.dart`, `example/integration_test/short_document_recall_test.dart`, `docs/guides/ask.md`, 검색 가이드, `CHANGELOG.md`, `docs/milestones.md`
+
+**측정 (2026-11-13)**
+- 조건: 엔진 `9f88185` + 실험 코드(변형을 파일로 고르는 임시 코드, 커밋하지 않음), 로컬 Mac(macOS 27, Xcode 27.1, Flutter 3.35.5, rustc 1.91.1). README 형태는 debug(`short_document_recall_test.dart`), 80 질의는 profile(링커 래퍼 + arm64, B1과 같은 하네스·평가셋). 세 모델의 기준선(none)이 B1 값과 fingerprint까지 같다: MiniLM `…e9246dc3…` 4667 청크, KoEn-E5-Tiny `…fd688b15…` 4492 청크, BGE-m3 `…b089a980…` 4492 청크(Teradata/bge-m3 `53f88357`에서 다시 받음).
+- **W-1 재현(수정 전):** Rust 테스트 실패(벡터 1위 문서가 top 5 밖, BM25 일치 없음). 실제 엔진(MiniLM, 1821 청크)에서 세 경우 모두 `prepareAsk` 5개 구절에 환불 문장이 없다. 환불 문장의 BM25 순위는 0(불일치)으로, "refund"와 "Refunds"가 실제로 맞지 않는다. PDF는 IFRS 회계 문서라 질의 토큰 df가 how 25, long 3, is 214, the 1037, period 141, refund 0(1826 청크 중)이다.
+- **README 형태 `prepareAsk`(구절 5개 안 환불 문장 위치, 짧은→PDF / PDF→짧은 / 짧은 6개):** none -/-/-, (a) 5% -/-/-, (a) 1% 2/2/2(HNSW 질의가 빠짐), (b) 0.5 -/-/-, (c1) 없는 쪽 순위=후보 수+1 -/-/-, (c2) BM25 몫에 질의 IDF 커버리지를 곱함 5/5/5, (d) 색인·질의 복수형 접기 1/1/1, (e) 하이브리드 질의에서만 단·복수형을 함께 찾음(색인 그대로) 1/1/1.
+- **80 질의 default_hybrid `passage_recall@10` (B1: 0.9375 / 0.9625 / 0.975):** none 0.9375 / 0.9625 / 0.975. (e) 0.9375 / **0.950** / 0.975. (c2) 0.9125 / **0.950** / –. (d) 0.925 / **0.950** / –, `bm25_only`도 바뀜(MiniLM 0.900→0.8875). (a) 5%·(c1)은 MiniLM에서 0.9375 그대로지만 README를 못 고친다. (b) 0.925.
+- KoEn의 (e) 하락은 질의 하나다: "What are the key concepts and features of Cultural imperialism?" 정답이 10위→밖. "features/concepts"가 "feature/concept"까지 맞아 일반 청크가 올라왔다. (e)는 BGE-m3에서도 `answerable_context@10` 0.9875→0.975, MRR 0.839→0.823으로 내려간다.
+
+**처음 고른 방식과 수치 (2026-11-13, PR #137 첫 판. 아래 재작업으로 대체됨)**
+- **고른 것: (e) 질의 쪽 단·복수형 확장.** 하이브리드 검색(두 가중치가 모두 0이 아닐 때)에서만, 질의의 영어 낱말이 색인에 있는 다른 형태도 함께 찾는다. 색인 토큰은 그대로이므로 마이그레이션이 없고, `bm25_only`(벡터 가중치 0)와 `vector_only`는 전과 같다. 문서마다 한 낱말은 한 번만 센다(여러 형태가 있어도 가장 높은 점수 하나).
+- **버린 것:** (a) 흔한 단어만 맞은 청크 거르기는 README를 못 고친다(남은 청크가 "how" 25개·"long" 3개로 5개보다 많다). (b) 점수 비율 거르기는 README를 못 고치고 MiniLM 0.925로 내려간다. (c1)은 README를 못 고친다. (c2) IDF 커버리지 곱은 README를 5위로만 올리고 MiniLM 0.9125로 내려간다. (d) 색인까지 복수형을 접으면 README는 1위가 되지만 MiniLM 0.925, `bm25_only`도 0.900→0.8875로 바뀌고 기존 DB의 BM25 토큰이 달라진다.
+- **KoEn은 0.9625 → 0.950으로 내려간다.** 2026-11-13 사용자 결정: "0.950을 받아들이고" 한계는 문서에 적는다. 내려가는 질의는 하나다("What are the key concepts and features of Cultural imperialism?", 정답이 10위 → 밖). BGE-m3는 `answerable_context@10` 0.9875→0.975, MRR 0.8388→0.8229이고 `passage_recall@10`은 그대로다.
+- **조건(규칙 9):** 엔진 `9f88185` + 이 브랜치의 최종 코드, 로컬 Mac(macOS 27.2, Xcode 27.1, Flutter 3.35.5, rustc 1.91.1, 2026-11-13). README 형태는 debug(`short_document_recall_test.dart`, MiniLM 1,821~1,826 청크), 80 질의는 profile(B1과 같은 하네스·평가셋, `--dart-define=HYBRID_PASSAGE_REUSE_EXISTING_INDEX=true`로 수정 전에 만든 색인을 다시 열어 검색만 새 코드로 했다).
+
+| 80 질의, default_hybrid | MiniLM (4,667 청크, `…e9246dc3…`) | KoEn-E5-Tiny (4,492, `…fd688b15…`) | BGE-m3 (4,492, `…b089a980…`) |
+|---|---|---|---|
+| `passage_recall@10` 전 → 후 | 0.9375 → **0.9375** | 0.9625 → **0.950** | 0.975 → **0.975** |
+| `answerable_context@10` | 0.9125 → 0.900 | 0.975 → 0.9625 | 0.9875 → 0.975 |
+| `passage_mrr@10` | 0.7633 → 0.7414 | 0.8169 → 0.8086 | 0.8388 → 0.8229 |
+| 언어별(ko/en/other, 후) | 29/32, 30/32, 16/16 | 31/32, 29/32, 16/16 | 32/32, 30/32, 16/16 |
+| `vector_only` | 0.65 → 0.65 | 0.95 → 0.95 | 0.975 → 0.975 |
+| `bm25_only` | 0.90 → 0.90 | 0.925 → 0.925 | 0.925 → 0.925 |
+
+- **README 형태(구절 5개 안 환불 문장 위치):** 짧은→PDF 1위, PDF→짧은 1위, 짧은 6개 1위. 짧은 문서 6개 모두 1위다(전에는 환불 문장이 세 경우 모두 없었다). 환불 문장의 BM25 순위는 0(불일치) → 2위가 됐다.
+- **남는 한계(측정):** 같은 묶음에서 "How many days do I have to return an item?"(공통 낱말은 "days" 하나, 벡터 50위 안에 없음)는 기본 가중치에서 두 번째 구절, 0.5/0.5에서 첫 구절이다. 짧은 문서만 담은 컬렉션(`inCollection('faq')`)에서는 두 질문 모두 첫 구절이다. 낱말이 하나도 겹치지 않는 질문은 여전히 빠질 수 있다(측정하지 않았다). 이 세 가지를 `docs/guides/ask.md`의 "Short documents next to a large one"과 FAQ에 적었다.
+- **검색 시간:** 질의 쪽 확장은 색인에 있는 형태만 더 찾으므로 질의 낱말 수에 비례한다. Rust 벤치(release, 5,000 문서, 질의 7낱말, `cargo test --release --lib bm25_expand_search_benchmark -- --ignored`): 462µs → 1.03ms. 앱 수준 `searchHybrid` 중위수(profile, 80 질의 × 5 프로필)는 수정 전 1.8~2.6ms, 후 1.75~2.7ms로 실행 간 변동 안이다(BM25와 벡터 검색을 동시에 돌리고 벡터 쪽이 더 오래 걸린다).
+- **업그레이드 경로(실측):** pub `mobile_rag_engine` 0.23.0 + `rag_engine_flutter` 0.22.0(경로 override 없이 배포본)으로 환불 문장 + PDF를 색인해 DB를 만들었다(1,821 청크, `.hnsw`는 형식 v1). 같은 DB를 이 브랜치로 열었더니 source 2개·청크 1,821개가 그대로 읽히고, 첫 검색이 되고(`vectorRank=0`), 기본 가중치 하이브리드에서도 1위다. `.hnsw`는 v1 → v2로 한 번 다시 만들어진다(S1에서 이미 들어간 동작). BM25 인덱스는 활성화 때 DB 내용에서 메모리로 다시 만들므로 단·복수형 확장이 바로 적용된다. 저장되는 데이터는 바뀌지 않아 마이그레이션이 없다. 참고로 0.23.0 쪽에서는 같은 질문에 환불 문장이 어떤 프로필에서도 나오지 않는다(S1 버그, `vectorRank=-1`).
+
+**재작업 결과: (S1) 표준 어간 처리로 간다 (2026-11-13)**
+- **결정:** 2026-11-13 사용자 "W1은 표준 방식으로 진행". (S1)과 (S2) 모두 README 예제는 고치지만 default_hybrid가 MiniLM·BGE-m3에서 PR #137 첫 판보다 질의 하나씩 낮다. **2026-11-13 사용자 합의:** MiniLM 0.9375 → 0.925, BGE-m3 0.975 → 0.9625, `bm25_only` MiniLM 0.900 → 0.8875 하락을 받아들인다. (S2) 코드는 넣지 않는다.
+- **바뀐 코드:** `tokenize_for_bm25`가 ASCII 영문자로만 된 토큰을 Snowball English(`rust-stemmers` 1.2.0, MIT/BSD-3-Clause)로 어간 처리한다. 색인과 질의가 같은 함수를 지나므로 모든 BM25 경로(키워드 전용 포함)에 적용된다. 한글·CJK·악센트 문자·`iphone15` 같은 섞인 토큰과 Hangul bigram은 그대로다. PR #137 첫 판의 `plural_forms`, `query_groups`, 형태별 최댓값 점수, `expand_plurals` 스위치는 지웠다.
+- **재현 테스트:** `not`/`notes`, `car`/`cares`, `plan`/`planes`, `new`/`news`가 서로 맞지 않는 테스트와 "Refunds"·"Refund"가 같은 점수를 받는 IDF 테스트. 둘 다 PR #137 첫 판 코드에서 실패했다(IDF 테스트: 4.25 대 0.78).
+- **떨어진 질의:** 세 모델 모두 평가셋의 같은 틀 문장 "What are the key concepts and features of X?"이다(MiniLM: Dividend policy 6위→밖, BGE-m3·KoEn: Cultural imperialism 밖. Government는 세 모델 모두 1~2위 → 8~9위). "concepts/features"의 어간이 일반 청크의 "concept/feature…"와 맞는다. (S1)과 (S2)는 질의별 순위까지 같았다.
+- **이 평가셋의 한계:** 영어 질의 32개 중 8개가 같은 틀 문장이라 틀 낱말 하나의 변화가 여러 질의에 함께 나타난다. 질문과 정답 구절이 통째 낱말을 하나도 공유하지 않는 질의는 영어 0개, 한국어 2개(둘 다 틀 문장 "…의 핵심 개념과 주요 특징을 설명해줘")뿐이라, 근본 원인(낱말이 안 겹치는 짧은 문서)은 이 평가셋으로 잴 수 없다(후보 목록).
+- **조건(규칙 9):** 엔진 `529e5ea` + 이 재작업, 로컬 Mac(macOS 27.2, Xcode 27.1, Flutter 3.35.5, rustc 1.91.1, 2026-11-13, 다른 측정과 겹치지 않게 차례로 실행). 80 질의는 profile, README 형태는 debug(MiniLM, 1,821~1,826 청크). 80 질의는 수정 전에 만든 색인을 다시 열었다(`HYBRID_PASSAGE_REUSE_EXISTING_INDEX=true`). BM25 색인은 활성화 때 DB에서 메모리로 다시 만들어지므로(로그 "Building index from 4667 chunks") 어간 토큰이 적용된다. 같은 환경에서 수정 전 코드의 MiniLM이 B1 값과 정확히 같았다.
+
+| 80 질의 default_hybrid (recall@10 / answerable@10 / MRR@10) | MiniLM (4,667 청크, `…e9246dc3…`) | KoEn-E5-Tiny (4,492, `…fd688b15…`) | BGE-m3 (4,492, `…b089a980…`) |
+|---|---|---|---|
+| B1 (수정 전) | 0.9375 / 0.9125 / 0.7633 | 0.9625 / 0.975 / 0.8169 | 0.975 / 0.9875 / 0.8388 |
+| PR #137 첫 판 (손으로 짠 복수형) | 0.9375 / 0.900 / 0.7414 | 0.950 / 0.9625 / 0.8086 | 0.975 / 0.975 / 0.8229 |
+| **(S1) 최종** | **0.925** / 0.900 / 0.7450 | **0.950** / 0.9625 / 0.8168 | **0.9625** / 0.9625 / 0.8211 |
+| (S2) 질의 쪽 어간 묶음 | (S1)과 같음 | (S1)과 같음 | (S1)과 같음 |
+| 언어별 (S1, ko/en/other) | 29/32, 29/32, 16/16 | 31/32, 29/32, 16/16 | 32/32, 29/32, 16/16 |
+| `bm25_only` recall (S1) | 0.900 → 0.8875 | 0.925 → 0.925 | 0.925 → 0.925 |
+| `bm25_only` recall (S2) | 그대로 | 그대로 | 그대로 |
+| `vector_only` recall | 그대로 0.65 | 그대로 0.95 | 그대로 0.975 |
+
+- **README 형태(구절 5개 안 환불 문장 위치):** (S1)·(S2) 모두 짧은→PDF 1위, PDF→짧은 1위, 짧은 6개 1위. 짧은 문서 6개 모두 자기 질문에서 1위.
+- **시간(release, 문서 20,000개, `bm25_build_benchmark`/`bm25_search_benchmark`):** 영어 색인 빌드 290~317ms → 536~542ms(어간 처리 비용), 한국어 색인 빌드 328~359ms로 그대로. BM25 한 번(7낱말, top 40) 2.0~2.1ms로 그대로. 앱의 `searchHybrid` 중위수(80 질의 × 5 프로필)는 1.67~2.54ms로 수정 전(1.69~2.18ms, MiniLM)과 실행 간 변동 안이다. (S2)는 빌드는 그대로, BM25 한 번이 약 30% 느렸다.
+
+**착수 전에 정한 것 (2026-11-13, 초안대로)**
+1. W-4(인용 괄호, 문서 변경)는 이 PR에 함께 넣는다.
+2. 80 질의 수치가 세 모델 중 하나라도 B1 값보다 떨어지면 PR을 열기 전에 수치를 보이고 묻는다.
 
 ### Q0. 내부 점검 묶음 (Q1~Q5) 공통
 
@@ -471,7 +603,7 @@
 **포함**
 - B10: `MobileRag.search`의 `similarity`가 `sourceIds` 유무에 따라 RRF 값과 코사인으로 바뀌는 문제.
 - B11: `adjacentChunks > 0`이면 결과가 출처 순서로 정렬되어 relevanceFirst가 깨지는 문제.
-- B12: 인용 파싱이 `［１］`, `【1】`, `[1、2]`, `[1-3]`을 놓치고 코드 안의 `items[2]`를 잡는 문제.
+- B12: 인용 파싱이 `［１］`, `【1】`, `[1、2]`, `[1-3]`을 놓치고 코드 안의 `items[2]`를 잡는 문제. `「1」`·`『1』`은 2026-11-09 게임 연동에서 Foundation Models가 실제로 쓴 형식이라 W1에서 먼저 읽게 했다(짝이 맞는 괄호 안 숫자, 준 번호만).
 - B13: ask·tool 토큰 예산이 임베딩 tokenizer 단위라 UNK가 많은 언어에서 LLM 토큰과 크게 다른 문제. `PromptCompressor`의 char/4 근사. 해결 방식(예: `targetPromptTokenCounter` 연결)은 착수 때 정한다.
 
 **제외:** LLM SDK 의존성.
@@ -498,6 +630,34 @@
 
 **손대는 파일:** `lib/src/model_pack/apple_host_configurator.dart`, `bin/**`, `.github/workflows/{quickstart_e2e,ci}.yml`, `tool/quickstart_e2e/**`, `rust_builder/rust/Cargo.toml`, `test/unit/apple_host_configurator_test.dart`, `docs/milestones.md`
 
+### I1. 실제 앱 연동 마찰 문서
+
+- **상태:** 착수 대기 (2026-11-09 사용자: "다음범위 문서에 써줘").
+- **출처:** 2026-11-09 Flutter Flame 게임(`legendary-bow-master`, 브랜치 `feats/ios-guide-qa`)에 iOS 전용 가이드 Q&A를 붙인 경험. 0.23.0, KoEn-E5-Tiny int8, Apple Foundation Models를 `RagGenerate`로 연결했고 iPhone 17(iOS 27.0.1)에서 확인했다. 패키지 코드는 고치지 않았다. 핵심 API(`initialize` → `addDocument` → `prepareAsk`)는 바로 붙었고, 시간이 든 곳은 빌드·배포 단계에서 원인을 찾는 일이었다.
+- **순서:** `troubleshooting.md`·`faq.md`·`release_build.md`를 고친 Q1(#132)과 README·가이드를 고친 D1(#133)은 머지됐다. W1과 `ask.md`가 겹치므로 W1 머지 뒤 main에서 브랜치를 딴다(규칙 3).
+
+**목표:** 기존 앱(다른 플러그인이 있고, 웹 빌드도 하고, 한 플랫폼에서만 RAG를 쓰는 앱)에 붙일 때 만나는 문제를 증상으로 찾아 바로 고칠 수 있게 문서로 남긴다.
+
+**포함**
+- **정적 링크와 vendored 라이브러리 충돌:** `use_frameworks! :linkage => :static`으로 바꾸면 기기용·시뮬레이터용 `.a`를 따로 vendoring하는 플러그인(예: `flutter_soloud`의 `libflac_iOS-device.a`)이 SDK 구분 없이 앱 링크에 들어가 시뮬레이터 빌드가 `building for iOS Simulator, but linking in object file built for iOS`로 깨진다. 증상, 원인, `post_install`에서 `OTHER_LDFLAGS`를 `[sdk=iphoneos*]`/`[sdk=iphonesimulator*]`로 나누는 우회 예시를 `troubleshooting.md`에 적는다. 정적 링크 요구 자체는 `flutter_onnxruntime`에서 오므로 없애지 않는다.
+- **한 플랫폼에서만 쓰는 앱:** (1) 웹 빌드: 조건부 import(`if (dart.library.io)`)로 FFI 코드를 빼는 예시. (2) 모델 asset이 웹 빌드에도 같이 들어가는 문제(Flutter asset은 플랫폼별로 뺄 수 없다)와 대응: 빌드 뒤 `build/web/assets/...`에서 지우거나, Q1의 `tokenizerPath`/`modelPath`로 asset 없이 배포하는 방법. `faq.md`의 "Does it support Web?" 답을 이 내용으로 고친다.
+- **모델 파일을 git 밖에 둘 때:** 고정 revision에서 받아 Model Pack manifest의 sha256으로 확인하는 스크립트 예시와 `.gitignore` 안내를 `model_setup.md`에 넣는다.
+- **짧은 문서 묶음을 넣을 때의 요령:** 긴 절 하나가 검색 결과를 계속 차지한 사례(게임 가이드의 「강화 카드」 절)를 바탕으로, 절을 주제 하나 단위로 나누는 기준을 적는다. 기본 가중치(`vectorWeight` 0.2 / `bm25Weight` 0.8)와 0.5 / 0.5를 같은 질문 묶음으로 비교해 보고 결과가 분명할 때만 권장값을 적는다. 측정 없이 권장값을 쓰지 않는다.
+- **생성 연결 예시:** iOS Foundation Models를 메서드 채널로 `RagGenerate`에 붙이는 최소 예시(사용 가능 여부 확인, 가드레일·컨텍스트 초과 오류를 찾은 구절 보여주기로 대체)를 `ask.md`에 넣는다. 시뮬레이터에서는 사용 가능으로 나와도 생성이 실패한다는 점도 적는다.
+
+**제외**
+- 패키지 코드 변경. 정적 링크 요구 제거, 웹 지원.
+- 답이 `[3]`처럼 인용 번호만 오는 경우 감지: Q4(인용·출력 계약)에서 함께 다룰지 착수 때 정한다.
+- Xcode 27 시뮬레이터 lipo 문제(위 후보에 이미 있다), 작은 모델의 지어내기(모델 문제).
+
+**완료 기준**
+- 새로 만든 Flutter 앱에 `flutter_soloud`를 함께 넣고 정적 링크로 바꿔 시뮬레이터 링크 오류를 재현한 뒤, 문서의 우회법만으로 빌드가 되는지 확인한다.
+- 조건부 import 예시로 `flutter build web`이 되고, 모델 파일이 빌드 결과에서 빠지는 것을 확인한다.
+- 가중치 비교 결과(질문, 상위 결과, 판정)를 PR 본문에 적는다.
+- 규칙 8의 네 항목. 문서만 바뀌므로 업그레이드 경로는 "해당 없음"과 이유를 적는다. PR 하나, CI 통과.
+
+**손대는 파일:** `docs/guides/{troubleshooting,faq,model_setup,ask,quick_start}.md`, `README.md`(필요할 때 링크만), `docs/milestones.md`
+
 ### 아직 마일스톤으로 적지 않은 후보
 
 착수하려면 위 형식으로 옮겨 적고 합의를 받는다.
@@ -508,7 +668,11 @@
   - 데이터는 있다: `search(..., sourceIds: [1])`(exact scan)은 환불 문장을 돌려준다. 5 청크짜리 PDF와 함께일 때는 정상이다.
   - 추정(확인하지 않음): 한 문서의 청크가 빽빽이 모여 있을 때 멀리 떨어진 벡터로 들어오는 HNSW 링크가 모두 잘려 그래프에서 도달할 수 없게 된다. BM25는 "refund"와 "Refunds"가 달라 이 질의에서 맞지 않았다.
 - **[중간] `clearAndRestart()` 뒤에 같은 문서를 다시 넣을 수 없다 (2026-11-12 D1).** → S1 범위 초안으로 옮겼다. `sources` 행이 남아 `addDocument`가 `isDuplicate: true, chunkCount: 0, message: "Source ingestion already in progress"`를 돌려준다. API 주석("`sources` 테이블을 남겨 `addDocument`로 다시 넣을 수 있다")과 다르다. 문서에는 `removeSource` 우회 절차를 적었다.
-- **[중간] 기본 하이브리드 가중치(벡터 0.2, BM25 0.8)에서 불용어만 맞은 청크가 정답보다 앞선다 (2026-11-12 D1).** 6 청크 코퍼스에서 "How long is the refund period?"의 정답(벡터 1위, BM25 불일치)이 `searchHybrid` 5위(0.0033)이고, "the"/"is"만 겹친 청크 넷이 0.016 안팎으로 앞선다. `ask`는 이 검색의 상위 5개만 쓴다. main 체크아웃의 `feat/ask-search-weights` 작업과 겹치는지 확인한다.
+- **[중간] (→ W1로 옮겼다) 기본 하이브리드 가중치(벡터 0.2, BM25 0.8)에서 불용어만 맞은 청크가 정답보다 앞선다 (2026-11-12 D1).** 6 청크 코퍼스에서 "How long is the refund period?"의 정답(벡터 1위, BM25 불일치)이 `searchHybrid` 5위(0.0033)이고, "the"/"is"만 겹친 청크 넷이 0.016 안팎으로 앞선다. `ask`는 이 검색의 상위 5개만 쓴다. main 체크아웃의 `feat/ask-search-weights` 작업과 겹치는지 확인한다.
+- **[중간] 낱말이 겹치지 않는 짧은 문서는 RRF에서 여전히 밀린다 (2026-11-13 W1에서 확인, 고치지 않음).** W1은 단·복수형이 달라 안 맞던 경우만 고쳤다. 질문과 낱말이 하나도 겹치지 않는 짧은 문서는 기본 가중치에서 상위 5개에 못 들 수 있다. 원인은 RRF가 두 목록 모두에 오른 문서에 점수를 더해 주는 구조라, 한쪽에서만 1위인 문서가 양쪽 중간인 문서에 지는 것이다(벡터 1위 단독 `0.2/61`, BM25 10위 `0.8/70`). 가중치만으로는 풀리지 않는다(0.5/0.5에서 W1 전 32~35위).
+  - 생각해 둔 방식: 벡터 점수가 분명히 높은 문서에 상위 자리를 보장한다. 융합 설계를 바꾸는 일이다.
+  - **먼저 평가셋이 필요하다.** 지금 80 질의 평가셋에는 "짧은 문서 + 낱말 안 겹침" 질문이 거의 없어서, 좋아졌는지 잴 수 없다. 그런 질문을 담은 평가셋을 만드는 것이 이 후보의 첫 단계다.
+  - 지금은 `docs/guides/ask.md`의 "Short documents next to a large one"에 우회 세 가지(짧은 문서를 따로 컬렉션에 두기, 그 질문에만 벡터 가중치 올리기, 짧은 문서에 낱말 더하기)를 적어 두었다.
 - **[낮음] 2026-11-12 D1에서 본 것:** (1) `mobile_rag_engine.dart`가 `RagError`만 `show`로 내보내, 앱이 `when`/`maybeWhen`과 `RagErrorUi.userFriendlyMessage`를 쓸 수 없다. (2) `pubspec.yaml`의 `flutter: ">=3.9.0"`이 실제 하한(Dart 3.9.2 = Flutter 3.35.3)과 다르다. (3) `name` 없이 넣은 문서는 `RagPassage.sourceName`이 null이라 `ask.md`와 README의 인용 출력 예제가 "null"을 찍는다. (4) `DocumentParser.parse`를 `MobileRag.initialize` 전에 부르면 `flutter_rust_bridge has not been initialized`가 난다.
 - **[중간] Xcode 27에서 macOS profile/release 빌드의 Rust 소스 빌드가 실패한다 (2026-11-12 S1 실행 중 발견, B1에서 원인 확인, 고치지 않음).**
   - **증상:** cargokit이 `--features vector_faer,vector_quant_i8 --release`로 빌드하면 `error[E0463]: can't find crate for dyn_stack_macros`(또는 `paste`)로 멈춘다. debug 빌드는 faer가 없어 이 proc-macro들을 만들지 않으므로 된다.
@@ -544,6 +708,11 @@
 - Xcode 27 + Flutter 3.35.5 (2026-11-06 Q1 확인 중 발견, 빈 `flutter create` 앱도 같다): (1) pod 배포 대상 macOS 10.15를 Xcode 27이 거부한다(12.0 이상). `setup`은 Podfile `platform`만 올리므로 pod target까지 맞추는 `post_install`을 넣을지 Q5에서 정한다. (2) Flutter의 release lipo 검사가 `ARCHS="arm64 x86_64"`를 아키텍처 하나로 읽어 universal macOS release 빌드가 실패한다. Flutter 쪽 문제라 문서(troubleshooting)에 우회법만 적을지 정한다. CI의 `macos-latest`가 Xcode 27로 바뀌면 macOS job이 함께 깨진다.
 - 2026-11-07 추가 점검(회고 6절): C1 Xcode 27 Rust 소스 빌드 strip 문제(Q5에 넣을지 정한다, `rag_engine_flutter` 배포 필요), C2 Xcode 27 ↔ Flutter 3.47 요구와 CI Flutter 고정값(Q5), C3 직접 만든 Model Pack에서 setup이 멈추고 `--repair`가 모델을 덮어쓰는 문제(Q5), C4~C6과 낮음 문서 항목(새 문서 묶음 후보), inf/NaN 벡터 panic과 테스트 0개를 돌리는 Integration Tests job(가능성 있음, 착수 때 재현).
 - 2026-11-06 점검의 낮음 항목: 부팅마다 기본 컬렉션 청크 전체를 UPDATE하는 backfill, 0.12 이하 DB의 dedup 해시 형식, `.vec` offset 정체성과 남는 `*.tmp-*` 파일, 동시 하이브리드 검색, Apple 정적 SQLite 심볼 노출(회고 2절 "낮음").
+- 번들 문서 레시피 (2026-11-09 게임 가이드 연동, 규칙 10으로 다시 나눔): 앱과 함께 배포되는 문서 묶음이 바뀌었을 때 바뀐 문서만 갈아 끼우는 일은 지금 API로 된다. `listSources`로 목록을 보고, 바뀌었거나 없어진 문서를 `removeSource`로 지운 뒤 다시 `addDocument`하면, 그대로인 문서는 중복 검사가 건너뛴다. 게임은 더 간단해서 `clearAllData` 뒤 전부 다시 넣었다. 결함이 아니라 편의 기능이므로, 새 API보다 이 순서를 문서 레시피로 적을지 먼저 정한다. 새 API(예: `syncDocuments`)는 레시피로 부족하다는 근거가 생길 때 다시 검토한다.
+- 2026-11-09 게임 가이드 연동에서 나온 검색 항목 (규칙 10으로 나눔, 앱 쪽 우회는 `legendary-bow-master` `lib/guide/guide_service_io.dart`):
+  - **ask 검색 가중치 인자:** → W1(W-3)으로 옮겼다. `searchHybrid`에는 있는 `vectorWeight`/`bm25Weight`를 `prepareAsk`/`ask`에도 연다. 앱은 지금 `RagSearchTool`과 `prepareAskWith`로 우회한다. 범용: 인자. 앱 전용: 0.5/0.5 값. 기본값 0.2/0.8은 그대로 둔다.
+  - **관련 없는 질문 거르기 신호 (리랭커 없이):** 하이브리드 결과는 RRF 순위 점수라 "관련 있음"을 나타내지 못한다. 그래서 가이드에 없는 질문(예: 날씨)에도 상위 K개가 오고, 작은 모델이 그 구절로 답을 지어냈다. 범용: 섞기 전의 신호(벡터 코사인, BM25 점수와 일치 여부)를 결과에 함께 돌려주고, 거를지 정하는 선택 옵션을 둔다(기본 꺼짐). 앱 전용: 기준값과 조합 규칙(앱은 지금 조사를 잘라 원문 문자열을 찾는 `guideCovers`를 쓴다). 패키지는 기준값을 넣지 않는다(코사인 분포가 모델마다 다르다). Q4의 B10(점수 단위)과 묶어 정한다. Rust 변경 가능성이 있다. 먼저 게임 가이드로 "가이드에 있음 / 다른 낱말로 물음 / 없음" 질문 묶음을 만들어 두 신호로 구분이 되는지 사례로 확인한다.
+  - **문서별 청크 크기:** `maxChunkChars`/`overlapChars`는 `initialize`에서만 정하는 전역 설정이다. 길이가 다른 문서를 섞는 앱에서 필요할 수 있지만, 이 연동에서는 앱이 절을 미리 잘라 넣어 영향이 없었다. 근거가 생길 때까지 후보로만 둔다.
 - 레거시 자산 확인 비용 절감: 전체 sha256 대신 크기 + 앞뒤 1MiB만 해시한다(#118 fingerprint와 같은 방식). 시뮬레이터에서 KoEn 매 시작 약 250ms와, 확인 중 모델 크기의 약 2배 순간 메모리를 줄인다. M5 실측을 본 뒤 판단한다.
 
 ## 완료

@@ -1,6 +1,8 @@
-// Real-engine checks for milestone S1 (docs/milestones.md):
+// Real-engine checks for milestones S1 and W1 (docs/milestones.md):
 //   A. a short document stored next to a large PDF is found by vector search;
-//   B. after clearAndRestart() the same documents can be added again.
+//   B. after clearAndRestart() the same documents can be added again;
+//   W1. `prepareAsk` with its default arguments (README example 3) puts the
+//       short document among its five passages.
 //
 // Runs against real models, so it needs an app with these assets (paths can
 // be changed with --dart-define):
@@ -160,14 +162,80 @@ Future<(int, int, int)> _ranks(
 }
 
 /// Vector search must find the chunk, and so must hybrid search with equal
-/// weights (the vector candidate reaches the fusion step). With the default
-/// weights (vector 0.2, BM25 0.8) a chunk that matches no query word can rank
-/// below every BM25 hit that matches only stop words; that is the separate
-/// hybrid-weight candidate in docs/milestones.md, so it is logged only.
+/// weights (the vector candidate reaches the fusion step). The default
+/// weights (vector 0.2, BM25 0.8) are checked through `prepareAsk` in
+/// [_expectInAsk] (milestone W1).
 Future<void> _expectFound(String label, String query, String phrase) async {
   final (vectorRank, _, equalRank) = await _ranks(label, query, phrase);
   expect(vectorRank, isNot(-1), reason: '$label: vector search missed it');
   expect(equalRank, isNot(-1), reason: '$label: hybrid (0.5/0.5) missed it');
+}
+
+/// Milestone W1: `prepareAsk` with its default arguments (topK 5, default
+/// hybrid weights) is what README example 3 (`rag.ask`) sends to the LLM, so
+/// the passage holding [phrase] must be among those five.
+///
+/// Also logs the chunk's vector and BM25 ranks in `searchHybrid(topK: 300)`;
+/// a BM25 rank of 0 means the question shares no BM25 token with it
+/// ("refund" vs "Refunds").
+Future<void> _expectInAsk(String label, String query, String phrase) async {
+  final rag = MobileRag.instance;
+  final prepared = await rag.prepareAsk(query);
+  final index = prepared.passages.indexWhere((p) => p.text.contains(phrase));
+  // bm25Rank is 0 when the chunk matched no BM25 token of the question.
+  final hybrid = await rag.searchHybrid(query, topK: 300);
+  final hit = hybrid.where((c) => c.content.contains(phrase)).firstOrNull;
+  final bm25Hits = hybrid.where((c) => c.bm25Rank > 0).length;
+  String head(String text) => text.length > 30 ? text.substring(0, 30) : text;
+  _log(
+    '$label prepareAsk "$query" passage=$index of ${prepared.passages.length} '
+    'chunk vectorRank=${hit?.vectorRank} bm25Rank=${hit?.bm25Rank} '
+    'bm25Hits(top300)=$bm25Hits '
+    'passages=${prepared.passages.map((p) => '"${head(p.text)}"').join(' | ')}',
+  );
+  // Collected and checked at the end of the phase so one run logs every case.
+  if (index == -1) _askMisses.add(label);
+}
+
+final _askMisses = <String>[];
+
+const _paraphraseQuery = 'How many days do I have to return an item?';
+
+/// Milestone W1, known limit (logged, not checked): a question that shares no
+/// word with the short document, so BM25 cannot help it. Also logs the
+/// workaround in docs/guides/ask.md: the short document in its own
+/// collection, asked separately.
+Future<void> _paraphraseProbe(String pdf) async {
+  await _wipe('s1_w1_paraphrase');
+  await _open('s1_w1_paraphrase');
+  final rag = MobileRag.instance;
+  // Default collection: the sentence next to the PDF, as in the README.
+  await rag.addDocument(_refundDoc);
+  await rag.addDocumentFromFile(pdf);
+  // Collection "faq": the same sentence on its own.
+  await rag.inCollection('faq').addDocument(_refundDoc, name: 'refund.txt');
+  int at(RagAskPrompt p) =>
+      p.passages.indexWhere((x) => x.text.contains('14 days'));
+  for (final query in [_refundQuery, _paraphraseQuery]) {
+    final vector = await rag.search(query, topK: 50);
+    final mixed = await rag.prepareAsk(query);
+    final equal = await rag.prepareAsk(
+      query,
+      vectorWeight: 0.5,
+      bm25Weight: 0.5,
+    );
+    final faq = await rag.inCollection('faq').prepareAsk(query);
+    final vectorRank = vector.chunks.indexWhere(
+      (c) => c.content.contains('14 days'),
+    );
+    _log(
+      'W1 probe "$query" vectorRank=$vectorRank '
+      'prepareAsk(default)=${at(mixed)} of ${mixed.passages.length} '
+      'prepareAsk(0.5/0.5)=${at(equal)} of ${equal.passages.length} '
+      'inCollection(faq).prepareAsk=${at(faq)} of ${faq.passages.length}',
+    );
+  }
+  await MobileRag.dispose();
 }
 
 Future<void> _reproPhase() async {
@@ -179,6 +247,7 @@ Future<void> _reproPhase() async {
   await MobileRag.instance.addDocument(_refundDoc);
   await MobileRag.instance.addDocumentFromFile(pdf);
   await _expectFound('short->pdf', _refundQuery, '14 days');
+  await _expectInAsk('short->pdf', _refundQuery, '14 days');
   await MobileRag.dispose();
   // Reopen: the index comes from the saved .hnsw file this time.
   await _open('s1_short_then_pdf');
@@ -191,6 +260,7 @@ Future<void> _reproPhase() async {
   await MobileRag.instance.addDocumentFromFile(pdf);
   await MobileRag.instance.addDocument(_refundDoc);
   await _expectFound('pdf->short', _refundQuery, '14 days');
+  await _expectInAsk('pdf->short', _refundQuery, '14 days');
   await MobileRag.dispose();
 
   // Six short documents next to the PDF; each must be found by its question.
@@ -207,8 +277,19 @@ Future<void> _reproPhase() async {
       entry.value.$2,
       entry.value.$3,
     );
+    await _expectInAsk(
+      'six short+pdf ${entry.key}',
+      entry.value.$2,
+      entry.value.$3,
+    );
   }
   await MobileRag.dispose();
+  await _paraphraseProbe(pdf);
+  expect(
+    _askMisses,
+    isEmpty,
+    reason: 'prepareAsk (topK 5, default weights) missed these passages',
+  );
 }
 
 Future<void> _upgradeAPhase() async {

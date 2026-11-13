@@ -248,6 +248,15 @@ class MobileRag {
     }
   }
 
+  /// **(FOR TESTING ONLY)** Makes the real facade use [engine], for example a
+  /// mock, without loading the native library. Undo it with
+  /// `setMockInstance(null)`.
+  @visibleForTesting
+  static MobileRag useEngineForTest(RagEngine engine) {
+    _engine = engine;
+    return _instance = MobileRag._();
+  }
+
   /// Check if the engine is initialized.
   static bool get isInitialized => _instance != null;
 
@@ -598,15 +607,18 @@ class MobileRag {
   /// complete answer to [RagAskPrompt.answer].
   ///
   /// Searches like [searchHybridWithContext] for [topK] passages within
-  /// [tokenBudget] engine tokens. Citation ids start at 1 for every question.
+  /// [tokenBudget] engine tokens, with the same [vectorWeight] / [bm25Weight]
+  /// as [searchHybrid]. Citation ids start at 1 for every question.
   /// The prompt is empty when nothing was found.
   Future<RagAskPrompt> prepareAsk(
     String question, {
     int topK = 5,
     int tokenBudget = 1500,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
     RagPromptBuilder buildPrompt = defaultAskPrompt,
   }) => prepareAskWith(
-    _askTool(topK, tokenBudget),
+    _askTool(topK, tokenBudget, vectorWeight, bm25Weight),
     question,
     buildPrompt: buildPrompt,
   );
@@ -621,19 +633,28 @@ class MobileRag {
     required RagGenerate generate,
     int topK = 5,
     int tokenBudget = 1500,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
     RagPromptBuilder buildPrompt = defaultAskPrompt,
   }) => askWith(
-    _askTool(topK, tokenBudget),
+    _askTool(topK, tokenBudget, vectorWeight, bm25Weight),
     question,
     generate: generate,
     buildPrompt: buildPrompt,
   );
 
-  RagSearchTool _askTool(int topK, int tokenBudget) => RagSearchTool(
+  RagSearchTool _askTool(
+    int topK,
+    int tokenBudget,
+    double vectorWeight,
+    double bm25Weight,
+  ) => RagSearchTool(
     search: (query, k) => _engine!.searchHybridWithContext(
       query,
       topK: k,
       tokenBudget: tokenBudget,
+      vectorWeight: vectorWeight,
+      bm25Weight: bm25Weight,
     ),
     listSources: listSources,
     defaultTopK: topK,
@@ -874,15 +895,18 @@ class CollectionRag {
   /// complete answer to [RagAskPrompt.answer].
   ///
   /// Searches like [searchHybridWithContext] for [topK] passages within
-  /// [tokenBudget] engine tokens. Citation ids start at 1 for every question.
+  /// [tokenBudget] engine tokens, with the same [vectorWeight] / [bm25Weight]
+  /// as [searchHybrid]. Citation ids start at 1 for every question.
   /// The prompt is empty when nothing was found.
   Future<RagAskPrompt> prepareAsk(
     String question, {
     int topK = 5,
     int tokenBudget = 1500,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
     RagPromptBuilder buildPrompt = defaultAskPrompt,
   }) => prepareAskWith(
-    _askTool(topK, tokenBudget),
+    _askTool(topK, tokenBudget, vectorWeight, bm25Weight),
     question,
     buildPrompt: buildPrompt,
   );
@@ -897,19 +921,28 @@ class CollectionRag {
     required RagGenerate generate,
     int topK = 5,
     int tokenBudget = 1500,
+    double vectorWeight = kDefaultVectorWeight,
+    double bm25Weight = kDefaultBm25Weight,
     RagPromptBuilder buildPrompt = defaultAskPrompt,
   }) => askWith(
-    _askTool(topK, tokenBudget),
+    _askTool(topK, tokenBudget, vectorWeight, bm25Weight),
     question,
     generate: generate,
     buildPrompt: buildPrompt,
   );
 
-  RagSearchTool _askTool(int topK, int tokenBudget) => RagSearchTool(
+  RagSearchTool _askTool(
+    int topK,
+    int tokenBudget,
+    double vectorWeight,
+    double bm25Weight,
+  ) => RagSearchTool(
     search: (query, k) => _engine.searchHybridWithContext(
       query,
       topK: k,
       tokenBudget: tokenBudget,
+      vectorWeight: vectorWeight,
+      bm25Weight: bm25Weight,
       collectionId: _collectionId,
     ),
     listSources: listSources,
