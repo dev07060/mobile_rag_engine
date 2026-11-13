@@ -526,6 +526,10 @@
   - **검색은 원인이 아니다:** S1 수정 뒤 HNSW `vector_only`의 정답 순위가 80개 질의 모두 exact scan(`sourceIds`에 전체 소스)과 같다(52/80). 수정 전에는 38/80이었다.
 
   README와 `docs/local-rag-engine.md`의 0.925는 기본 Model Pack(MiniLM)이 아니라 BGE-m3로 잰 값이다. 지금 코드에서 기본 모델로 다시 재서 바꿀지, 모델을 함께 적을지 정한다.
+- **[낮음] README의 `source_recall@10 = 1.000`에 모델이 적혀 있지 않다 (2026-11-13 D2, 규칙 9).** README "Supported and Verified Scope"의 "Hybrid source retrieval" 행이 "80-source balanced profile run"의 `default_hybrid` 값으로 적고 있다. D2 범위(passage 행)가 아니라 그대로 뒀다.
+  - **출처:** 2026-06-19 `faa5079`("docs: sharpen local rag package positioning")에서 들어왔다. 어떤 실행의 값인지 가리키는 보고서나 artifact가 저장소에 없다. 6월 평가가 BGE-m3로 돌았으므로 같은 모델일 가능성이 높지만 확인하지 않았다.
+  - **B1 결과에 있는 값:** B1의 passage 평가 결과 JSON(`docs/perf/passage-benchmark-2026-11/results/*_hnsw.json`)에도 `aggregates.default_hybrid.overall.source_recall@10`이 있고, MiniLM·KoEn-E5-Tiny·BGE-m3·6월 BGE-m3 모두 1.0이다. README의 "80-source balanced profile run"이 이 하네스의 값과 같은 측정인지는 확인하지 않았다.
+  - **할 일:** 같은 측정이면 README 행을 B1 값으로 바꾸고 모델과 조건을 붙인다(새 측정 없음). 다른 측정이면 "모델 미기재"라고 밝히거나, 그 하네스로 다시 잴지 정한다. `docs/local-rag-engine.md`에는 이 수치가 없다.
 - Windows `Native Tests`의 `ingest_ffi_traffic_test.dart` "Peak-RSS delta"가 가끔 실패한다(파일 경로가 UTF-8 경로보다 2MB 이상 적게 써야 하는데 0.7~0.8MB 차이만 났다. 11/1 `ci/quickstart-e2e`, 11/3 #125). 측정값이 흔들리는 테스트라 기준이나 측정 방식을 손봐야 한다.
 - 성능 후보: `vector_math` 8-lane dot, HNSW 증분 삽입, prune 거리 캐싱, ef 상한, 짧은 문단 병합
 - `lib/src/rust/api/mmap_store.dart` 잔존 파일 정리
