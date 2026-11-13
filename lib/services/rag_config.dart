@@ -80,6 +80,18 @@ class RagConfig {
   /// awaiting [RagEngine.warmupFuture].
   final bool deferIndexWarmup;
 
+  /// Vector weight for hybrid searches that do not pass `vectorWeight`
+  /// (`searchHybrid`, `searchHybridWithContext`, `searchMeta`, `ask`,
+  /// `prepareAsk`, `RagSearchTool.fromMobileRag`). Default
+  /// [kDefaultVectorWeight] (0.2), which suits the English-only default model.
+  /// A multilingual model such as KoEn-E5-Tiny does better with more vector
+  /// weight; see `docs/guides/model_setup.md`.
+  final double defaultVectorWeight;
+
+  /// BM25 (keyword) weight for hybrid searches that do not pass `bm25Weight`.
+  /// Default [kDefaultBm25Weight] (0.8). See [defaultVectorWeight].
+  final double defaultBm25Weight;
+
   /// Creates a RagConfig with all options.
   const RagConfig({
     required this.tokenizerAsset,
@@ -93,6 +105,8 @@ class RagConfig {
     this.embeddingIntraOpNumThreads,
     this.threadLevel,
     this.deferIndexWarmup = false,
+    this.defaultVectorWeight = kDefaultVectorWeight,
+    this.defaultBm25Weight = kDefaultBm25Weight,
   }) : assert(
          embeddingIntraOpNumThreads == null || threadLevel == null,
          'Cannot set both [embeddingIntraOpNumThreads] and [threadLevel]. Choose one.',
@@ -117,6 +131,8 @@ class RagConfig {
     int? embeddingIntraOpNumThreads,
     ThreadUseLevel? threadLevel,
     bool deferIndexWarmup = false,
+    double defaultVectorWeight = kDefaultVectorWeight,
+    double defaultBm25Weight = kDefaultBm25Weight,
   }) => RagConfig(
     tokenizerAsset: tokenizerAsset,
     modelAsset: modelAsset,
@@ -126,6 +142,8 @@ class RagConfig {
     embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
     threadLevel: threadLevel,
     deferIndexWarmup: deferIndexWarmup,
+    defaultVectorWeight: defaultVectorWeight,
+    defaultBm25Weight: defaultBm25Weight,
   );
 
   /// Configuration for files already verified by [RagModelPackResolver].
@@ -139,6 +157,8 @@ class RagConfig {
     int? embeddingIntraOpNumThreads,
     ThreadUseLevel? threadLevel,
     bool deferIndexWarmup = false,
+    double defaultVectorWeight = kDefaultVectorWeight,
+    double defaultBm25Weight = kDefaultBm25Weight,
   }) => RagConfig(
     tokenizerAsset: '',
     modelAsset: '',
@@ -151,5 +171,7 @@ class RagConfig {
     embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
     threadLevel: threadLevel,
     deferIndexWarmup: deferIndexWarmup,
+    defaultVectorWeight: defaultVectorWeight,
+    defaultBm25Weight: defaultBm25Weight,
   );
 }

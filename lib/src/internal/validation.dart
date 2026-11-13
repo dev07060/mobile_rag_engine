@@ -119,3 +119,36 @@ NormalizedHybridWeights normalizeHybridWeights({
     bm25Weight: normalizedBm25,
   );
 }
+
+/// Checks the default hybrid weights given to `MobileRag.initialize` or
+/// `RagConfig`. Unlike per-call weights, which are clamped with a log line,
+/// bad defaults are a setup mistake and throw.
+void validateDefaultHybridWeights({
+  required double vectorWeight,
+  required double bm25Weight,
+}) {
+  for (final (name, value) in [
+    ('defaultVectorWeight', vectorWeight),
+    ('defaultBm25Weight', bm25Weight),
+  ]) {
+    if (!value.isFinite || value < 0.0 || value > 1.0) {
+      throw ArgumentError.value(value, name, 'must be between 0.0 and 1.0');
+    }
+  }
+  if (vectorWeight == 0.0 && bm25Weight == 0.0) {
+    throw ArgumentError(
+      'defaultVectorWeight and defaultBm25Weight cannot both be 0.0.',
+    );
+  }
+}
+
+/// Weights for one hybrid search: each weight the caller did not pass comes
+/// from the engine defaults.
+NormalizedHybridWeights resolveHybridWeights({
+  required double? vectorWeight,
+  required double? bm25Weight,
+  required NormalizedHybridWeights defaults,
+}) => NormalizedHybridWeights(
+  vectorWeight: vectorWeight ?? defaults.vectorWeight,
+  bm25Weight: bm25Weight ?? defaults.bm25Weight,
+);

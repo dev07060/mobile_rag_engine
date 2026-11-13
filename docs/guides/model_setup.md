@@ -134,8 +134,36 @@ flutter:
 ```dart
 await MobileRag.initialize(
   modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json'),
+  defaultVectorWeight: 0.6,
+  defaultBm25Weight: 0.4,
 );
 ```
+
+**Set the hybrid search weights to 0.6 / 0.4.** The default weights (vector
+0.2, BM25 0.8) suit the English-only default model. With them, hybrid search
+(`ask`, `prepareAsk`, `searchHybrid*`, `RagSearchTool.fromMobileRag`) on Korean
+text keeps almost only keyword results: Korean keywords are matched as
+two-syllable pieces, so the 20 keyword candidates that `ask` looks at are nearly
+always full, and a passage found only by KoEn-E5-Tiny's vector search cannot
+outrank them. `defaultVectorWeight` / `defaultBm25Weight` apply to every
+hybrid search that does not pass its own `vectorWeight` / `bm25Weight`.
+
+Measured in the `ask` condition (5 passages, 20 candidates per list) with
+KoEn-E5-Tiny, profile build on an Apple M3 Pro Mac, 2026-11-14:
+
+| Questions | Vector only | 0.2 / 0.8 (default) | 0.6 / 0.4 |
+|---|---|---|---|
+| MIRACL Korean dev, 213 questions, 5,000 passages (answer in top 5) | 196 | 167 | 187 |
+| Same, 15,000 passages | 176 | 165 | 181 |
+| 32 hand-written questions (13 share no word with the answer) | 28 | 20 | 27 |
+| 80 Wikipedia questions that share words with the answer | – | 72 | 73 |
+
+MIRACL questions were written by native speakers; KoEn-E5-Tiny's base model was
+trained on MIRACL's training split, so its vector numbers there may be
+optimistic. The method and all numbers, including BGE-m3, are in
+[the F2-0 report](../perf/f2-fusion/f2_0_report.md). Keep the defaults with the
+English-only MiniLM: on its Korean questions, raising the vector weight loses
+answers.
 
 You do not need to add `query: ` or `passage: ` prefixes. With KoEn-E5-Tiny
 they change scores by 0.002 or less.

@@ -156,7 +156,7 @@ def main() -> int:
     meta["result_files"] = sorted(p.name for p in out.iterdir() if p.name != "run.log")
     (out / "run_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    lines = [l.split("flutter: ", 1)[-1] for l in log.splitlines() if "PASSAGE_SUMMARY" in l or "F3_ASK profile" in l]
+    lines = [l.split("flutter: ", 1)[-1] for l in log.splitlines() if "PASSAGE_SUMMARY" in l or "F3_ASK profile" in l or "F2_INIT_WEIGHTS" in l]
     seen, summary = set(), []
     for l in lines:
         if l not in seen:

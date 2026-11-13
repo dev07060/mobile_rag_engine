@@ -28,6 +28,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:mobile_rag_engine/src/internal/defaults.dart';
+import 'package:mobile_rag_engine/src/internal/validation.dart';
 import 'package:mobile_rag_engine/services/rag_config.dart';
 import 'package:mobile_rag_engine/services/rag_engine.dart';
 import 'package:mobile_rag_engine/services/context_builder.dart';
@@ -118,6 +119,15 @@ class MobileRag {
   ///   **Mutually exclusive with [embeddingIntraOpNumThreads].**
   /// - [deferIndexWarmup] - If true, returns before BM25/HNSW warmup completes.
   ///   Use [isIndexReady] or [warmupFuture] to gate search quality.
+  /// - [defaultVectorWeight], [defaultBm25Weight] - Weights for hybrid search
+  ///   ([searchHybrid], [searchHybridWithContext], [searchMeta], [ask],
+  ///   [prepareAsk], [CollectionRag] and `RagSearchTool.fromMobileRag`) when a
+  ///   call does not pass `vectorWeight` / `bm25Weight`. Default 0.2 / 0.8,
+  ///   which suits the English-only default model. With a multilingual model
+  ///   such as KoEn-E5-Tiny, more vector weight finds answers that share few
+  ///   words with the question; the Korean recipe in
+  ///   `docs/guides/model_setup.md` uses 0.6 / 0.4. Each must be between 0.0
+  ///   and 1.0, and not both 0.0.
   /// - [onProgress] - Callback for initialization progress updates
   ///
   /// **Thread Configuration:**
@@ -151,12 +161,18 @@ class MobileRag {
     int? embeddingIntraOpNumThreads,
     ThreadUseLevel? threadLevel,
     bool deferIndexWarmup = false,
+    double defaultVectorWeight = kDefaultVectorWeight,
+    double defaultBm25Weight = kDefaultBm25Weight,
     void Function(String status)? onProgress,
   }) async {
     if (_instance != null) {
       onProgress?.call('Already initialized');
       return;
     }
+    validateDefaultHybridWeights(
+      vectorWeight: defaultVectorWeight,
+      bm25Weight: defaultBm25Weight,
+    );
 
     final hasLegacyAssets = tokenizerAsset != null || modelAsset != null;
     final hasFilePaths = tokenizerPath != null || modelPath != null;
@@ -203,6 +219,8 @@ class MobileRag {
         embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
         threadLevel: threadLevel,
         deferIndexWarmup: deferIndexWarmup,
+        defaultVectorWeight: defaultVectorWeight,
+        defaultBm25Weight: defaultBm25Weight,
       );
     } else if (modelPack != null) {
       final resolved = await const RagModelPackResolver().resolve(modelPack);
@@ -216,6 +234,8 @@ class MobileRag {
         embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
         threadLevel: threadLevel,
         deferIndexWarmup: deferIndexWarmup,
+        defaultVectorWeight: defaultVectorWeight,
+        defaultBm25Weight: defaultBm25Weight,
       );
     } else {
       config = RagConfig.fromAssets(
@@ -227,6 +247,8 @@ class MobileRag {
         embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
         threadLevel: threadLevel,
         deferIndexWarmup: deferIndexWarmup,
+        defaultVectorWeight: defaultVectorWeight,
+        defaultBm25Weight: defaultBm25Weight,
       );
     }
     _engine = await RagEngine.initialize(
@@ -473,8 +495,8 @@ class MobileRag {
   Future<SearchMetaResult> searchMeta(
     String query, {
     int topK = 10,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     List<int>? sourceIds,
     int adjacentChunks = 0,
   }) => _engine!.searchMeta(
@@ -535,8 +557,8 @@ class MobileRag {
   Future<List<hybrid.HybridSearchResult>> searchHybrid(
     String query, {
     int topK = 10,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     List<int>? sourceIds,
   }) => _engine!.searchHybrid(
     query,
@@ -553,8 +575,8 @@ class MobileRag {
     int tokenBudget = 2000,
     ContextStrategy strategy = ContextStrategy.relevanceFirst,
     int adjacentChunks = 0,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     bool singleSourceMode = false,
     List<int>? sourceIds,
     SearchHydrationMode hydrationMode = SearchHydrationMode.full,
@@ -614,8 +636,8 @@ class MobileRag {
     String question, {
     int topK = 5,
     int tokenBudget = 1500,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     RagPromptBuilder buildPrompt = defaultAskPrompt,
   }) => prepareAskWith(
     _askTool(topK, tokenBudget, vectorWeight, bm25Weight),
@@ -633,8 +655,8 @@ class MobileRag {
     required RagGenerate generate,
     int topK = 5,
     int tokenBudget = 1500,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     RagPromptBuilder buildPrompt = defaultAskPrompt,
   }) => askWith(
     _askTool(topK, tokenBudget, vectorWeight, bm25Weight),
@@ -646,8 +668,8 @@ class MobileRag {
   RagSearchTool _askTool(
     int topK,
     int tokenBudget,
-    double vectorWeight,
-    double bm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
   ) => RagSearchTool(
     search: (query, k) => _engine!.searchHybridWithContext(
       query,
@@ -773,8 +795,8 @@ class CollectionRag {
   Future<SearchMetaResult> searchMeta(
     String query, {
     int topK = 10,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     List<int>? sourceIds,
     int adjacentChunks = 0,
   }) => _engine.searchMeta(
@@ -842,8 +864,8 @@ class CollectionRag {
   Future<List<hybrid.HybridSearchResult>> searchHybrid(
     String query, {
     int topK = 10,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     List<int>? sourceIds,
   }) => _engine.searchHybrid(
     query,
@@ -860,8 +882,8 @@ class CollectionRag {
     int tokenBudget = 2000,
     ContextStrategy strategy = ContextStrategy.relevanceFirst,
     int adjacentChunks = 0,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     bool singleSourceMode = false,
     List<int>? sourceIds,
     SearchHydrationMode hydrationMode = SearchHydrationMode.full,
@@ -902,8 +924,8 @@ class CollectionRag {
     String question, {
     int topK = 5,
     int tokenBudget = 1500,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     RagPromptBuilder buildPrompt = defaultAskPrompt,
   }) => prepareAskWith(
     _askTool(topK, tokenBudget, vectorWeight, bm25Weight),
@@ -921,8 +943,8 @@ class CollectionRag {
     required RagGenerate generate,
     int topK = 5,
     int tokenBudget = 1500,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     RagPromptBuilder buildPrompt = defaultAskPrompt,
   }) => askWith(
     _askTool(topK, tokenBudget, vectorWeight, bm25Weight),
@@ -934,8 +956,8 @@ class CollectionRag {
   RagSearchTool _askTool(
     int topK,
     int tokenBudget,
-    double vectorWeight,
-    double bm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
   ) => RagSearchTool(
     search: (query, k) => _engine.searchHybridWithContext(
       query,

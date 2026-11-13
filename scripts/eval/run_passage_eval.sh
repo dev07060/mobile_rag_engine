@@ -14,6 +14,8 @@
 # --name              label used in file names (default: model directory name)
 # --out               result directory (default: build/eval_results/<time>_<name>_<bundle>)
 # --timeout-minutes N harness time limit (default 90)
+# --init-weights V,B   pass defaultVectorWeight/defaultBm25Weight to initialize and
+#                      check that prepareAsk without weights uses them (F2)
 # --dump-candidates   also dump the engine's vector and BM25 candidate lists and a
 #                     copy of the index DB for scripts/eval/f7_fusion_compare.py
 #
@@ -26,7 +28,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MODEL_DIR="" ; MODEL_PACK="" ; BUNDLE="80" ; NAME="" ; OUT="" ; DUMP=false ; TIMEOUT=90
+MODEL_DIR="" ; MODEL_PACK="" ; BUNDLE="80" ; NAME="" ; OUT="" ; DUMP=false ; TIMEOUT=90 ; INIT_WEIGHTS=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --model) MODEL_DIR="$2"; shift 2;;
@@ -36,7 +38,8 @@ while [[ $# -gt 0 ]]; do
     --out) OUT="$2"; shift 2;;
     --dump-candidates) DUMP=true; shift;;
     --timeout-minutes) TIMEOUT="$2"; shift 2;;
-    -h|--help) sed -n '2,25p' "$0"; exit 0;;
+    --init-weights) INIT_WEIGHTS="$2"; shift 2;;
+    -h|--help) sed -n '2,27p' "$0"; exit 0;;
     *) echo "unknown argument: $1" >&2; exit 2;;
   esac
 done
@@ -149,6 +152,8 @@ set +e
   --dart-define=F1_NO_ANSWER_ASSET="$NO_ANSWER" \
   --dart-define=F7_DUMP_CANDIDATES="$DUMP" \
   --dart-define=EVAL_TIMEOUT_MINUTES="$TIMEOUT" \
+  --dart-define=EVAL_INIT_VECTOR_WEIGHT="${INIT_WEIGHTS%%,*}" \
+  --dart-define=EVAL_INIT_BM25_WEIGHT="${INIT_WEIGHTS#*,}" \
   --dart-define=EVAL_MODEL_ASSET=assets/eval_model/model.onnx \
   --dart-define=EVAL_TOKENIZER_ASSET=assets/eval_model/tokenizer.json) > "$LOG" 2>&1
 RC=$?

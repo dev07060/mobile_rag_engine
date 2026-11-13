@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_rag_engine/services/rag_config.dart';
-import 'package:mobile_rag_engine/services/source_rag_service.dart';
+import 'package:mobile_rag_engine/mobile_rag_engine.dart';
 import 'package:mobile_rag_engine/src/internal/defaults.dart';
 import 'package:mobile_rag_engine/src/internal/validation.dart';
 
@@ -14,6 +13,27 @@ void main() {
 
       expect(config.maxChunkChars, kDefaultMaxChunkChars);
       expect(config.overlapChars, kDefaultOverlapChars);
+    });
+
+    test('RagConfig default hybrid weights are 0.2 / 0.8 unless given', () {
+      final config = RagConfig.fromAssets(
+        tokenizerAsset: 'assets/tokenizer.json',
+        modelAsset: 'assets/model.onnx',
+      );
+      expect(config.defaultVectorWeight, kDefaultVectorWeight);
+      expect(config.defaultBm25Weight, kDefaultBm25Weight);
+      expect(kDefaultVectorWeight, 0.2);
+      expect(kDefaultBm25Weight, 0.8);
+
+      final prepared = RagConfig.fromPreparedFiles(
+        tokenizerPath: '/t.json',
+        modelPath: '/m.onnx',
+        expectedEmbeddingDimension: 384,
+        defaultVectorWeight: 0.6,
+        defaultBm25Weight: 0.4,
+      );
+      expect(prepared.defaultVectorWeight, 0.6);
+      expect(prepared.defaultBm25Weight, 0.4);
     });
 
     test('SourceRagService defaults are aligned with internal constants', () {
@@ -88,6 +108,75 @@ void main() {
 
       expect(weights.vectorWeight, kDefaultVectorWeight);
       expect(weights.bm25Weight, kDefaultBm25Weight);
+    });
+
+    test('default hybrid weights accept 0.0~1.0 and reject the rest', () {
+      for (final (v, b) in [(0.6, 0.4), (1.0, 0.0), (0.0, 1.0), (0.2, 0.8)]) {
+        expect(
+          () => validateDefaultHybridWeights(vectorWeight: v, bm25Weight: b),
+          returnsNormally,
+        );
+      }
+      for (final (v, b) in [
+        (-0.1, 0.5),
+        (0.5, 1.1),
+        (double.nan, 0.5),
+        (0.5, double.infinity),
+        (0.0, 0.0),
+      ]) {
+        expect(
+          () => validateDefaultHybridWeights(vectorWeight: v, bm25Weight: b),
+          throwsArgumentError,
+          reason: '($v, $b)',
+        );
+      }
+    });
+
+    test('a weight the call does not pass comes from the defaults', () {
+      const defaults = NormalizedHybridWeights(
+        vectorWeight: 0.6,
+        bm25Weight: 0.4,
+      );
+      final none = resolveHybridWeights(
+        vectorWeight: null,
+        bm25Weight: null,
+        defaults: defaults,
+      );
+      expect((none.vectorWeight, none.bm25Weight), (0.6, 0.4));
+      final given = resolveHybridWeights(
+        vectorWeight: 0.2,
+        bm25Weight: 0.8,
+        defaults: defaults,
+      );
+      expect((given.vectorWeight, given.bm25Weight), (0.2, 0.8));
+      final one = resolveHybridWeights(
+        vectorWeight: 0.5,
+        bm25Weight: null,
+        defaults: defaults,
+      );
+      expect((one.vectorWeight, one.bm25Weight), (0.5, 0.4));
+    });
+
+    test('initialize rejects bad default weights before loading anything', () {
+      expect(
+        () => MobileRag.initialize(
+          tokenizerAsset: 'missing/tokenizer.json',
+          modelAsset: 'missing/model.onnx',
+          defaultVectorWeight: 1.5,
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => RagEngine.initialize(
+          config: RagConfig.fromAssets(
+            tokenizerAsset: 'missing/tokenizer.json',
+            modelAsset: 'missing/model.onnx',
+            defaultVectorWeight: 0.0,
+            defaultBm25Weight: 0.0,
+          ),
+        ),
+        throwsArgumentError,
+      );
     });
 
     test('thread conflict warning path does not throw', () {
