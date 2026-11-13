@@ -41,8 +41,9 @@ enterprise apps where user data must stay on the device.
 - **Offline and private.** Documents, embeddings and the search index stay on
   the user's device. Retrieval needs no server and costs nothing per query.
 - **Hybrid search with measured quality.** HNSW vector search and BM25 keyword
-  search are fused into one ranking. On an 80-query benchmark fixture,
-  the right passage is in the top 10 for 92.5% of queries (see
+  search are fused into one ranking. On an 80-query English/Korean benchmark,
+  the right passage is in the top 10 for 93.75% of queries with the default
+  MiniLM Model Pack and 96.25% with KoEn-E5-Tiny (see
   [Supported and verified scope](#supported-and-verified-scope)).
 - **Works with any LLM.** There is no LLM inside. `search` returns context
   within a token budget, and `ask` takes your own generation function, so a
@@ -294,10 +295,17 @@ collection.
 | **Local Flutter RAG retrieval** | Supported | Dart facade over a native core for ingest, chunking, embedding, SQLite storage, HNSW vector search, BM25 keyword search, RRF fusion, and context assembly |
 | **Offline / on-device operation** | Supported | Models and user documents stay local after you bundle the ONNX model and tokenizer assets |
 | **Hybrid source retrieval** | Verified on benchmark fixtures | 80-source balanced profile run: `source_recall@10 = 1.000` for shipped `default_hybrid` |
-| **Passage/context retrieval** | Verified on benchmark fixtures | 80-query passage run: `passage_recall@10 = 0.925`, `answerable_context@10 = 0.938`; semantic passage misses remain the main improvement area |
+| **Passage/context retrieval** | Verified on benchmark fixtures | 80-query passage run, default hybrid search: **MiniLM Model Pack** (default) `passage_recall@10 = 0.9375`, `answerable_context@10 = 0.9125`; **KoEn-E5-Tiny** `passage_recall@10 = 0.9625`, `answerable_context@10 = 0.975`. MiniLM is English-only: its vector search alone found 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#korean-documents-koen-e5-tiny). Semantic passage misses remain the main improvement area. See the note below the table for conditions |
 | **Text-layer PDF-to-RAG** | Verified on sample scope | `sample_eng.pdf` and `sample_kor.pdf` profile run: 8/8 PDF-derived queries reached source, passage, and answerable context at top-10 |
 | **Scanned/image-only PDFs** | Detected, not OCR-processed | OCR-required PDFs are surfaced as extraction errors so your app can route to an OCR layer; OCR is not bundled in this package |
 | **Large, table-heavy, OCR-heavy PDFs** | Still being validated | Do not treat the PDF smoke result as broad PDF robustness or mobile latency/memory proof |
+
+Passage numbers: 80 queries (32 English, 32 Korean, 16 multilingual), a
+fresh database per model, profile build on an Apple Silicon Mac, measured
+2026-11-12. They include a vector-index fix that reaches pub.dev users with
+the next `rag_engine_flutter` release. Full conditions and per-language
+results are in the
+[passage benchmark report](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/perf/passage-benchmark-2026-11/README.md).
 
 Numbers vary by device and corpus. To measure on your own hardware, see
 [`benchmark_service`](https://github.com/dev07060/mobile_rag_engine/blob/main/lib/services/benchmark_service.dart).
