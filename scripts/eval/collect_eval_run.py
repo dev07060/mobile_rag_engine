@@ -98,7 +98,9 @@ def main() -> int:
         "engine": {
             "commit": sh("git", "rev-parse", "HEAD", cwd=str(root)),
             "branch": sh("git", "rev-parse", "--abbrev-ref", "HEAD", cwd=str(root)),
-            "dirty_tracked_files": [l[3:] for l in sh("git", "status", "--porcelain", "--untracked-files=no", cwd=str(root)).splitlines()],
+            # sh() strips the output, which would eat the first line's leading
+            # status column; split on whitespace instead of slicing.
+            "dirty_tracked_files": [l.split(None, 1)[1] for l in sh("git", "status", "--porcelain", "--untracked-files=no", cwd=str(root)).splitlines() if l.strip()],
             "build_mode": "profile",
             "rust_features": rust_features(root),
         },
