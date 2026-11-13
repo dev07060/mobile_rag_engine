@@ -382,7 +382,7 @@ void main() {
         }
       }
     },
-    timeout: const Timeout(Duration(minutes: 90)),
+    timeout: const Timeout(Duration(minutes: _timeoutMinutes)),
     skip: kDebugMode
         ? 'Measurement requires flutter drive --profile; debug uses fallback '
               'native backend and would not represent shipped retrieval.'
@@ -914,6 +914,9 @@ const _askSeparator = '\n\n---\n\n';
 final _askRows = <Map<String, Object?>>[];
 final _noAnswerRows = <Map<String, Object?>>[];
 const _noAnswerAsset = String.fromEnvironment('F1_NO_ANSWER_ASSET');
+// Large bundles with a large model (BGE-m3, 15,000 MIRACL passages) index for
+// well over the default 90 minutes.
+const _timeoutMinutes = int.fromEnvironment('EVAL_TIMEOUT_MINUTES', defaultValue: 90);
 
 class _AskOutcome {
   const _AskOutcome(

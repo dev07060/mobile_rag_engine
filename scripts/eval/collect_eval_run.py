@@ -83,10 +83,14 @@ def main() -> int:
     model_dir = Path(a.model_dir)
     pack = model_dir / "model-pack.json"
     example = root / "example"
+    # `flutter drive` can exit 0 after the test itself failed (for example on
+    # its time limit); count the run as failed then.
+    test_failed = "Some tests failed" in log or "PASSAGE_SUMMARY chunks=" not in log
     meta = {
         "schema": "f1_eval_run_meta_v1",
         "finished_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-        "exit_code": int(a.exit_code or 0),
+        "exit_code": int(a.exit_code or 0) or (1 if test_failed else 0),
+        "test_failed": test_failed,
         "elapsed_seconds": int(a.elapsed or 0),
         "model": {
             "name": a.model_name,
@@ -164,7 +168,7 @@ def main() -> int:
     print(head)
     print("\n".join(summary))
     print(f"[eval] results in {out}")
-    return 0
+    return meta["exit_code"]
 
 
 if __name__ == "__main__":
