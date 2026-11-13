@@ -375,8 +375,18 @@
 
 ### W1. 하이브리드 순위 (흔한 단어만 맞은 청크가 정답을 밀어냄, `ask` 가중치 인자)
 
-- **담당:** 세션 "W1 하이브리드 순위", 브랜치 `claude/w1-hybrid-ranking-95dfb8` (worktree `.claude/worktrees/w1-hybrid-ranking-95dfb8`, W1 초안 커밋 `9f88185`에서 땄다. 그 아래는 main `a6992cc`)
-- **상태:** PR 열기 전 (2026-11-13). 착수는 사용자 "새 세션에서 W1 착수". 범위 초안은 2026-11-13 사용자 "가중치 초안 써줘"로 적었다.
+- **담당:** 세션 "W1 어간 처리 재작업"(2026-11-13~), worktree `.claude/worktrees/w1-stemmer-rework-195896`(브랜치 `claude/w1-stemmer-rework-195896`, PR #137 끝 `529e5ea`에서 땄다). 커밋은 PR #137의 브랜치 `claude/w1-hybrid-ranking-95dfb8`에 fast-forward로 올린다. 처음 담당은 세션 "W1 하이브리드 순위"(worktree `.claude/worktrees/w1-hybrid-ranking-95dfb8`, W1 초안 커밋 `9f88185`에서 땄다. 그 아래는 main `a6992cc`)였다.
+- **상태:** PR #137 열림, 재작업 중 (2026-11-13). 착수는 사용자 "새 세션에서 W1 착수", 재작업은 사용자 "새 세션으로 진행"(2026-11-13). 범위 초안은 2026-11-13 사용자 "가중치 초안 써줘"로 적었다.
+
+**범위 변경: 손으로 짠 복수형 규칙을 표준 어간 처리로 바꾼다 (2026-11-13, 규칙 4)**
+- **이유:** PR #137 검토에서 `bm25_search.rs`의 `plural_forms`가 무관한 낱말을 서로 맞추는 것이 나왔다(`not`↔`notes`, `car`→`cares`, `plan`→`planes`, `times`→`tim`, `new`→`news`). 또 `score_groups`가 형태마다 그 형태의 IDF로 점수를 매겨 최댓값을 취하므로, 질의의 흔한 낱말("not")이 문서의 드문 형태("notes")의 높은 IDF를 받는다. 사용자는 이를 오류로 판단했고, 손으로 짠 규칙 대신 표준 알고리즘을 쓰기로 했다.
+- **바뀌는 것:** 손으로 짠 `plural_forms`와 형태별 IDF 최댓값을 버린다. 영어 어간 처리는 표준 Snowball English(Porter2)를 `rust-stemmers` 크레이트로 쓴다. **새 Rust 의존성이 생긴다.**
+- **후보 둘을 같은 조건으로 잰다.**
+  - (S1) 색인과 질의 양쪽에서 ASCII 영문 토큰을 Snowball English로 어간 처리한다. 한글·CJK 토큰과 Hangul bigram은 그대로다. 형태 확장 코드와 "두 가중치가 모두 0이 아닐 때만" 스위치를 지운다. **BM25 색인 토큰이 바뀐다**(`bm25_only`도 바뀐다). BM25 색인은 디스크에 저장되지 않고 활성화 때 `chunks` 테이블에서 메모리로 다시 만들어지므로(`rebuild_chunk_bm25_index_for_collection_inner`) 저장 데이터 마이그레이션은 없다.
+  - (S2) 색인은 그대로 두고 하이브리드 질의에서만, 같은 Snowball 어간을 가진 색인 내 형태를 한 묶음으로 찾는다. 묶음의 IDF는 묶음 전체의 문서 수로 계산한다(Lucene `SynonymQuery` 방식).
+- **고르는 기준:** (S1)이 README 예제를 고치고 default_hybrid `passage_recall@10`이 세 모델 모두 PR #137의 값(0.9375 / 0.950 / 0.975) 이상이면 (S1). 아니면 (S2)를 본다. 둘 다 PR #137 값보다 낮으면 푸시 전에 수치를 보이고 묻는다. (S1)의 `bm25_only` 변화는 실패로 보지 않고 수치만 적는다.
+- **추가 완료 기준:** 위 오탐(`not`/`notes`, `car`/`cares`, `plan`/`planes`)이 서로 맞지 않는다는 Rust 테스트와, 질의의 흔한 낱말이 다른 형태의 높은 IDF를 받지 않는다는 Rust 테스트(수정 전 코드에서 실패 확인). 표준 어간 처리의 알려진 오탐(예: university/universe)과 영어 전용이라는 점을 가이드에 적는다. BM25 한 번의 시간과 색인 빌드 시간을 잰다.
+- **그대로 두는 것:** `prepareAsk`/`ask`의 가중치 인자, 인용 괄호, `test/unit/ask_test.dart`, `short_document_recall_test.dart`의 `prepareAsk` 단계, 규칙 10·I1·후보 줄, `ask.md`의 "Short documents next to a large one" 절(복수형 문장만 고친다). `MobileRag.useEngineForTest`는 범위 밖에서 들어간 공개 테스트용 API라 PR 본문에 "받아들일지 결정 필요"로 적는다.
 - **출처:** 후보 목록의 "[중간] 기본 하이브리드 가중치에서 불용어만 맞은 청크가 정답보다 앞선다"(D1), S1 PR(#134) 본문의 "`searchHybrid` with the default weights still does not return the refund sentence", 메인 체크아웃 브랜치 `feat/ask-search-weights`의 커밋 안 된 작업(2026-11-09).
 - **순서:** D2(#136) 머지 뒤 main에서 브랜치를 딴다. Q4와 `lib/services/ask.dart`가 겹치므로 Q4보다 먼저 한다(규칙 3). Q2·Q3과는 Rust 파일이 겹치지 않는다.
 
