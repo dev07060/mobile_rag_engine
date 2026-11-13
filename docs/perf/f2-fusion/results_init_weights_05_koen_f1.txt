@@ -1,0 +1,13 @@
+model=koen fp=model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413 chunks=4543 bundle=f1 commit=ef7628d exit=0 secs=59
+F3_ASK profile=vector_only ask_recall5=0.875 ask_in_context=0.875 top100_recall5=0.9375 top100_recall10=0.96875 ctx_chunks=5.00 ctx_tokens=630.5
+F3_ASK profile=bm25_only ask_recall5=0.53125 ask_in_context=0.53125 top100_recall5=0.53125 top100_recall10=0.5625 ctx_chunks=5.00 ctx_tokens=656.7
+F3_ASK profile=default_hybrid ask_recall5=0.625 ask_in_context=0.625 top100_recall5=0.65625 top100_recall10=0.65625 ctx_chunks=5.00 ctx_tokens=653.8
+F3_ASK profile=sweep_0_4_0_6 ask_recall5=0.625 ask_in_context=0.625 top100_recall5=0.71875 top100_recall10=0.78125 ctx_chunks=5.00 ctx_tokens=654.4
+F3_ASK profile=sweep_0_6_0_4 ask_recall5=0.84375 ask_in_context=0.84375 top100_recall5=0.8125 top100_recall10=0.875 ctx_chunks=5.00 ctx_tokens=661.1
+F2_INIT_WEIGHTS vector=0.5 bm25=0.5 same_passages_as_explicit=32/32 gold_in_prompt_without_weights=26/32
+PASSAGE_SUMMARY chunks=4543 fp=model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413
+PASSAGE_SUMMARY profile=vector_only recall10=0.96875 answerable10=0.875 mrr10=0.8717 langs={en: 15.0/16, ko: 16.0/16} search_us_median=2430 search_us_mean=2471
+PASSAGE_SUMMARY profile=bm25_only recall10=0.5625 answerable10=0.5625 mrr10=0.4655 langs={en: 8.0/16, ko: 10.0/16} search_us_median=1912 search_us_mean=1946
+PASSAGE_SUMMARY profile=default_hybrid recall10=0.65625 answerable10=0.6875 mrr10=0.5193 langs={en: 9.0/16, ko: 12.0/16} search_us_median=1929 search_us_mean=1958
+PASSAGE_SUMMARY profile=sweep_0_4_0_6 recall10=0.78125 answerable10=0.6875 mrr10=0.5946 langs={en: 12.0/16, ko: 13.0/16} search_us_median=1934 search_us_mean=1951
+PASSAGE_SUMMARY profile=sweep_0_6_0_4 recall10=0.875 answerable10=0.875 mrr10=0.6523 langs={en: 14.0/16, ko: 14.0/16} search_us_median=1945 search_us_mean=2000
