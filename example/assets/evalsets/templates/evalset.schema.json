@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mobile-rag.example/evalset_line.schema.json",
+  "title": "Evalset JSONL Line",
+  "type": "object",
+  "required": [
+    "dataset_id",
+    "schema_version",
+    "item_id",
+    "query",
+    "language",
+    "query_type",
+    "expected_source_key",
+    "hard_negative_source_keys"
+  ],
+  "properties": {
+    "dataset_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "item_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "enum": ["ko", "en", "other"]
+    },
+    "query_type": {
+      "type": "string",
+      "enum": ["positive", "hard_negative", "paraphrase", "noise"]
+    },
+    "expected_source_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hard_negative_source_keys": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "collected_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    }
+  },
+  "additionalProperties": true
+}

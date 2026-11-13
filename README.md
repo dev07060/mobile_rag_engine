@@ -407,3 +407,5 @@ Bug reports, feature requests, and PRs are all welcome!
 ## License
 
 This project is licensed under the [MIT License](https://github.com/dev07060/mobile_rag_engine/blob/main/LICENSE).
+
+The Wikipedia articles used as search evaluation data in `example/assets/corpus/` are not under the MIT License. They are licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) (see `example/assets/corpus/README.md`) and are not part of the published package.

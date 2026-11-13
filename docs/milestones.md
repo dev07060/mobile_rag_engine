@@ -559,6 +559,13 @@
   - **권고: (가).** 한 저장소에서 한 명령으로 돌고, 정답과 본문이 함께 버전 관리된다. 6 MB는 감당할 크기다.
   - 위키 문서는 CC BY-SA다. 코퍼스 디렉터리에 출처 표기 파일(문서별 URL과 `revision_id`는 매니페스트에 있다)과 라이선스 안내를 두고, 저장소의 코드 라이선스(MIT)와 다르다는 것을 README에 한 줄 적는다.
   - 기계 생성 묶음이라는 사실과 위 집계(종류, 틀, 제목 포함 비율)를 자료 옆 README에 적어, 수치를 읽는 사람이 무엇을 잰 것인지 알게 한다.
+  - **결과 (2026-11-13).** 갈래 (2)와 결정 1에 따라 보관했다.
+    - 넣은 것: 위키 문서 300개(`example/assets/corpus/{en,ko}/`, 4.3 MB, main 체크아웃과 같은 파일), `wiki_article_sources_manifest_v1.json`, 80개 묶음 세 파일, `templates/`의 스키마와 예시, 생성·검증 스크립트 세 개, 하네스(`hybrid_passage_relevance_measure_test.dart`, `relevance_{evalset,metrics}.dart`)와 그 단위 테스트 둘.
+    - 넣지 않은 것: 800개 질의, 400행 정답, `templates/`의 그 사본과 `sources_manifest.json` 사본, 20개 묶음, `_runtime_abs` 매니페스트. 80개 묶음은 800·400을 seed 42로 다시 만든 뒤 `generate_p5_4_expanded_evalset.py`를 돌리면 바이트 단위로 같게 나온다(2026-11-13 확인). 명령은 `example/assets/evalsets/README.md`.
+    - 라이선스: `example/assets/corpus/README.md`에 CC BY-SA 4.0 고지, 출처(매니페스트의 URL과 `revision_id`), 바꾼 내용을 적었다. 루트 README의 License 절에 한 줄 더했다. `f1_short/`는 세션이 쓴 문서라 MIT다.
+    - 예제 앱: 커밋된 `example/pubspec.yaml`로 `flutter build bundle`을 돌리면 자산이 0개다. `assets/`의 하위 폴더는 묶이지 않는다.
+    - pub: `flutter pub publish --dry-run` 목록에 평가 자료, 스크립트, 하네스가 없다. 테스트 전용 `rust_builder/rust/src/api/eval_dump.rs`(1 KB, `#[cfg(test)]`)만 Rust 소스와 함께 들어간다.
+    - 하네스 정리: W1 실험용 `W1_VARIANT`를 지우고, 모델 인자를 `EVAL_MODEL_ASSET`/`EVAL_TOKENIZER_ASSET`, 요약 줄을 `PASSAGE_SUMMARY`로 바꿨다. 단위 테스트의 20개 묶음 검사는 80개 묶음과 `f1/` 묶음 검사로 바꿨다.
 - **F-2. 없는 것을 만든다.** 사람이 쓴 질의 30~40개와 정답을 영어·한국어로 만든다.
   - 큰 문서 옆에 넣는 짧은 문서 10~20개와 그 질의
   - 낱말이 겹치지 않는 바꿔 말한 질문 15~20개
