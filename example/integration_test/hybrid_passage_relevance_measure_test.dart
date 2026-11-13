@@ -10,6 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
 // ignore: implementation_imports
+import 'package:mobile_rag_engine/src/rust/api/bm25_search.dart' as rust_bm25;
+import 'package:mobile_rag_engine/src/rust/api/hnsw_index.dart' as rust_hnsw;
 import 'package:mobile_rag_engine/src/rust/api/source_rag.dart' as rust_rag;
 import 'package:mobile_rag_engine_example/profiling/query_profiler.dart';
 import 'package:mobile_rag_engine_example/profiling/relevance_evalset.dart';
@@ -179,6 +181,14 @@ void main() {
             reason: 'missing gold for ${item.itemId}',
           );
           final queryEmbedding = await EmbeddingService.embed(item.query);
+          if (_dumpCandidates) {
+            await _dumpCandidateLists(
+              profiler: profiler,
+              itemId: item.itemId,
+              query: item.query,
+              queryEmbedding: queryEmbedding,
+            );
+          }
           for (final profile in _profiles) {
             final chunks = await _searchPassageChunks(
               profiler: profiler,
@@ -286,6 +296,14 @@ void main() {
             final item = jsonDecode(raw) as Map<String, dynamic>;
             final query = item['query'] as String;
             final embedding = await EmbeddingService.embed(query);
+            if (_dumpCandidates) {
+              await _dumpCandidateLists(
+                profiler: profiler,
+                itemId: item['item_id'] as String,
+                query: query,
+                queryEmbedding: embedding,
+              );
+            }
             for (final profile in _profiles) {
               final ask = await _askCondition(
                 profiler: profiler,
@@ -308,6 +326,13 @@ void main() {
               });
             }
           }
+        }
+        if (_dumpCandidates) {
+          await _writeCandidateDump(
+            chunks: stats.chunkCount,
+            fingerprint: MobileRag.instance.currentEmbeddingFingerprint,
+            dbPath: MobileRag.instance.dbPath,
+          );
         }
         await _writeAskRows(
           chunks: stats.chunkCount,
@@ -1038,4 +1063,73 @@ Future<void> _writeAskRows({
   );
   // ignore: avoid_print
   print('F3_ASK_FILE $path');
+}
+
+
+// ---- F-7: candidate lists for offline fusion comparison -------------------
+// The engine's hybrid search (`compute_hybrid_rrf_scores` in
+// rust_builder/rust/src/api/hybrid_search.rs) fuses `search_hnsw_slice(k)` and
+// `bm25_search(k)` with k = topK x 4. This dumps the same two engine calls for
+// the two candidate counts the evaluation uses: 20 (`ask`, topK 5) and 400
+// (harness, topK 100). HNSW results depend on k (ef_search = max(100, 5k)),
+// so both are kept. Offline fusion is scripts/eval/f7_fusion_compare.py.
+const _dumpCandidates = bool.fromEnvironment('F7_DUMP_CANDIDATES');
+const _dumpCandidateCounts = [20, 400];
+final _candidateRows = <Map<String, Object?>>[];
+
+Future<void> _dumpCandidateLists({
+  required QueryProfiler profiler,
+  required String itemId,
+  required String query,
+  required List<double> queryEmbedding,
+}) async {
+  await rust_rag.activateCollectionForHybridSearch(
+    collectionId: _collectionId,
+    basePath: profiler.indexBasePath(_collectionId),
+  );
+  final row = <String, Object?>{
+    'item_id': itemId,
+    'query': query,
+    'query_embedding': queryEmbedding,
+  };
+  for (final k in _dumpCandidateCounts) {
+    final vec = await rust_hnsw.searchHnswSlice(
+      queryEmbedding: queryEmbedding,
+      topK: BigInt.from(k),
+    );
+    final bm25 = await rust_bm25.bm25Search(query: query, topK: k);
+    row['vector_$k'] = [
+      for (final r in vec) [r.id.toInt(), r.distance],
+    ];
+    row['bm25_$k'] = [
+      for (final r in bm25) [r.docId.toInt(), r.score],
+    ];
+  }
+  _candidateRows.add(row);
+}
+
+Future<void> _writeCandidateDump({
+  required int chunks,
+  required String? fingerprint,
+  required String dbPath,
+}) async {
+  final dir = await getApplicationDocumentsDirectory();
+  final path =
+      '${dir.path}/f7_candidates_${DateTime.now().millisecondsSinceEpoch}.json';
+  await File(path).writeAsString(
+    jsonEncode({
+      'generated_at': DateTime.now().toUtc().toIso8601String(),
+      'model_asset': _modelAsset,
+      'embedding_fingerprint': fingerprint,
+      'chunk_count': chunks,
+      'db_path': dbPath,
+      'collection_id': _collectionId,
+      'candidate_counts': _dumpCandidateCounts,
+      'rrf_k': 60,
+      'rows': _candidateRows,
+    }),
+    flush: true,
+  );
+  // ignore: avoid_print
+  print('F7_CANDIDATES_FILE $path');
 }

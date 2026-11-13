@@ -1,0 +1,1856 @@
+[
+ {
+  "name": "minilm",
+  "bundle": "80",
+  "fingerprint": "model.onnx|384|f32+vabq:none|sha256:e9246dc32f332cb687c5d1ea0c0c51d3",
+  "chunks": 4667,
+  "commit": "6944ce383e360d3477bd630252d203abb6d40036",
+  "validation": {
+   "ask": {
+    "same": 400,
+    "different": 0,
+    "different_with_bm25_ties": 0,
+    "mismatches": []
+   },
+   "harness": {
+    "same": 400,
+    "different": 0,
+    "different_with_bm25_ties": 0,
+    "mismatches": []
+   }
+  },
+  "ask_recall_at_5": {
+   "rrf 0.2": {
+    "all": [
+     72,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     15,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.3": {
+    "all": [
+     71,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     14,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.4": {
+    "all": [
+     71,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     14,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.5": {
+    "all": [
+     70,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     13,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.6": {
+    "all": [
+     49,
+     80
+    ],
+    "lexical": [
+     9,
+     16
+    ],
+    "semantic": [
+     7,
+     16
+    ],
+    "mixed": [
+     10,
+     16
+    ],
+    "hard_negative": [
+     12,
+     16
+    ],
+    "multilingual": [
+     11,
+     16
+    ]
+   },
+   "rrf 0.7": {
+    "all": [
+     48,
+     80
+    ],
+    "lexical": [
+     9,
+     16
+    ],
+    "semantic": [
+     7,
+     16
+    ],
+    "mixed": [
+     10,
+     16
+    ],
+    "hard_negative": [
+     12,
+     16
+    ],
+    "multilingual": [
+     10,
+     16
+    ]
+   },
+   "linear 0.3": {
+    "all": [
+     71,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     8,
+     16
+    ],
+    "mixed": [
+     15,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "linear 0.5": {
+    "all": [
+     72,
+     80
+    ],
+    "lexical": [
+     15,
+     16
+    ],
+    "semantic": [
+     10,
+     16
+    ],
+    "mixed": [
+     15,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "linear 0.7": {
+    "all": [
+     54,
+     80
+    ],
+    "lexical": [
+     10,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     12,
+     16
+    ],
+    "hard_negative": [
+     13,
+     16
+    ],
+    "multilingual": [
+     10,
+     16
+    ]
+   },
+   "rrf 0.2+top1": {
+    "all": [
+     73,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     10,
+     16
+    ],
+    "mixed": [
+     15,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.2+top1>0.02": {
+    "all": [
+     72,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     15,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.2+top1>0.05": {
+    "all": [
+     72,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     15,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.2+top1>0.1": {
+    "all": [
+     72,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     15,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   }
+  }
+ },
+ {
+  "name": "koen",
+  "bundle": "80",
+  "fingerprint": "model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413",
+  "chunks": 4492,
+  "commit": "6944ce383e360d3477bd630252d203abb6d40036",
+  "validation": {
+   "ask": {
+    "same": 400,
+    "different": 0,
+    "different_with_bm25_ties": 0,
+    "mismatches": []
+   },
+   "harness": {
+    "same": 400,
+    "different": 0,
+    "different_with_bm25_ties": 0,
+    "mismatches": []
+   }
+  },
+  "ask_recall_at_5": {
+   "rrf 0.2": {
+    "all": [
+     72,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     8,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.3": {
+    "all": [
+     72,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     8,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.4": {
+    "all": [
+     72,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     8,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.5": {
+    "all": [
+     73,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.6": {
+    "all": [
+     73,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.7": {
+    "all": [
+     73,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "linear 0.3": {
+    "all": [
+     72,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     8,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "linear 0.5": {
+    "all": [
+     73,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "linear 0.7": {
+    "all": [
+     74,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     10,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.2+top1": {
+    "all": [
+     73,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.2+top1>0.02": {
+    "all": [
+     73,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.2+top1>0.05": {
+    "all": [
+     72,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     8,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.2+top1>0.1": {
+    "all": [
+     72,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     8,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   }
+  }
+ },
+ {
+  "name": "bgem3",
+  "bundle": "80",
+  "fingerprint": "model.onnx|1024|f32+vabq:none|sha256:b089a980c41f6158f8447400dd5b2abb",
+  "chunks": 4492,
+  "commit": "6944ce383e360d3477bd630252d203abb6d40036",
+  "validation": {
+   "ask": {
+    "same": 400,
+    "different": 0,
+    "different_with_bm25_ties": 0,
+    "mismatches": []
+   },
+   "harness": {
+    "same": 400,
+    "different": 0,
+    "different_with_bm25_ties": 0,
+    "mismatches": []
+   }
+  },
+  "ask_recall_at_5": {
+   "rrf 0.2": {
+    "all": [
+     73,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.3": {
+    "all": [
+     74,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     10,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.4": {
+    "all": [
+     75,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     11,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.5": {
+    "all": [
+     76,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     12,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.6": {
+    "all": [
+     77,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     13,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.7": {
+    "all": [
+     77,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     13,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "linear 0.3": {
+    "all": [
+     75,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     11,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "linear 0.5": {
+    "all": [
+     79,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     15,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "linear 0.7": {
+    "all": [
+     79,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     15,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.2+top1": {
+    "all": [
+     77,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     13,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.2+top1>0.02": {
+    "all": [
+     74,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     10,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.2+top1>0.05": {
+    "all": [
+     73,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   },
+   "rrf 0.2+top1>0.1": {
+    "all": [
+     73,
+     80
+    ],
+    "lexical": [
+     16,
+     16
+    ],
+    "semantic": [
+     9,
+     16
+    ],
+    "mixed": [
+     16,
+     16
+    ],
+    "hard_negative": [
+     16,
+     16
+    ],
+    "multilingual": [
+     16,
+     16
+    ]
+   }
+  }
+ },
+ {
+  "name": "minilm",
+  "bundle": "f1",
+  "fingerprint": "model.onnx|384|f32+vabq:none|sha256:e9246dc32f332cb687c5d1ea0c0c51d3",
+  "chunks": 4718,
+  "commit": "6944ce383e360d3477bd630252d203abb6d40036",
+  "validation": {
+   "ask": {
+    "same": 160,
+    "different": 0,
+    "different_with_bm25_ties": 0,
+    "mismatches": []
+   },
+   "harness": {
+    "same": 160,
+    "different": 0,
+    "different_with_bm25_ties": 0,
+    "mismatches": []
+   }
+  },
+  "ask_recall_at_5": {
+   "rrf 0.2": {
+    "all": [
+     16,
+     32
+    ],
+    "none": [
+     3,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     5,
+     10
+    ]
+   },
+   "rrf 0.3": {
+    "all": [
+     16,
+     32
+    ],
+    "none": [
+     3,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     5,
+     10
+    ]
+   },
+   "rrf 0.4": {
+    "all": [
+     16,
+     32
+    ],
+    "none": [
+     3,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     5,
+     10
+    ]
+   },
+   "rrf 0.5": {
+    "all": [
+     19,
+     32
+    ],
+    "none": [
+     4,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   },
+   "rrf 0.6": {
+    "all": [
+     10,
+     32
+    ],
+    "none": [
+     4,
+     14
+    ],
+    "high": [
+     2,
+     8
+    ],
+    "partial": [
+     4,
+     10
+    ]
+   },
+   "rrf 0.7": {
+    "all": [
+     9,
+     32
+    ],
+    "none": [
+     4,
+     14
+    ],
+    "high": [
+     1,
+     8
+    ],
+    "partial": [
+     4,
+     10
+    ]
+   },
+   "linear 0.3": {
+    "all": [
+     18,
+     32
+    ],
+    "none": [
+     4,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     6,
+     10
+    ]
+   },
+   "linear 0.5": {
+    "all": [
+     20,
+     32
+    ],
+    "none": [
+     5,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   },
+   "linear 0.7": {
+    "all": [
+     14,
+     32
+    ],
+    "none": [
+     5,
+     14
+    ],
+    "high": [
+     5,
+     8
+    ],
+    "partial": [
+     4,
+     10
+    ]
+   },
+   "rrf 0.2+top1": {
+    "all": [
+     20,
+     32
+    ],
+    "none": [
+     5,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   },
+   "rrf 0.2+top1>0.02": {
+    "all": [
+     19,
+     32
+    ],
+    "none": [
+     5,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     6,
+     10
+    ]
+   },
+   "rrf 0.2+top1>0.05": {
+    "all": [
+     19,
+     32
+    ],
+    "none": [
+     5,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     6,
+     10
+    ]
+   },
+   "rrf 0.2+top1>0.1": {
+    "all": [
+     18,
+     32
+    ],
+    "none": [
+     5,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     5,
+     10
+    ]
+   }
+  }
+ },
+ {
+  "name": "koen",
+  "bundle": "f1",
+  "fingerprint": "model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413",
+  "chunks": 4543,
+  "commit": "6944ce383e360d3477bd630252d203abb6d40036",
+  "validation": {
+   "ask": {
+    "same": 160,
+    "different": 0,
+    "different_with_bm25_ties": 0,
+    "mismatches": []
+   },
+   "harness": {
+    "same": 160,
+    "different": 0,
+    "different_with_bm25_ties": 0,
+    "mismatches": []
+   }
+  },
+  "ask_recall_at_5": {
+   "rrf 0.2": {
+    "all": [
+     19,
+     32
+    ],
+    "none": [
+     4,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   },
+   "rrf 0.3": {
+    "all": [
+     19,
+     32
+    ],
+    "none": [
+     4,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   },
+   "rrf 0.4": {
+    "all": [
+     19,
+     32
+    ],
+    "none": [
+     4,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   },
+   "rrf 0.5": {
+    "all": [
+     27,
+     32
+    ],
+    "none": [
+     10,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "rrf 0.6": {
+    "all": [
+     27,
+     32
+    ],
+    "none": [
+     10,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "rrf 0.7": {
+    "all": [
+     27,
+     32
+    ],
+    "none": [
+     10,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "linear 0.3": {
+    "all": [
+     20,
+     32
+    ],
+    "none": [
+     4,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     8,
+     10
+    ]
+   },
+   "linear 0.5": {
+    "all": [
+     28,
+     32
+    ],
+    "none": [
+     11,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "linear 0.7": {
+    "all": [
+     28,
+     32
+    ],
+    "none": [
+     11,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "rrf 0.2+top1": {
+    "all": [
+     26,
+     32
+    ],
+    "none": [
+     9,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "rrf 0.2+top1>0.02": {
+    "all": [
+     21,
+     32
+    ],
+    "none": [
+     6,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   },
+   "rrf 0.2+top1>0.05": {
+    "all": [
+     18,
+     32
+    ],
+    "none": [
+     3,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   },
+   "rrf 0.2+top1>0.1": {
+    "all": [
+     18,
+     32
+    ],
+    "none": [
+     3,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   }
+  }
+ },
+ {
+  "name": "bgem3",
+  "bundle": "f1",
+  "fingerprint": "model.onnx|1024|f32+vabq:none|sha256:b089a980c41f6158f8447400dd5b2abb",
+  "chunks": 4543,
+  "commit": "6944ce383e360d3477bd630252d203abb6d40036",
+  "validation": {
+   "ask": {
+    "same": 160,
+    "different": 0,
+    "different_with_bm25_ties": 0,
+    "mismatches": []
+   },
+   "harness": {
+    "same": 160,
+    "different": 0,
+    "different_with_bm25_ties": 0,
+    "mismatches": []
+   }
+  },
+  "ask_recall_at_5": {
+   "rrf 0.2": {
+    "all": [
+     19,
+     32
+    ],
+    "none": [
+     4,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   },
+   "rrf 0.3": {
+    "all": [
+     19,
+     32
+    ],
+    "none": [
+     4,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   },
+   "rrf 0.4": {
+    "all": [
+     19,
+     32
+    ],
+    "none": [
+     4,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   },
+   "rrf 0.5": {
+    "all": [
+     27,
+     32
+    ],
+    "none": [
+     10,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "rrf 0.6": {
+    "all": [
+     27,
+     32
+    ],
+    "none": [
+     10,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "rrf 0.7": {
+    "all": [
+     27,
+     32
+    ],
+    "none": [
+     10,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "linear 0.3": {
+    "all": [
+     22,
+     32
+    ],
+    "none": [
+     6,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     8,
+     10
+    ]
+   },
+   "linear 0.5": {
+    "all": [
+     28,
+     32
+    ],
+    "none": [
+     11,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "linear 0.7": {
+    "all": [
+     29,
+     32
+    ],
+    "none": [
+     12,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "rrf 0.2+top1": {
+    "all": [
+     26,
+     32
+    ],
+    "none": [
+     9,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "rrf 0.2+top1>0.02": {
+    "all": [
+     24,
+     32
+    ],
+    "none": [
+     7,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     9,
+     10
+    ]
+   },
+   "rrf 0.2+top1>0.05": {
+    "all": [
+     22,
+     32
+    ],
+    "none": [
+     6,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     8,
+     10
+    ]
+   },
+   "rrf 0.2+top1>0.1": {
+    "all": [
+     20,
+     32
+    ],
+    "none": [
+     5,
+     14
+    ],
+    "high": [
+     8,
+     8
+    ],
+    "partial": [
+     7,
+     10
+    ]
+   }
+  }
+ }
+]

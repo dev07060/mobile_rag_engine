@@ -9,6 +9,7 @@
 | [`f3_ask_condition.md`](f3_ask_condition.md) | F-3. `ask` 조건(topK 5) 측정과 README 수치의 차이 |
 | [`f2_stage1.md`](f2_stage1.md) | F-2 1단계. 세션 초안 질의 40개와 짧은 문서 16개 측정 |
 | [`f2_review_sheet.md`](f2_review_sheet.md) | F-2 질의 40개 검수표 |
+| [`f7_fusion_compare.md`](f7_fusion_compare.md) | F-7. 후보 목록 덤프와 오프라인 결합 비교(엔진 결과 3,360건 재현) |
 
 자료는 `example/assets/corpus/`(문서, 위키는 CC BY-SA 4.0)와 `example/assets/evalsets/`(묶음)에 있다. 각 디렉터리의 README를 본다.
 
@@ -27,6 +28,7 @@ scripts/eval/run_passage_eval.sh --model-pack stable-minilm-l6-v2-arm64-en --bun
 - 스크립트는 추적 중인 파일을 고치지 않는다. `example/`을 `build/eval_app/`에 복사하고, 복사본에만 평가 자산 선언과 Xcode 27 우회 세 가지(링커 래퍼 `-Wl,-no_fixup_chains`, `ARCHS = arm64`, Pod 배포 대상 14.0)를 넣은 뒤, 하네스를 profile 빌드로 돌린다.
 - 필요한 것: Flutter, Xcode, rustup(Rust 소스 빌드). 처음 실행은 Rust 빌드 때문에 몇 분 걸린다. BGE-m3처럼 큰 모델은 80개 묶음에 3~18분이 걸렸다.
 - 결과는 `build/eval_results/<시각>_<이름>_<묶음>/`에 남는다.
+- `--dump-candidates`를 주면 엔진의 벡터·BM25 후보 목록(`candidates.json`)과 색인 DB 사본(`index.sqlite`)도 남는다. `python3 scripts/eval/f7_fusion_compare.py <결과 디렉터리>...`로 결합 방식을 오프라인에서 비교한다(`f7_fusion_compare.md`).
 
 | 파일 | 내용 |
 |---|---|

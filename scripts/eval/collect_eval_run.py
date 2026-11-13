@@ -9,7 +9,8 @@ dataset, chunk count, time, and the machine load at the end of the run.
 
 Writes <out>/run_meta.json, <out>/passage_result.json (harness JSON with
 "run_meta" added), <out>/passage_result.csv, <out>/ask_condition.json, and
-<out>/summary.txt.
+<out>/summary.txt. With --dump-candidates also <out>/candidates.json and
+<out>/index.sqlite (a copy of the index DB).
 """
 
 from __future__ import annotations
@@ -68,6 +69,9 @@ def main() -> int:
     m = re.search(r"F3_ASK_FILE (\S+\.json)", log)
     if m:
         files["ask_condition.json"] = Path(m.group(1))
+    m = re.search(r"F7_CANDIDATES_FILE (\S+\.json)", log)
+    if m:
+        files["candidates.json"] = Path(m.group(1))
     m = re.search(r"PASSAGE_SUMMARY chunks=(\d+) fp=(\S+)", log)
     chunks, fingerprint = (int(m.group(1)), m.group(2)) if m else (None, None)
 
@@ -133,6 +137,16 @@ def main() -> int:
                 obj = json.loads(dst.read_text(encoding="utf-8"))
                 obj["run_meta"] = meta
                 dst.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if (out / "candidates.json").is_file():
+        # A consistent single-file copy of the index DB (chunk text and
+        # embeddings) for the offline fusion comparison.
+        import sqlite3
+        cand = json.loads((out / "candidates.json").read_text(encoding="utf-8"))
+        src = sqlite3.connect(f"file:{cand['db_path']}?mode=ro", uri=True)
+        dst = sqlite3.connect(str(out / "index.sqlite"))
+        src.backup(dst)
+        dst.close()
+        src.close()
     meta["result_files"] = sorted(p.name for p in out.iterdir() if p.name != "run.log")
     (out / "run_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
