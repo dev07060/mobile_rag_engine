@@ -8,7 +8,9 @@
 #                     never committed; pass a path)
 # --model-pack PRESET download a Model Pack with `dart run mobile_rag_engine:setup`
 #                     (e.g. stable-minilm-l6-v2-arm64-en)
-# --bundle            80 = 80-query regression bundle (default), f1 = F1 bundle
+# --bundle            80 = 80-query regression bundle (default), f1 = F1 bundle,
+#                     miracl_ko_5000 / miracl_ko_15000 = reduced MIRACL Korean dev
+#                     (build first: scripts/miracl/build_miracl_ko_bundle.py)
 # --name              label used in file names (default: model directory name)
 # --out               result directory (default: build/eval_results/<time>_<name>_<bundle>)
 # --dump-candidates   also dump the engine's vector and BM25 candidate lists and a
@@ -52,7 +54,13 @@ case "$BUNDLE" in
     EVALSET=assets/evalsets/f1/f1_evalset_v1.jsonl
     GOLD=assets/evalsets/f1/f1_passage_gold_v1.jsonl
     NO_ANSWER=assets/evalsets/f1/f1_no_answer_v1.jsonl;;
-  *) echo "unknown bundle: $BUNDLE (80 or f1)" >&2; exit 2;;
+  miracl_ko_*)
+    MANIFEST=assets/evalsets/miracl_ko/${BUNDLE}_sources_manifest.json
+    EVALSET=assets/evalsets/miracl_ko/${BUNDLE}_evalset.jsonl
+    GOLD=assets/evalsets/miracl_ko/${BUNDLE}_gold.jsonl
+    NO_ANSWER=""
+    [[ -f "$ROOT/example/$MANIFEST" ]] || { echo "missing $MANIFEST; run scripts/miracl/build_miracl_ko_bundle.py" >&2; exit 2; };;
+  *) echo "unknown bundle: $BUNDLE (80, f1, miracl_ko_<size>)" >&2; exit 2;;
 esac
 
 WORK="$ROOT/build/eval_app"
@@ -87,14 +95,18 @@ OUT="${OUT:-$ROOT/build/eval_results/${STAMP}_${NAME}_${BUNDLE}}"
 mkdir -p "$OUT"
 
 echo "[eval] patching the copy (asset declarations, Xcode 27 workarounds)"
-python3 - "$WORK" "$ROOT" <<'PY'
-import pathlib, re, sys
-work, root = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+python3 - "$WORK" "$ROOT" "$MANIFEST" <<'PY'
+import json, pathlib, re, sys
+work, root, manifest = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
 p = work / "pubspec.yaml"
 s = p.read_text()
 s = s.replace("path: ../rust_builder", f"path: {root}/rust_builder").replace("path: ../\n", f"path: {root}/\n")
-dirs = sorted({str(q.parent.relative_to(work)) + "/" for q in (work / "assets" / "corpus").rglob("*.md")})
-dirs += ["assets/evalsets/", "assets/evalsets/f1/", "assets/eval_model/"]
+# Declare only the corpus directories this bundle uses (the MIRACL corpus has
+# 15,000 files and would slow every other bundle).
+src = json.loads((work / manifest).read_text())["sources"]
+dirs = sorted({str(pathlib.PurePosixPath(s["file_path"]).parent) + "/" for s in src})
+dirs += [str(pathlib.PurePosixPath(manifest).parent) + "/", "assets/eval_model/"]
+dirs = sorted(set(dirs))
 block = "".join(f"    - {d}\n" for d in dirs)
 s = s.replace("    - assets/\n", "    - assets/\n" + block, 1)
 p.write_text(s)
