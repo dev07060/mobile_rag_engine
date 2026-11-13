@@ -136,6 +136,14 @@ Rebuild the HNSW index:
 await MobileRag.instance.rebuildIndex();
 ```
 
+### Q: A short document is not in the answer, although `search` finds it
+
+`ask` and `prepareAsk` put only the top 5 passages in the prompt. A
+one-sentence document stored next to a large one can rank below chunks of the
+large document that match common words of the question. See
+[Short documents next to a large one](ask.md#short-documents-next-to-a-large-one)
+in the Ask guide for the three things that help.
+
 ### Q: Memory usage is high
 
 - **Prefer file-path ingest for large local files**: Use `addDocumentFromFile(path)` for text-layer PDFs, DOCX, Markdown, and text files when you have a stable path. Scanned/image-only PDFs need OCR before indexing.

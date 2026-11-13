@@ -1,5 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+import 'package:mocktail/mocktail.dart';
+
+class _MockRagEngine extends Mock implements RagEngine {}
 
 ChunkSearchResult _chunk(int chunkId, int sourceId, String content) =>
     ChunkSearchResult(
@@ -183,8 +186,98 @@ void main() {
       expect(ids('Invented [9] and real [3], [0]'), ['3']);
     });
 
+    test('reads CJK corner bracket citations', () {
+      expect(ids('「1」에 따르면 … 「3」과 「2」'), ['1', '3', '2']);
+      expect(ids('『2』によると [1]'), ['2', '1']);
+      expect(ids('「1, 3」'), ['1', '3']);
+    });
+
+    test('does not read quoted words or unmatched brackets as citations', () {
+      expect(ids('「결전」 전에 「공성 준비」'), isEmpty);
+      expect(ids('「9」 and 「1] and [2」 and 「1』'), isEmpty);
+    });
+
     test('ignores brackets that are not citations', () {
       expect(ids('No citations [a] [1a] [ ] [-1] here'), isEmpty);
+    });
+  });
+
+  group('MobileRag.prepareAsk / ask search weights', () {
+    late _MockRagEngine engine;
+    late MobileRag rag;
+
+    setUp(() {
+      engine = _MockRagEngine();
+      rag = MobileRag.useEngineForTest(engine);
+      when(
+        () => engine.searchHybridWithContext(
+          any(),
+          topK: any(named: 'topK'),
+          tokenBudget: any(named: 'tokenBudget'),
+          vectorWeight: any(named: 'vectorWeight'),
+          bm25Weight: any(named: 'bm25Weight'),
+          collectionId: any(named: 'collectionId'),
+        ),
+      ).thenAnswer((_) async => _result([refund]));
+      when(
+        () => engine.listSources(collectionId: any(named: 'collectionId')),
+      ).thenAnswer((_) async => [_source(7, 'refund.md')]);
+    });
+    tearDown(() => MobileRag.setMockInstance(null));
+
+    test('default arguments search as before (5, 1500, 0.2 / 0.8)', () async {
+      await rag.prepareAsk('q');
+      await rag.ask('q', generate: (_) async => 'a [1]');
+      verify(
+        () => engine.searchHybridWithContext(
+          'q',
+          topK: 5,
+          tokenBudget: 1500,
+          vectorWeight: 0.2,
+          bm25Weight: 0.8,
+        ),
+      ).called(2);
+    });
+
+    test('given weights are passed to the search', () async {
+      await rag.prepareAsk('q', vectorWeight: 0.5, bm25Weight: 0.5);
+      await rag.ask(
+        'q',
+        generate: (_) async => 'a',
+        vectorWeight: 0.7,
+        bm25Weight: 0.3,
+      );
+      await rag
+          .inCollection('manuals')
+          .prepareAsk('q', vectorWeight: 0.6, bm25Weight: 0.4);
+      verify(
+        () => engine.searchHybridWithContext(
+          'q',
+          topK: 5,
+          tokenBudget: 1500,
+          vectorWeight: 0.5,
+          bm25Weight: 0.5,
+        ),
+      ).called(1);
+      verify(
+        () => engine.searchHybridWithContext(
+          'q',
+          topK: 5,
+          tokenBudget: 1500,
+          vectorWeight: 0.7,
+          bm25Weight: 0.3,
+        ),
+      ).called(1);
+      verify(
+        () => engine.searchHybridWithContext(
+          'q',
+          topK: 5,
+          tokenBudget: 1500,
+          vectorWeight: 0.6,
+          bm25Weight: 0.4,
+          collectionId: 'manuals',
+        ),
+      ).called(1);
     });
   });
 }
