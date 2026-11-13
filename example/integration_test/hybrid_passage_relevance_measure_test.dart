@@ -56,6 +56,11 @@ const _tokenizerAsset = String.fromEnvironment(
   'EVAL_TOKENIZER_ASSET',
   defaultValue: 'assets/tokenizer.json',
 );
+// F2: default hybrid weights given to MobileRag.initialize. When set, the run
+// also checks the public path: prepareAsk without weights must return the
+// same passages as prepareAsk with these weights.
+const _initVectorWeight = String.fromEnvironment('EVAL_INIT_VECTOR_WEIGHT');
+const _initBm25Weight = String.fromEnvironment('EVAL_INIT_BM25_WEIGHT');
 final _searchMicros = <String, List<int>>{};
 
 const _searchTopK = 100;
@@ -103,6 +108,10 @@ void main() {
         modelAsset: _modelAsset,
         databaseName: _dbName,
         deferIndexWarmup: true,
+        // 0.2 / 0.8 are the package defaults (kDefaultVectorWeight /
+        // kDefaultBm25Weight).
+        defaultVectorWeight: double.tryParse(_initVectorWeight) ?? 0.2,
+        defaultBm25Weight: double.tryParse(_initBm25Weight) ?? 0.8,
       );
 
       final profiler = QueryProfiler(dbPath: MobileRag.instance.dbPath);
@@ -338,6 +347,44 @@ void main() {
           chunks: stats.chunkCount,
           fingerprint: MobileRag.instance.currentEmbeddingFingerprint,
         );
+        if (_initVectorWeight.isNotEmpty) {
+          final v = double.parse(_initVectorWeight);
+          final b = double.parse(_initBm25Weight);
+          final rag = MobileRag.instance.inCollection(_collectionId);
+          var same = 0;
+          var inPrompt = 0;
+          var asked = 0;
+          for (final item in sourceEvalset.items) {
+            final gold = normalizePassageText(
+              chunkGold.itemById[item.itemId]!.goldPassage,
+            );
+            final implicit = await rag.prepareAsk(item.query);
+            final explicit = await rag.prepareAsk(
+              item.query,
+              vectorWeight: v,
+              bm25Weight: b,
+            );
+            final a = [for (final p in implicit.passages) p.chunkId];
+            final e = [for (final p in explicit.passages) p.chunkId];
+            if (a.length == e.length &&
+                Iterable<int>.generate(a.length).every((i) => a[i] == e[i])) {
+              same++;
+            }
+            asked++;
+            if (gold.isNotEmpty &&
+                implicit.passages.any(
+                  (p) => normalizePassageText(p.text).contains(gold),
+                )) {
+              inPrompt++;
+            }
+          }
+          // ignore: avoid_print
+          print(
+            'F2_INIT_WEIGHTS vector=$v bm25=$b '
+            'same_passages_as_explicit=$same/$asked '
+            'gold_in_prompt_without_weights=$inPrompt/$asked',
+          );
+        }
         // ignore: avoid_print
         print(
           'PASSAGE_SUMMARY chunks=${stats.chunkCount} '

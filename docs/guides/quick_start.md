@@ -134,6 +134,7 @@ two-asset path.
 > - `maxChunkChars < 100` is normalized to `100` at runtime.
 > - `overlapChars < 0` is normalized to `0` at runtime.
 > - `vectorWeight` / `bm25Weight` are clamped to `0.0 ~ 1.0` (if both become `0`, defaults `0.2 / 0.8` are restored).
+> - A search that does not pass `vectorWeight` / `bm25Weight` uses `defaultVectorWeight` / `defaultBm25Weight` from `MobileRag.initialize` (default `0.2 / 0.8`). Those must be within `0.0 ~ 1.0` and not both `0`; otherwise `initialize` throws an `ArgumentError`.
 > - Keyword (BM25) matching reduces English words to their stem with the standard Snowball English stemmer, in the documents and in the question: "refund" matches "Refunds", "policy" matches "policies", "run" matches "running". This applies to every search that uses BM25, including keyword-only (`vectorWeight: 0`). It is English-only: words with non-ASCII letters (Korean, Japanese, Chinese, accented Latin) and mixed tokens such as `iphone15` are matched as before. Like any stemmer it joins some unrelated words ("university" and "universe" share the stem "univers").
 > - A short document next to a much larger one can still fall outside the top results; see [Short documents next to a large one](ask.md#short-documents-next-to-a-large-one).
 > - If both `threadLevel` and `embeddingIntraOpNumThreads` are set, debug builds assert; release builds use `threadLevel` precedence with warning logs.

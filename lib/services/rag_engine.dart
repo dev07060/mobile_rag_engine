@@ -63,7 +63,6 @@ import '../src/rust/api/source_rag.dart'
     as rust_rag
     show listChunksNeedingReembed, updateChunkReembedded;
 import '../src/internal/asset_file_sync.dart';
-import '../src/internal/defaults.dart';
 import '../src/internal/embedding_fingerprint.dart';
 import '../src/internal/storage_directory.dart';
 import '../src/internal/validation.dart';
@@ -108,6 +107,15 @@ class RagEngine {
   final int vocabSize;
   final bool _deferIndexWarmup;
 
+  /// Vector weight used by [searchHybrid], [searchHybridWithContext] and
+  /// [searchMeta] when the call does not pass `vectorWeight`. Set with
+  /// [RagConfig.defaultVectorWeight].
+  final double defaultVectorWeight;
+
+  /// BM25 weight used when a hybrid search call does not pass `bm25Weight`.
+  /// Set with [RagConfig.defaultBm25Weight].
+  final double defaultBm25Weight;
+
   /// Fingerprint of the currently loaded embedding model.
   /// Captured during [initialize] via a one-shot probe embed.
   final String currentEmbeddingFingerprint;
@@ -125,6 +133,8 @@ class RagEngine {
     required this.currentEmbeddingFingerprint,
     required RagEmbeddingFingerprintLock? initialLock,
     required bool deferIndexWarmup,
+    required this.defaultVectorWeight,
+    required this.defaultBm25Weight,
   }) : _ragService = ragService,
        _deferIndexWarmup = deferIndexWarmup,
        _fingerprintLock = initialLock,
@@ -289,6 +299,11 @@ class RagEngine {
     required RagConfig config,
     void Function(String status)? onProgress,
   }) async {
+    validateDefaultHybridWeights(
+      vectorWeight: config.defaultVectorWeight,
+      bm25Weight: config.defaultBm25Weight,
+    );
+
     // 0. Auto-initialize Rust library (safe to call multiple times)
     await _ensureRustInitialized();
 
@@ -460,6 +475,8 @@ class RagEngine {
         currentEmbeddingFingerprint: currentFingerprint,
         initialLock: resolvedInitialLock,
         deferIndexWarmup: config.deferIndexWarmup,
+        defaultVectorWeight: config.defaultVectorWeight,
+        defaultBm25Weight: config.defaultBm25Weight,
       );
     } catch (_) {
       if (embeddingWorkerInitialized) {
@@ -777,11 +794,14 @@ class RagEngine {
   }
 
   /// Additive metadata-first low-level search lane.
+  ///
+  /// [vectorWeight] / [bm25Weight] default to [defaultVectorWeight] /
+  /// [defaultBm25Weight].
   Future<SearchMetaResult> searchMeta(
     String query, {
     int topK = 10,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     List<int>? sourceIds,
     int adjacentChunks = 0,
     String? collectionId,
@@ -792,8 +812,8 @@ class RagEngine {
     return service.searchMeta(
       query,
       topK: topK,
-      vectorWeight: vectorWeight,
-      bm25Weight: bm25Weight,
+      vectorWeight: vectorWeight ?? defaultVectorWeight,
+      bm25Weight: bm25Weight ?? defaultBm25Weight,
       sourceIds: sourceIds,
       adjacentChunks: adjacentChunks,
     );
@@ -866,11 +886,13 @@ class RagEngine {
   /// Hybrid search combining vector and keyword (BM25) search.
   ///
   /// Uses Reciprocal Rank Fusion (RRF) to combine semantic and keyword results.
+  /// [vectorWeight] / [bm25Weight] default to [defaultVectorWeight] /
+  /// [defaultBm25Weight].
   Future<List<hybrid.HybridSearchResult>> searchHybrid(
     String query, {
     int topK = 10,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     List<int>? sourceIds,
     String? collectionId,
   }) async {
@@ -882,8 +904,8 @@ class RagEngine {
     return service.searchHybrid(
       query,
       topK: topK,
-      vectorWeight: vectorWeight,
-      bm25Weight: bm25Weight,
+      vectorWeight: vectorWeight ?? defaultVectorWeight,
+      bm25Weight: bm25Weight ?? defaultBm25Weight,
       sourceIds: sourceIds,
     );
   }
@@ -896,13 +918,15 @@ class RagEngine {
   /// as full content, lightweight previews, or omitted entirely.
   /// [previewMaxBytes] - Maximum UTF-8 bytes per chunk preview when
   /// [hydrationMode] is [SearchHydrationMode.preview].
+  /// [vectorWeight] / [bm25Weight] default to [defaultVectorWeight] /
+  /// [defaultBm25Weight].
   Future<RagSearchResult> searchHybridWithContext(
     String query, {
     int topK = 10,
     int tokenBudget = 2000,
     ContextStrategy strategy = ContextStrategy.relevanceFirst,
-    double vectorWeight = kDefaultVectorWeight,
-    double bm25Weight = kDefaultBm25Weight,
+    double? vectorWeight,
+    double? bm25Weight,
     List<int>? sourceIds,
     int adjacentChunks = 0,
     bool singleSourceMode = false,
@@ -920,8 +944,8 @@ class RagEngine {
       topK: topK,
       tokenBudget: tokenBudget,
       strategy: strategy,
-      vectorWeight: vectorWeight,
-      bm25Weight: bm25Weight,
+      vectorWeight: vectorWeight ?? defaultVectorWeight,
+      bm25Weight: bm25Weight ?? defaultBm25Weight,
       sourceIds: sourceIds,
       adjacentChunks: adjacentChunks,
       singleSourceMode: singleSourceMode,

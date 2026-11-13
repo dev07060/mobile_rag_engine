@@ -41,7 +41,10 @@ Each `RagPassage` has `id`, `text`, `sourceId`, `sourceName`, `chunkId` and
 - **Search:** hybrid (vector + keyword) search for `topK` passages (default 5),
   kept within `tokenBudget` engine tokens (default 1500), the same as
   `RagSearchTool.fromMobileRag`. `vectorWeight` and `bm25Weight` change the
-  fusion weights, as in `searchHybrid`; they default to 0.2 and 0.8.
+  fusion weights for one call, as in `searchHybrid`. Without them the call uses
+  `defaultVectorWeight` / `defaultBm25Weight` from `MobileRag.initialize`
+  (0.2 and 0.8 unless you set them; the Korean recipe in
+  [Model Setup](model_setup.md) sets 0.6 and 0.4).
 - **Citation ids** start at 1 for every question.
 - **Default prompt:** an instruction to answer only from the passages, cite
   them like `[1]`, say when they do not contain the answer, and answer in the
@@ -84,7 +87,8 @@ What helps, in order:
    defaults put it second among the five passages and 0.5/0.5 put it first.
    Which weights are best depends on the embedding model (on an 80-question
    measurement, raising the vector weight helped two models and hurt a third),
-   so measure before changing them everywhere.
+   so measure before changing them everywhere. To change them for every call,
+   pass `defaultVectorWeight` / `defaultBm25Weight` to `MobileRag.initialize`.
 3. **Give the short document a few more words** — a title line, or the question
    it answers. One sentence of 8 words has little for either search to work
    with.

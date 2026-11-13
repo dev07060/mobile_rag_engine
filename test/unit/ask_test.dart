@@ -225,18 +225,20 @@ void main() {
     });
     tearDown(() => MobileRag.setMockInstance(null));
 
-    test('default arguments search as before (5, 1500, 0.2 / 0.8)', () async {
+    test('default arguments search with 5 / 1500 and leave the weights to the '
+        'engine defaults', () async {
       await rag.prepareAsk('q');
       await rag.ask('q', generate: (_) async => 'a [1]');
+      await RagSearchTool.fromMobileRag(rag).call({'query': 'q'});
       verify(
         () => engine.searchHybridWithContext(
           'q',
           topK: 5,
           tokenBudget: 1500,
-          vectorWeight: 0.2,
-          bm25Weight: 0.8,
+          vectorWeight: null,
+          bm25Weight: null,
         ),
-      ).called(2);
+      ).called(3);
     });
 
     test('given weights are passed to the search', () async {
