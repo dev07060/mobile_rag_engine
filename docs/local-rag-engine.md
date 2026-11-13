@@ -69,11 +69,19 @@ database.
 | Local document retrieval in Flutter | Supported | Use `MobileRag.initialize`, `addDocument`, `addDocumentFromFile`, and `search`. |
 | Offline semantic search | Supported | Retrieval runs locally after model/tokenizer assets are bundled. |
 | Hybrid search | Supported and benchmarked | HNSW vector search, BM25 keyword search, and RRF fusion are available through the default hybrid path. |
-| Passage/context retrieval quality | Verified on benchmark fixtures | The 80-query passage benchmark measured `passage_recall@10 = 0.925` and `answerable_context@10 = 0.938` for the shipped default hybrid profile. |
+| Passage/context retrieval quality | Verified on benchmark fixtures | The 80-query passage benchmark with the default hybrid profile measured `passage_recall@10 = 0.9375` and `answerable_context@10 = 0.9125` with the default MiniLM Model Pack, and `0.9625` / `0.975` with KoEn-E5-Tiny. BGE-m3 (569 MB, for reference) measured `0.975` / `0.9875`. MiniLM is English-only: its vector search alone found 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](guides/model_setup.md#korean-documents-koen-e5-tiny). Conditions are below the table. |
 | Text-layer PDF-to-RAG | Verified on sample scope | The PDF-to-RAG smoke run covered `sample_eng.pdf` and `sample_kor.pdf`; all 8 PDF-derived queries reached source, passage, and answerable context at top-10. |
 | Scanned/image-only PDFs | Detected, OCR not bundled | Extraction errors are classified as OCR-required so your UI can route to an OCR workflow. |
 | Large/table-heavy/OCR-heavy PDFs | Still being validated | Do not generalize the two-sample PDF smoke result to every PDF layout or mobile memory/latency condition. |
 | LLM generation | App responsibility | This package returns context; your app chooses the LLM. |
+
+Passage numbers: 80 queries (32 English, 32 Korean, 16 multilingual), a fresh
+database per model, profile build on an Apple Silicon Mac, measured 2026-11-12.
+They include a vector-index fix that reaches pub.dev users with the next
+`rag_engine_flutter` release. The earlier `0.925` / `0.938` in this guide was
+measured with BGE-m3 in June 2026, not with the default model. Full conditions
+and per-language results are in the
+[passage benchmark report](perf/passage-benchmark-2026-11/README.md).
 
 ## PDF-to-RAG Boundary
 
@@ -112,5 +120,6 @@ indexing, managed OCR at scale, or large shared vector databases.
 - [Search Strategies](features/search_strategies.md)
 - [Search by Source](features/search_by_source.md)
 - [Troubleshooting](guides/troubleshooting.md)
+- [Passage Benchmark Report (2026-11, per model)](perf/passage-benchmark-2026-11/README.md)
 - [P5-4 Expanded Passage Relevance Report](perf/ondevice-query-profiler/PR-P5-4-expanded-passage-relevance.html)
 - [P5-5 PDF-to-RAG Passage Relevance Report](perf/ondevice-query-profiler/PR-P5-5-pdf-to-rag-passage-relevance.html)
