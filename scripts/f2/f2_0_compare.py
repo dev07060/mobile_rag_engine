@@ -7,7 +7,8 @@ Re-fuses dumped engine candidates (`scripts/eval/run_passage_eval.sh
 f7_fusion_compare.py / miracl_compare.py on the same dumps.
 
 Inputs (result directories):
-  --miracl DIR...   MIRACL Korean runs, scored by positive source id, split tune / check
+  --miracl DIR...   bundles with positive_source_keys and split:/class: tags (MIRACL
+                    Korean, the F2 Korean validation bundles), scored by positive source
   --b80 DIR...      80-query bundle runs (regression check), groups all / en / ko
   --f1 DIR...       reviewed F1 bundle runs (32 answerable), groups all / class
 
@@ -16,6 +17,7 @@ Method families (F2 draft):
   (B) per-model weight: rrf w for w = 0.2..0.7, picked per model on MIRACL tune
   (C) one new default for every model: any single method, judged on all inputs
   (D) more candidates: default rrf 0.2 over the first K entries of the 400-lists
+  ref: vector only / BM25 only top 5 of the 20-lists, for reference
 
 (D) uses prefixes of the dumped 400-candidate lists. The engine would search
 HNSW with a different ef for another K, so these are close to, not equal to,
@@ -38,7 +40,6 @@ sys.path.insert(0, str(ROOT / "scripts" / "eval"))
 import f7_fusion_compare as f7  # noqa: E402
 
 DEFAULT = "rrf 0.2"
-EVAL_MIRACL = ROOT / "example" / "assets" / "evalsets" / "miracl_ko"
 
 
 def method_table():
@@ -54,6 +55,8 @@ def method_table():
     for k in (50, 100, 200, 400):
         m[f"rrf 0.2 K{k}"] = ("D", lambda r, k=k: f7.rrf(r["vector_400"][:k], r["bm25_400"][:k], 0.2, 5))
     m["rrf 0.5 K50"] = ("D", lambda r: f7.rrf(r["vector_400"][:50], r["bm25_400"][:50], 0.5, 5))
+    m["vector only"] = ("ref", lambda r: [c for c, _ in r["vector_20"][:5]])
+    m["bm25 only"] = ("ref", lambda r: [c for c, _ in r["bm25_20"][:5]])
     return m
 
 
@@ -73,10 +76,11 @@ def score_miracl(d: Path):
     ev = [json.loads(l) for l in (ROOT / "example" / meta["dataset"]["evalset"]).read_text(encoding="utf-8").splitlines() if l.strip()]
     pos = {r["item_id"]: set(r["positive_source_keys"]) for r in ev}
     split = {r["item_id"]: next(t[6:] for t in r["tags"] if t.startswith("split:")) for r in ev}
-    overlap = json.loads((EVAL_MIRACL / "miracl_ko_overlap.json").read_text(encoding="utf-8"))
+    cls = {r["item_id"]: next(t[6:] for t in r["tags"] if t.startswith("class:")) for r in ev}
     hits = {m: {r["item_id"]: any(src_of.get(c) in pos[r["item_id"]] for c in fn(r)) for r in run["rows"]} for m, (_, fn) in METHODS.items()}
     groups = {"tune": [q for q in split if split[q] == "tune"], "check": [q for q in split if split[q] == "check"]}
-    groups["partial"] = [q for q in split if overlap[q]["class"] == "partial"]
+    for c in ("partial", "high"):
+        groups[c] = [q for q in split if cls[q] == c]
     return run, hits, groups
 
 
