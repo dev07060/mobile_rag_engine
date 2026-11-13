@@ -10,6 +10,7 @@
 | [`f2_stage1.md`](f2_stage1.md) | F-2 1단계. 세션 초안 질의 40개와 짧은 문서 16개 측정 |
 | [`f2_review_sheet.md`](f2_review_sheet.md) | F-2 질의 40개 검수표 |
 | [`f7_fusion_compare.md`](f7_fusion_compare.md) | F-7. 후보 목록 덤프와 오프라인 결합 비교(엔진 결과 3,360건 재현) |
+| [`f8_report.md`](f8_report.md) | **F-8. 종합 보고서.** 기준선(세 모델 × 80개 묶음, F1 묶음, `ask` 조건), F-7 비교, F2로 넘기는 것 |
 
 자료는 `example/assets/corpus/`(문서, 위키는 CC BY-SA 4.0)와 `example/assets/evalsets/`(묶음)에 있다. 각 디렉터리의 README를 본다.
 

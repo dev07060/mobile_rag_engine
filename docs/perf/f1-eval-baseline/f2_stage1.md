@@ -23,7 +23,7 @@
 | 항목 | 값 |
 |---|---|
 | 엔진 코드 | `b1df7a0` 위의 작업 트리(엔진 코드는 W1 머지 `28308ab`와 같다. 테스트 전용 `eval_dump.rs`만 더했다) |
-| 하네스 | `example/integration_test/hybrid_passage_relevance_measure_test.dart` (gitignore 대상 로컬 파일. B1 다중 모델 사본 + F-3 `_askCondition` + 답 없는 질문 기록 `F1_NO_ANSWER_ASSET`) |
+| 하네스 | `example/integration_test/hybrid_passage_relevance_measure_test.dart` (측정 당시 gitignore 대상 로컬 파일, F-1에서 추적 대상으로 넣었다. B1 다중 모델 사본 + F-3 `_askCondition` + 답 없는 질문 기록 `F1_NO_ANSWER_ASSET`) |
 | 빌드 | profile, arm64만, Rust feature `vector_faer,vector_quant_i8` |
 | 기기 | Apple M3 Pro, macOS 27.2.1, Xcode 27.1, Flutter 3.35.5, rustc 1.91.1 |
 | DB | 모델마다 새 DB, HNSW 기본 검색 |

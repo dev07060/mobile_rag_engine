@@ -18,6 +18,23 @@
 - 그래서 이 묶음의 수치는 "낱말이 겹치는 쉬운 질의"의 값이다. README나 PR에서 품질 수치로 인용하지 않고, 같은 코드에서 같은 값이 나오는지 보는 회귀 확인에만 쓴다(2026-11-13 결정).
 - 현재 기준값(W1 머지 `28308ab` 뒤, topK 100 `passage_recall@10`, default_hybrid): MiniLM 0.925, KoEn-E5-Tiny 0.950, BGE-m3 0.9625. 조건은 `docs/perf/f1-eval-baseline/f3_ask_condition.md`.
 
+## F1 묶음 (`f1/`)
+
+- **작성자: 세션 초안(`author: session_draft`), 사람 검수 전이다.** 사람이 쓴 질의로 부르지 않는다. 검수표는 `docs/perf/f1-eval-baseline/f2_review_sheet.md`이고, 검수를 거친 질의는 `session_draft+human_review`로 바꾼다.
+- 문서 96개: 80개 묶음의 위키 문서 80개 + 세션이 쓴 짧은 문서 16개(`../corpus/f1_short/`, 영어 8, 한국어 8, MIT).
+- 겹침은 질의 토큰 중 정답 구절(또는 정답 문서)에도 있는 비율이다. 엔진 `tokenize_for_bm25`를 테스트 전용 덤프(`rust_builder/rust/src/api/eval_dump.rs`)로 그대로 불러 셌다. 질의별 값은 `f1/f1_overlap_v1.json`.
+
+| 유형 | 질의 | 영어 / 한국어 | 짧은 문서 / 위키 | 정답 구절 겹침 (중앙값, 범위) | 정답 문서 겹침 (중앙값) |
+|---|---|---|---|---|---|
+| 안 겹침 (`none`) | 14 | 7 / 7 | 7 / 7 | 0 (0~0) | 0.366 |
+| 일부 겹침 (`partial`, 0.5 미만) | 10 | 5 / 5 | 5 / 5 | 0.191 (0.062~0.444) | 0.446 |
+| 많이 겹침 (`high`, 대조군) | 8 | 4 / 4 | 4 / 4 | 0.676 (0.500~0.833) | 0.787 |
+| 답 없음 (`no_answer`) | 8 | 4 / 4 | – | – | – |
+| 합계 | 40 | 20 / 20 | 16 / 16 | | |
+
+- 의도한 유형과 잰 유형이 다른 질의는 없다. 정답 문서 전체와도 낱말이 안 겹치는 질의는 f1q-011 하나다.
+- 다시 만들기: `python3 scripts/f1/build_f1_bundle.py` (질의 원본 `scripts/f1/f1_queries_v1_spec.py`, cargo가 필요하다).
+
 ## 넣지 않은 것과 다시 만드는 방법
 
 질의 800개(`wiki_article_evalset_seed_v1.jsonl`)와 정답 400행(`wiki_article_chunk_gold_seed_v1.jsonl`)은 저장소에 넣지 않았다. 결함이 확인됐기 때문이다(`docs/perf/f1-eval-baseline/f0_report.md`). 질의의 29%는 정답 라벨이 질의와 맞지 않고, 한국어 noise 질의는 원문이다. 80개 묶음은 이 두 파일로 다시 만들 수 있고, 2026-11-13에 바이트 단위로 같게 나오는 것을 확인했다.

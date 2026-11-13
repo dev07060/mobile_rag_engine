@@ -14,7 +14,7 @@
 | 항목 | 값 |
 |---|---|
 | 엔진 코드 | `76e27d2` (W1 머지 `28308ab` 위에 문서 커밋만 더한 F1 브랜치). 엔진 코드는 바꾸지 않았다 |
-| 하네스 | `example/integration_test/hybrid_passage_relevance_measure_test.dart` (gitignore 대상 로컬 파일, `.claude/local-models/`의 B1 다중 모델 사본). `search_top_k` 100, `hydrated_top_k` 10 |
+| 하네스 | `example/integration_test/hybrid_passage_relevance_measure_test.dart` (측정 당시 gitignore 대상 로컬 파일, F-1에서 추적 대상으로 넣었다, `.claude/local-models/`의 B1 다중 모델 사본). `search_top_k` 100, `hydrated_top_k` 10 |
 | 빌드 | profile (`flutter drive --profile -d macos`), arm64만, Rust feature `vector_faer,vector_quant_i8` |
 | 기기 | Apple M3 Pro, macOS 27.2.1, Xcode 27.1, Flutter 3.35.5, rustc 1.91.1 |
 | Xcode 27 우회 | 링커 래퍼(`-Wl,-no_fixup_chains`), `ARCHS = arm64`, Podfile `post_install`에서 Pod 배포 대상 14.0 (커밋하지 않음) |
