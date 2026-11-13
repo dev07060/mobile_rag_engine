@@ -1,0 +1,3920 @@
+{
+  "generated_at": "2026-11-13T15:09:51.548981Z",
+  "build_mode": "profile",
+  "model_asset": "assets/eval_model/model.onnx",
+  "embedding_fingerprint": "model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413",
+  "chunk_count": 4543,
+  "manifest_asset": "assets/evalsets/f1/f1_sources_manifest_v1.json",
+  "source_evalset_asset": "assets/evalsets/f1/f1_evalset_v1.jsonl",
+  "chunk_gold_asset": "assets/evalsets/f1/f1_passage_gold_v1.jsonl",
+  "ask_top_k": 5,
+  "ask_token_budget": 1500,
+  "harness_search_top_k": 100,
+  "summary": {
+    "vector_only": {
+      "total": 32,
+      "ask_recall@5": 0.875,
+      "ask_in_context": 0.875,
+      "top100_recall@5": 0.9375,
+      "top100_recall@10": 0.96875,
+      "ask_context_chunks_mean": 5.0,
+      "ask_context_tokens_mean": 630.46875
+    },
+    "bm25_only": {
+      "total": 32,
+      "ask_recall@5": 0.53125,
+      "ask_in_context": 0.53125,
+      "top100_recall@5": 0.53125,
+      "top100_recall@10": 0.5625,
+      "ask_context_chunks_mean": 5.0,
+      "ask_context_tokens_mean": 656.71875
+    },
+    "default_hybrid": {
+      "total": 32,
+      "ask_recall@5": 0.625,
+      "ask_in_context": 0.625,
+      "top100_recall@5": 0.65625,
+      "top100_recall@10": 0.65625,
+      "ask_context_chunks_mean": 5.0,
+      "ask_context_tokens_mean": 653.84375
+    },
+    "sweep_0_4_0_6": {
+      "total": 32,
+      "ask_recall@5": 0.625,
+      "ask_in_context": 0.625,
+      "top100_recall@5": 0.71875,
+      "top100_recall@10": 0.78125,
+      "ask_context_chunks_mean": 5.0,
+      "ask_context_tokens_mean": 654.375
+    },
+    "sweep_0_6_0_4": {
+      "total": 32,
+      "ask_recall@5": 0.84375,
+      "ask_in_context": 0.84375,
+      "top100_recall@5": 0.8125,
+      "top100_recall@10": 0.875,
+      "ask_context_chunks_mean": 5.0,
+      "ask_context_tokens_mean": 661.0625
+    }
+  },
+  "rows": [
+    {
+      "item_id": "f1q-001",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 520,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-001",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 669,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-001",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 681,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.016289357272963833,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-001",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 681,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.016185271922976842,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-001",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 4,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 556,
+      "top100_gold_rank": 8,
+      "ask_top1_similarity": 0.01608118657298985,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-002",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 739,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-002",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 708,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-002",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 662,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01623975409836066,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-002",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 662,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.016086065573770493,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-002",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 643,
+      "top100_gold_rank": 10,
+      "ask_top1_similarity": 0.015932377049180328,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-003",
+      "profile": "vector_only",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 384,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-003",
+      "profile": "bm25_only",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 441,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-003",
+      "profile": "default_hybrid",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 441,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-003",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 441,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-003",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 384,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-004",
+      "profile": "vector_only",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 427,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-004",
+      "profile": "bm25_only",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 604,
+      "top100_gold_rank": 9,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-004",
+      "profile": "default_hybrid",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 2,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 549,
+      "top100_gold_rank": 4,
+      "ask_top1_similarity": 0.015295815295815297,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-004",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 549,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.015253029223093371,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-004",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 418,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.015633167023045853,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-005",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 386,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-005",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 5,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 457,
+      "top100_gold_rank": 5,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-005",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 3,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 457,
+      "top100_gold_rank": 3,
+      "ask_top1_similarity": 0.016129032258064516,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-005",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 3,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 457,
+      "top100_gold_rank": 3,
+      "ask_top1_similarity": 0.016129032258064516,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-005",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 2,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 386,
+      "top100_gold_rank": 2,
+      "ask_top1_similarity": 0.016129032258064516,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-006",
+      "profile": "vector_only",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 987,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-006",
+      "profile": "bm25_only",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 725,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-006",
+      "profile": "default_hybrid",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 725,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-006",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 725,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-006",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 987,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-007",
+      "profile": "vector_only",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 754,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-007",
+      "profile": "bm25_only",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 582,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-007",
+      "profile": "default_hybrid",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 582,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-007",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 582,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-007",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 754,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-008",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 603,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-008",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 625,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-008",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 625,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01607782898105479,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-008",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 625,
+      "top100_gold_rank": 5,
+      "ask_top1_similarity": 0.016026625704045058,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-008",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 3,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 603,
+      "top100_gold_rank": 3,
+      "ask_top1_similarity": 0.01597542242703533,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-009",
+      "profile": "vector_only",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 734,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-009",
+      "profile": "bm25_only",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 668,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-009",
+      "profile": "default_hybrid",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 543,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-009",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 543,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-009",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 659,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-010",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 965,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-010",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 551,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-010",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 551,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-010",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 551,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-010",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 835,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-011",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 529,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-011",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 687,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-011",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 687,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.013114754098360657,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-011",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 687,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.009836065573770493,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-011",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 529,
+      "top100_gold_rank": 3,
+      "ask_top1_similarity": 0.009836065573770493,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-012",
+      "profile": "vector_only",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 940,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-012",
+      "profile": "bm25_only",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1012,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-012",
+      "profile": "default_hybrid",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1072,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-012",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1072,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-012",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 967,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-013",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 404,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-013",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 677,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-013",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 461,
+      "top100_gold_rank": 2,
+      "ask_top1_similarity": 0.014389799635701276,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-013",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 461,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.014890710382513661,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-013",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 384,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.015391621129326048,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-014",
+      "profile": "vector_only",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 507,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-014",
+      "profile": "bm25_only",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 715,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-014",
+      "profile": "default_hybrid",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 715,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-014",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 715,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-014",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 600,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-015",
+      "profile": "vector_only",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 635,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-015",
+      "profile": "bm25_only",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 695,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-015",
+      "profile": "default_hybrid",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 695,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-015",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 695,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-015",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 635,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-016",
+      "profile": "vector_only",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 2,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 604,
+      "top100_gold_rank": 2,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-016",
+      "profile": "bm25_only",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 4,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 659,
+      "top100_gold_rank": 4,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-016",
+      "profile": "default_hybrid",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 2,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 670,
+      "top100_gold_rank": 2,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-016",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 2,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 670,
+      "top100_gold_rank": 2,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-016",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 2,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 675,
+      "top100_gold_rank": 2,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:short",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-017",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 2,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 783,
+      "top100_gold_rank": 2,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-017",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 547,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-017",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 3,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 558,
+      "top100_gold_rank": 5,
+      "ask_top1_similarity": 0.015971896955503516,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-017",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 3,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 558,
+      "top100_gold_rank": 4,
+      "ask_top1_similarity": 0.015677655677655677,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-017",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 3,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 791,
+      "top100_gold_rank": 3,
+      "ask_top1_similarity": 0.01557997557997558,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-018",
+      "profile": "vector_only",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 491,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-018",
+      "profile": "bm25_only",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 460,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-018",
+      "profile": "default_hybrid",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 491,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-018",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 491,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-018",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 491,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-019",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 600,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-019",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 596,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-019",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 547,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01605593056894889,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-019",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 547,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.015718418514946965,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-019",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 547,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.015380906460945035,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-020",
+      "profile": "vector_only",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 542,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-020",
+      "profile": "bm25_only",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 616,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-020",
+      "profile": "default_hybrid",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 473,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-020",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 499,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-020",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "high",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 528,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-021",
+      "profile": "vector_only",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 231,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-021",
+      "profile": "bm25_only",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 559,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-021",
+      "profile": "default_hybrid",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 462,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-021",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 462,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-021",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 410,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-022",
+      "profile": "vector_only",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 371,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-022",
+      "profile": "bm25_only",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 561,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-022",
+      "profile": "default_hybrid",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 563,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.015031645569620253,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-022",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 563,
+      "top100_gold_rank": 10,
+      "ask_top1_similarity": 0.014438291139240507,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-022",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 4,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 537,
+      "top100_gold_rank": 5,
+      "ask_top1_similarity": 0.014018334606569902,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-023",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 533,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-023",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 561,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-023",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 449,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.015933528836754644,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-023",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 449,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01573802541544477,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-023",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 401,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.015584415584415584,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-024",
+      "profile": "vector_only",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 410,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-024",
+      "profile": "bm25_only",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 654,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-024",
+      "profile": "default_hybrid",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 612,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01623975409836066,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-024",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 612,
+      "top100_gold_rank": 9,
+      "ask_top1_similarity": 0.016086065573770493,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-024",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "partial",
+      "language": "en",
+      "ask_gold_rank": 4,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 584,
+      "top100_gold_rank": 5,
+      "ask_top1_similarity": 0.015932377049180328,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "en",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-025",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 884,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-025",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 726,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-025",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 771,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01607782898105479,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-025",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 771,
+      "top100_gold_rank": 5,
+      "ask_top1_similarity": 0.016026625704045058,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-025",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 4,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 947,
+      "top100_gold_rank": 4,
+      "ask_top1_similarity": 0.01597542242703533,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-026",
+      "profile": "vector_only",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 573,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-026",
+      "profile": "bm25_only",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 811,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-026",
+      "profile": "default_hybrid",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1124,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-026",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1124,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-026",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1013,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-027",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 4,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 899,
+      "top100_gold_rank": 4,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-027",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1074,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-027",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1074,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.013114754098360657,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-027",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1074,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.009836065573770493,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-027",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": 4,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 899,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.009836065573770493,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-028",
+      "profile": "vector_only",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 651,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-028",
+      "profile": "bm25_only",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 595,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-028",
+      "profile": "default_hybrid",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 609,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-028",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 609,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-028",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 651,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-029",
+      "profile": "vector_only",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 847,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-029",
+      "profile": "bm25_only",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 3,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1016,
+      "top100_gold_rank": 3,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-029",
+      "profile": "default_hybrid",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 3,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1016,
+      "top100_gold_rank": 3,
+      "ask_top1_similarity": 0.016289357272963833,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-029",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 3,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1016,
+      "top100_gold_rank": 3,
+      "ask_top1_similarity": 0.016185271922976842,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-029",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1016,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.016185271922976842,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-030",
+      "profile": "vector_only",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1148,
+      "top100_gold_rank": 7,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-030",
+      "profile": "bm25_only",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 953,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-030",
+      "profile": "default_hybrid",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1032,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.015778688524590165,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-030",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1023,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.015932377049180328,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-030",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "none",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 1023,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.016086065573770493,
+      "tags": [
+        "f1",
+        "class:none",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-031",
+      "profile": "vector_only",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 531,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-031",
+      "profile": "bm25_only",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 499,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-031",
+      "profile": "default_hybrid",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 558,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-031",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 558,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-031",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "high",
+      "language": "ko",
+      "ask_gold_rank": 1,
+      "ask_recall@5": 1,
+      "ask_in_context": 1,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 665,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:high",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-032",
+      "profile": "vector_only",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 563,
+      "top100_gold_rank": 2,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-032",
+      "profile": "bm25_only",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 312,
+      "top100_gold_rank": -1,
+      "ask_top1_similarity": 0.01639344262295082,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-032",
+      "profile": "default_hybrid",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 468,
+      "top100_gold_rank": 2,
+      "ask_top1_similarity": 0.014705882352941176,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-032",
+      "profile": "sweep_0_4_0_6",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 468,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.014705882352941176,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    },
+    {
+      "item_id": "f1q-032",
+      "profile": "sweep_0_6_0_4",
+      "query_class": "partial",
+      "language": "ko",
+      "ask_gold_rank": -1,
+      "ask_recall@5": 0,
+      "ask_in_context": 0,
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 636,
+      "top100_gold_rank": 1,
+      "ask_top1_similarity": 0.014705882352941176,
+      "tags": [
+        "f1",
+        "class:partial",
+        "doc:wiki",
+        "ko",
+        "author:session_draft"
+      ]
+    }
+  ],
+  "no_answer_asset": "assets/evalsets/f1/f1_no_answer_v1.jsonl",
+  "no_answer_rows": [
+    {
+      "item_id": "f1q-033",
+      "profile": "vector_only",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_en_03",
+        "f1_short_en_03",
+        "f1_short_en_03",
+        "f1_short_en_03",
+        "src_ko_support_0013"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 562
+    },
+    {
+      "item_id": "f1q-033",
+      "profile": "bm25_only",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_en_03",
+        "src_en_tech_0211",
+        "src_en_finance_0153",
+        "src_en_policy_0197",
+        "src_en_policy_0209"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 615
+    },
+    {
+      "item_id": "f1q-033",
+      "profile": "default_hybrid",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_en_03",
+        "src_en_tech_0211",
+        "src_en_finance_0153",
+        "src_en_policy_0197",
+        "src_en_policy_0209"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 615
+    },
+    {
+      "item_id": "f1q-033",
+      "profile": "sweep_0_4_0_6",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_en_03",
+        "src_en_tech_0211",
+        "src_en_finance_0153",
+        "src_en_policy_0197",
+        "src_en_policy_0209"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 615
+    },
+    {
+      "item_id": "f1q-033",
+      "profile": "sweep_0_6_0_4",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_en_03",
+        "f1_short_en_03",
+        "f1_short_en_03",
+        "f1_short_en_03",
+        "src_ko_support_0013"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 562
+    },
+    {
+      "item_id": "f1q-034",
+      "profile": "vector_only",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "f1_short_en_02"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 250
+    },
+    {
+      "item_id": "f1q-034",
+      "profile": "bm25_only",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "src_en_tech_0083",
+        "src_en_policy_0209",
+        "src_en_tech_0211"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 541
+    },
+    {
+      "item_id": "f1q-034",
+      "profile": "default_hybrid",
+      "language": "en",
+      "ask_top1_similarity": 0.01634056054997356,
+      "ask_top_source_keys": [
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "src_en_tech_0083"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 383
+    },
+    {
+      "item_id": "f1q-034",
+      "profile": "sweep_0_4_0_6",
+      "language": "en",
+      "ask_top1_similarity": 0.0162876784769963,
+      "ask_top_source_keys": [
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "src_en_tech_0083"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 383
+    },
+    {
+      "item_id": "f1q-034",
+      "profile": "sweep_0_6_0_4",
+      "language": "en",
+      "ask_top1_similarity": 0.0162876784769963,
+      "ask_top_source_keys": [
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "f1_short_en_02",
+        "f1_short_en_02"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 250
+    },
+    {
+      "item_id": "f1q-035",
+      "profile": "vector_only",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_01",
+        "f1_short_en_07",
+        "src_en_finance_0245",
+        "src_en_finance_0245",
+        "src_en_support_0261"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 609
+    },
+    {
+      "item_id": "f1q-035",
+      "profile": "bm25_only",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "src_en_tech_0179",
+        "src_en_finance_0275",
+        "f1_short_en_08",
+        "src_en_support_0281",
+        "src_en_finance_0142"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 671
+    },
+    {
+      "item_id": "f1q-035",
+      "profile": "default_hybrid",
+      "language": "en",
+      "ask_top1_similarity": 0.015106286748077794,
+      "ask_top_source_keys": [
+        "src_en_finance_0275",
+        "src_en_tech_0179",
+        "src_en_finance_0275",
+        "src_en_support_0140",
+        "f1_short_en_08"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 577
+    },
+    {
+      "item_id": "f1q-035",
+      "profile": "sweep_0_4_0_6",
+      "language": "en",
+      "ask_top1_similarity": 0.015061058344640433,
+      "ask_top_source_keys": [
+        "src_en_finance_0275",
+        "src_en_support_0140",
+        "src_en_tech_0179",
+        "src_en_finance_0275",
+        "f1_short_en_08"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 577
+    },
+    {
+      "item_id": "f1q-035",
+      "profile": "sweep_0_6_0_4",
+      "language": "en",
+      "ask_top1_similarity": 0.015015829941203075,
+      "ask_top_source_keys": [
+        "src_en_finance_0275",
+        "src_en_support_0140",
+        "f1_short_ko_01",
+        "f1_short_en_07",
+        "src_en_finance_0245"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 662
+    },
+    {
+      "item_id": "f1q-036",
+      "profile": "vector_only",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_en_01",
+        "f1_short_en_01",
+        "f1_short_en_01",
+        "f1_short_en_01",
+        "src_ko_support_0013"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 611
+    },
+    {
+      "item_id": "f1q-036",
+      "profile": "bm25_only",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_en_01",
+        "f1_short_en_01",
+        "f1_short_en_01",
+        "src_en_policy_0217",
+        "src_en_support_0112"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 549
+    },
+    {
+      "item_id": "f1q-036",
+      "profile": "default_hybrid",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_en_01",
+        "f1_short_en_01",
+        "f1_short_en_01",
+        "src_en_policy_0217",
+        "src_en_support_0112"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 549
+    },
+    {
+      "item_id": "f1q-036",
+      "profile": "sweep_0_4_0_6",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_en_01",
+        "f1_short_en_01",
+        "f1_short_en_01",
+        "src_en_policy_0217",
+        "src_en_support_0112"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 549
+    },
+    {
+      "item_id": "f1q-036",
+      "profile": "sweep_0_6_0_4",
+      "language": "en",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_en_01",
+        "f1_short_en_01",
+        "f1_short_en_01",
+        "f1_short_en_01",
+        "src_ko_support_0013"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 611
+    },
+    {
+      "item_id": "f1q-037",
+      "profile": "vector_only",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_02",
+        "f1_short_ko_06",
+        "f1_short_ko_04",
+        "f1_short_en_02",
+        "f1_short_en_07"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 870
+    },
+    {
+      "item_id": "f1q-037",
+      "profile": "bm25_only",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_02",
+        "f1_short_ko_03",
+        "src_ko_policy_0165",
+        "src_ko_policy_0010",
+        "src_ko_policy_0059"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 723
+    },
+    {
+      "item_id": "f1q-037",
+      "profile": "default_hybrid",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_02",
+        "f1_short_ko_03",
+        "f1_short_ko_07",
+        "src_ko_policy_0165",
+        "src_ko_policy_0010"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 710
+    },
+    {
+      "item_id": "f1q-037",
+      "profile": "sweep_0_4_0_6",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_02",
+        "f1_short_ko_07",
+        "f1_short_ko_03",
+        "src_ko_policy_0165",
+        "src_ko_policy_0010"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 710
+    },
+    {
+      "item_id": "f1q-037",
+      "profile": "sweep_0_6_0_4",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_02",
+        "f1_short_ko_07",
+        "f1_short_ko_06",
+        "f1_short_ko_04",
+        "f1_short_en_02"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 863
+    },
+    {
+      "item_id": "f1q-038",
+      "profile": "vector_only",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_06",
+        "f1_short_ko_01",
+        "src_en_policy_0129",
+        "f1_short_ko_01",
+        "src_en_tech_0211"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 428
+    },
+    {
+      "item_id": "f1q-038",
+      "profile": "bm25_only",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_07",
+        "f1_short_ko_01",
+        "src_ko_tech_0031",
+        "f1_short_ko_06",
+        "src_ko_support_0013"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 619
+    },
+    {
+      "item_id": "f1q-038",
+      "profile": "default_hybrid",
+      "language": "ko",
+      "ask_top1_similarity": 0.016129032258064516,
+      "ask_top_source_keys": [
+        "f1_short_ko_01",
+        "f1_short_ko_07",
+        "src_ko_tech_0031",
+        "f1_short_ko_06",
+        "src_ko_support_0013"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 619
+    },
+    {
+      "item_id": "f1q-038",
+      "profile": "sweep_0_4_0_6",
+      "language": "ko",
+      "ask_top1_similarity": 0.016129032258064516,
+      "ask_top_source_keys": [
+        "f1_short_ko_01",
+        "f1_short_ko_07",
+        "src_ko_tech_0031",
+        "f1_short_ko_06",
+        "src_ko_support_0013"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 619
+    },
+    {
+      "item_id": "f1q-038",
+      "profile": "sweep_0_6_0_4",
+      "language": "ko",
+      "ask_top1_similarity": 0.016129032258064516,
+      "ask_top_source_keys": [
+        "f1_short_ko_01",
+        "f1_short_ko_06",
+        "src_en_policy_0129",
+        "f1_short_ko_01",
+        "src_en_tech_0211"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 428
+    },
+    {
+      "item_id": "f1q-039",
+      "profile": "vector_only",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_08",
+        "f1_short_ko_08",
+        "f1_short_ko_08",
+        "src_ko_tech_0016",
+        "f1_short_ko_08"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 530
+    },
+    {
+      "item_id": "f1q-039",
+      "profile": "bm25_only",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_08",
+        "src_ko_support_0017",
+        "src_ko_tech_0067",
+        "src_ko_tech_0232",
+        "src_ko_support_0017"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 958
+    },
+    {
+      "item_id": "f1q-039",
+      "profile": "default_hybrid",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_08",
+        "src_ko_support_0017",
+        "src_ko_tech_0016",
+        "src_ko_tech_0016",
+        "src_ko_tech_0067"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 915
+    },
+    {
+      "item_id": "f1q-039",
+      "profile": "sweep_0_4_0_6",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_08",
+        "src_ko_support_0017",
+        "src_ko_tech_0016",
+        "src_ko_tech_0016",
+        "src_ko_support_0017"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 817
+    },
+    {
+      "item_id": "f1q-039",
+      "profile": "sweep_0_6_0_4",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_08",
+        "src_ko_support_0017",
+        "src_ko_tech_0016",
+        "src_ko_tech_0016",
+        "src_ko_support_0017"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 817
+    },
+    {
+      "item_id": "f1q-040",
+      "profile": "vector_only",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_04",
+        "src_en_finance_0245",
+        "f1_short_ko_02",
+        "f1_short_en_02",
+        "f1_short_en_07"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 820
+    },
+    {
+      "item_id": "f1q-040",
+      "profile": "bm25_only",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_04",
+        "src_ko_policy_0154",
+        "f1_short_ko_01",
+        "src_ko_tech_0016",
+        "src_ko_tech_0031"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 748
+    },
+    {
+      "item_id": "f1q-040",
+      "profile": "default_hybrid",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_04",
+        "f1_short_ko_01",
+        "src_ko_policy_0154",
+        "src_ko_tech_0016",
+        "src_ko_tech_0031"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 748
+    },
+    {
+      "item_id": "f1q-040",
+      "profile": "sweep_0_4_0_6",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_04",
+        "f1_short_ko_01",
+        "src_ko_policy_0154",
+        "src_ko_tech_0016",
+        "src_ko_tech_0031"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 748
+    },
+    {
+      "item_id": "f1q-040",
+      "profile": "sweep_0_6_0_4",
+      "language": "ko",
+      "ask_top1_similarity": 0.01639344262295082,
+      "ask_top_source_keys": [
+        "f1_short_ko_04",
+        "f1_short_ko_01",
+        "src_en_finance_0245",
+        "f1_short_ko_02",
+        "f1_short_en_02"
+      ],
+      "ask_context_chunks": 5,
+      "ask_context_tokens": 726
+    }
+  ],
+  "run_meta": {
+    "schema": "f1_eval_run_meta_v1",
+    "finished_at_utc": "2026-11-13T15:09:52+00:00",
+    "exit_code": 0,
+    "elapsed_seconds": 47,
+    "model": {
+      "name": "koen",
+      "embedding_fingerprint": "model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413",
+      "model_onnx_sha256": "d463c9b1c29f3202d510e2836265d60f9e6e6dd518c5930ba865700646489bd4",
+      "tokenizer_json_sha256": "a6dd38d692ac1caa6d5dbc195d92f1f978b5c74ec60e02ed15fdf04404742fe3",
+      "model_pack": null
+    },
+    "engine": {
+      "commit": "37f6e19db4fe70783b27c8126300ddfb1f944325",
+      "branch": "claude/f1-eval-baseline-154010",
+      "dirty_tracked_files": [
+        "docs/perf/f1-eval-baseline/f2_review_sheet.md"
+      ],
+      "build_mode": "profile",
+      "rust_features": {
+        "profile": "vector_faer,vector_quant_i8",
+        "release": "vector_faer,vector_quant_i8"
+      }
+    },
+    "device": {
+      "cpu": "Apple M3 Pro",
+      "macos": "27.2.1",
+      "load_average_at_end": "{ 4.90 3.45 3.37 }"
+    },
+    "toolchain": {
+      "xcode": "Xcode 27.1 Build version 27A9275",
+      "flutter": "3.35.5",
+      "dart": "3.9.2",
+      "rustc": "rustc 1.91.1 (ed61e7d7e 2025-11-07)",
+      "xcode27_workarounds": [
+        "linker -Wl,-no_fixup_chains",
+        "ARCHS = arm64",
+        "Pod MACOSX_DEPLOYMENT_TARGET 14.0"
+      ]
+    },
+    "dataset": {
+      "bundle": "f1",
+      "manifest": "assets/evalsets/f1/f1_sources_manifest_v1.json",
+      "evalset": "assets/evalsets/f1/f1_evalset_v1.jsonl",
+      "gold": "assets/evalsets/f1/f1_passage_gold_v1.jsonl",
+      "no_answer": "assets/evalsets/f1/f1_no_answer_v1.jsonl",
+      "sha256": {
+        "manifest": "d6a6f73ababcc14913f9df8f13dc3d6819f43c34732e828d139d4ba6c95f58d8",
+        "evalset": "1f0c3f7542c8db0048dffad21d64c26f62f2cab6ea0c358d6a6369be494def8b",
+        "gold": "9a365f64b7fc99c5b9b93917cdd84ebb3722d7f1ca40f892fcd299f95f37e235",
+        "no_answer": "03372421f42acd326b6374e8d40afb58eda7838d678081bb7b18c0184b9085c2"
+      },
+      "chunk_count": 4543
+    }
+  }
+}

@@ -1,0 +1,605 @@
+{
+  "totals": {
+    "queries": 40,
+    "by_language": {
+      "en": 20,
+      "ko": 20
+    },
+    "by_measured_class": {
+      "none": 13,
+      "high": 8,
+      "partial": 11,
+      "no_answer": 8
+    },
+    "by_class_and_doc_kind": {
+      "none/short": 7,
+      "high/short": 4,
+      "partial/short": 5,
+      "none/wiki": 6,
+      "high/wiki": 4,
+      "partial/wiki": 6,
+      "no_answer/-": 8
+    },
+    "by_class_and_language": {
+      "none/en": 7,
+      "high/en": 4,
+      "partial/en": 5,
+      "partial/ko": 6,
+      "none/ko": 6,
+      "high/ko": 4,
+      "no_answer/en": 4,
+      "no_answer/ko": 4
+    },
+    "intended_vs_measured_mismatch": [],
+    "zero_overlap_with_whole_doc": [
+      "f1q-011"
+    ],
+    "author": "session_draft"
+  },
+  "rows": [
+    {
+      "item_id": "f1q-001",
+      "language": "en",
+      "intended": "none",
+      "query_tokens": 10,
+      "source_key": "f1_short_en_01",
+      "doc_kind": "short",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.5,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-002",
+      "language": "en",
+      "intended": "none",
+      "query_tokens": 14,
+      "source_key": "f1_short_en_02",
+      "doc_kind": "short",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.286,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-003",
+      "language": "en",
+      "intended": "high",
+      "query_tokens": 6,
+      "source_key": "f1_short_en_03",
+      "doc_kind": "short",
+      "overlap_gold": 0.833,
+      "overlap_doc": 0.833,
+      "shared_with_gold": [
+        "be",
+        "filter",
+        "hepa",
+        "the",
+        "wash"
+      ],
+      "measured": "high"
+    },
+    {
+      "item_id": "f1q-004",
+      "language": "en",
+      "intended": "partial",
+      "query_tokens": 11,
+      "source_key": "f1_short_en_04",
+      "doc_kind": "short",
+      "overlap_gold": 0.182,
+      "overlap_doc": 0.182,
+      "shared_with_gold": [
+        "parcel",
+        "the"
+      ],
+      "measured": "partial"
+    },
+    {
+      "item_id": "f1q-005",
+      "language": "en",
+      "intended": "none",
+      "query_tokens": 16,
+      "source_key": "f1_short_en_05",
+      "doc_kind": "short",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.375,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-006",
+      "language": "en",
+      "intended": "high",
+      "query_tokens": 10,
+      "source_key": "f1_short_en_06",
+      "doc_kind": "short",
+      "overlap_gold": 0.5,
+      "overlap_doc": 0.8,
+      "shared_with_gold": [
+        "mean",
+        "or",
+        "orang",
+        "pink",
+        "streak"
+      ],
+      "measured": "high"
+    },
+    {
+      "item_id": "f1q-007",
+      "language": "en",
+      "intended": "partial",
+      "query_tokens": 9,
+      "source_key": "f1_short_en_07",
+      "doc_kind": "short",
+      "overlap_gold": 0.111,
+      "overlap_doc": 0.333,
+      "shared_with_gold": [
+        "deposit"
+      ],
+      "measured": "partial"
+    },
+    {
+      "item_id": "f1q-008",
+      "language": "en",
+      "intended": "none",
+      "query_tokens": 16,
+      "source_key": "f1_short_en_08",
+      "doc_kind": "short",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.25,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-009",
+      "language": "ko",
+      "intended": "partial",
+      "query_tokens": 11,
+      "source_key": "f1_short_ko_01",
+      "doc_kind": "short",
+      "overlap_gold": 0.364,
+      "overlap_doc": 0.727,
+      "shared_with_gold": [
+        "규직",
+        "정규",
+        "정규직은",
+        "직은"
+      ],
+      "measured": "partial"
+    },
+    {
+      "item_id": "f1q-010",
+      "language": "ko",
+      "intended": "none",
+      "query_tokens": 16,
+      "source_key": "f1_short_ko_02",
+      "doc_kind": "short",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.125,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-011",
+      "language": "ko",
+      "intended": "none",
+      "query_tokens": 15,
+      "source_key": "f1_short_ko_03",
+      "doc_kind": "short",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.0,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-012",
+      "language": "ko",
+      "intended": "high",
+      "query_tokens": 11,
+      "source_key": "f1_short_ko_04",
+      "doc_kind": "short",
+      "overlap_gold": 0.545,
+      "overlap_doc": 0.636,
+      "shared_with_gold": [
+        "수증",
+        "식비",
+        "영수",
+        "영수증은",
+        "제출",
+        "증은"
+      ],
+      "measured": "high"
+    },
+    {
+      "item_id": "f1q-013",
+      "language": "ko",
+      "intended": "none",
+      "query_tokens": 14,
+      "source_key": "f1_short_ko_05",
+      "doc_kind": "short",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.143,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-014",
+      "language": "ko",
+      "intended": "partial",
+      "query_tokens": 10,
+      "source_key": "f1_short_ko_06",
+      "doc_kind": "short",
+      "overlap_gold": 0.3,
+      "overlap_doc": 0.5,
+      "shared_with_gold": [
+        "103동",
+        "강기",
+        "승강"
+      ],
+      "measured": "partial"
+    },
+    {
+      "item_id": "f1q-015",
+      "language": "ko",
+      "intended": "high",
+      "query_tokens": 11,
+      "source_key": "f1_short_ko_07",
+      "doc_kind": "short",
+      "overlap_gold": 0.727,
+      "overlap_doc": 0.727,
+      "shared_with_gold": [
+        "방접",
+        "예방",
+        "예방접종은",
+        "오후",
+        "요일",
+        "접종",
+        "종은",
+        "후에"
+      ],
+      "measured": "high"
+    },
+    {
+      "item_id": "f1q-016",
+      "language": "ko",
+      "intended": "partial",
+      "query_tokens": 16,
+      "source_key": "f1_short_ko_08",
+      "doc_kind": "short",
+      "overlap_gold": 0.062,
+      "overlap_doc": 0.312,
+      "shared_with_gold": [
+        "메모"
+      ],
+      "measured": "partial"
+    },
+    {
+      "item_id": "f1q-017",
+      "language": "en",
+      "intended": "none",
+      "query_tokens": 10,
+      "source_key": "src_en_tech_0211",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.6,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-018",
+      "language": "en",
+      "intended": "high",
+      "query_tokens": 16,
+      "source_key": "src_en_policy_0241",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.625,
+      "overlap_doc": 0.938,
+      "shared_with_gold": [
+        "an",
+        "crusad",
+        "it",
+        "of",
+        "on",
+        "part",
+        "terror",
+        "the",
+        "war",
+        "which"
+      ],
+      "measured": "high"
+    },
+    {
+      "item_id": "f1q-019",
+      "language": "en",
+      "intended": "none",
+      "query_tokens": 12,
+      "source_key": "src_en_finance_0295",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.667,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-020",
+      "language": "en",
+      "intended": "high",
+      "query_tokens": 11,
+      "source_key": "src_en_policy_0105",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.818,
+      "overlap_doc": 0.909,
+      "shared_with_gold": [
+        "bodi",
+        "collegi",
+        "constitut",
+        "explicit",
+        "for",
+        "in",
+        "is",
+        "provid",
+        "the"
+      ],
+      "measured": "high"
+    },
+    {
+      "item_id": "f1q-021",
+      "language": "en",
+      "intended": "partial",
+      "query_tokens": 15,
+      "source_key": "src_en_support_0112",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.333,
+      "overlap_doc": 1.0,
+      "shared_with_gold": [
+        "airlin",
+        "assist",
+        "of",
+        "on",
+        "websit"
+      ],
+      "measured": "partial"
+    },
+    {
+      "item_id": "f1q-022",
+      "language": "en",
+      "intended": "partial",
+      "query_tokens": 12,
+      "source_key": "src_en_tech_0199",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.083,
+      "overlap_doc": 0.583,
+      "shared_with_gold": [
+        "page"
+      ],
+      "measured": "partial"
+    },
+    {
+      "item_id": "f1q-023",
+      "language": "en",
+      "intended": "none",
+      "query_tokens": 10,
+      "source_key": "src_en_finance_0225",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.5,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-024",
+      "language": "en",
+      "intended": "partial",
+      "query_tokens": 5,
+      "source_key": "src_en_policy_0283",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.2,
+      "overlap_doc": 1.0,
+      "shared_with_gold": [
+        "citizenship"
+      ],
+      "measured": "partial"
+    },
+    {
+      "item_id": "f1q-025",
+      "language": "ko",
+      "intended": "none",
+      "query_tokens": 14,
+      "source_key": "src_ko_support_0017",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.286,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-026",
+      "language": "ko",
+      "intended": "partial",
+      "query_tokens": 23,
+      "source_key": "src_ko_finance_0178",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.348,
+      "overlap_doc": 0.391,
+      "shared_with_gold": [
+        "금으",
+        "라고",
+        "만기",
+        "으로",
+        "은행",
+        "전에",
+        "현금",
+        "현금으로"
+      ],
+      "measured": "partial"
+    },
+    {
+      "item_id": "f1q-027",
+      "language": "ko",
+      "intended": "none",
+      "query_tokens": 28,
+      "source_key": "src_ko_tech_0067",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.214,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-028",
+      "language": "ko",
+      "intended": "high",
+      "query_tokens": 22,
+      "source_key": "src_ko_tech_0232",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.773,
+      "overlap_doc": 0.773,
+      "shared_with_gold": [
+        "관은",
+        "니셔",
+        "명기",
+        "물관",
+        "박물",
+        "박물관은",
+        "보존",
+        "보존하기",
+        "셔티",
+        "위한",
+        "이니",
+        "정리",
+        "존하",
+        "증명",
+        "증명기",
+        "티브",
+        "하기"
+      ],
+      "measured": "high"
+    },
+    {
+      "item_id": "f1q-029",
+      "language": "ko",
+      "intended": "partial",
+      "query_tokens": 21,
+      "source_key": "src_ko_tech_0016",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.286,
+      "overlap_doc": 0.667,
+      "shared_with_gold": [
+        "수형",
+        "어는",
+        "언어",
+        "언어는",
+        "함수",
+        "함수형"
+      ],
+      "measured": "partial"
+    },
+    {
+      "item_id": "f1q-030",
+      "language": "ko",
+      "intended": "none",
+      "query_tokens": 21,
+      "source_key": "src_ko_support_0013",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.0,
+      "overlap_doc": 0.571,
+      "shared_with_gold": [],
+      "measured": "none"
+    },
+    {
+      "item_id": "f1q-031",
+      "language": "ko",
+      "intended": "high",
+      "query_tokens": 16,
+      "source_key": "src_ko_support_0124",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.625,
+      "overlap_doc": 0.688,
+      "shared_with_gold": [
+        "개념",
+        "념이",
+        "아키",
+        "정보",
+        "키텍",
+        "텍처",
+        "포함",
+        "포함하는",
+        "하는",
+        "함하"
+      ],
+      "measured": "high"
+    },
+    {
+      "item_id": "f1q-032",
+      "language": "ko",
+      "intended": "partial",
+      "query_tokens": 12,
+      "source_key": "src_ko_tech_0184",
+      "doc_kind": "wiki",
+      "overlap_gold": 0.25,
+      "overlap_doc": 0.417,
+      "shared_with_gold": [
+        "객사",
+        "고객",
+        "한국"
+      ],
+      "measured": "partial"
+    },
+    {
+      "item_id": "f1q-033",
+      "language": "en",
+      "intended": "no_answer",
+      "query_tokens": 8,
+      "measured": "no_answer"
+    },
+    {
+      "item_id": "f1q-034",
+      "language": "en",
+      "intended": "no_answer",
+      "query_tokens": 9,
+      "measured": "no_answer"
+    },
+    {
+      "item_id": "f1q-035",
+      "language": "en",
+      "intended": "no_answer",
+      "query_tokens": 8,
+      "measured": "no_answer"
+    },
+    {
+      "item_id": "f1q-036",
+      "language": "en",
+      "intended": "no_answer",
+      "query_tokens": 9,
+      "measured": "no_answer"
+    },
+    {
+      "item_id": "f1q-037",
+      "language": "ko",
+      "intended": "no_answer",
+      "query_tokens": 14,
+      "measured": "no_answer"
+    },
+    {
+      "item_id": "f1q-038",
+      "language": "ko",
+      "intended": "no_answer",
+      "query_tokens": 14,
+      "measured": "no_answer"
+    },
+    {
+      "item_id": "f1q-039",
+      "language": "ko",
+      "intended": "no_answer",
+      "query_tokens": 13,
+      "measured": "no_answer"
+    },
+    {
+      "item_id": "f1q-040",
+      "language": "ko",
+      "intended": "no_answer",
+      "query_tokens": 11,
+      "measured": "no_answer"
+    }
+  ]
+}

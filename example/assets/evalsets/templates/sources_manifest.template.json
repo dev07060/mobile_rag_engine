@@ -1,0 +1,30 @@
+{
+  "dataset_id": "your_dataset_v1",
+  "schema_version": 1,
+  "sources": [
+    {
+      "source_key": "src_ko_policy_001",
+      "file_path": "assets/corpus/ko/policy_001.pdf",
+      "language": "ko",
+      "description": "Korean policy reference document"
+    },
+    {
+      "source_key": "src_ko_report_002",
+      "file_path": "assets/corpus/ko/report_002.pdf",
+      "language": "ko",
+      "description": "Korean analysis report"
+    },
+    {
+      "source_key": "src_en_standard_003",
+      "file_path": "assets/corpus/en/standard_003.pdf",
+      "language": "en",
+      "description": "English standard specification"
+    },
+    {
+      "source_key": "src_en_faq_004",
+      "file_path": "assets/corpus/en/faq_004.md",
+      "language": "en",
+      "description": "English FAQ markdown"
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+# User profile
+
+- source_key: src_en_tech_0199
+- language: en
+- domain: tech
+- length_bucket: long
+- collected_at: 2026-02-22
+- url: https://en.wikipedia.org/wiki/User_profile
+
+---
+
+A user profile is a collection of settings and information associated with a user. It contains critical information that is used to identify an individual, such as their name, age, portrait photograph and individual characteristics such as knowledge or expertise. User profiles are most commonly present on social media websites such as Facebook, Instagram, and LinkedIn; and serve as voluntary digital identity of an individual, highlighting their key features and traits. In personal computing and operating systems, user profiles serve to categorise files, settings, and documents by individual user environments, known as 'accounts', allowing the operating system to be more friendly and catered to the user. Physical user profiles serve as identity documents such as passports, driving licenses and legal documents that are used to identify an individual under the legal system.
+A user profile can also be considered as the computer representation of a user model. A user model is a (data) structure that is used to capture certain characteristics about an individual user, and the process of obtaining the user profile is called user modeling or profiling.
+
+Origin
+The origin of user profiles can be traced to the origin of the passport, an identity document (ID) made mandatory in 1920, after World War I following negotiations at the League of Nations. The passport served as an official government record of an individual. Consequently, Immigration Act of 1924 was established to identify an individual's country of origin. In the 21st century, passports have now become a highly sought-after commodity as it is widely accepted as a source of verifying an individual's identity under the legal system.
+With the advent of digital revolution and social media websites, user profiles have transitioned to an organised group of data describing the interaction between a user and a system. Social media sites like Instagram allow individuals to create profiles that are representative of their desired personality and image. Filling all fields of profile information may not be necessary to create a meaningful self-presentation, which grants individual more control over of the identity they wish to present by displaying the most meaningful attributes. A personal user profile is a key aspect of an individual's social networking experience, around which his/her public identity is built.
+
+Types of user profiles
+A user profile can be of any format if it contains information, settings and/or characteristics specific to an individual. Most popular user profiles include those on photo and video sharing websites such as Facebook and Instagram, accounts on operating systems, such as those on Windows and MacOS and physical documents such as passports and driving licenses.
+
+Social media
+Effectively structured user profiles on social media channels such as Instagram and Facebook offer a way for people to form impressions about someone that is predictive or similarly meeting them offline. The condensed format of social media profiles allows for quick filtering of millions of profiles by matching individuals by similar characteristics and interests; information provided upon sign up. A research conducted highlights that only a "thin slice" of information is required to form an impression about an individual online (Stecher and Counts 2008). Online user profiles eliminate the complexity of interaction that is present in 'face-to-face' meetings such as behavioural, facial, and environmental information, resulting in increased predictiveness of user personality.
+Dating apps and websites solely rely on an individual's user profile and the information provided to form interactions and communication with others on the platform. Despite having control over presented information, lying is minimal in online dating contexts (Hancock, Toma and Ellison, 2007). Apps such as Bumble allow users to 'match' with other individuals based on their characteristics and selected filters that allow users to narrow the spectrum of search to their preference. Information for a user's profile is voluntarily specified by the user and includes information such as height, interests, photographs, gender or education.
+The requirement of information varies respective to each platform, and there surrounds little consensus to an appropriate amount of information for a condensed user profile. Universally, all social networking platforms display an individual's profile picture and an "about me" page that allows for self-expression.
+
+Influencers
+Influencer user profiles are third party endorsers who shape audience attitudes and decisions through social media content such as photos, blogs and tweets. Social Media Influencers (SMI) often hold a significant following on a social media platform which enables them to be recognised as opinion leaders to shape an information influence to their audience. 'Influencer marketing' industry gained prominence in 2018, when the photo sharing app Instagram crossed 1 billion users, subsequently with approximately 60,000 google search queries for 'influencer marketing' the same year. Influencer user profiles hold a unique selling point, or public personality that is unique and charismatic to the needs and wants of their target audience. SMI profiles advertise product information, latest promotions and regularly engage with their followers to maintain their online persona. Messages endorsed by social media influencers are often perceived as reliable and compelling, as a study conducted found 82% of followers were more inclined to follow the suggestions of their favorite influencer. This allows advertisers to leverage online user profiles and their audience rapport to target younger and niche audiences. According to a market survey, influencer marketing through social media profiles yields a return 11 times higher than traditional marketing, as they are more capable of communicating to a niche segment. Most popular influencers include sport starts such as Cristiano Ronaldo and Hollywood personalities such as Dwayne Johnson and Kylie Jenner each with over 200 million followers respectively.
+
+Ecommerce
+Online shopping or Ecommerce websites such as Amazon use information from a customer's user profile and interests to generate a list of recommended items to shop. Recommendation algorithms analyse user demographic data, history, and favourite artists to compile suggestions. The store rapidly adapts to changing user needs and preferences, with generation of real time results required within half of a second. New profiles naturally have limited information for algorithms to analyse, and customer data of each interaction provides valuable information which is stored as a database linked with each individual profile. User profiles on ecommerce websites also serve to improve sales of sellers as individuals are recommend products that other "customers who bought this item also bought" to widen the selection of the buyer. A study conducted found that user profiles and recommendation algorithms have significant impact on related product sales and overall spending of an individual. A process known as "collaborative filtering" tries to analyse common products of interest for an individual on the basis of views expressed by other similar behaving profiles. Features such as product ratings, seller ratings and comments allow individual user profiles to contribute to recommendation algorithms, eliminate adverse selection and contribute to shaping an online marketplace adhering to Amazons zero tolerance policy for misleading products.
+
+Digital user profiles
+
+Modern software and applications account for user profiles as a foundation on which a usable application is built. The structure and layout of an application such as its menus, features and controls are often derived from user's selected settings and preferences. The origin of digital user profiles in computer systems was first initiated by Windows NT that held user settings and information in a separate environment variable named %USERPROFILE% and held the framework to a user's profile root. Consequently, operating systems such as MacOS further accelerated prominence of user profiles in Mac OS X 10.0. Iterations since have been made with each operating system release with the aim to maximise user friendliness with the system. Features such as keyboard layouts, time zones, measurement units, synchronisation of different services and privacy preferences are made available during the setup of a user account on the computer
+
+Types of accounts
+
+Administrator
+Administrator user profiles have complete access to the system and its permissions. It is often the first user profile on a system by design, and is what allows other accounts to be created. However, since the administrator account has no restrictions, they are highly vulnerable to malware and viruses, with potential to impact all other accounts.
+
+Guest
+Guest accounts allow other people access to your system with limited functionality and restrictions on modifying apps, settings and documents. Guest user accounts solve the concern of providing entire access of your account to other individuals. On MacOS, guest profiles don't require a password, however are completely controlled by parental controls on an administrative account. Features such as automatic data & history deletion after a session is closed, allow guest accounts to save disk space once a user logs off. Guest accounts are most popularly used in public services such as libraries where individuals can request for a temporary account to complete work and research.
+
+Physical user profiles
+Physical user profiles or legal documents such as passport and driving license are widely accepted as an official government record of an individual's details. Much like digital user profiles, these documents outline primary characteristics of an individual such as their full legal name, birthdate, address portrait picture and a date of expiry. In recent history, many user profiles include a date of expiry or date of creation to indicate the legitimacy of the document and/or to encourage renewal to maintain accuracy of details. In some countries, it is a requirement to have a valid passport for six months after the planned leave from the country.
+
+National identity documents
+National identity documents are any documents issued by the official national authority, and are part of a government record. It is used to verify aspects of an individual's personal identity. Government issued documents include birth certificates, drivers licence, marriage certificate, national identity document and a social security card. The format of identity documents varies with each individual country.
+
+Controversies
+
+Cambridge Analytica scandal 2018
+The Cambridge Analytica Scandal, surfaced in 2018, raised global concerns over the privacy and the psychographic profiling algorithms that can be derived from user profiles. In 2013, Aleksandr Kogan of Cambridge Analytica developed an application "thisisyourdigitallife", which operated as a personality quiz, with the key caveat of connecting to an individual's Facebook user profile to operate. Many news sources documented Cambridge Analytica's exploitation of the Facebook data algorithm, where users not only gave the app permissions to access their "likes", but also information about their contacts and friends. The amassed data approximating 87 million Facebook users was harvested and exploited legally, to predict and influence the individual voting decisions in the 2016 presidential election. For many users it was unsettling that social media was being used to influence public opinion, leading to #deletefacebook campaigns on Twitter as a backlash to the scandal and Facebook's inability to guard privacy invasions. However, a research conducted on undergraduate students revealed many users believe that an exchange of personal information is necessary to participate in a social network and thus, despite the "breach of trust" (Zuckerberg, 2018) minimal users left the platform permanently. 
+In the months following Mark Zuckerberg's (founder) congressional hearing regarding the scandal, 74% of users made adjustments to their use of Facebook user profiles and changed their privacy settings. The Federal Trade Commission (FTC) legally required Facebook to acquire explicit consent of the user in use of their data, alongside disclosing appropriate information about the third party identity.
+
+#DeleteFacebook movement
+Social media dissatisfaction can arise from challenges relating to misinformation, privacy and anti-social behaviours. 'Facebooklessness' a term coined by Ongun & Güder, 2013, considers the intentional distancing and isolation from Facebook. The #deletefacebook movement arose after the Cambridge Analytica Scandal 2018, which fuelled a lack of trust for the service and its ability to protect user information. Some reasons for intentional distancing was time-waste, reducing distraction, privacy concerns, seeking new relationships and coping with lost relationships. The movement away from Facebook is less of a one time gush, but a more steady trickle over the course. Some users adapted by deactivating their profiles (which can be reactivated later), others permanently and unretrievably deleting their accounts. For many users, deactivating was a reactionary and a temporary response to the scandal, as social needs and constant connectedness with relationships introduced imperatives to stay.
+
+See also
+Internet privacy
+Identity document
+Online identity
+Online identity management
+Personal data
+Data mining
+Social media
+
+References
