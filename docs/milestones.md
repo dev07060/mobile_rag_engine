@@ -30,7 +30,7 @@
 - main: `3505825` (#135 머지). **새 배포는 보류**(규칙 5). 다음 배포는 내부 점검으로 문제를 모두 고친 뒤에 한다.
 - 0.23.0 배포 뒤 main에 머지된 것: Q1 (#132, 2026-11-09)와 D1 (#133)·S1 (#134)·B1 (#135) (셋 다 2026-11-12). 아직 배포하지 않았다. 코드 변경(Q1, S1)은 `CHANGELOG.md`의 `## Unreleased`에 있고, D1과 B1은 문서와 측정만 바꿨다.
   - S1은 Rust 코어를 바꿨다. 다음 `rag_engine_flutter` 배포가 있어야 pub 사용자에게 닿는다.
-- PR 열림: D2 (#136, README와 `docs/local-rag-engine.md`의 검색 품질 수치를 B1의 모델별 값으로 고친다).
+- 열린 PR 없음. D2 (#136)는 2026-11-13에 머지됐다.
 
 2026-11-06 기준으로 적었던 내용:
 - 마지막 배포: `mobile_rag_engine` 0.23.0과 `rag_engine_flutter` 0.22.0 (pub.dev, 2026-11-04). R1 완료(태그 `v0.23.0`, pub 모드 확인 통과, 2026-11-06).
@@ -329,7 +329,7 @@
 ### D2. 검색 품질 수치를 모델별로 고치기 (README, `docs/local-rag-engine.md`)
 
 - **담당:** 세션 "D2 수치 모델별", 브랜치 `claude/d2-metrics-by-model-eed8b3` (worktree `.claude/worktrees/d2-metrics-by-model-eed8b3`, main `3505825`에서 땄다)
-- **상태:** PR 열림 (#136, 2026-11-13). 머지 대기. 2026-11-13 사용자 "새 세션 하나 파서 D2 진행". BGE-m3는 `docs/local-rag-engine.md`에만 참고 한 줄로 넣고 README에는 넣지 않았다(이유는 PR 본문). 범위 초안은 2026-11-12 사용자 "위 수치도 마일스톤에 작성해줘"로 적었다.
+- **상태:** 머지 완료 (#136, 2026-11-13). 2026-11-13 사용자 "새 세션 하나 파서 D2 진행". BGE-m3는 `docs/local-rag-engine.md`에만 참고 한 줄로 넣고 README에는 넣지 않았다(이유는 PR 본문). 범위 초안은 2026-11-12 사용자 "위 수치도 마일스톤에 작성해줘"로 적었다.
 - **시점 (2026-11-13 합의):** 문서는 지금 바꾼다. 수치가 S1 수정이 들어간 코드의 값이고, 그 수정은 다음 `rag_engine_flutter` 배포부터 pub 사용자에게 닿는다는 점을 한 줄로 적는다. 배포 버전 번호는 적지 않는다.
 - **출처:** B1 결과(#135, `docs/perf/passage-benchmark-2026-11/README.md`).
 - **순서:** #133 → #134(S1) → #135(B1) 머지 뒤에 main에서 브랜치를 딴다. README는 D1(#133)도 고치므로 D1 머지 뒤여야 한다(규칙 3).
@@ -367,6 +367,73 @@
 - 규칙 8의 네 항목. 문서만 바뀌므로 업그레이드 경로는 "해당 없음"과 이유를 적는다. PR 하나, CI 통과.
 
 **손대는 파일:** `README.md`, `docs/local-rag-engine.md`, `docs/milestones.md`
+
+### W1. 하이브리드 순위 (흔한 단어만 맞은 청크가 정답을 밀어냄, `ask` 가중치 인자)
+
+- **상태:** 범위 초안. 합의 대기 (2026-11-13 사용자 "가중치 초안 써줘").
+- **출처:** 후보 목록의 "[중간] 기본 하이브리드 가중치에서 불용어만 맞은 청크가 정답보다 앞선다"(D1), S1 PR(#134) 본문의 "`searchHybrid` with the default weights still does not return the refund sentence", 메인 체크아웃 브랜치 `feat/ask-search-weights`의 커밋 안 된 작업(2026-11-09).
+- **순서:** D2(#136) 머지 뒤 main에서 브랜치를 딴다. Q4와 `lib/services/ask.dart`가 겹치므로 Q4보다 먼저 한다(규칙 3). Q2·Q3과는 Rust 파일이 겹치지 않는다.
+
+**배경**
+- **README 첫 화면 예제가 `ask`에서 정답을 못 찾는다.**
+  - 예제는 환불 문장 하나와 PDF를 넣고 `rag.ask('How long is the refund period?')`를 부른다.
+  - `ask`와 `prepareAsk`는 `searchHybridWithContext`를 기본 가중치(벡터 0.2, BM25 0.8)로 부르고 상위 5개만 프롬프트에 넣는다.
+  - S1 뒤 실측(MiniLM, 1821 청크): 환불 문장은 벡터 1위(0.7295)인데 `searchHybrid(topK: 50)`에 없다. 0.5/0.5로 바꿔도 32~35위다.
+  - `rag.search`(예제 2번)는 S1 뒤 1위로 나온다. 깨지는 것은 3번(`ask`)이다.
+- **원인 (코드로 확인, `hybrid_search.rs`의 RRF와 `bm25_search.rs`의 토큰화):**
+  - 결합은 순위만 쓴다: `vector_weight / (60 + 벡터 순위) + bm25_weight / (60 + BM25 순위)`.
+  - BM25 목록에는 질의 단어가 하나라도 맞은 청크가 모두 들어온다. 토큰화는 한 글자 `a`·`i`만 빼므로 "how", "is", "the"만 맞은 청크도 순위를 받는다.
+  - 기본 가중치에서는 BM25 r위(벡터 순위 없음)가 `0.8 / (60 + r)`이고 벡터 1위(BM25 불일치)가 `0.2 / 61`이다. r이 184 이하이면 BM25 쪽이 앞선다. 큰 문서가 있으면 흔한 단어만 맞은 청크 180여 개가 정답 앞에 선다.
+  - 질의의 "refund"와 문서의 "Refunds"는 다른 토큰이라 BM25에서 맞지 않는다(어간 처리 없음).
+- **가중치만으로는 풀리지 않는다.** 0.5/0.5에서도 32~35위다. B1 측정에서 가중치의 좋은 값은 모델마다 반대였다.
+
+  | `passage_recall@10` | MiniLM | KoEn-E5-Tiny | BGE-m3 |
+  |---|---|---|---|
+  | 0.2/0.8 (기본) | 0.9375 | 0.9625 | 0.975 |
+  | 0.4/0.6 | 0.925 | 0.9875 | 1.000 |
+  | 0.6/0.4 | 0.8125 | 0.9875 | 1.000 |
+
+- **`feat/ask-search-weights`의 커밋 안 된 작업 (main `7a67b09` 기준, 파일 6개):**
+  - `prepareAsk`/`ask`에 `vectorWeight`/`bm25Weight` 인자(`MobileRag`, `CollectionRag`). 기본값은 그대로다.
+  - 인용 파싱이 `「1」`·`『1』`도 읽는다(Q4 B12의 일부).
+  - `docs/milestones.md`에 "범용 패키지" 규칙과 I1 마일스톤, 후보 몇 줄. 이 규칙의 번호 9는 main의 규칙 9(측정 기록)와 겹친다.
+
+**목표:** 벡터 검색이 분명하게 찾은 구절이, 흔한 단어만 맞은 BM25 결과에 밀려 하이브리드 상위에서 빠지지 않게 한다. `ask`에서 가중치를 바꿀 수 있게 한다.
+
+**포함**
+- **W-1. 재현 테스트부터.** 고치기 전에 실패하는 테스트를 만든다.
+  - Rust 단위 테스트: 벡터 1위이고 BM25 불일치인 문서와, 흔한 단어만 맞은 문서 200개를 넣었을 때의 결합 순위.
+  - `example/integration_test/short_document_recall_test.dart`에 `prepareAsk`(topK 5, 기본 인자) 단계를 더한다.
+- **W-2. 고칠 방식을 측정으로 정한다.** 아래 후보를 같은 조건으로 재고 하나를 고른다. 고른 이유와 버린 후보의 수치를 PR에 적는다.
+  - (a) BM25 후보 거르기: 질의 토큰 가운데 드문 것(IDF 기준)이 하나도 맞지 않은 청크를 BM25 목록에서 뺀다. 언어별 불용어 목록이 필요 없다. **권장 출발점.**
+  - (b) BM25 점수 기준 거르기: 점수가 1위 점수의 일정 비율보다 낮은 청크를 뺀다.
+  - (c) 결합 방식: 한쪽 목록에만 있는 문서의 처리(없는 쪽에 큰 순위를 주는 방식 등)를 바꾼다.
+  - (d) 영어 복수형 정도의 가벼운 어간 처리. "refund"/"Refunds"를 맞게 한다. BM25 인덱스 토큰이 바뀌므로 기존 DB의 인덱스가 어떻게 다시 만들어지는지 먼저 확인한다.
+- **W-3. `ask` 가중치 인자.** `feat/ask-search-weights`의 `lib/mobile_rag.dart`, `test/unit/ask_test.dart`, `CHANGELOG.md` 변경을 main 위로 옮긴다.
+- **W-4. 브랜치의 나머지 변경 정리.** 인용 괄호(`「1」`·`『1』`)와 `docs/milestones.md` 변경(범용 패키지 규칙을 규칙 10으로, I1, 후보 줄)을 이 PR에 함께 넣는다. 그 뒤 `feat/ask-search-weights`는 지운다. 따로 나누려면 착수 전에 정한다.
+- **W-5. 문서.** `docs/guides/ask.md`와 검색 가이드에 가중치 인자와 바뀐 동작을 적는다. `CHANGELOG.md` `## Unreleased`.
+
+**제외**
+- 기본 가중치 0.2/0.8 변경. 좋은 값이 모델마다 반대라(위 표) 모델별 기본값은 별도 후보로 남긴다.
+- 리랭커, 관련 없는 질문 거르기 신호(후보 목록), e5 계열 `query:`/`passage:` 접두어, 한국어 프리셋.
+- 언어별 불용어 목록을 넣는 일. (a)~(d)로 풀리지 않으면 마일스톤을 먼저 고친다(규칙 4).
+- 버전 변경과 배포. Rust 코어가 바뀌므로 다음 `rag_engine_flutter` 배포가 있어야 pub 사용자에게 닿는다.
+
+**완료 기준**
+- **README 예제:** 환불 문장 + `sample_eng.pdf`(MiniLM Model Pack, 새 DB)에서 `prepareAsk('How long is the refund period?')`의 구절 5개 안에 환불 문장이 있다. PDF를 먼저 넣어도, 짧은 문서가 6개여도 같다.
+- **80 질의 평가가 나빠지지 않는다.** MiniLM, KoEn-E5-Tiny, BGE-m3의 default_hybrid `passage_recall@10`이 B1 값(0.9375 / 0.9625 / 0.975)보다 낮지 않고, 언어별 수치와 `answerable_context@10`, `passage_mrr@10`도 함께 적는다. 하나라도 떨어지면 PR을 열기 전에 수치를 사용자에게 보이고 묻는다.
+  - 측정 하네스와 평가셋은 저장소에 없다(gitignore). B1 세션이 쓴 로컬 파일과 공유 메모 폴더의 원본을 쓴다.
+  - 규칙 9대로 모델 fingerprint, 커밋, 빌드 모드, 기기, 청크 수, 측정일을 적는다.
+- **성격이 다른 문서 묶음 둘 이상에서 확인한다:** 위키 문서 80개(평가셋)와 짧은 문서 + 긴 PDF(README 형태). `vector_only`와 `bm25_only` 프로필의 결과는 바뀌지 않아야 한다.
+- **검색 시간:** `searchHybrid` 한 번의 시간을 수정 전후로 잰다(1,821 청크와 평가셋 4,492 청크).
+- **`ask` 인자:** 기본 인자의 결과가 수정 전과 같은 검색 호출을 만든다는 단위 테스트, 가중치를 준 호출이 그 값으로 검색한다는 단위 테스트.
+- 규칙 8의 네 항목. 업그레이드 경로는 0.23.0이 남긴 DB에서 시작해 첫 검색이 되는지와, BM25 인덱스가 다시 만들어지는지를 본다. PR 하나, CI 통과.
+
+**손대는 파일:** `rust_builder/rust/src/api/{hybrid_search,bm25_search}.rs`, `lib/mobile_rag.dart`, `lib/services/ask.dart`, `test/unit/ask_test.dart`, `example/integration_test/short_document_recall_test.dart`, `docs/guides/ask.md`, 검색 가이드, `CHANGELOG.md`, `docs/milestones.md`
+
+**착수 전에 정할 것**
+1. W-4를 이 PR에 함께 넣을지, 인용 괄호는 Q4로, 문서 변경은 따로 넣을지.
+2. 80 질의 수치가 조금 떨어지고 README 예제는 고쳐지는 경우에 어느 쪽을 우선할지.
 
 ### Q0. 내부 점검 묶음 (Q1~Q5) 공통
 
