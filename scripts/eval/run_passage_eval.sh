@@ -76,6 +76,8 @@ else
     [[ -f "$MODEL_DIR/$f" ]] || { echo "missing $MODEL_DIR/$f" >&2; exit 2; }
     cp -c "$MODEL_DIR/$f" "$WORK/assets/eval_model/$f" 2>/dev/null || cp "$MODEL_DIR/$f" "$WORK/assets/eval_model/$f"
   done
+  rm -f "$WORK/assets/eval_model/model-pack.json"
+  [[ -f "$MODEL_DIR/model-pack.json" ]] && cp "$MODEL_DIR/model-pack.json" "$WORK/assets/eval_model/"
   NAME="${NAME:-$(basename "$MODEL_DIR")}"
 fi
 OUT="${OUT:-$ROOT/build/eval_results/${STAMP}_${NAME}_${BUNDLE}}"
