@@ -24,6 +24,10 @@ use std::sync::RwLock;
 static INVERTED_INDEX: Lazy<RwLock<InvertedIndex>> =
     Lazy::new(|| RwLock::new(InvertedIndex::new()));
 
+/// Snowball English (Porter2) stemmer for ASCII word tokens.
+static ENGLISH_STEMMER: Lazy<rust_stemmers::Stemmer> =
+    Lazy::new(|| rust_stemmers::Stemmer::create(rust_stemmers::Algorithm::English));
+
 #[derive(Clone, Debug)]
 struct DocMeta {
     length: usize,
@@ -129,23 +133,41 @@ impl InvertedIndex {
         }
     }
 
-    #[cfg(test)]
     pub fn search(&self, query: &str, top_k: usize) -> Vec<(i64, f64)> {
-        self.search_forms(query, top_k, false)
-    }
-
-    /// Like [`Self::search`]; with `expand_plurals` each English query word
-    /// also matches its singular/plural forms (see [`plural_forms`]).
-    pub fn search_forms(&self, query: &str, top_k: usize, expand_plurals: bool) -> Vec<(i64, f64)> {
         if self.doc_count == 0 {
             return vec![];
         }
-        let groups = self.query_groups(&tokenize_for_bm25(query), expand_plurals);
-        if groups.is_empty() {
+
+        let query_tokens = tokenize_for_bm25(query);
+        if query_tokens.is_empty() {
             return vec![];
         }
-        let scores = self.score_groups(&groups, None, self.avg_doc_length);
-        top_results(scores, top_k)
+
+        let k1 = 1.2;
+        let b = 0.75;
+        let mut scores: HashMap<i64, f64> = HashMap::new();
+
+        for token in &query_tokens {
+            if let Some(postings) = self.postings.get(token) {
+                let n = postings.len() as f64;
+                let idf = ((self.doc_count as f64 - n + 0.5) / (n + 0.5) + 1.0).ln();
+
+                for &(doc_id, tf) in postings {
+                    if let Some(meta) = self.doc_meta.get(&doc_id) {
+                        let tf_f = tf as f64;
+                        let doc_len = meta.length as f64;
+                        let tf_component = (tf_f * (k1 + 1.0))
+                            / (tf_f + k1 * (1.0 - b + b * (doc_len / self.avg_doc_length)));
+                        *scores.entry(doc_id).or_insert(0.0) += idf * tf_component;
+                    }
+                }
+            }
+        }
+
+        let mut results: Vec<(i64, f64)> = scores.into_iter().collect();
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        results.truncate(top_k);
+        results
     }
 
     pub fn search_scoped_tokens(
@@ -153,7 +175,6 @@ impl InvertedIndex {
         query_tokens: &[String],
         scoped_doc_ids: &[i64],
         top_k: usize,
-        expand_plurals: bool,
     ) -> Vec<(i64, f64)> {
         if self.doc_count == 0 || query_tokens.is_empty() || scoped_doc_ids.is_empty() {
             return vec![];
@@ -176,100 +197,47 @@ impl InvertedIndex {
             return vec![];
         }
 
-        let avg_doc_length = (scoped_total_tokens as f64 / scoped_doc_count as f64).max(1.0);
-        let groups = self.query_groups(query_tokens, expand_plurals);
-        let scores = self.score_groups(
-            &groups,
-            Some((&scoped_ids, scoped_doc_count)),
-            avg_doc_length,
-        );
-        top_results(scores, top_k)
-    }
-
-    /// One group per query token: the token itself, plus the singular/plural
-    /// forms that occur in the index when `expand_plurals` is set.
-    fn query_groups(&self, query_tokens: &[String], expand_plurals: bool) -> Vec<Vec<String>> {
-        query_tokens
-            .iter()
-            .map(|token| {
-                let mut forms = vec![token.clone()];
-                if expand_plurals {
-                    for form in plural_forms(token) {
-                        if self.postings.contains_key(&form) && !forms.contains(&form) {
-                            forms.push(form);
-                        }
-                    }
-                }
-                forms
-            })
-            .collect()
-    }
-
-    /// BM25 scores. Each group adds its best-scoring form per document, so a
-    /// document holding both "refund" and "refunds" counts the word once.
-    /// `scope` limits documents (and document frequencies) to a set of ids.
-    fn score_groups(
-        &self,
-        groups: &[Vec<String>],
-        scope: Option<(&HashSet<i64>, usize)>,
-        avg_doc_length: f64,
-    ) -> HashMap<i64, f64> {
+        let avg_doc_length = scoped_total_tokens as f64 / scoped_doc_count as f64;
         let k1 = 1.2;
         let b = 0.75;
-        let doc_count = scope.map(|(_, count)| count).unwrap_or(self.doc_count) as f64;
-        let in_scope = |doc_id: &i64| match scope {
-            Some((ids, _)) => ids.contains(doc_id),
-            None => true,
-        };
         let mut scores: HashMap<i64, f64> = HashMap::new();
-        let mut best: HashMap<i64, f64> = HashMap::new();
 
-        for forms in groups {
-            best.clear();
-            for form in forms {
-                let Some(postings) = self.postings.get(form) else {
-                    continue;
-                };
-                let df = if scope.is_some() {
-                    postings
-                        .iter()
-                        .filter(|(doc_id, _)| {
-                            in_scope(doc_id) && self.doc_meta.contains_key(doc_id)
-                        })
-                        .count()
-                } else {
-                    postings.len()
-                };
-                if df == 0 {
-                    continue;
-                }
-                let n = df as f64;
-                let idf = ((doc_count - n + 0.5) / (n + 0.5) + 1.0).ln();
+        for token in query_tokens {
+            let Some(postings) = self.postings.get(token) else {
+                continue;
+            };
 
-                for &(doc_id, tf) in postings {
-                    if !in_scope(&doc_id) {
-                        continue;
-                    }
-                    if let Some(meta) = self.doc_meta.get(&doc_id) {
-                        let tf_f = tf as f64;
-                        let doc_len = meta.length as f64;
-                        let tf_component = (tf_f * (k1 + 1.0))
-                            / (tf_f + k1 * (1.0 - b + b * (doc_len / avg_doc_length)));
-                        let score = idf * tf_component;
-                        if forms.len() == 1 {
-                            *scores.entry(doc_id).or_insert(0.0) += score;
-                        } else {
-                            let entry = best.entry(doc_id).or_insert(0.0);
-                            *entry = entry.max(score);
-                        }
-                    }
-                }
+            let scoped_df = postings
+                .iter()
+                .filter(|(doc_id, _)| {
+                    scoped_ids.contains(doc_id) && self.doc_meta.contains_key(doc_id)
+                })
+                .count();
+            if scoped_df == 0 {
+                continue;
             }
-            for (&doc_id, &score) in &best {
-                *scores.entry(doc_id).or_insert(0.0) += score;
+
+            let n = scoped_df as f64;
+            let idf = ((scoped_doc_count as f64 - n + 0.5) / (n + 0.5) + 1.0).ln();
+
+            for &(doc_id, tf) in postings {
+                if !scoped_ids.contains(&doc_id) {
+                    continue;
+                }
+                if let Some(meta) = self.doc_meta.get(&doc_id) {
+                    let tf_f = tf as f64;
+                    let doc_len = meta.length as f64;
+                    let tf_component = (tf_f * (k1 + 1.0))
+                        / (tf_f + k1 * (1.0 - b + b * (doc_len / avg_doc_length.max(1.0))));
+                    *scores.entry(doc_id).or_insert(0.0) += idf * tf_component;
+                }
             }
         }
-        scores
+
+        let mut results: Vec<(i64, f64)> = scores.into_iter().collect();
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        results.truncate(top_k);
+        results
     }
 
     pub fn clear(&mut self) {
@@ -349,6 +317,19 @@ fn push_hangul_bigrams(word: &str, out: &mut Vec<String>) {
     }
 }
 
+/// Snowball English stem of a lowercase word made only of ASCII letters
+/// ("refunds" -> "refund", "policies" -> "polici"). Any other token (Hangul,
+/// CJK, digits, mixed like "iphone15") is returned unchanged.
+fn stem_english(word: String) -> String {
+    if !word.is_empty() && word.bytes().all(|b| b.is_ascii_lowercase()) {
+        ENGLISH_STEMMER.stem(&word).into_owned()
+    } else {
+        word
+    }
+}
+
+/// BM25 tokens for indexing and for queries. Both sides go through this
+/// function, so English words are stemmed the same way on each side.
 pub(crate) fn tokenize_for_bm25(text: &str) -> Vec<String> {
     use unicode_segmentation::UnicodeSegmentation;
 
@@ -358,42 +339,9 @@ pub(crate) fn tokenize_for_bm25(text: &str) -> Vec<String> {
     for word in text.unicode_words().filter(|s| keep_bm25_token(s)) {
         let word = word.to_lowercase();
         push_hangul_bigrams(&word, &mut tokens);
-        tokens.push(word);
+        tokens.push(stem_english(word));
     }
     tokens
-}
-
-fn top_results(scores: HashMap<i64, f64>, top_k: usize) -> Vec<(i64, f64)> {
-    let mut results: Vec<(i64, f64)> = scores.into_iter().collect();
-    results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    results.truncate(top_k);
-    results
-}
-
-/// English singular/plural variants of a lowercase ASCII query word:
-/// "refund" -> "refunds", "refundes"; "policies" -> "policy";
-/// "boxes" -> "box", "boxe"; "days" -> "day"; "policy" -> "policies".
-/// Callers keep only the variants that occur in the index. Other scripts and
-/// words shorter than 3 letters get none, so Korean, Japanese and Chinese
-/// queries search exactly as before.
-pub(crate) fn plural_forms(token: &str) -> Vec<String> {
-    let len = token.len();
-    if len < 3 || !token.bytes().all(|b| b.is_ascii_lowercase()) {
-        return vec![];
-    }
-    let mut forms = vec![format!("{token}s"), format!("{token}es")];
-    if token.ends_with("ies") && len > 4 {
-        forms.push(format!("{}y", &token[..len - 3]));
-    } else if token.ends_with("es") && len > 4 {
-        forms.push(token[..len - 2].to_string());
-        forms.push(token[..len - 1].to_string());
-    } else if token.ends_with('s') && !token.ends_with("ss") && len > 3 {
-        forms.push(token[..len - 1].to_string());
-    }
-    if token.ends_with('y') && len > 3 {
-        forms.push(format!("{}ies", &token[..len - 1]));
-    }
-    forms
 }
 
 /// Add document to BM25 index.
@@ -436,18 +384,8 @@ pub struct Bm25SearchResult {
 
 /// Search using BM25.
 pub fn bm25_search(query: String, top_k: u32) -> Vec<Bm25SearchResult> {
-    bm25_search_forms(&query, top_k, false)
-}
-
-/// BM25 search; `expand_plurals` also matches English singular/plural forms
-/// of the query words. Hybrid search sets it when both weights are non-zero.
-pub(crate) fn bm25_search_forms(
-    query: &str,
-    top_k: u32,
-    expand_plurals: bool,
-) -> Vec<Bm25SearchResult> {
     let index = INVERTED_INDEX.read().unwrap();
-    let results = index.search_forms(query, top_k as usize, expand_plurals);
+    let results = index.search(&query, top_k as usize);
     debug!(
         "[bm25] Search for '{}' returned {} results",
         query,
@@ -463,10 +401,9 @@ pub(crate) fn bm25_search_scoped_tokens(
     query_tokens: &[String],
     scoped_doc_ids: &[i64],
     top_k: usize,
-    expand_plurals: bool,
 ) -> Vec<Bm25SearchResult> {
     let index = INVERTED_INDEX.read().unwrap();
-    let results = index.search_scoped_tokens(query_tokens, scoped_doc_ids, top_k, expand_plurals);
+    let results = index.search_scoped_tokens(query_tokens, scoped_doc_ids, top_k);
     debug!(
         "[bm25] Scoped search over {} ids returned {} results",
         scoped_doc_ids.len(),
@@ -543,19 +480,20 @@ mod tests {
         assert_eq!(results[0].0, 2);
     }
 
-    // Cost of the plural-form expansion. Run with:
-    // cargo test --release --lib bm25_expand_search_benchmark -- --ignored --nocapture
+    // BM25 search time with stemmed tokens. Run with:
+    // cargo test --release --lib bm25_search_benchmark -- --ignored --nocapture
     #[test]
     #[ignore]
-    fn bm25_expand_search_benchmark() {
+    fn bm25_search_benchmark() {
         let words = [
             "refund", "refunds", "policy", "policies", "shipping", "warranty",
             "device", "devices", "period", "periods", "day", "days", "order",
-            "orders", "section", "manual",
+            "orders", "section", "manual", "running", "connected", "generously",
+            "검색엔진은", "벡터를", "인덱스에서",
         ];
         let mut seed = 12345u64;
         let mut index = InvertedIndex::new();
-        for id in 0..5_000_i64 {
+        for id in 0..20_000_i64 {
             let mut text = String::new();
             while text.len() < 500 {
                 seed = seed
@@ -567,65 +505,89 @@ mod tests {
             index.add_document(id, &text);
         }
         let query = "How long is the refund period for devices?";
-        for expand in [false, true] {
-            let started = std::time::Instant::now();
-            for _ in 0..100 {
-                index.search_forms(query, 10, expand);
-            }
-            println!(
-                "bm25_expand_search_benchmark docs=5000 expand={expand} per_search={:?}",
-                started.elapsed() / 100
-            );
+        let started = std::time::Instant::now();
+        for _ in 0..100 {
+            index.search(query, 40);
         }
+        println!(
+            "bm25_search_benchmark docs=20000 per_search={:?} terms={}",
+            started.elapsed() / 100,
+            index.postings.len()
+        );
     }
 
     #[test]
-    fn plural_forms_cover_common_english_endings() {
-        let has = |word: &str, form: &str| plural_forms(word).iter().any(|f| f == form);
-        assert!(has("refund", "refunds"));
-        assert!(has("refunds", "refund"));
-        assert!(has("box", "boxes"));
-        assert!(has("boxes", "box"));
-        assert!(has("policy", "policies"));
-        assert!(has("policies", "policy"));
-        assert!(has("class", "classes"));
-        assert!(!has("class", "clas"));
-        // Short words, other scripts and mixed tokens get no variants.
-        assert!(plural_forms("is").is_empty());
-        assert!(plural_forms("환불").is_empty());
-        assert!(plural_forms("v2api").is_empty());
-    }
-
-    #[test]
-    fn expanded_search_counts_each_query_word_once() {
+    fn english_words_match_their_inflected_forms() {
         let mut index = InvertedIndex::new();
         index.add_document(1, "Refunds are accepted within 14 days.");
-        index.add_document(2, "Shipping takes three days.");
-        index.add_document(3, "The refund and refunds desk.");
-        index.add_document(4, "Unrelated text about devices.");
+        index.add_document(2, "Our shipping policies changed.");
+        index.add_document(3, "Unrelated text about devices.");
 
-        assert!(index.search("refund", 10).iter().all(|r| r.0 != 1));
-        let expanded = index.search_forms("refund", 10, true);
-        let ids: Vec<i64> = expanded.iter().map(|r| r.0).collect();
-        assert!(ids.contains(&1) && ids.contains(&3), "got {:?}", expanded);
+        assert_eq!(index.search("refund", 10).first().map(|r| r.0), Some(1));
+        assert_eq!(index.search("policy", 10).first().map(|r| r.0), Some(2));
+        assert_eq!(index.search("device", 10).first().map(|r| r.0), Some(3));
+    }
 
-        // Doc 3 holds both forms; the word still counts once (its best form),
-        // not once per form.
-        let doc3 = expanded.iter().find(|r| r.0 == 3).unwrap().1;
-        let exact_refund = index.search("refund", 10)[0].1;
-        let exact_refunds = index
-            .search("refunds", 10)
-            .iter()
-            .find(|r| r.0 == 3)
-            .unwrap()
-            .1;
-        assert!((doc3 - exact_refund.max(exact_refunds)).abs() < 1e-12);
+    /// W1 review: unrelated English words must not match each other just
+    /// because one looks like the other plus "s"/"es".
+    #[test]
+    fn unrelated_words_do_not_match_as_plural_forms() {
+        let mut index = InvertedIndex::new();
+        index.add_document(1, "Write your notes here.");
+        index.add_document(2, "The cares of the world.");
+        index.add_document(3, "Planes land on time.");
+        index.add_document(4, "Read the news today.");
+        index.add_document(5, "Filler text without the words.");
 
-        // With no other form in the index, expansion changes nothing.
-        assert_eq!(
-            index.search_forms("shipping three", 10, true),
-            index.search("shipping three", 10)
+        for (query, wrong_doc) in [("not", 1), ("car", 2), ("plan", 3), ("new", 4)] {
+            let ids: Vec<i64> = index.search(query, 100).iter().map(|r| r.0).collect();
+            assert!(
+                !ids.contains(&wrong_doc),
+                "query {query:?} must not match doc {wrong_doc}; got {ids:?}"
+            );
+        }
+
+        index.add_document(6, "Do not panic.");
+        let ids: Vec<i64> = index.search("notes", 100).iter().map(|r| r.0).collect();
+        assert!(!ids.contains(&6), "\"notes\" must not match \"not\"; got {ids:?}");
+    }
+
+    /// W1 review: a word's forms are one term. A document holding the rare
+    /// form ("refunds") must not get that form's higher IDF when the query
+    /// uses the common one ("refund"): at equal length and frequency both
+    /// documents score the same.
+    #[test]
+    fn word_forms_share_one_idf() {
+        let mut index = InvertedIndex::new();
+        index.add_document(1, "Refunds take five business days.");
+        index.add_document(2, "Refund takes five business days.");
+        for id in 3..40_i64 {
+            index.add_document(id, "The refund desk opens daily at nine.");
+        }
+        for id in 40..80_i64 {
+            index.add_document(id, "Unrelated filler about shipping boxes.");
+        }
+
+        let results = index.search("refund", 100);
+        let score = |doc: i64| results.iter().find(|r| r.0 == doc).map(|r| r.1);
+        let (rare, common) = (score(1), score(2));
+        assert!(rare.is_some() && common.is_some(), "got {results:?}");
+        assert!(
+            (rare.unwrap() - common.unwrap()).abs() < 1e-9,
+            "\"Refunds\" ({rare:?}) and \"Refund\" ({common:?}) must score the same"
         );
+    }
+
+    #[test]
+    fn stemming_leaves_other_scripts_and_mixed_tokens_alone() {
+        let tokens = tokenize_for_bm25("Refunds 환불은 iPhone15 v2 running");
+        assert!(tokens.contains(&"refund".to_string()));
+        assert!(tokens.contains(&"run".to_string()));
+        assert!(tokens.contains(&"환불은".to_string()));
+        assert!(tokens.contains(&"iphone15".to_string()));
+        assert!(tokens.contains(&"v2".to_string()));
+        // A known limit of Snowball English, documented in the guides.
+        assert_eq!(tokenize_for_bm25("university"), tokenize_for_bm25("universe"));
     }
 
     #[test]
@@ -698,12 +660,12 @@ mod tests {
         index.add_document(3, "apple checksum");
 
         let query_tokens = tokenize_for_bm25("apple");
-        let scoped = index.search_scoped_tokens(&query_tokens, &[1, 2], 10, false);
+        let scoped = index.search_scoped_tokens(&query_tokens, &[1, 2], 10);
 
         assert_eq!(scoped.len(), 1);
         assert_eq!(scoped[0].0, 1);
 
-        let all = index.search_scoped_tokens(&query_tokens, &[1, 2, 3], 10, false);
+        let all = index.search_scoped_tokens(&query_tokens, &[1, 2, 3], 10);
         assert_eq!(all.len(), 2);
         assert!(all.iter().any(|(doc_id, _)| *doc_id == 3));
     }

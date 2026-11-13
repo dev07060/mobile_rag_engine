@@ -19,7 +19,7 @@
 use log::{debug, error, info};
 use std::collections::{HashMap, HashSet};
 
-use crate::api::bm25_search::{bm25_search_forms, bm25_search_scoped_tokens, tokenize_for_bm25};
+use crate::api::bm25_search::{bm25_search, bm25_search_scoped_tokens, tokenize_for_bm25};
 use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
 use crate::api::hnsw_index::{is_hnsw_index_loaded, search_hnsw_slice, HnswSearchResult};
@@ -117,10 +117,6 @@ fn compute_hybrid_rrf_scores(
     // Fetch more candidates if filtering is active to maintain recall
     let multiplier = if filter.is_some() { 4 } else { 2 };
     let candidate_k = (top_k * multiplier) as usize;
-    // Only a true hybrid search matches English singular/plural forms
-    // ("refund" also finds "Refunds"). BM25-only (vector weight 0) keeps
-    // exact-token BM25, and vector-only never runs BM25.
-    let expand_plurals = config.vector_weight != 0.0 && config.bm25_weight != 0.0;
 
     let use_exact_source_scan = filter.as_ref().is_some_and(|f| {
         f.source_ids
@@ -150,8 +146,7 @@ fn compute_hybrid_rrf_scores(
                 }
             });
 
-            let handle_bm25 =
-                s.spawn(|| bm25_search_forms(&query_text, candidate_k as u32, expand_plurals));
+            let handle_bm25 = s.spawn(|| bm25_search(query_text.clone(), candidate_k as u32));
 
             let vec_res = handle_vec.join().unwrap_or_else(|e| {
                 log::error!("[hybrid] Vector search thread panicked: {:?}", e);
@@ -374,12 +369,8 @@ fn compute_hybrid_rrf_scores(
             vector_results.truncate(candidate_k);
 
             if need_bm25 {
-                bm25_results = bm25_search_scoped_tokens(
-                    &query_tokens,
-                    &scoped_doc_ids,
-                    candidate_k,
-                    expand_plurals,
-                );
+                bm25_results =
+                    bm25_search_scoped_tokens(&query_tokens, &scoped_doc_ids, candidate_k);
             }
 
             info!(
@@ -1183,7 +1174,7 @@ mod tests {
     /// match only common words of the question ("how", "is", "the").
     /// `prepareAsk` searches with topK 5 and the default weights (vector 0.2,
     /// BM25 0.8). Before W1 the document had no BM25 hit and could not reach
-    /// the top 5.
+    /// the top 5; with English stemming "refund" and "Refunds" are one token.
     #[test]
     fn plural_query_word_keeps_short_vector_top1_in_hybrid_top5() {
         clear_hnsw_index();
@@ -1231,17 +1222,19 @@ mod tests {
         assert_eq!(
             position,
             Some(0),
-            "vector top-1 matching the plural form must lead the hybrid top 5; got {:?}",
+            "vector top-1 matching the inflected form must lead the hybrid top 5; got {:?}",
             hybrid
         );
         let doc1 = &hybrid[0];
         assert_eq!((doc1.2, doc1.3), (1, 1), "vector rank 1 and BM25 rank 1");
 
-        // BM25-only keeps exact tokens: "refund" does not match "Refunds".
+        // Stemming is part of tokenization, so keyword-only search matches
+        // the inflected form too.
         let bm25_only = search(0.0, 1.0);
-        assert!(
-            bm25_only.iter().all(|r| r.0 != 1),
-            "BM25-only must not expand plurals; got {:?}",
+        assert_eq!(
+            bm25_only.first().map(|r| r.0),
+            Some(1),
+            "BM25-only must match \"Refunds\" for \"refund\"; got {:?}",
             bm25_only
         );
 

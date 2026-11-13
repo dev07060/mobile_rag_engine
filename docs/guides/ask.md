@@ -65,10 +65,12 @@ to match, and with the default weights (vector 0.2, BM25 0.8) a chunk of the
 large document that matches only common words of the question ("how", "is",
 "the") scores above a passage that matches none.
 
-Keyword search matches English singular and plural forms, so "How long is the
-refund period?" finds "Refunds are accepted within 14 days of purchase." even
-next to a 1,800-chunk PDF. A question that shares *no* word with the sentence
-still can miss it.
+Keyword search reduces English words to their stem (Snowball English), so
+"How long is the refund period?" finds "Refunds are accepted within 14 days of
+purchase." even next to a 1,800-chunk PDF. A question that shares *no* word
+with the sentence still can miss it. Stemming is English-only (Korean, Japanese and
+Chinese words are matched as before), and like any stemmer it joins some
+unrelated words, such as "university" and "universe".
 
 What helps, in order:
 
