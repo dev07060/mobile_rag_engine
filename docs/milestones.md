@@ -530,6 +530,12 @@
   - **출처:** 2026-06-19 `faa5079`("docs: sharpen local rag package positioning")에서 들어왔다. 어떤 실행의 값인지 가리키는 보고서나 artifact가 저장소에 없다. 6월 평가가 BGE-m3로 돌았으므로 같은 모델일 가능성이 높지만 확인하지 않았다.
   - **B1 결과에 있는 값:** B1의 passage 평가 결과 JSON(`docs/perf/passage-benchmark-2026-11/results/*_hnsw.json`)에도 `aggregates.default_hybrid.overall.source_recall@10`이 있고, MiniLM·KoEn-E5-Tiny·BGE-m3·6월 BGE-m3 모두 1.0이다. README의 "80-source balanced profile run"이 이 하네스의 값과 같은 측정인지는 확인하지 않았다.
   - **할 일:** 같은 측정이면 README 행을 B1 값으로 바꾸고 모델과 조건을 붙인다(새 측정 없음). 다른 측정이면 "모델 미기재"라고 밝히거나, 그 하네스로 다시 잴지 정한다. `docs/local-rag-engine.md`에는 이 수치가 없다.
+- **[중간] S1의 HNSW 회귀 테스트가 흔들린다 (2026-11-13 D2 PR #136의 CI에서 발견, 고치지 않음).**
+  - **증상:** `custom_hnsw::tests::far_vectors_next_to_a_dense_cluster_are_their_own_top_result`(`rust_builder/rust/src/api/custom_hnsw.rs`)가 Windows `Native Tests`에서 실패했다(run `43339546418`). 외톨이 나중 순서에서 들어오는 링크가 0개인 layer-0 노드가 1개, 자기 벡터로 검색해도 1위가 아닌 외톨이가 1/6(id 1803, builder와 파일 모두 487이 1위)이었다. 진입점에서 도달할 수 없는 노드는 0개였다.
+  - **같은 코드에서 통과도 했다:** 바로 앞 실행(run `43336051835`, 같은 엔진 코드, 문서만 다름)에서는 통과했다. S1 PR(#134) CI와 S1 로컬 실행에서도 통과했다.
+  - **추정 원인(확인하지 않음):** 노드의 층을 `random_layer`가 시드 없는 `rand::thread_rng()`로 정한다. 테스트 벡터는 고정 시드(`lcg_vectors`)지만 그래프 모양은 실행마다 다르다. 도달 보장(`connect_unreachable_nodes`)은 도달 가능성만 맞추므로, 먼 노드에서 들어오는 링크가 하나뿐이라 검색 빔이 지나가지 않는 경우(S1 범위 변경에 적은 두 번째 형태)가 드물게 남을 수 있다.
+  - **영향:** 테스트만의 문제가 아니라면 S1 수정 뒤에도 짧은 문서가 가끔 벡터 검색 1위로 나오지 않을 수 있다. 1위가 아니어도 top-10에 드는지는 이 실패 기록으로는 모른다.
+  - **할 일:** 층 결정을 시드 가능하게 해 실패하는 시드를 재현하고, 들어오는 링크 수 하한 같은 보강이 필요한지 정한다. 테스트만 고정 시드로 바꾸면 흔들림은 사라지지만 위 경우는 가려진다. Rust 코어가 바뀌면 `rag_engine_flutter` 배포가 필요하다.
 - Windows `Native Tests`의 `ingest_ffi_traffic_test.dart` "Peak-RSS delta"가 가끔 실패한다(파일 경로가 UTF-8 경로보다 2MB 이상 적게 써야 하는데 0.7~0.8MB 차이만 났다. 11/1 `ci/quickstart-e2e`, 11/3 #125). 측정값이 흔들리는 테스트라 기준이나 측정 방식을 손봐야 한다.
 - 성능 후보: `vector_math` 8-lane dot, HNSW 증분 삽입, prune 거리 캐싱, ef 상한, 짧은 문단 병합
 - `lib/src/rust/api/mmap_store.dart` 잔존 파일 정리
