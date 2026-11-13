@@ -91,3 +91,19 @@ MIRACL은 네 실행(KoEn·BGE-m3 × 5천·1.5만)의 합계다. 80개 묶음 Mi
 | F1 묶음(검수 뒤) | MiniLM / KoEn / BGE-m3 | 4,718 / 4,543 / 4,543 | `37f6e19` | 2026-11-13 |
 
 엔진 코드는 세 커밋 모두 W1 머지 `28308ab`와 같다. 비교: `python3 -I scripts/f2/f2_0_compare.py --miracl … --b80 … --f1 … --json docs/perf/f2-fusion/results_f2_0.json` (2026-11-14, 3.6초).
+
+## 구현 뒤 확인 (2026-11-14, 결정 (B2))
+
+사용자 결정 "B로 하고 초기화 인자 여는 걸로 진행해줘"에 따라 `MobileRag.initialize(defaultVectorWeight:, defaultBm25Weight:)`와 `RagConfig`의 같은 필드를 열었다. 기본은 0.2/0.8 그대로다.
+
+**실제 엔진 실행:** KoEn-E5-Tiny(`model_qint8_arm64.onnx`, fingerprint `model.onnx|384|f32+vabq:none|sha256:fd688b15…`), F1 묶음(검수 뒤, 4,543 청크), `scripts/eval/run_passage_eval.sh --model <KoEn> --bundle f1 --init-weights 0.6,0.4`, 67초.
+
+| 확인 | 결과 |
+|---|---|
+| `inCollection(...).prepareAsk(q)`(무게 안 줌)와 `prepareAsk(q, vectorWeight: 0.6, bm25Weight: 0.4)`의 passages가 같은 청크·같은 순서 | 32/32 |
+| 무게를 주지 않은 `prepareAsk`의 프롬프트에 정답 구절이 든 질의 | 27/32 (기본 0.2/0.8은 20/32) |
+| 같은 실행의 하네스 `ask` 조건(엔진 저수준 API, 무게 명시) | default_hybrid 0.625(20/32), 0.6/0.4 0.844(27/32). F1 측정과 같다 |
+
+- 요약 파일: `results_init_weights_koen_f1.txt`. 실행의 `--name`이 모델 이름 칸에 들어가 `model=f2_init_koen_f1`로 적혔다. 모델은 위 fingerprint로 KoEn이다.
+- 엔진 커밋: 실행은 `92bf08f`의 내용이 커밋되기 직전의 작업 트리에서 시작했고, 그 사이 파일을 고치지 않았다(`run_meta.json`의 커밋은 끝날 때의 `92bf08f`, 고친 추적 파일 없음). Apple M3 Pro, macOS 27.2.1, Xcode 27.1, Flutter 3.35.5, rustc 1.91.1, profile, `vector_faer,vector_quant_i8`, 새 DB. 끝날 때 load average 5.54. 같은 Mac에서 다른 측정은 돌지 않았다.
+- 초기화 무게를 주지 않는 경로: 기본값 상수(0.2/0.8)와 `RagConfig` 기본이 같다는 것, 무게를 주지 않은 호출이 엔진 기본값으로 넘어간다는 것은 단위 테스트(`test/unit/config_validation_test.dart`, `ask_test.dart`)로 확인했다. 이 경로의 실제 엔진 실행은 하지 않았다.
