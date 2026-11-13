@@ -2755,5 +2755,889 @@
     }
    }
   }
+ },
+ {
+  "name": "bgem3",
+  "bundle": "miracl_ko_15000",
+  "commit": "26eac41190740278b08704b5861553d12de29b17",
+  "fingerprint": "model.onnx|1024|f32+vabq:none|sha256:b089a980c41f6158f8447400dd5b2abb",
+  "chunks": 17482,
+  "sources_indexed": 15000,
+  "sources_in_manifest": 15000,
+  "positive_sources_not_indexed": [],
+  "sources_split_into_chunks": 1117,
+  "positive_sources_split": 43,
+  "validation": {
+   "ask": {
+    "same": 1064,
+    "different": 1,
+    "different_with_bm25_ties": 1,
+    "mismatches": [
+     [
+      "miracl-ko-1139",
+      "sweep_0_6_0_4",
+      3,
+      2,
+      "bm25_tie"
+     ]
+    ]
+   },
+   "harness": {
+    "same": 1063,
+    "different": 2,
+    "different_with_bm25_ties": 2,
+    "mismatches": [
+     [
+      "miracl-ko-1094",
+      "sweep_0_6_0_4",
+      1,
+      2,
+      "bm25_tie"
+     ],
+     [
+      "miracl-ko-1139",
+      "sweep_0_6_0_4",
+      3,
+      2,
+      "bm25_tie"
+     ]
+    ]
+   }
+  },
+  "default_top5_unjudged_share": 0.164,
+  "groups": {
+   "all": {
+    "rrf 0.2": {
+     "hits": 166,
+     "of": 213,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.3": {
+     "hits": 169,
+     "of": 213,
+     "new": 3,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.4": {
+     "hits": 175,
+     "of": 213,
+     "new": 9,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.5": {
+     "hits": 180,
+     "of": 213,
+     "new": 15,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-1249"
+     ]
+    },
+    "rrf 0.6": {
+     "hits": 186,
+     "of": 213,
+     "new": 21,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-1249"
+     ]
+    },
+    "rrf 0.7": {
+     "hits": 186,
+     "of": 213,
+     "new": 21,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-1249"
+     ]
+    },
+    "linear 0.3": {
+     "hits": 170,
+     "of": 213,
+     "new": 11,
+     "lost": 7,
+     "lost_ids": [
+      "miracl-ko-184",
+      "miracl-ko-285",
+      "miracl-ko-294",
+      "miracl-ko-334",
+      "miracl-ko-718",
+      "miracl-ko-1306",
+      "miracl-ko-1400"
+     ]
+    },
+    "linear 0.5": {
+     "hits": 190,
+     "of": 213,
+     "new": 27,
+     "lost": 3,
+     "lost_ids": [
+      "miracl-ko-184",
+      "miracl-ko-1249",
+      "miracl-ko-1400"
+     ]
+    },
+    "linear 0.7": {
+     "hits": 196,
+     "of": 213,
+     "new": 34,
+     "lost": 4,
+     "lost_ids": [
+      "miracl-ko-184",
+      "miracl-ko-679",
+      "miracl-ko-1213",
+      "miracl-ko-1249"
+     ]
+    },
+    "rrf 0.2+top1": {
+     "hits": 181,
+     "of": 213,
+     "new": 16,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-718"
+     ]
+    },
+    "rrf 0.2+top1>0.02": {
+     "hits": 177,
+     "of": 213,
+     "new": 11,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.05": {
+     "hits": 172,
+     "of": 213,
+     "new": 6,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.1": {
+     "hits": 166,
+     "of": 213,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "vector_top5": {
+     "hits": 196,
+     "of": 213
+    },
+    "bm25_top5": {
+     "hits": 150,
+     "of": 213
+    },
+    "vector_found_default_dropped": {
+     "count": 37,
+     "of_vector_hits": 196,
+     "ids": [
+      "miracl-ko-40",
+      "miracl-ko-45",
+      "miracl-ko-88",
+      "miracl-ko-167",
+      "miracl-ko-239",
+      "miracl-ko-263",
+      "miracl-ko-292",
+      "miracl-ko-318",
+      "miracl-ko-474",
+      "miracl-ko-486",
+      "miracl-ko-557",
+      "miracl-ko-608",
+      "miracl-ko-613",
+      "miracl-ko-695",
+      "miracl-ko-731",
+      "miracl-ko-827",
+      "miracl-ko-838",
+      "miracl-ko-883",
+      "miracl-ko-919",
+      "miracl-ko-941",
+      "miracl-ko-948",
+      "miracl-ko-953",
+      "miracl-ko-1011",
+      "miracl-ko-1012",
+      "miracl-ko-1065",
+      "miracl-ko-1075",
+      "miracl-ko-1108",
+      "miracl-ko-1154",
+      "miracl-ko-1176",
+      "miracl-ko-1187",
+      "miracl-ko-1195",
+      "miracl-ko-1333",
+      "miracl-ko-1357",
+      "miracl-ko-1391",
+      "miracl-ko-1437",
+      "miracl-ko-1551",
+      "miracl-ko-1582"
+     ]
+    }
+   },
+   "tune": {
+    "rrf 0.2": {
+     "hits": 82,
+     "of": 106,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.3": {
+     "hits": 84,
+     "of": 106,
+     "new": 2,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.4": {
+     "hits": 86,
+     "of": 106,
+     "new": 4,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.5": {
+     "hits": 88,
+     "of": 106,
+     "new": 7,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-1249"
+     ]
+    },
+    "rrf 0.6": {
+     "hits": 92,
+     "of": 106,
+     "new": 11,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-1249"
+     ]
+    },
+    "rrf 0.7": {
+     "hits": 92,
+     "of": 106,
+     "new": 11,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-1249"
+     ]
+    },
+    "linear 0.3": {
+     "hits": 85,
+     "of": 106,
+     "new": 8,
+     "lost": 5,
+     "lost_ids": [
+      "miracl-ko-184",
+      "miracl-ko-285",
+      "miracl-ko-294",
+      "miracl-ko-718",
+      "miracl-ko-1400"
+     ]
+    },
+    "linear 0.5": {
+     "hits": 96,
+     "of": 106,
+     "new": 17,
+     "lost": 3,
+     "lost_ids": [
+      "miracl-ko-184",
+      "miracl-ko-1249",
+      "miracl-ko-1400"
+     ]
+    },
+    "linear 0.7": {
+     "hits": 99,
+     "of": 106,
+     "new": 19,
+     "lost": 2,
+     "lost_ids": [
+      "miracl-ko-184",
+      "miracl-ko-1249"
+     ]
+    },
+    "rrf 0.2+top1": {
+     "hits": 90,
+     "of": 106,
+     "new": 9,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-718"
+     ]
+    },
+    "rrf 0.2+top1>0.02": {
+     "hits": 88,
+     "of": 106,
+     "new": 6,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.05": {
+     "hits": 84,
+     "of": 106,
+     "new": 2,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.1": {
+     "hits": 82,
+     "of": 106,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "vector_top5": {
+     "hits": 98,
+     "of": 106
+    },
+    "bm25_top5": {
+     "hits": 74,
+     "of": 106
+    },
+    "vector_found_default_dropped": {
+     "count": 21,
+     "of_vector_hits": 98,
+     "ids": [
+      "miracl-ko-45",
+      "miracl-ko-88",
+      "miracl-ko-167",
+      "miracl-ko-239",
+      "miracl-ko-292",
+      "miracl-ko-318",
+      "miracl-ko-474",
+      "miracl-ko-486",
+      "miracl-ko-557",
+      "miracl-ko-613",
+      "miracl-ko-827",
+      "miracl-ko-883",
+      "miracl-ko-919",
+      "miracl-ko-948",
+      "miracl-ko-953",
+      "miracl-ko-1011",
+      "miracl-ko-1012",
+      "miracl-ko-1065",
+      "miracl-ko-1357",
+      "miracl-ko-1437",
+      "miracl-ko-1582"
+     ]
+    }
+   },
+   "check": {
+    "rrf 0.2": {
+     "hits": 84,
+     "of": 107,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.3": {
+     "hits": 85,
+     "of": 107,
+     "new": 1,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.4": {
+     "hits": 89,
+     "of": 107,
+     "new": 5,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.5": {
+     "hits": 92,
+     "of": 107,
+     "new": 8,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.6": {
+     "hits": 94,
+     "of": 107,
+     "new": 10,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.7": {
+     "hits": 94,
+     "of": 107,
+     "new": 10,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "linear 0.3": {
+     "hits": 85,
+     "of": 107,
+     "new": 3,
+     "lost": 2,
+     "lost_ids": [
+      "miracl-ko-334",
+      "miracl-ko-1306"
+     ]
+    },
+    "linear 0.5": {
+     "hits": 94,
+     "of": 107,
+     "new": 10,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "linear 0.7": {
+     "hits": 97,
+     "of": 107,
+     "new": 15,
+     "lost": 2,
+     "lost_ids": [
+      "miracl-ko-679",
+      "miracl-ko-1213"
+     ]
+    },
+    "rrf 0.2+top1": {
+     "hits": 91,
+     "of": 107,
+     "new": 7,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.02": {
+     "hits": 89,
+     "of": 107,
+     "new": 5,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.05": {
+     "hits": 88,
+     "of": 107,
+     "new": 4,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.1": {
+     "hits": 84,
+     "of": 107,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "vector_top5": {
+     "hits": 98,
+     "of": 107
+    },
+    "bm25_top5": {
+     "hits": 76,
+     "of": 107
+    },
+    "vector_found_default_dropped": {
+     "count": 16,
+     "of_vector_hits": 98,
+     "ids": [
+      "miracl-ko-40",
+      "miracl-ko-263",
+      "miracl-ko-608",
+      "miracl-ko-695",
+      "miracl-ko-731",
+      "miracl-ko-838",
+      "miracl-ko-941",
+      "miracl-ko-1075",
+      "miracl-ko-1108",
+      "miracl-ko-1154",
+      "miracl-ko-1176",
+      "miracl-ko-1187",
+      "miracl-ko-1195",
+      "miracl-ko-1333",
+      "miracl-ko-1391",
+      "miracl-ko-1551"
+     ]
+    }
+   },
+   "class:none": {
+    "rrf 0.2": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.3": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.4": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.5": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.6": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.7": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "linear 0.3": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "linear 0.5": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "linear 0.7": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.02": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.05": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.1": {
+     "hits": 1,
+     "of": 1,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "vector_top5": {
+     "hits": 1,
+     "of": 1
+    },
+    "bm25_top5": {
+     "hits": 0,
+     "of": 1
+    },
+    "vector_found_default_dropped": {
+     "count": 0,
+     "of_vector_hits": 1,
+     "ids": []
+    }
+   },
+   "class:partial": {
+    "rrf 0.2": {
+     "hits": 52,
+     "of": 92,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.3": {
+     "hits": 54,
+     "of": 92,
+     "new": 2,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.4": {
+     "hits": 60,
+     "of": 92,
+     "new": 8,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.5": {
+     "hits": 66,
+     "of": 92,
+     "new": 14,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.6": {
+     "hits": 70,
+     "of": 92,
+     "new": 18,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.7": {
+     "hits": 70,
+     "of": 92,
+     "new": 18,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "linear 0.3": {
+     "hits": 55,
+     "of": 92,
+     "new": 9,
+     "lost": 6,
+     "lost_ids": [
+      "miracl-ko-184",
+      "miracl-ko-294",
+      "miracl-ko-334",
+      "miracl-ko-718",
+      "miracl-ko-1306",
+      "miracl-ko-1400"
+     ]
+    },
+    "linear 0.5": {
+     "hits": 74,
+     "of": 92,
+     "new": 24,
+     "lost": 2,
+     "lost_ids": [
+      "miracl-ko-184",
+      "miracl-ko-1400"
+     ]
+    },
+    "linear 0.7": {
+     "hits": 81,
+     "of": 92,
+     "new": 31,
+     "lost": 2,
+     "lost_ids": [
+      "miracl-ko-184",
+      "miracl-ko-1213"
+     ]
+    },
+    "rrf 0.2+top1": {
+     "hits": 66,
+     "of": 92,
+     "new": 15,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-718"
+     ]
+    },
+    "rrf 0.2+top1>0.02": {
+     "hits": 63,
+     "of": 92,
+     "new": 11,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.05": {
+     "hits": 58,
+     "of": 92,
+     "new": 6,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.1": {
+     "hits": 52,
+     "of": 92,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "vector_top5": {
+     "hits": 82,
+     "of": 92
+    },
+    "bm25_top5": {
+     "hits": 39,
+     "of": 92
+    },
+    "vector_found_default_dropped": {
+     "count": 33,
+     "of_vector_hits": 82,
+     "ids": [
+      "miracl-ko-40",
+      "miracl-ko-45",
+      "miracl-ko-88",
+      "miracl-ko-167",
+      "miracl-ko-239",
+      "miracl-ko-263",
+      "miracl-ko-292",
+      "miracl-ko-318",
+      "miracl-ko-474",
+      "miracl-ko-486",
+      "miracl-ko-608",
+      "miracl-ko-613",
+      "miracl-ko-731",
+      "miracl-ko-827",
+      "miracl-ko-838",
+      "miracl-ko-883",
+      "miracl-ko-919",
+      "miracl-ko-941",
+      "miracl-ko-953",
+      "miracl-ko-1011",
+      "miracl-ko-1012",
+      "miracl-ko-1075",
+      "miracl-ko-1108",
+      "miracl-ko-1154",
+      "miracl-ko-1176",
+      "miracl-ko-1187",
+      "miracl-ko-1195",
+      "miracl-ko-1333",
+      "miracl-ko-1357",
+      "miracl-ko-1391",
+      "miracl-ko-1437",
+      "miracl-ko-1551",
+      "miracl-ko-1582"
+     ]
+    }
+   },
+   "class:high": {
+    "rrf 0.2": {
+     "hits": 113,
+     "of": 120,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.3": {
+     "hits": 114,
+     "of": 120,
+     "new": 1,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.4": {
+     "hits": 114,
+     "of": 120,
+     "new": 1,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.5": {
+     "hits": 113,
+     "of": 120,
+     "new": 1,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-1249"
+     ]
+    },
+    "rrf 0.6": {
+     "hits": 115,
+     "of": 120,
+     "new": 3,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-1249"
+     ]
+    },
+    "rrf 0.7": {
+     "hits": 115,
+     "of": 120,
+     "new": 3,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-1249"
+     ]
+    },
+    "linear 0.3": {
+     "hits": 114,
+     "of": 120,
+     "new": 2,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-285"
+     ]
+    },
+    "linear 0.5": {
+     "hits": 115,
+     "of": 120,
+     "new": 3,
+     "lost": 1,
+     "lost_ids": [
+      "miracl-ko-1249"
+     ]
+    },
+    "linear 0.7": {
+     "hits": 114,
+     "of": 120,
+     "new": 3,
+     "lost": 2,
+     "lost_ids": [
+      "miracl-ko-679",
+      "miracl-ko-1249"
+     ]
+    },
+    "rrf 0.2+top1": {
+     "hits": 114,
+     "of": 120,
+     "new": 1,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.02": {
+     "hits": 113,
+     "of": 120,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.05": {
+     "hits": 113,
+     "of": 120,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "rrf 0.2+top1>0.1": {
+     "hits": 113,
+     "of": 120,
+     "new": 0,
+     "lost": 0,
+     "lost_ids": []
+    },
+    "vector_top5": {
+     "hits": 113,
+     "of": 120
+    },
+    "bm25_top5": {
+     "hits": 111,
+     "of": 120
+    },
+    "vector_found_default_dropped": {
+     "count": 4,
+     "of_vector_hits": 113,
+     "ids": [
+      "miracl-ko-557",
+      "miracl-ko-695",
+      "miracl-ko-948",
+      "miracl-ko-1065"
+     ]
+    }
+   }
+  }
  }
 ]
