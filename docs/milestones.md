@@ -630,7 +630,7 @@
 ### F2. 하이브리드 결합 방식 (기본 하이브리드가 다국어 모델의 벡터 결과를 버림)
 
 - **담당:** 세션 "F1 검색 평가 기반"(F2-0만), 로컬 브랜치 `claude/f2-fusion-0`(F1 브랜치 끝 `161ebb7`에서 땄다. F1 머지 뒤 main으로 옮긴다).
-- **상태:** F2-0 결과 나옴, 형태 결정 대기 (2026-11-14 사용자 "MIRACL 작업 #138에 넣고 F2-0 먼저 진행해줘"). 범위 초안은 사용자 "그럼 고쳐야지". 구현 착수는 F2-0 결과를 보고 정한다.
+- **상태:** 구현 중 (2026-11-14 사용자 "B로 하고 초기화 인자 여는 걸로 진행해줘"). F2-0은 사용자 "MIRACL 작업 #138에 넣고 F2-0 먼저 진행해줘"로 했다. 범위 초안은 사용자 "그럼 고쳐야지". 구현 착수는 F2-0 결과를 보고 정한다.
 - **F2-0 결과 (2026-11-14, `docs/perf/f2-fusion/f2_0_report.md`):** (D) 후보 수는 효과 없음. (C) 모든 모델에 같은 새 기본값은 MiniLM 한국어를 잃지 않는 것이 "벡터 1위가 0.05 이상 앞설 때만 자리 보장"뿐이고 이득이 작다(MIRACL +12/−0, +10/−0). (B) 다국어 모델에 RRF 0.6이 가장 낫다(MIRACL 확인용 KoEn +17/−1, BGE-m3 +21/−0, 80개·F1 묶음에서 나빠지지 않음). 무게는 이미 인자라 결합 코드는 필요 없고, 값을 둘 곳(레시피만 / 초기화 인자 / Model Pack)을 정해야 한다. 미세조정 겹침 때문에 (B)의 확신은 중간이다.
 - **출처:** F1의 MIRACL 한국어 측정(`docs/perf/f1-eval-baseline/miracl_ko.md`)과 F-7 비교(`f7_fusion_compare.md`). 후보 목록의 "[높음] F2 결합 방식"을 옮겼다.
 - **순서:** F1(#138) 머지 뒤 main에서 브랜치를 딴다. F1의 평가 도구(`scripts/eval/`, `scripts/miracl/`, 하네스)를 그대로 쓰기 때문이다. MIRACL 작업이 아직 #138에 없으면 그것부터 합친다. 손대는 파일 중 `lib/mobile_rag.dart`는 Q4와 겹칠 수 있어 착수 때 확인한다(규칙 3).
@@ -669,6 +669,13 @@
 - 규칙 8의 네 항목(업그레이드 경로: 0.23.0 DB에서 같은 검색이 도는지, 실제 엔진 출력, 여러 번 호출할 때, 주변 코드). PR 하나, CI 통과.
 
 **손대는 파일 (예상, F2-0 뒤 확정):** `rust_builder/rust/src/api/hybrid_search.rs`, `lib/src/internal/defaults.dart`, `lib/mobile_rag.dart`, `lib/services/{rag_engine,source_rag_service,ask}.dart`, ((B)이면) `lib/src/model_pack/**`, `docs/guides/ask.md`, `test/**`, `example/integration_test/**`, `docs/perf/f2-*/`, `CHANGELOG.md`, `docs/milestones.md`.
+
+**결정 (2026-11-14, F2-0 뒤): (B) 모델에 따른 무게를 초기화 인자로 연다 (규칙 4, 사용자 "B로 하고 초기화 인자 여는 걸로 진행해줘")**
+- **바뀌는 것:** `MobileRag.initialize`와 `RagConfig`가 하이브리드 검색의 기본 무게(`defaultVectorWeight`, `defaultBm25Weight`)를 받는다. 무게를 넘기지 않은 `searchHybrid`, `searchHybridWithContext`, `searchMeta`, `prepareAsk`, `ask`, `CollectionRag`의 같은 메서드, `RagSearchTool.fromMobileRag`/`fromCollection`이 그 값을 쓴다. 호출에서 넘긴 무게는 지금처럼 그 호출에만 쓴다.
+- **기본은 지금 그대로 0.2/0.8이다(규칙 10.3).** 값은 앱이 정하고(규칙 10.2), KoEn-E5-Tiny 레시피(`docs/guides/model_setup.md`)가 0.6/0.4를 권한다. 근거는 F2-0 보고서다.
+- **공개 API 형태:** 위 메서드의 `vectorWeight`/`bm25Weight` 인자가 `double`(기본값 0.2/0.8)에서 `double?`로 바뀐다. 부르는 코드는 그대로 컴파일되지만, `MobileRag`·`RagEngine`·`CollectionRag`를 손으로 구현(override)한 테스트 대역은 고쳐야 한다. CHANGELOG에 적는다.
+- **넣지 않는 것:** (A) 새 결합 방식, (C) 기본값 변경, (D) 후보 수, Model Pack 메타데이터. 학습에 쓰이지 않은 한국어 자료로의 재확인은 사용자 답이 없어 하지 않았다(내려받기는 허락이 필요하다).
+- **완료 기준(이 결정으로 바뀐 부분):** 무게를 넘기지 않은 호출이 초기화 무게를 쓰고 넘긴 호출은 넘긴 값을 쓴다는 단위 테스트. 초기화 무게를 주지 않으면 결과가 지금과 같다는 것(기본값 경로가 바뀌지 않음). KoEn으로 0.6/0.4를 초기화에 넣은 실제 엔진 실행 한 번(F1 묶음 `ask` 조건). 0.23.0 DB에서 초기화 인자를 넣고 열어 검색이 도는지. 위 "완료 기준"의 Rust 테스트 항목은 엔진 결합을 고치지 않으므로 해당 없음으로 적는다.
 
 **착수 전에 정할 것**
 1. F2-0에서 볼 후보 범위: (A)~(D) 전부인지, (C)를 처음부터 빼는지.
