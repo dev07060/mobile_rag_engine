@@ -75,8 +75,11 @@ docs/promo/package_guide_staging/
 docs/promo/package_guide_sample_document.txt
 docs/promo/package_guide_validation_*.md
 docs/promo/screenshots/
-example/assets/corpus/
-example/assets/evalsets/
+example/assets/corpus/*
+example/assets/evalsets/*
+# F1 search evaluation data (docs/milestones.md F1) is tracked.
+!example/assets/corpus/f1_short/
+!example/assets/evalsets/f1/
 example/assets/sample_data/*.pdf
 !example/assets/sample_data/sample_eng.pdf
 !example/assets/sample_data/sample_kor.pdf

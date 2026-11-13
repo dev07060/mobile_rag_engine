@@ -12,6 +12,8 @@ pub(crate) mod custom_hnsw;
 pub mod db_pool;
 pub mod document_parser;
 pub mod error;
+#[cfg(test)]
+mod eval_dump;
 pub mod hnsw_index;
 pub mod hybrid_search;
 pub mod incremental_index;
