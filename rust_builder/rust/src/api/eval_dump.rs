@@ -41,3 +41,18 @@ fn dump_bm25_tokens() {
     writer.flush().expect("flush");
     println!("F1_DUMP_BM25_TOKENS rows={count} out={output}");
 }
+
+// E1 (docs/milestones.md): text the engine extracts from a document file, so
+// gold passages for PDF questions can be copied from exactly what is indexed.
+//
+//   E1_DUMP_FILE=example/assets/sample_data/sample_kor.pdf E1_DUMP_OUT=out.txt \
+//     cargo test --lib eval_dump::dump_file_text -- --ignored --test-threads=1
+#[test]
+#[ignore]
+fn dump_file_text() {
+    let input = std::env::var("E1_DUMP_FILE").expect("E1_DUMP_FILE");
+    let output = std::env::var("E1_DUMP_OUT").expect("E1_DUMP_OUT");
+    let text = super::document_parser::extract_text_from_file(input.clone()).expect("extract");
+    std::fs::write(&output, &text).expect("write");
+    println!("E1_DUMP_FILE_TEXT chars={} in={input} out={output}", text.chars().count());
+}

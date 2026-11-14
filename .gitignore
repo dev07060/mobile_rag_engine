@@ -100,6 +100,7 @@ example/assets/corpus/en_validation/
 example/assets/evalsets/*
 !example/assets/evalsets/README.md
 !example/assets/evalsets/f1/
+!example/assets/evalsets/e1/
 !example/assets/evalsets/wiki_article_sources_manifest_v1.json
 !example/assets/evalsets/wiki_article_sources_manifest_80_balanced_v1.json
 !example/assets/evalsets/hybrid_relevance_seed_80_balanced_v1.jsonl
