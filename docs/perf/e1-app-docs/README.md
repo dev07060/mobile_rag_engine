@@ -25,7 +25,7 @@
 | 합계 | 56 | 2,330 / 2,319 | |
 
 - **GNOME 한국어 쪽:** help.gnome.org는 번역되지 않은 문단을 영어로 보여 준다. 한글이 하나도 없는 문단(20자 이상)은 지우고 지운 수를 문서 머리말에 적었다. 지우고 나서 너무 짧아진 4쪽(clock-timezone 157자 등)은 다른 4쪽으로 바꿨다. 받은 쪽은 모두 36쪽이다. 변환 스크립트는 [`scripts/e1/gnome_help_to_md.py`](../../../scripts/e1/gnome_help_to_md.py), 받은 HTML의 해시는 `example/assets/corpus/e1/gnome/gnome_pages_v1.json`.
-- **`sample_eng.pdf`:** PDF 메타데이터 제목이 IFRS 재단의 IFRS 17 기준서 URL이다. 재배포 조건을 확인하지 않은 채 저장소에 있다(E1 전부터). E1은 이 파일을 바꾸지 않았고 후보 목록에 적었다.
+- **`sample_eng.pdf`:** PDF 메타데이터 제목이 IFRS 재단의 IFRS 17 기준서 URL이다. 재배포 조건을 확인하지 않은 채 저장소에 있다(E1 전부터). E1은 이 파일을 바꾸지 않았고 후보 목록에 적었다. 2026-11-15 사용자가 그대로 두기로 정했다.
 - **청크 수가 모델마다 다르다:** 청크를 토크나이저 토큰 수로도 자르기 때문이다(MiniLM 2,330, KoEn·BGE-m3 2,319).
 
 ### 질문
