@@ -43,8 +43,9 @@ Each `RagPassage` has `id`, `text`, `sourceId`, `sourceName`, `chunkId` and
   `RagSearchTool.fromMobileRag`. `vectorWeight` and `bm25Weight` change the
   fusion weights for one call, as in `searchHybrid`. Without them the call uses
   `defaultVectorWeight` / `defaultBm25Weight` from `MobileRag.initialize`
-  (0.2 and 0.8 unless you set them; the Korean recipe in
-  [Model Setup](model_setup.md) sets 0.5 and 0.5 for Korean documents).
+  (0.2 and 0.8 unless you set them; the KoEn-E5-Tiny recipe in
+  [Model Setup](model_setup.md) sets 0.5 and 0.5 for Korean and English
+  documents).
 - **Citation ids** start at 1 for every question.
 - **Default prompt:** an instruction to answer only from the passages, cite
   them like `[1]`, say when they do not contain the answer, and answer in the
