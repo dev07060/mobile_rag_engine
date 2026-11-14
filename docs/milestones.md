@@ -15,7 +15,7 @@
 6. **머지는 사용자가 한다.** 세션은 "PR 열림, CI 통과"에서 멈춘다.
 7. **착수는 사용자가 마일스톤 번호로 지시할 때만 한다** (예: "M2 착수"). 순서는 아래 목록 순서를 기본으로 한다.
 8. **모든 마일스톤의 완료 기준에 아래 네 가지를 넣는다 (2026-11-03 리뷰 뒤 합의).** 기존 검증이 새로 설치한 상태와 가짜 값만 봐서 맹점이 생겼기 때문이다. 작업을 마치기 전에 세션이 직접 확인하고, PR 본문의 같은 내용 절에 결과를 적는다. PR 본문은 영어로만 쓰고 한국어를 섞지 않는다(2026-11-13 사용자 지시). 절 이름은 `## Upgrade path`, `## Real engine output`, `## Caller's view`, `## Surrounding code and what could break`이고, 해당 없으면 "Not applicable."과 이유를 쓴다. CI로 강제하거나 GitHub rules를 바꾸지 않는다(2026-11-03 사용자: 혼자 관리하는 패키지라 머지 부담만 커진다).
-   1. **업그레이드 경로:** 마지막 배포 버전(0.23.0)이 남긴 DB와 파일 상태에서 시작해 확인한다. Upgrade E2E의 기준 버전은 아직 0.22.3이다(후보 목록 참고).
+   1. **업그레이드 경로:** 마지막 배포 버전(0.23.0)이 남긴 DB와 파일 상태에서 시작해 확인한다. Upgrade E2E는 Q2부터 0.23.0과 0.22.3 두 기준 버전에서 시작한다.
    2. **실제 출력:** 가짜 값이 아니라 실제 엔진 출력으로 최소 한 번 확인한다.
    3. **사용하는 쪽 관점:** 여러 번 호출할 때와 토큰 비용을 확인한다.
    4. **주변 코드:** 수정과 맞물리는 코드를 읽고, 무엇이 깨질 수 있는지 PR에 적는다.
@@ -377,7 +377,7 @@
 ### W1. 하이브리드 순위 (흔한 단어만 맞은 청크가 정답을 밀어냄, `ask` 가중치 인자)
 
 - **담당:** 세션 "W1 어간 처리 재작업"(2026-11-13~), worktree `.claude/worktrees/w1-stemmer-rework-195896`(브랜치 `claude/w1-stemmer-rework-195896`, PR #137 끝 `529e5ea`에서 땄다). 커밋은 PR #137의 브랜치 `claude/w1-hybrid-ranking-95dfb8`에 fast-forward로 올린다. 처음 담당은 세션 "W1 하이브리드 순위"(worktree `.claude/worktrees/w1-hybrid-ranking-95dfb8`, W1 초안 커밋 `9f88185`에서 땄다. 그 아래는 main `a6992cc`)였다.
-- **상태:** PR #137 열림, 재작업(S1) 반영 (2026-11-13). 착수는 사용자 "새 세션에서 W1 착수", 재작업은 사용자 "새 세션으로 진행"(2026-11-13). 범위 초안은 2026-11-13 사용자 "가중치 초안 써줘"로 적었다.
+- **상태:** 머지 완료 (#137). 재작업(S1) 반영 (2026-11-13). 착수는 사용자 "새 세션에서 W1 착수", 재작업은 사용자 "새 세션으로 진행"(2026-11-13). 범위 초안은 2026-11-13 사용자 "가중치 초안 써줘"로 적었다.
 
 **범위 변경: 손으로 짠 복수형 규칙을 표준 어간 처리로 바꾼다 (2026-11-13, 규칙 4)**
 - **이유:** PR #137 검토에서 `bm25_search.rs`의 `plural_forms`가 무관한 낱말을 서로 맞추는 것이 나왔다(`not`↔`notes`, `car`→`cares`, `plan`→`planes`, `times`→`tim`, `new`→`news`). 또 `score_groups`가 형태마다 그 형태의 IDF로 점수를 매겨 최댓값을 취하므로, 질의의 흔한 낱말("not")이 문서의 드문 형태("notes")의 높은 IDF를 받는다. 사용자는 이를 오류로 판단했고, 손으로 짠 규칙 대신 표준 알고리즘을 쓰기로 했다.
@@ -630,7 +630,7 @@
 ### F2. 하이브리드 결합 방식 (기본 하이브리드가 다국어 모델의 벡터 결과를 버림)
 
 - **담당:** 세션 "F1 검색 평가 기반", 브랜치 `feats/f2-hybrid-weights`(F1 브랜치 끝에서 따서 작업하고, #138 머지 `27daea7` 위로 옮겼다). 재확인과 값 변경은 후속 브랜치 `docs/f2-korean-weights-05`.
-- **상태:** #139 머지(2026-11-14, `1810d64`, 레시피 0.6/0.4까지). 재확인과 0.5/0.5 변경은 후속 PR 열림. #139는 사용자 "#138 머지했어, F2 PR 열어줘"로 열었다. 구현은 사용자 "B로 하고 초기화 인자 여는 걸로 진행해줘". KoEn 실제 실행: 무게 없는 `prepareAsk`가 0.6/0.4 명시와 32/32 같고, F1 묶음 정답 20/32 → 27/32(`docs/perf/f2-fusion/f2_0_report.md` "구현 뒤 확인"). 학습에 쓰이지 않은 한국어 자료로 다시 재고 레시피 값을 0.5/0.5로 바꿨다(아래 "재확인"). 경위 전체는 `docs/perf/f2-fusion/README.md`. F2-0은 사용자 "MIRACL 작업 #138에 넣고 F2-0 먼저 진행해줘"로 했다. 범위 초안은 사용자 "그럼 고쳐야지". 구현 착수는 F2-0 결과를 보고 정한다.
+- **상태:** #139 머지(2026-11-14, `1810d64`, 레시피 0.6/0.4까지). 재확인과 0.5/0.5 변경은 #143으로 머지됐다. #139는 사용자 "#138 머지했어, F2 PR 열어줘"로 열었다. 구현은 사용자 "B로 하고 초기화 인자 여는 걸로 진행해줘". KoEn 실제 실행: 무게 없는 `prepareAsk`가 0.6/0.4 명시와 32/32 같고, F1 묶음 정답 20/32 → 27/32(`docs/perf/f2-fusion/f2_0_report.md` "구현 뒤 확인"). 학습에 쓰이지 않은 한국어 자료로 다시 재고 레시피 값을 0.5/0.5로 바꿨다(아래 "재확인"). 경위 전체는 `docs/perf/f2-fusion/README.md`. F2-0은 사용자 "MIRACL 작업 #138에 넣고 F2-0 먼저 진행해줘"로 했다. 범위 초안은 사용자 "그럼 고쳐야지". 구현 착수는 F2-0 결과를 보고 정한다.
 - **F2-0 결과 (2026-11-14, `docs/perf/f2-fusion/f2_0_report.md`):** (D) 후보 수는 효과 없음. (C) 모든 모델에 같은 새 기본값은 MiniLM 한국어를 잃지 않는 것이 "벡터 1위가 0.05 이상 앞설 때만 자리 보장"뿐이고 이득이 작다(MIRACL +12/−0, +10/−0). (B) 다국어 모델에 RRF 0.6이 가장 낫다(MIRACL 확인용 KoEn +17/−1, BGE-m3 +21/−0, 80개·F1 묶음에서 나빠지지 않음). 무게는 이미 인자라 결합 코드는 필요 없고, 값을 둘 곳(레시피만 / 초기화 인자 / Model Pack)을 정해야 한다. 미세조정 겹침 때문에 (B)의 확신은 중간이다.
 - **재확인 (2026-11-14, `docs/perf/f2-fusion/validation_ko.md`):** 사용자 "AutoRAG와 KorQuAD dev 받아서 진행해줘". KorQuAD 1.0 dev 500개(5천 구절)와 AutoRAG 114개를 KoEn·BGE-m3로 쟀다. 0.6/0.4는 KorQuAD에서 기본값보다 잃었고(KoEn 483 → 477, BGE-m3 482 → 477; 같은 글의 다른 문단이 낱말로 맞힌 정답을 밀어냄), 0.5/0.5는 같거나 나았다(484, 488). AutoRAG는 기본값이 이미 111~112/114라 무게를 가르지 못했다. 모든 자료를 합치면 0.5와 0.6의 이득은 비슷하고 잃는 질의는 0.5가 절반 이하다. 사용자 "한국어 한정 0.5/0.5로 바꿔서 진행해줘"로 레시피를 0.5/0.5로 바꿨다. KoEn 실제 실행: 무게 없는 `prepareAsk`가 0.5/0.5 명시와 32/32 같고, F1 묶음 20/32 → 26/32. 확신은 중간이다.
 - **영어 확인 (2026-11-14, `docs/perf/f2-fusion/validation_en.md`):** BEIR NFCorpus(test 323)·SciFact(test 300)를 MiniLM·KoEn·BGE-m3로 쟀다. 영어에도 벽이 있다(BM25 20개 목록이 찬 질의에서 기본값 상위 5개가 모두 BM25 후보). 다만 영어 BM25가 강해 손실은 작다. 두 자료 합계로 KoEn은 0.5가 나았고(426 → 438, +16/−4), MiniLM(433 → 438, +14/−9)과 BGE-m3(429 → 429)는 0.2와 0.5가 비슷했다. 0.6은 세 모델 모두 NFCorpus에서 잃었다. 확신은 중간이다. 사용자 "KoEn 레시피 문구 영어까지 넓혀줘"로 레시피·`ask` 가이드·CHANGELOG·`initialize` 문서 주석이 0.5/0.5를 한국어와 영어 문서에 권하게 했다(값과 기본값은 그대로).
@@ -735,19 +735,38 @@
 
 ### Q2. 상태 수명주기
 
-- **상태:** 착수 대기.
+- **담당:** 세션 "Q2 상태 수명주기", 브랜치 `fix/q2-state-lifecycle`(worktree `.claude/worktrees/q2-state-lifecycle-599d05`, main `49057dc`에서 땄다)
+- **상태:** 진행 중 (2026-11-15 사용자 "새 세션에서 Q2 착수"). 아래 "착수 때 확인한 것"으로 범위를 고쳤다(규칙 4).
+
+**착수 때 확인한 것 (2026-11-15, main `49057dc`)**
+
+초안은 2026-11-06에 썼고 그 뒤 S1(#134)·W1(#137)·F2(#139·#143)가 머지됐다. 항목마다 지금 main에서 재현되는지 먼저 봤다.
+
+| 항목 | main에서 | 근거 | 처리 |
+|---|---|---|---|
+| A3 | 재현 안 됨 | S1 B-1이 `claim_source_for_ingestion`에서 청크 0개인 `completed` source를 잡게 고쳤다. 회귀 테스트 `ingest_session.rs`의 `test_prepare_same_content_after_clearing_embeddings_reingests`와 `example/integration_test/short_document_recall_test.dart`가 있다 | 범위에서 뺀다. 하네스 r1(`clearAndRestart` → 재추가)은 업그레이드 경로 확인용으로 넣는다 |
+| A4 | 재현 | Rust 테스트 2개가 수정 전 실패: 컬렉션 B 검색이 빈 결과, 재임베딩 뒤 옛 그래프의 순위(1위가 다른 청크) | 고친다 |
+| B3 | 재현 | Rust 테스트 2개가 수정 전 실패: 같은 모델로 돌아가면 `Ok`, 세 번째 모델은 "cannot retarget" | 고친다 |
+| B4 | 재현 | Rust 테스트가 수정 전 실패: 같은 문서를 세 번 다시 넣으면 generation 4 → 7 | 고친다 |
+| B5 | 코드로 확인(추적) | `embed()`가 `replyPort.first`를 timeout 없이 기다린다. `MobileRag.initialize`에 진행 중 호출을 막는 장치가 없다 | 고친다 |
+| B6 | 코드로 확인(추적) | `RagEngine.dispose`는 static이고 인스턴스 타이머를 모른다 | 고친다 |
+| B7 | 코드로 확인(추적) | `clearAllData`는 `_ragService.warmupFuture`(기본 컬렉션)만 기다린다 | 고친다 |
+
+- **B5~B7 테스트 방법:** 실제 ONNX 없이 엔진 수명주기를 재현하려고 테스트 전용 진입점 셋을 더한다. `EmbeddingService.startWorkerForTest`(가짜 임베딩 worker), `RagEngine.initializeForTest`(tokenizer·ONNX 단계를 뺀 초기화), `MobileRag.engineInitializer`(엔진 생성 함수 교체). 모두 `@visibleForTesting`이다. 수정 전 실패는 이 진입점만 수정 전 코드에 붙여 확인한다.
+- **Upgrade E2E 기준 버전:** 0.23.0을 더하고 0.22.3도 남겨 job을 둘로 돌린다. 0.22.x DB는 fingerprint에 모델 파일 해시가 없어서(#118 이전 형식), 업그레이드 때 fingerprint를 늘리는 경로(s1)와 모델 교체 잠금(s2~s4)을 0.22.3 기준에서만 확인할 수 있다. 0.23.0을 건너뛰고 올라오는 앱이 그 경로를 탄다. 비용은 macOS job 하나가 더 도는 것이다.
+- **A4 하네스(c1):** 0.22.3과 0.23.0의 `search_chunks_in_collection`은 main과 같은 코드라 두 기준 모두 같은 결과가 나와야 한다. 수정 전 재현은 c1을 `H1_KNOWN_FAILING`에 넣은 커밋으로 CI에서 확인하고, 고친 커밋에서 뺀다.
 
 **목표:** 새로 설치한 상태가 아닐 때만 드러나는 상태·수명주기 버그를 고치고 하네스로 막는다.
 
 **포함**
-- A3: `clearAndRestart` 뒤 같은 문서를 다시 추가하면 `DuplicateInProgress`로 막히는 문제. 청크 0개인 `completed` source를 다시 잡을 수 있게 한다.
+- ~~A3~~: S1(#134)이 고쳤다(위 표). 회귀 테스트만 확인하고 코드는 고치지 않는다.
 - A4: 비하이브리드 `search()`가 다른 컬렉션의 로드된 HNSW로 검색하는 문제. `reembedAll` 뒤 옛 그래프도 같다.
 - B3: 중간에 끊긴 재임베딩을 같은 모델로 돌아가면 받아들이고, 다른 모델로는 빠져나갈 수 없는 문제.
 - B4: 이미 있는 문서를 다시 추가해도 generation이 올라 인덱스가 전부 다시 빌드되는 문제.
 - B5: 임베딩 worker dispose 중의 `embed()`가 영원히 기다리는 문제와 `MobileRag.initialize` 동시 호출.
 - B6: dispose 뒤에도 남는 500ms debounce 타이머.
 - B7: `clearAllData`가 다른 컬렉션의 진행 중인 ingest·warmup을 기다리지 않는 문제.
-- Upgrade E2E: 기준 버전에 0.23.0을 더하고(0.22.3은 유지할지 착수 때 정한다), `clearAndRestart` → 재추가, 컬렉션 전환 뒤 `search()` 시나리오를 넣는다.
+- Upgrade E2E: 기준 버전에 0.23.0을 더하고 0.22.3도 유지한다(위 이유). `clearAndRestart` → 재추가(r1), 컬렉션 전환 뒤 `search()`(c1) 시나리오를 넣는다.
 
 **제외:** 낮음 항목(부팅 backfill, 0.12 이하 DB 중복, `.vec` offset 정체성, 동시 하이브리드 검색). 필요하면 후보로 둔다.
 
@@ -755,7 +774,7 @@
 - 새 하네스 시나리오가 수정 전 main에서 실패하고 수정 뒤 통과한다(H1과 같은 `KNOWN_FAILING` 방식).
 - 공통 완료 기준. PR 하나, CI 통과. Rust를 고치므로 `rag_engine_flutter` 배포가 필요하다(배포는 규칙 5).
 
-**손대는 파일:** `rust_builder/rust/src/api/{source_rag,migration_meta,ingest_session,hnsw_index}.rs`, `lib/services/{rag_engine,source_rag_service,embedding_service}.dart`, `lib/mobile_rag.dart`, `.github/workflows/upgrade_e2e.yml`, `tool/upgrade_e2e/**`, `.github/pull_request_template.md`(기준 버전), `test/**`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `docs/milestones.md`
+**손대는 파일:** `rust_builder/rust/src/api/{source_rag,migration_meta,ingest_session,hnsw_index}.rs`, `lib/services/{rag_engine,source_rag_service,embedding_service}.dart`, `lib/mobile_rag.dart`, `.github/workflows/upgrade_e2e.yml`, `tool/upgrade_e2e/**`, `.github/pull_request_template.md`(기준 버전), `test/**`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `docs/milestones.md`, 이 마일스톤 W1·F2·E1 절의 낡은 상태 줄
 
 ### Q3. 텍스트 경계
 
@@ -845,7 +864,7 @@
 
 ### E1. 실제 앱 문서로 검색 평가 (example 앱 갱신과 함께)
 
-- **상태:** PR 대기. 질문 120개는 2026-11-14 사용자 검수를 거쳤다(세션 판정을 사용자 "확정할게, 반영하고 다시 재줘"로 확정, OK 106 · 고침 14 · 빼기 0, `author: session_draft+human_review`). 결과 [`docs/perf/e1-app-docs/README.md`](perf/e1-app-docs/README.md), 검수표 [`review_sheet.md`](perf/e1-app-docs/review_sheet.md). 검수 반영 뒤 다시 잰 값: KoEn-E5-Tiny는 답 있는 90개에서 0.2/0.8 71 → 0.5/0.5 80(+10/−1)으로 레시피와 같은 방향이고, MiniLM은 60 → 57(영어 35 → 36, 한국어 25 → 21), BGE-m3는 72 → 80이다. 검수 전(66 → 76, 56 → 56, 67 → 78)보다 고친 질문을 BM25가 더 찾아 기본값이 올랐고, 고치지 않은 78개는 결과가 같다. 엔진 기본값(0.2/0.8)은 바꾸지 않았다.
+- **상태:** 머지 완료 (#144, 2026-11-15). 질문 120개는 2026-11-14 사용자 검수를 거쳤다(세션 판정을 사용자 "확정할게, 반영하고 다시 재줘"로 확정, OK 106 · 고침 14 · 빼기 0, `author: session_draft+human_review`). 결과 [`docs/perf/e1-app-docs/README.md`](perf/e1-app-docs/README.md), 검수표 [`review_sheet.md`](perf/e1-app-docs/review_sheet.md). 검수 반영 뒤 다시 잰 값: KoEn-E5-Tiny는 답 있는 90개에서 0.2/0.8 71 → 0.5/0.5 80(+10/−1)으로 레시피와 같은 방향이고, MiniLM은 60 → 57(영어 35 → 36, 한국어 25 → 21), BGE-m3는 72 → 80이다. 검수 전(66 → 76, 56 → 56, 67 → 78)보다 고친 질문을 BM25가 더 찾아 기본값이 올랐고, 고치지 않은 78개는 결과가 같다. 엔진 기본값(0.2/0.8)은 바꾸지 않았다.
   - **2026-11-15 가이드 권장 문장을 뺌:** 사용자 "레시피 문장도 지표 + 선택은 사용자로 바꿔줘". `docs/guides/model_setup.md`의 KoEn 절은 더 이상 0.5/0.5를 정하라고 하지 않고, 무게별로 맞힌 수(F2 한국어·영어, E1 앱 문서와 언어별 0.0~1.0 격자)만 적고 고르는 일은 앱에 맡긴다. `ask.md`, `initialize` 문서 주석, CHANGELOG Unreleased, `example/README.md`도 같은 방향으로 맞췄다. 예제 앱의 KoEn 0.5/0.5는 예제 앱의 선택으로 남는다.
 - **범위 합의:** 2026-11-14(착수 때 사용자가 매뉴얼 출처 GNOME 도움말, 질문은 세션 초안 + 사용자 검수, example 앱은 제안 전체를 골랐다). 처음 요청: "어차피 지금 example 앱도 한번 갱신 해야하니까 실제 앱 문서로 측정하는 거 마일스톤에 적어줘".
 - **출처:** F2 검증(`docs/perf/f2-fusion/validation_ko.md`, `validation_en.md`). KoEn-E5-Tiny에 0.5/0.5가 잰 자료 모두에서 기본값과 같거나 나았다. 그러나 자료가 모두 위키백과, 공개 보고서, 의학·생명과학 논문 초록이었고, 앱이 실제로 넣는 문서(매뉴얼, FAQ, 메모, 긴 PDF 옆의 짧은 문서)로는 재지 않았다.
