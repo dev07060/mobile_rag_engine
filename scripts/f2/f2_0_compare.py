@@ -79,8 +79,9 @@ def score_miracl(d: Path):
     cls = {r["item_id"]: next(t[6:] for t in r["tags"] if t.startswith("class:")) for r in ev}
     hits = {m: {r["item_id"]: any(src_of.get(c) in pos[r["item_id"]] for c in fn(r)) for r in run["rows"]} for m, (_, fn) in METHODS.items()}
     groups = {"tune": [q for q in split if split[q] == "tune"], "check": [q for q in split if split[q] == "check"]}
-    for c in ("partial", "high"):
-        groups[c] = [q for q in split if cls[q] == c]
+    for c in ("none", "partial", "high"):
+        if any(cls[q] == c for q in split):
+            groups[c] = [q for q in split if cls[q] == c]
     return run, hits, groups
 
 
@@ -128,9 +129,11 @@ def main() -> int:
             same, n = prefix_agreement(run["rows"])
             entry = {"kind": kind, "dir": Path(d).name, "model": run["name"], "bundle": run["bundle"],
                      "fingerprint": run["fingerprint"], "chunks": run["chunks"], "commit": run["commit"],
-                     "vector_prefix20_equals_engine20": [same, n], "groups": summarize(hits, groups)}
+                     "vector_prefix20_equals_engine20": [same, n],
+                     "bm25_20_full": [sum(1 for r in run["rows"] if len(r["bm25_20"]) >= 20), len(run["rows"])],
+                     "groups": summarize(hits, groups)}
             report.append(entry)
-            print(f"## {kind} {run['name']} {run['bundle']} chunks={run['chunks']} commit={run['commit'][:7]} prefix20==engine20 {same}/{n}")
+            print(f"## {kind} {run['name']} {run['bundle']} chunks={run['chunks']} commit={run['commit'][:7]} prefix20==engine20 {same}/{n} bm25_20_full {entry['bm25_20_full'][0]}/{n}")
             gs = list(entry["groups"])
             print(f"    {'method':<18}" + "".join(f"{g:>18}" for g in gs))
             for m, (fam, _) in METHODS.items():

@@ -9,6 +9,7 @@
 | [`../f1-eval-baseline/f7_fusion_compare.md`](../f1-eval-baseline/f7_fusion_compare.md) | 덤프로 결합 방식을 다시 계산하는 도구와 경계값 61/141 |
 | [`f2_0_report.md`](f2_0_report.md) | 고칠 형태 (A)~(D) 비교, 결정, 구현 뒤 실제 엔진 확인 |
 | [`validation_ko.md`](validation_ko.md) | 학습에 쓰이지 않은 한국어 자료(AutoRAG, KorQuAD dev)로 다시 확인 |
+| [`validation_en.md`](validation_en.md) | 영어 자료(NFCorpus, SciFact)로 벽과 모델별 무게 확인. 값은 바꾸지 않음 |
 
 ## 한 줄 요약
 
@@ -74,6 +75,7 @@
 | 2026-11-14 | PR | #139 | — |
 | 2026-11-14 | 재확인 | 학습에 쓰이지 않은 한국어 자료(KorQuAD dev 500개, AutoRAG 114개)를 두 모델로 잼 | 0.6/0.4는 KorQuAD에서 기본값보다 잃음(KoEn 483 → 477), 0.5/0.5는 같거나 나음(484). [`validation_ko.md`](validation_ko.md) |
 | 2026-11-14 | 값 변경 | 사용자 "한국어 한정 0.5/0.5로 바꿔서 진행해줘". 레시피·가이드·CHANGELOG를 0.5/0.5로 | 무게 없는 `prepareAsk`가 0.5/0.5 명시와 32/32 같음, F1 묶음 20 → 26/32 |
+| 2026-11-14 | 영어 확인 | NFCorpus(323)·SciFact(300)를 세 모델로 잼 | 영어에도 벽이 있음(BM25 목록이 찬 질의에서 기본값 상위 5개 100% BM25 후보). 손실은 작고, KoEn은 0.5가 나음(426 → 438), MiniLM·BGE-m3는 0.2와 0.5가 비슷. 값은 바꾸지 않음. [`validation_en.md`](validation_en.md) |
 
 ### F2-0에서 고른 이유 (요약)
 
