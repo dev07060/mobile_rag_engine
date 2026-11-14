@@ -59,6 +59,8 @@ example/assets/tokenizer.json
 example/assets/backup_onnx/
 # Models copied in for evaluation runs (docs/milestones.md F1, F-4 passes paths).
 example/assets/mobile_rag/
+example/assets/models/*/*
+!example/assets/models/*/README.md
 example/assets/koen/
 example/assets/bgem3/
 
@@ -100,6 +102,7 @@ example/assets/corpus/en_validation/
 example/assets/evalsets/*
 !example/assets/evalsets/README.md
 !example/assets/evalsets/f1/
+!example/assets/evalsets/e1/
 !example/assets/evalsets/wiki_article_sources_manifest_v1.json
 !example/assets/evalsets/wiki_article_sources_manifest_80_balanced_v1.json
 !example/assets/evalsets/hybrid_relevance_seed_80_balanced_v1.jsonl

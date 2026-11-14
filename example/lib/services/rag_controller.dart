@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
 
+import '../example_model.dart';
+
 const _defaultCollectionId = '__default__';
 
 class _PickedImportResult {
@@ -16,6 +18,9 @@ class _PickedImportResult {
 }
 
 class RagController extends ChangeNotifier {
+  RagController({required this.model});
+
+  final ExampleModel model;
   String status = "Ready";
   bool isReady = true;
   bool isLoading = false;
@@ -54,7 +59,10 @@ class RagController extends ChangeNotifier {
   void initializeStatus() {
     if (MobileRag.isInitialized) {
       final vocab = MobileRag.instance.vocabSize;
-      status = "✅ Ready!\nVocab: $vocab | Embedding: 384 dims";
+      status =
+          "✅ Ready!\n${model.label} (${model.languages}) | "
+          "Vocab: $vocab | Embedding: ${model.dimension} dims\n"
+          "Hybrid weights: ${model.weightLabel}";
       isReady = true;
       loadSources();
     } else {

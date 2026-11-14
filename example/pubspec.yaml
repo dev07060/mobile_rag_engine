@@ -35,3 +35,13 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
+    # Model Packs (not in git; see assets/models/*/README.md).
+    - assets/models/minilm/
+    - assets/models/koen/
+    # E1 app-document set for the "App docs" screen (docs/perf/e1-app-docs/).
+    - assets/corpus/e1/gnome/en/
+    - assets/corpus/e1/gnome/ko/
+    - assets/corpus/e1/own/en/
+    - assets/corpus/e1/own/ko/
+    - assets/evalsets/e1/
+    - assets/sample_data/

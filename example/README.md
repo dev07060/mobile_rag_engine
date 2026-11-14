@@ -2,56 +2,48 @@
 
 This example demonstrates the `mobile_rag_engine` package with the `MobileRag` facade.
 
-## Repository Demo Initialization
+## Choosing a model
 
-This repository demo intentionally uses the advanced multilingual BGE-m3
-two-asset path. For a new app, use the Q8_0 Model Pack setup, `--check`, and
-manifest initialization in the package [Quick Start](../docs/guides/quick_start.md).
+The app initializes from a Model Pack and picks the model at build time:
+
+| `--dart-define=EXAMPLE_MODEL=` | Model | Languages | Hybrid weights the app sets |
+|---|---|---|---|
+| `minilm` (default) | MiniLM, the default Model Pack | English | none, the engine default (vector 0.2 / BM25 0.8) |
+| `koen` | KoEn-E5-Tiny | Korean, English | vector 0.5 / BM25 0.5, from the [KoEn-E5-Tiny recipe](../docs/guides/model_setup.md#korean-documents-koen-e5-tiny) |
 
 ```dart
-import 'package:mobile_rag_engine/mobile_rag_engine.dart';
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // 1. Initialize (just 1 line!)
-  await MobileRag.initialize(
-    tokenizerAsset: 'assets/tokenizer.json',
-    modelAsset: 'assets/model.onnx',
-  );
-  
-  runApp(const MyApp());
-}
-
-// Later in your app:
-
-// 2. Add documents
-await MobileRag.instance.addDocument('Your document text here');
-await MobileRag.instance.addDocumentFromFile('/path/to/document.pdf');
-await MobileRag.instance.rebuildIndex();
-
-// 3. Search
-final result = await MobileRag.instance.search('query', tokenBudget: 2000);
-print(result.context.text);
+await MobileRag.initialize(
+  modelPack: const RagModelPack.asset('assets/models/koen/model-pack.json'),
+  defaultVectorWeight: 0.5,
+  defaultBm25Weight: 0.5,
+);
 ```
+
+See `lib/example_model.dart`. Each model uses its own database file, because
+vectors from different models cannot be mixed.
 
 ## Running the Example
 
-1. Download the demo's custom BGE-m3 model files to `assets/`:
-   ```bash
-   cd assets
-   curl -L -o model.onnx "https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx"
-   curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer.json"
-   ```
+1. Install the Model Pack for the model you want. Model files are not in git.
+   - MiniLM, from `example/`:
+     ```bash
+     dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en --output assets/models/minilm --skip-host-config
+     ```
+   - KoEn-E5-Tiny: follow `assets/models/koen/README.md`.
 
 2. Run:
    ```bash
-   flutter run
+   flutter run --dart-define=EXAMPLE_MODEL=minilm
    ```
 
-## Features Demonstrated
+## Screens
 
-- **Document ingestion** with auto-chunking
-- **Semantic search** with vector similarity
-- **PDF/DOCX import** using built-in parser
-- **File attachment** via file_picker
+- **Main screen:** add text or a file (PDF, DOCX, Markdown, text), search, list and delete sources, switch collections.
+- **App docs (E1 questions)** in the menu: adds the E1 document set (GNOME Help pages, short app and office documents, the two sample PDFs; English and Korean) and lets you ask its 120 questions, or your own. Pick a weight setting (app default, 0.2 / 0.8, 0.5 / 0.5, 0.6 / 0.4, vector only, BM25 only) to see the top 5 that `ask` would use and whether the answer is among them. The measured results are in [`docs/perf/e1-app-docs/`](../docs/perf/e1-app-docs/README.md).
+- **Chunking Test, Benchmark, Quality Test:** developer tools.
+
+## Licenses of the bundled documents
+
+- `assets/corpus/e1/gnome/`: GNOME Help pages, CC BY-SA 3.0 Unported. Authors, translators and the source URL are in each file's header.
+- `assets/corpus/e1/own/`: short fictional documents written for this repository (MIT).
+- `assets/corpus/en/`, `assets/corpus/ko/`: Wikipedia articles, CC BY-SA 4.0 (see `assets/corpus/README.md`).

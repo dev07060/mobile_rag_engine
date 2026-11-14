@@ -189,6 +189,23 @@ on (biomedical paper abstracts), same condition and setup:
 lost 24. Details, including MiniLM and BGE-m3, are in
 [the English validation](../perf/f2-fusion/validation_en.md).
 
+On app-style documents the direction is the same: 56 documents (GNOME Help
+pages, short app FAQs, release notes and office policies, two large PDFs) in
+English and Korean, 90 questions with an answer, same condition and setup.
+The questions were drafted for this test and reviewed by the maintainer; with
+90 questions, treat the size of the difference as rough:
+
+| Questions | Vector only | 0.2 / 0.8 (default) | 0.5 / 0.5 | 0.6 / 0.4 |
+|---|---|---|---|---|
+| English, 45 | 38 | 34 | 38 | 38 |
+| Korean, 45 | 41 | 37 | 42 | 42 |
+
+0.5 / 0.5 gained 10 and lost 1 against the default, all on questions
+worded differently from the document. The example app's "App docs" screen
+lets you ask the same questions. Details, including MiniLM (English 35 → 36,
+Korean 25 → 21) and BGE-m3, are in
+[the E1 report](../perf/e1-app-docs/README.md).
+
 You do not need to add `query: ` or `passage: ` prefixes. With KoEn-E5-Tiny
 they change scores by 0.002 or less.
 
