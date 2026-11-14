@@ -59,6 +59,8 @@ example/assets/tokenizer.json
 example/assets/backup_onnx/
 # Models copied in for evaluation runs (docs/milestones.md F1, F-4 passes paths).
 example/assets/mobile_rag/
+example/assets/models/*/*
+!example/assets/models/*/README.md
 example/assets/koen/
 example/assets/bgem3/
 

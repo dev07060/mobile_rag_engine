@@ -1,8 +1,9 @@
 // lib/main.dart
 
 import 'package:flutter/material.dart';
-import 'package:mobile_rag_engine/mobile_rag_engine.dart';
 
+import 'example_model.dart';
+import 'screens/app_docs_screen.dart';
 import 'screens/benchmark_screen.dart';
 import 'screens/quality_test_screen.dart';
 import 'screens/chunking_test_screen.dart';
@@ -13,20 +14,18 @@ import 'widgets/search_section.dart';
 import 'widgets/source_list_section.dart';
 import 'services/rag_controller.dart';
 
-enum _FeatureMenuAction { chunkingTest, benchmark, qualityTest }
+enum _FeatureMenuAction { appDocs, chunkingTest, benchmark, qualityTest }
+
+/// Chosen at build time with `--dart-define=EXAMPLE_MODEL=minilm|koen`.
+final ExampleModel exampleModel = resolveExampleModel();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Initialize Mobile RAG Engine (Singleton)
-  // This automatically handles Rust initialization, threads, and model loading.
-  await MobileRag.initialize(
-    tokenizerAsset: 'assets/tokenizer.json',
-    modelAsset: 'assets/model.onnx',
-    databaseName: 'rag_db.sqlite',
-    deferIndexWarmup: true,
-    threadLevel: ThreadUseLevel.medium, // Default: ~40% of cores
-  );
+  // 1. Initialize Mobile RAG Engine (Singleton) from the model's Model Pack.
+  // KoEn-E5-Tiny also sets the recipe's hybrid weights (0.5 / 0.5); MiniLM
+  // keeps the engine default (0.2 / 0.8). See lib/example_model.dart.
+  await exampleModel.initialize();
 
   runApp(const MyApp());
 }
@@ -38,7 +37,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final RagController _controller = RagController();
+  final RagController _controller = RagController(model: exampleModel);
 
   @override
   void initState() {
@@ -107,6 +106,11 @@ class _MyAppState extends State<MyApp> {
   void _openFeatureMenuAction(BuildContext context, _FeatureMenuAction action) {
     if (!_controller.isReady) return;
     switch (action) {
+      case _FeatureMenuAction.appDocs:
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => AppDocsScreen(model: exampleModel)),
+        );
+        break;
       case _FeatureMenuAction.chunkingTest:
         Navigator.of(
           context,
@@ -142,6 +146,10 @@ class _MyAppState extends State<MyApp> {
                 icon: const Icon(Icons.apps),
                 onSelected: (action) => _openFeatureMenuAction(context, action),
                 itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: _FeatureMenuAction.appDocs,
+                    child: Text('App docs (E1 questions)'),
+                  ),
                   PopupMenuItem(
                     value: _FeatureMenuAction.chunkingTest,
                     child: Text('Chunking Test'),

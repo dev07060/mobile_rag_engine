@@ -100,6 +100,8 @@ rsync -a --delete \
   --exclude build/ --exclude .dart_tool/ --exclude macos/Pods/ \
   --exclude macos/Flutter/ephemeral/ --exclude assets/eval_model/ \
   --exclude assets/mobile_rag/ --exclude assets/koen/ --exclude assets/bgem3/ \
+  --exclude 'assets/models/*/model.onnx' --exclude 'assets/models/*/tokenizer.json' \
+  --exclude 'assets/models/*/model-pack.json' \
   "$ROOT/example/" "$WORK/"
 
 # Model files go to assets/eval_model/ inside the copy only.
@@ -135,6 +137,7 @@ src = json.loads((work / manifest).read_text())["sources"]
 dirs = sorted({str(pathlib.PurePosixPath(s["file_path"]).parent) + "/" for s in src})
 dirs += [str(pathlib.PurePosixPath(manifest).parent) + "/", "assets/eval_model/"]
 dirs = sorted(set(dirs))
+dirs = [d for d in dirs if f"    - {d}\n" not in s]  # the app may declare some already
 block = "".join(f"    - {d}\n" for d in dirs)
 s = s.replace("    - assets/\n", "    - assets/\n" + block, 1)
 p.write_text(s)

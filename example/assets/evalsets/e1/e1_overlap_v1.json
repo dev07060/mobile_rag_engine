@@ -18,17 +18,17 @@
     },
     "by_measured_class_and_language": {
       "high/en": 13,
-      "high/ko": 8,
+      "high/ko": 7,
       "no_answer/en": 15,
       "no_answer/ko": 15,
       "none/en": 9,
       "none/ko": 18,
       "partial/en": 23,
-      "partial/ko": 19
+      "partial/ko": 20
     },
     "by_intent_and_measured": {
-      "lexical/high": 21,
-      "lexical/partial": 19,
+      "lexical/high": 20,
+      "lexical/partial": 20,
       "no_answer/no_answer": 30,
       "paraphrase/none": 27,
       "paraphrase/partial": 23
@@ -1038,22 +1038,16 @@
       "query_tokens": 20,
       "source_key": "gnome_ko_user_autologin",
       "doc_kind": "gnome",
-      "overlap_gold": 0.55,
+      "overlap_gold": 0.25,
       "overlap_doc": 0.75,
       "shared_with_gold": [
-        "계정",
         "바꿀",
         "설정",
         "설정을",
         "수",
-        "식이",
-        "정을",
-        "준이",
-        "표준",
-        "형식",
-        "형식이"
+        "정을"
       ],
-      "measured": "high"
+      "measured": "partial"
     },
     {
       "item_id": "e1q-067",
