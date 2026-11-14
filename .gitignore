@@ -91,6 +91,9 @@ docs/promo/screenshots/
 # MIRACL Korean bundles (scripts/miracl/build_miracl_ko_bundle.py): Wikipedia
 # text under CC BY-SA, regenerated from the original files, not committed.
 example/assets/corpus/miracl_ko/
+# F2 Korean validation bundles (scripts/f2/build_ko_validation_bundles.py):
+# KorQuAD (CC BY-ND) and Wikipedia text, not committed.
+example/assets/corpus/ko_validation/
 example/assets/evalsets/*
 !example/assets/evalsets/README.md
 !example/assets/evalsets/f1/

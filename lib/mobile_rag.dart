@@ -126,7 +126,7 @@ class MobileRag {
   ///   which suits the English-only default model. With a multilingual model
   ///   such as KoEn-E5-Tiny, more vector weight finds answers that share few
   ///   words with the question; the Korean recipe in
-  ///   `docs/guides/model_setup.md` uses 0.6 / 0.4. Each must be between 0.0
+  ///   `docs/guides/model_setup.md` uses 0.5 / 0.5. Each must be between 0.0
   ///   and 1.0, and not both 0.0.
   /// - [onProgress] - Callback for initialization progress updates
   ///
