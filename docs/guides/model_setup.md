@@ -189,22 +189,27 @@ on (biomedical paper abstracts), same condition and setup:
 lost 24. Details, including MiniLM and BGE-m3, are in
 [the English validation](../perf/f2-fusion/validation_en.md).
 
-On app-style documents the direction is the same: 56 documents (GNOME Help
-pages, short app FAQs, release notes and office policies, two large PDFs) in
-English and Korean, 90 questions with an answer, same condition and setup.
-The questions were drafted for this test and reviewed by the maintainer; with
-90 questions, treat the size of the difference as rough:
+App-style documents: 56 documents (GNOME Help pages, short app FAQs, release
+notes and office policies, two large PDFs) in English and Korean, 90 questions
+with an answer, same condition and setup. The questions were drafted for this
+test and reviewed by the maintainer. Answers in the top 5 at each vector weight
+(BM25 weight = 1 − vector weight; 0.0 is BM25 only, 1.0 is vector only):
 
-| Questions | Vector only | 0.2 / 0.8 (default) | 0.5 / 0.5 | 0.6 / 0.4 |
-|---|---|---|---|---|
-| English, 45 | 38 | 34 | 38 | 38 |
-| Korean, 45 | 41 | 37 | 42 | 42 |
+| KoEn-E5-Tiny | 0.0 | 0.2 (default) | 0.4 | 0.5 | 0.6 | 0.8 | 1.0 |
+|---|---|---|---|---|---|---|---|
+| English, 45 | 34 | 34 | 35 | 38 | 38 | 38 | 38 |
+| Korean, 45 | 30 | 37 | 38 | 42 | 42 | 42 | 41 |
 
-0.5 / 0.5 gained 10 and lost 1 against the default, all on questions
-worded differently from the document. The example app's "App docs" screen
-lets you ask the same questions. Details, including MiniLM (English 35 → 36,
-Korean 25 → 21) and BGE-m3, are in
-[the E1 report](../perf/e1-app-docs/README.md).
+These are measurements, not a choice. Here 0.5 through 0.8 score the same and
+vector only is within one; nothing in this test picks 0.5 over the others.
+Answers rise between 0.485 and 0.5, where a passage found only by vector search
+starts to outrank the fifth keyword-only result. With 45 questions per
+language, a difference of one or two is noise. Pick the weights for your own
+model, languages and documents, ideally by measuring on your own questions.
+The full grid for MiniLM, KoEn-E5-Tiny and BGE-m3 (MiniLM's English stays at
+34–38 at every weight; BGE-m3's English keeps rising up to vector only) is in
+[the E1 report](../perf/e1-app-docs/README.md). The example app's "App docs"
+screen lets you try the weights on the same questions.
 
 You do not need to add `query: ` or `passage: ` prefixes. With KoEn-E5-Tiny
 they change scores by 0.002 or less.
