@@ -845,7 +845,8 @@
 
 ### E1. 실제 앱 문서로 검색 평가 (example 앱 갱신과 함께)
 
-- **상태:** PR 대기. 질문 120개는 2026-11-14 사용자 검수를 거쳤다(세션 판정을 사용자 "확정할게, 반영하고 다시 재줘"로 확정, OK 106 · 고침 14 · 빼기 0, `author: session_draft+human_review`). 결과 [`docs/perf/e1-app-docs/README.md`](perf/e1-app-docs/README.md), 검수표 [`review_sheet.md`](perf/e1-app-docs/review_sheet.md). 검수 반영 뒤 다시 잰 값: KoEn-E5-Tiny는 답 있는 90개에서 0.2/0.8 71 → 0.5/0.5 80(+10/−1)으로 레시피와 같은 방향이고, MiniLM은 60 → 57(영어 35 → 36, 한국어 25 → 21), BGE-m3는 72 → 80이다. 검수 전(66 → 76, 56 → 56, 67 → 78)보다 고친 질문을 BM25가 더 찾아 기본값이 올랐고, 고치지 않은 78개는 결과가 같다. 레시피와 엔진 기본값은 바꾸지 않았다.
+- **상태:** PR 대기. 질문 120개는 2026-11-14 사용자 검수를 거쳤다(세션 판정을 사용자 "확정할게, 반영하고 다시 재줘"로 확정, OK 106 · 고침 14 · 빼기 0, `author: session_draft+human_review`). 결과 [`docs/perf/e1-app-docs/README.md`](perf/e1-app-docs/README.md), 검수표 [`review_sheet.md`](perf/e1-app-docs/review_sheet.md). 검수 반영 뒤 다시 잰 값: KoEn-E5-Tiny는 답 있는 90개에서 0.2/0.8 71 → 0.5/0.5 80(+10/−1)으로 레시피와 같은 방향이고, MiniLM은 60 → 57(영어 35 → 36, 한국어 25 → 21), BGE-m3는 72 → 80이다. 검수 전(66 → 76, 56 → 56, 67 → 78)보다 고친 질문을 BM25가 더 찾아 기본값이 올랐고, 고치지 않은 78개는 결과가 같다. 엔진 기본값(0.2/0.8)은 바꾸지 않았다.
+  - **2026-11-15 가이드 권장 문장을 뺌:** 사용자 "레시피 문장도 지표 + 선택은 사용자로 바꿔줘". `docs/guides/model_setup.md`의 KoEn 절은 더 이상 0.5/0.5를 정하라고 하지 않고, 무게별로 맞힌 수(F2 한국어·영어, E1 앱 문서와 언어별 0.0~1.0 격자)만 적고 고르는 일은 앱에 맡긴다. `ask.md`, `initialize` 문서 주석, CHANGELOG Unreleased, `example/README.md`도 같은 방향으로 맞췄다. 예제 앱의 KoEn 0.5/0.5는 예제 앱의 선택으로 남는다.
 - **범위 합의:** 2026-11-14(착수 때 사용자가 매뉴얼 출처 GNOME 도움말, 질문은 세션 초안 + 사용자 검수, example 앱은 제안 전체를 골랐다). 처음 요청: "어차피 지금 example 앱도 한번 갱신 해야하니까 실제 앱 문서로 측정하는 거 마일스톤에 적어줘".
 - **출처:** F2 검증(`docs/perf/f2-fusion/validation_ko.md`, `validation_en.md`). KoEn-E5-Tiny에 0.5/0.5가 잰 자료 모두에서 기본값과 같거나 나았다. 그러나 자료가 모두 위키백과, 공개 보고서, 의학·생명과학 논문 초록이었고, 앱이 실제로 넣는 문서(매뉴얼, FAQ, 메모, 긴 PDF 옆의 짧은 문서)로는 재지 않았다.
 
@@ -861,7 +862,7 @@
   - **한계:** 답 있는 질문이 90개라 F2에서 본 크기(3%p 안팎)의 차이는 통계로 가를 수 없다. 방향이 같은지를 본다.
 - **측정:** `scripts/eval/run_passage_eval.sh`에 묶음을 더하고 `--dump-candidates`로 MiniLM, KoEn-E5-Tiny(BGE-m3는 참고)를 잰다. `ask` 조건 0.2/0.8, 0.5/0.5, 0.6/0.4와 벡터만·BM25만. 오답의 구성(후보 목록 밖 비율)과 답 없는 질문에서 무엇이 나오는지도 적는다. 규칙 9 표를 남긴다.
 - **example 앱 갱신 (착수 때 정함):**
-  - **모델 선택:** 빌드 때 `--dart-define=EXAMPLE_MODEL=minilm|koen`(기본 minilm)으로 고른다. 모델 파일은 git 밖(`example/assets/models/<name>/`, `.gitignore`)에 둔다. KoEn이면 레시피대로 `initialize(defaultVectorWeight: 0.5, defaultBm25Weight: 0.5)`, MiniLM은 엔진 기본값. 상태 카드에 모델·차원·무게를 보인다(지금은 "384 dims"가 고정 문자열).
+  - **모델 선택:** 빌드 때 `--dart-define=EXAMPLE_MODEL=minilm|koen`(기본 minilm)으로 고른다. 모델 파일은 git 밖(`example/assets/models/<name>/`, `.gitignore`)에 둔다. KoEn이면 예제 앱의 선택으로 `initialize(defaultVectorWeight: 0.5, defaultBm25Weight: 0.5)`(착수 때는 레시피 값), MiniLM은 엔진 기본값. 상태 카드에 모델·차원·무게를 보인다(지금은 "384 dims"가 고정 문자열).
   - **새 "앱 문서 평가" 화면:** E1 문서 묶음을 한 번에 넣고, 질문 목록(유형별)에서 고르거나 직접 입력한다. 무게(레시피, 0.2/0.8, 0.5/0.5, 0.6/0.4, 벡터만, BM25만)를 바꿔 상위 5개와 정답 여부를 본다.
   - **`example/README.md`:** 모델 준비 안내를 Model Pack과 KoEn 레시피로 고친다(지금은 BGE-m3를 curl로 받는 안내).
   - **제외:** 기존 화면(Chunking, Benchmark, Quality) 삭제·재설계, LLM 생성 연결, 앱 안 모델 받기, 디자인 개편.

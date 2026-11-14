@@ -8,8 +8,9 @@
 // compares that file with the harness dump of the same model.
 //
 // It also checks that "App default" (no weights passed) returns the same top 5
-// as the model's recipe weights passed explicitly (repeating the pair when
-// BM25 ties make one call differ).
+// as the model's weights passed explicitly, repeating the pair when BM25 ties
+// make one call differ. The weights are this example's choice; the JSON keys
+// keep the name "recipe" because compare_app_parity.py reads them.
 //
 //   flutter drive --profile -d macos --driver=test_driver/integration_test.dart \
 //     --target=integration_test/e1_app_docs_parity_test.dart \

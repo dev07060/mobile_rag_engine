@@ -1,6 +1,6 @@
 # E1: 앱 형태 문서로 잰 하이브리드 무게
 
-`docs/milestones.md` E1의 기록이다. F2는 하이브리드 검색(`ask`: 상위 5개, 목록마다 후보 20개)의 기본 무게(벡터 0.2 / BM25 0.8)가 BM25 후보에 없는 정답을 버리는 "벽"을 찾았고, KoEn-E5-Tiny 레시피에 0.5/0.5를 권했다([`../f2-fusion/README.md`](../f2-fusion/README.md)). 그 근거 자료는 위키백과, 공개 보고서, 의학·생명과학 논문 초록이었다. 이 문서는 앱이 실제로 넣을 법한 문서(제품 도움말, 앱 FAQ·릴리스 노트, 사내 규정·회의록, 긴 PDF)와 질문으로 같은 비교를 다시 한 결과다. 엔진 기본값과 레시피 값은 바꾸지 않았다.
+`docs/milestones.md` E1의 기록이다. F2는 하이브리드 검색(`ask`: 상위 5개, 목록마다 후보 20개)의 기본 무게(벡터 0.2 / BM25 0.8)가 BM25 후보에 없는 정답을 버리는 "벽"을 찾았고, KoEn-E5-Tiny 레시피에 0.5/0.5를 권했다([`../f2-fusion/README.md`](../f2-fusion/README.md)). 그 근거 자료는 위키백과, 공개 보고서, 의학·생명과학 논문 초록이었다. 이 문서는 앱이 실제로 넣을 법한 문서(제품 도움말, 앱 FAQ·릴리스 노트, 사내 규정·회의록, 긴 PDF)와 질문으로 같은 비교를 다시 한 결과다. 엔진 기본값은 바꾸지 않았다. 2026-11-15 사용자 결정으로 가이드의 KoEn 절은 0.5/0.5 권장을 빼고 무게별 측정값만 적는다(아래 결론과 같은 방식).
 
 > **질문 검수.** 질문 120개는 세션이 쓴 초안이다. 2026-11-14 세션이 원문과 대조해 판정을 적었고, 같은 날 사용자가 그 판정을 확정했다(`author: session_draft+human_review`). 판정은 OK 106개, 고침 14개(질문 13, 정답 구절 1), 빼기 0개다. 이 문서의 수치는 모두 검수를 반영한 뒤 다시 잰 것이다. 검수표와 고친 이유는 [`review_sheet.md`](review_sheet.md), 검수 전 수치와의 비교는 아래 "검수 전후".
 
@@ -183,12 +183,12 @@
 
 E1과 같은 PR로 example 앱을 바꿨다(범위는 `docs/milestones.md` E1).
 
-- **모델 선택:** `--dart-define=EXAMPLE_MODEL=minilm|koen`. Model Pack(`assets/models/<이름>/model-pack.json`)으로 초기화한다. KoEn이면 레시피대로 `defaultVectorWeight: 0.5, defaultBm25Weight: 0.5`를 넣고, MiniLM은 엔진 기본값을 쓴다. 모델마다 DB 파일을 따로 쓴다. 상태 카드에 모델, 언어, 차원, 무게를 보인다.
+- **모델 선택:** `--dart-define=EXAMPLE_MODEL=minilm|koen`. Model Pack(`assets/models/<이름>/model-pack.json`)으로 초기화한다. KoEn이면 예제 앱의 선택으로 `defaultVectorWeight: 0.5, defaultBm25Weight: 0.5`를 넣고, MiniLM은 엔진 기본값을 쓴다. 모델마다 DB 파일을 따로 쓴다. 상태 카드에 모델, 언어, 차원, 무게를 보인다.
 - **"App docs" 화면:** E1 문서 56개를 `e1_app_docs` 컬렉션에 넣고(하네스와 같이 자산을 파일로 복사해 `addDocumentFromFile`), 질문 120개를 언어·유형별로 고르거나 직접 입력해 상위 5개를 본다. 무게(앱 기본, 0.2/0.8, 0.5/0.5, 0.6/0.4, 벡터만, BM25만)를 바꿔 볼 수 있고, 목록의 질문이면 정답이 상위 5개에 들었는지 표시한다. 검색은 하네스의 `ask` 조건과 같은 `searchMeta(topK: 5)`다.
-- **`example/README.md`:** 모델 준비 안내를 Model Pack과 KoEn 레시피로 고쳤다(전에는 BGE-m3를 curl로 받는 안내였다).
+- **`example/README.md`:** 모델 준비 안내를 Model Pack과 가이드의 KoEn 절로 고쳤다(전에는 BGE-m3를 curl로 받는 안내였다).
 - **앱 확인:** `example/integration_test/e1_app_docs_parity_test.dart`가 앱 코드로 문서를 넣고 질문 120개 × 무게 6개를 돌려, 결과를 하네스 덤프와 비교한다([`scripts/e1/compare_app_parity.py`](../../../scripts/e1/compare_app_parity.py), 실행은 [`scripts/e1/run_app_parity.sh`](../../../scripts/e1/run_app_parity.sh)). 앱은 macOS profile 빌드로 빌드됐다(Model Pack 두 개와 PDF를 넣어 162.8MB).
 
-| 모델 | 앱 기본 | 0.2/0.8 | 0.5/0.5 | 0.6/0.4 | 벡터만 | BM25만 | 기본 = 레시피 명시 |
+| 모델 | 앱 기본 | 0.2/0.8 | 0.5/0.5 | 0.6/0.4 | 벡터만 | BM25만 | 앱 기본 = 같은 무게 명시 |
 |---|---|---|---|---|---|---|---|
 | MiniLM (앱 기본 = 0.2/0.8) | 60 | 60 | 57 | 43 | 40 | 64 | 120/120 (2개는 첫 호출에서 달라 다시 불러 같음) |
 | KoEn (앱 기본 = 0.5/0.5) | 80 | 71 | 80 | 80 | 79 | 64 | 120/120 (2개는 첫 호출에서 달라 다시 불러 같음) |

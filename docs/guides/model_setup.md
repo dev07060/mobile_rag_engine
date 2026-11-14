@@ -195,8 +195,9 @@ lost 24. Details, including MiniLM and BGE-m3, are in
 
 App-style documents: 56 documents (GNOME Help pages, short app FAQs, release
 notes and office policies, two large PDFs) in English and Korean, 90 questions
-with an answer, same condition and setup. The questions were drafted for this
-test and reviewed by the maintainer. Answers in the top 5 at each vector weight
+with an answer, same condition and setup. The questions were drafted in-session
+for this test; review verdicts were drafted in-session and confirmed by the
+maintainer. Answers in the top 5 at each vector weight
 (BM25 weight = 1 − vector weight; 0.0 is BM25 only, 1.0 is vector only):
 
 | KoEn-E5-Tiny | 0.0 | 0.2 (default) | 0.4 | 0.5 | 0.6 | 0.8 | 1.0 |

@@ -23,7 +23,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 1. Initialize Mobile RAG Engine (Singleton) from the model's Model Pack.
-  // KoEn-E5-Tiny also sets the recipe's hybrid weights (0.5 / 0.5); MiniLM
+  // KoEn-E5-Tiny also sets this example's hybrid weights (0.5 / 0.5); MiniLM
   // keeps the engine default (0.2 / 0.8). See lib/example_model.dart.
   await exampleModel.initialize();
 

@@ -42,7 +42,9 @@ class ExampleModel {
 
   String get weightLabel {
     final (v, b) = effectiveWeights;
-    final source = vectorWeight == null ? 'engine default' : 'model recipe';
+    final source = vectorWeight == null
+        ? 'engine default'
+        : "this example's choice";
     return 'vector $v / BM25 $b ($source)';
   }
 
@@ -68,7 +70,8 @@ const exampleModels = <String, ExampleModel>{
     languages: 'English',
     dimension: 384,
   ),
-  // KoEn-E5-Tiny recipe in docs/guides/model_setup.md: 0.5 / 0.5.
+  // This example's choice for KoEn-E5-Tiny: 0.5 / 0.5. What each weight found
+  // is in docs/guides/model_setup.md.
   'koen': ExampleModel(
     id: 'koen',
     label: 'KoEn-E5-Tiny',
