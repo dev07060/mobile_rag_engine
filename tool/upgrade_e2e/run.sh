@@ -17,7 +17,8 @@
 #   H1_PACKAGE        git (default) or path
 #   H1_GIT_URL, H1_GIT_REF   package under test for git mode
 #   H1_PATH           repository root for path mode
-#   H1_BASE_VERSION   last published release (default 0.22.3)
+#   H1_BASE_VERSION   release phase A runs (default 0.22.3; CI runs 0.22.3
+#                     and the last published release, 0.23.0)
 #   H1_KNOWN_FAILING  space-separated check ids expected to fail
 #   H1_SUMMARY        file to append the Markdown summary to (optional)
 set -euo pipefail
@@ -37,9 +38,9 @@ koen_base=https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX/resolve/
 koen_model_sha=d463c9b1c29f3202d510e2836265d60f9e6e6dd518c5930ba865700646489bd4
 koen_tokenizer_sha=a6dd38d692ac1caa6d5dbc195d92f1f978b5c74ec60e02ed15fdf04404742fe3
 
-phase_a_scenarios="s1 s2 s3 s4"
-phase_b_scenarios="p0 s1 s2 s3 s4 contract"
-expected_checks="p0 s1 s2 s3 s4 b1 b2 b3 b4"
+phase_a_scenarios="s1 s2 s3 s4 r1 c1"
+phase_b_scenarios="p0 s1 s2 s3 s4 contract r1 c1"
+expected_checks="p0 s1 s2 s3 s4 b1 b2 b3 b4 r1 c1"
 
 rm -rf "$app" "$logs"
 mkdir -p "$logs"
@@ -94,7 +95,8 @@ run_phase() {
   echo "== Phase $phase: $id"
   set +e
   flutter test "integration_test/$test" -d macos -r expanded \
-    --dart-define=H1_SCENARIO="$id" > "$log" 2>&1
+    --dart-define=H1_SCENARIO="$id" \
+    --dart-define=H1_BASE_VERSION="$base_version" > "$log" 2>&1
   local status=$?
   set -e
   grep -hE "^(flutter: )?H1_(CHECK|PHASE_A)" "$log" | sed 's/^flutter: //' || true

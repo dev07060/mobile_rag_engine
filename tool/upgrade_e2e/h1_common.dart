@@ -9,6 +9,18 @@ import 'package:path_provider/path_provider.dart';
 /// Which scenario this process runs, from `--dart-define=H1_SCENARIO=...`.
 const scenario = String.fromEnvironment('H1_SCENARIO');
 
+/// The release phase A ran, from `--dart-define=H1_BASE_VERSION=...`.
+const baseVersion = String.fromEnvironment('H1_BASE_VERSION');
+
+/// Releases before 0.23.0 stored the fingerprint without the model file hash
+/// (`model.onnx|384|f32+vabq:none`); 0.23.0 appends `|sha256:...`.
+bool get baseStoresModelIdentity => !baseVersion.startsWith('0.22.');
+
+/// Collections that the c1 scenario splits the corpus into.
+const docsCollection = 'docs';
+const notesCollection = 'notes';
+const docsCorpus = ['flutter.txt', 'dart.txt', 'sqlite.txt', 'onnx.txt'];
+
 /// MiniLM pack written by `dart run mobile_rag_engine:setup`.
 const miniLmPack = 'assets/mobile_rag/model-pack.json';
 const miniLmModel = 'assets/mobile_rag/model.onnx';

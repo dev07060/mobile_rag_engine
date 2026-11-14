@@ -17,7 +17,7 @@ void main() {
     final database = databaseName(scenario);
     final RagEngine engine;
     switch (scenario) {
-      case 's1' || 's4':
+      case 's1' || 's4' || 'r1' || 'c1':
         await MobileRag.initialize(
           modelPack: const RagModelPack.asset(miniLmPack),
           databaseName: database,
@@ -48,12 +48,34 @@ void main() {
         fail('Unknown phase A scenario "$scenario"');
     }
 
-    for (final MapEntry(key: name, value: text) in corpus.entries) {
-      await engine.addDocument(text, name: name);
+    if (scenario == 'c1') {
+      // Two collections, each with its own persisted HNSW file.
+      for (final MapEntry(key: name, value: text) in corpus.entries) {
+        await engine.addDocument(
+          text,
+          name: name,
+          collectionId: docsCorpus.contains(name)
+              ? docsCollection
+              : notesCollection,
+        );
+      }
+      await engine.rebuildIndex(collectionId: docsCollection);
+      await engine.rebuildIndex(collectionId: notesCollection);
+    } else {
+      for (final MapEntry(key: name, value: text) in corpus.entries) {
+        await engine.addDocument(text, name: name);
+      }
+      await engine.rebuildIndex();
     }
-    await engine.rebuildIndex();
     final fingerprint = (await engine.migrationState).embeddingFingerprint;
-    final chunks = (await engine.getStats()).chunkCount.toInt();
+    final chunks = scenario == 'c1'
+        ? (await engine.getStats(
+                collectionId: docsCollection,
+              )).chunkCount.toInt() +
+              (await engine.getStats(
+                collectionId: notesCollection,
+              )).chunkCount.toInt()
+        : (await engine.getStats()).chunkCount.toInt();
     await (await phaseAMarker(scenario)).writeAsString(
       jsonEncode({'fingerprint': fingerprint, 'chunks': chunks}),
     );
@@ -65,7 +87,7 @@ void main() {
       await MobileRag.dispose();
     }
     // Releases before the model identity store three components.
-    expect(fingerprint.split('|'), hasLength(3));
+    expect(fingerprint.split('|'), hasLength(baseStoresModelIdentity ? 4 : 3));
     expect(chunks, greaterThan(0));
   });
 }

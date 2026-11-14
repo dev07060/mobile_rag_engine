@@ -9,10 +9,11 @@ Milestone **Mn** in `docs/milestones.md`.
 
 ## 업그레이드 경로
 
-<!-- Starting from what the last release (0.22.3) leaves on disk (database,
-copied model files, Model Pack directories): what did you run, and what
-happened? The Upgrade E2E job covers the model-swap scenarios. If this PR
-cannot affect upgrades, say why. -->
+<!-- Starting from what the last release (0.23.0) leaves on disk (database,
+copied model files, Model Pack directories, HNSW files): what did you run, and
+what happened? The Upgrade E2E job starts from 0.23.0 and from 0.22.3 and
+covers the model-swap, clearAndRestart re-add and collection-switch
+scenarios. If this PR cannot affect upgrades, say why. -->
 
 ## 실제 출력으로 확인한 것
 
