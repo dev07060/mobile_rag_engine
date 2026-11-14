@@ -54,7 +54,7 @@ scripts/eval/run_passage_eval.sh --model-pack stable-minilm-l6-v2-arm64-en --bun
 
 ## 새 클론 확인 (2026-11-13)
 
-- 브랜치 `claude/f1-eval-baseline-154010`의 `32ced9f`를 새 디렉터리에 `git clone`하고, Rust 빌드 캐시 없이 다음 한 명령을 돌렸다.
+- 브랜치 `feats/f1-eval-baseline`의 `32ced9f`를 새 디렉터리에 `git clone`하고, Rust 빌드 캐시 없이 다음 한 명령을 돌렸다.
 
   ```bash
   scripts/eval/run_passage_eval.sh --model <MiniLM Model Pack 디렉터리> --name minilm --bundle 80
