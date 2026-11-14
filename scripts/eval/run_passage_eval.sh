@@ -15,6 +15,8 @@
 #                     build first: scripts/f2/build_ko_validation_bundles.py)
 #                     enval_nfcorpus / enval_scifact = BEIR English validation
 #                     bundles (F2; build first: scripts/f2/build_en_validation_bundles.py)
+#                     e1 = E1 app-document bundle (GNOME Help, short docs, sample PDFs;
+#                     committed, rebuilt by scripts/e1/build_e1_bundle.py)
 # --name              label used in file names (default: model directory name)
 # --out               result directory (default: build/eval_results/<time>_<name>_<bundle>)
 # --timeout-minutes N harness time limit (default 90)
@@ -43,7 +45,7 @@ while [[ $# -gt 0 ]]; do
     --dump-candidates) DUMP=true; shift;;
     --timeout-minutes) TIMEOUT="$2"; shift 2;;
     --init-weights) INIT_WEIGHTS="$2"; shift 2;;
-    -h|--help) sed -n '2,31p' "$0"; exit 0;;
+    -h|--help) sed -n '2,33p' "$0"; exit 0;;
     *) echo "unknown argument: $1" >&2; exit 2;;
   esac
 done
@@ -63,6 +65,11 @@ case "$BUNDLE" in
     EVALSET=assets/evalsets/f1/f1_evalset_v1.jsonl
     GOLD=assets/evalsets/f1/f1_passage_gold_v1.jsonl
     NO_ANSWER=assets/evalsets/f1/f1_no_answer_v1.jsonl;;
+  e1)
+    MANIFEST=assets/evalsets/e1/e1_sources_manifest_v1.json
+    EVALSET=assets/evalsets/e1/e1_evalset_v1.jsonl
+    GOLD=assets/evalsets/e1/e1_passage_gold_v1.jsonl
+    NO_ANSWER=assets/evalsets/e1/e1_no_answer_v1.jsonl;;
   miracl_ko_*)
     MANIFEST=assets/evalsets/miracl_ko/${BUNDLE}_sources_manifest.json
     EVALSET=assets/evalsets/miracl_ko/${BUNDLE}_evalset.jsonl
@@ -81,7 +88,7 @@ case "$BUNDLE" in
     GOLD=assets/evalsets/en_validation/${BUNDLE}_gold.jsonl
     NO_ANSWER=""
     [[ -f "$ROOT/example/$MANIFEST" ]] || { echo "missing $MANIFEST; run scripts/f2/build_en_validation_bundles.py" >&2; exit 2; };;
-  *) echo "unknown bundle: $BUNDLE (80, f1, miracl_ko_<size>, koval_<name>, enval_<name>)" >&2; exit 2;;
+  *) echo "unknown bundle: $BUNDLE (80, f1, e1, miracl_ko_<size>, koval_<name>, enval_<name>)" >&2; exit 2;;
 esac
 
 WORK="$ROOT/build/eval_app"
@@ -93,6 +100,8 @@ rsync -a --delete \
   --exclude build/ --exclude .dart_tool/ --exclude macos/Pods/ \
   --exclude macos/Flutter/ephemeral/ --exclude assets/eval_model/ \
   --exclude assets/mobile_rag/ --exclude assets/koen/ --exclude assets/bgem3/ \
+  --exclude 'assets/models/*/model.onnx' --exclude 'assets/models/*/tokenizer.json' \
+  --exclude 'assets/models/*/model-pack.json' \
   "$ROOT/example/" "$WORK/"
 
 # Model files go to assets/eval_model/ inside the copy only.
@@ -128,6 +137,7 @@ src = json.loads((work / manifest).read_text())["sources"]
 dirs = sorted({str(pathlib.PurePosixPath(s["file_path"]).parent) + "/" for s in src})
 dirs += [str(pathlib.PurePosixPath(manifest).parent) + "/", "assets/eval_model/"]
 dirs = sorted(set(dirs))
+dirs = [d for d in dirs if f"    - {d}\n" not in s]  # the app may declare some already
 block = "".join(f"    - {d}\n" for d in dirs)
 s = s.replace("    - assets/\n", "    - assets/\n" + block, 1)
 p.write_text(s)

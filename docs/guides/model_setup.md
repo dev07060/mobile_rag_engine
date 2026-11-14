@@ -134,20 +134,28 @@ flutter:
 ```dart
 await MobileRag.initialize(
   modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json'),
-  defaultVectorWeight: 0.5,
-  defaultBm25Weight: 0.5,
+  // Optional: hybrid search weights, default 0.2 / 0.8. See below.
+  // defaultVectorWeight: ...,
+  // defaultBm25Weight: ...,
 );
 ```
 
-**With KoEn-E5-Tiny, set the hybrid search weights to 0.5 / 0.5, for Korean and
-English documents.** The default weights (vector
-0.2, BM25 0.8) suit the English-only default model. With them, hybrid search
-(`ask`, `prepareAsk`, `searchHybrid*`, `RagSearchTool.fromMobileRag`) on Korean
-text keeps almost only keyword results: Korean keywords are matched as
-two-syllable pieces, so the 20 keyword candidates that `ask` looks at are nearly
-always full, and a passage found only by KoEn-E5-Tiny's vector search cannot
-outrank them. `defaultVectorWeight` / `defaultBm25Weight` apply to every
-hybrid search that does not pass its own `vectorWeight` / `bm25Weight`.
+**Hybrid search weights are your choice.** This section reports what each
+weight found and does not pick one for you. Which weight found the most
+answers differed between models, languages and document sets, so measure on
+your own documents and questions where you can.
+
+The default weights (vector 0.2, BM25 0.8) were set for the English-only
+default model. With them, hybrid search (`ask`, `prepareAsk`, `searchHybrid*`,
+`RagSearchTool.fromMobileRag`) keeps almost only keyword results whenever the
+20 keyword candidates that `ask` looks at are full: a passage found only by
+vector search cannot outrank them. Korean keywords are matched as two-syllable
+pieces, so on Korean text that list is nearly always full; English lists were
+also nearly always full in these tests. With a vector weight above about 0.43 a
+vector-only passage can outrank the last keyword candidate, and from about
+0.485 its top passage can outrank the fifth. `defaultVectorWeight` / `defaultBm25Weight`
+apply to every hybrid search that does not pass its own `vectorWeight` /
+`bm25Weight`.
 
 Measured in the `ask` condition (5 passages, 20 candidates per list) with
 KoEn-E5-Tiny, profile build on an Apple M3 Pro Mac, 2026-11-14 (questions with
@@ -162,32 +170,51 @@ an answer in the top 5):
 | KorQuAD 1.0 dev, 500 questions, 5,000 passages | 454 | 483 | 484 | 477 |
 | AutoRAG Korean, 114 questions, 720 documents | 111 | 112 | 112 | 112 |
 
-0.6 / 0.4 finds a few more answers on MIRACL, but MIRACL's training split was
-used to train KoEn-E5-Tiny's base model, so vector search looks better there
-than it may be on your documents. On KorQuAD and AutoRAG, which these models
-were not trained on, 0.6 / 0.4 loses answers that keyword search had found
-(KorQuAD: 12 lost, 6 gained), mostly to other paragraphs of the same article;
-0.5 / 0.5 loses 3 and gains 4. Any vector weight above about 0.43 lets a
-passage found only by vector search reach the top 5. The method and all
-numbers, including BGE-m3 (same picture), are in
+MIRACL's training split was used to train KoEn-E5-Tiny's base model, so
+vector search may look better there than on your documents. On KorQuAD and
+AutoRAG, which these models were not trained on, 0.6 / 0.4 lost answers that
+keyword search had found (KorQuAD: 12 lost, 6 gained), mostly to other
+paragraphs of the same article; 0.5 / 0.5 lost 3 and gained 4. The method and
+all numbers, including BGE-m3, are in
 [the F2-0 report](../perf/f2-fusion/f2_0_report.md) and
-[the Korean validation](../perf/f2-fusion/validation_ko.md). Keep the defaults
-with the English-only MiniLM: on its Korean questions, raising the vector
-weight loses answers.
+[the Korean validation](../perf/f2-fusion/validation_ko.md). With the
+English-only MiniLM, raising the vector weight lost Korean answers in every
+test.
 
-English documents show the same pattern, smaller. English keyword candidates
-are also nearly always full, but English keyword search is strong, so the
-default loses fewer answers. On two English sets the models were not trained
-on (biomedical paper abstracts), same condition and setup:
+English documents, two sets the models were not trained on (biomedical paper
+abstracts), same condition and setup:
 
 | Questions | Vector only | 0.2 / 0.8 (default) | 0.5 / 0.5 | 0.6 / 0.4 |
 |---|---|---|---|---|
 | NFCorpus test, 323 questions, 3,633 documents | 191 | 207 | 214 | 202 |
 | SciFact test, 300 claims, 5,183 abstracts | 221 | 219 | 224 | 225 |
 
-0.5 / 0.5 gained 16 and lost 4 against the default; 0.6 / 0.4 gained 25 and
+Against the default, 0.5 / 0.5 gained 16 and lost 4; 0.6 / 0.4 gained 25 and
 lost 24. Details, including MiniLM and BGE-m3, are in
 [the English validation](../perf/f2-fusion/validation_en.md).
+
+App-style documents: 56 documents (GNOME Help pages, short app FAQs, release
+notes and office policies, two large PDFs) in English and Korean, 90 questions
+with an answer, same condition and setup. The questions were drafted in-session
+for this test; review verdicts were drafted in-session and confirmed by the
+maintainer. Answers in the top 5 at each vector weight
+(BM25 weight = 1 − vector weight; 0.0 is BM25 only, 1.0 is vector only):
+
+| KoEn-E5-Tiny | 0.0 | 0.2 (default) | 0.4 | 0.5 | 0.6 | 0.8 | 1.0 |
+|---|---|---|---|---|---|---|---|
+| English, 45 | 34 | 34 | 35 | 38 | 38 | 38 | 38 |
+| Korean, 45 | 30 | 37 | 38 | 42 | 42 | 42 | 41 |
+
+These are measurements, not a choice. Here 0.5 through 0.8 score the same and
+vector only is within one; nothing in this test picks 0.5 over the others.
+Answers rise between 0.485 and 0.5, where a passage found only by vector search
+starts to outrank the fifth keyword-only result. With 45 questions per
+language, a difference of one or two is noise. Pick the weights for your own
+model, languages and documents, ideally by measuring on your own questions.
+The full grid for MiniLM, KoEn-E5-Tiny and BGE-m3 (MiniLM's English stays at
+34–38 at every weight; BGE-m3's English keeps rising up to vector only) is in
+[the E1 report](../perf/e1-app-docs/README.md). The example app's "App docs"
+screen lets you try the weights on the same questions.
 
 You do not need to add `query: ` or `passage: ` prefixes. With KoEn-E5-Tiny
 they change scores by 0.002 or less.

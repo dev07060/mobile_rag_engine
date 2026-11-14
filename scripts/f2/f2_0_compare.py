@@ -11,6 +11,9 @@ Inputs (result directories):
                     Korean, the F2 Korean validation bundles), scored by positive source
   --b80 DIR...      80-query bundle runs (regression check), groups all / en / ko
   --f1 DIR...       reviewed F1 bundle runs (32 answerable), groups all / class
+  --e1 DIR...       E1 app-document bundle runs (docs/milestones.md E1), groups all,
+                    language, language x intent, language x measured class, doc kind,
+                    tune / check
 
 Method families (F2 draft):
   (A) fusion added as an option: linear w (min-max per list), rrf w + vector top-1 slot
@@ -86,6 +89,7 @@ def score_miracl(d: Path):
 
 
 def score_gold(d: Path, group_key):
+    # group_key returns one group name or a list of names.
     run = f7.load_run(d)
     meta = json.loads((d / "run_meta.json").read_text(encoding="utf-8"))
     ev = {r["item_id"]: r for r in (json.loads(l) for l in (ROOT / "example" / meta["dataset"]["evalset"]).read_text(encoding="utf-8").splitlines() if l.strip())}
@@ -94,9 +98,18 @@ def score_gold(d: Path, group_key):
     qs = [r["item_id"] for r in rows]
     groups = {"all": qs}
     for q in qs:
-        groups.setdefault(group_key(ev[q], run["classes"].get(q)), []).append(q)
+        keys = group_key(ev[q], run["classes"].get(q))
+        for k in ([keys] if isinstance(keys, str) else keys):
+            groups.setdefault(k, []).append(q)
     run["rows"] = rows
     return run, hits, groups
+
+
+def e1_groups(e, c):
+    tag = {t.split(":", 1)[0]: t.split(":", 1)[1] for t in e["tags"] if ":" in t}
+    lang = e["language"]
+    return [lang, f"{lang}|{tag['intent']}", f"{lang}|class:{tag['class']}", f"doc:{tag['doc']}",
+            f"split:{tag['split']}", f"{lang}|split:{tag['split']}"]
 
 
 def summarize(hits, groups):
@@ -115,17 +128,20 @@ def main() -> int:
     ap.add_argument("--miracl", nargs="*", default=[])
     ap.add_argument("--b80", nargs="*", default=[])
     ap.add_argument("--f1", nargs="*", default=[])
+    ap.add_argument("--e1", nargs="*", default=[])
     ap.add_argument("--json")
     a = ap.parse_args()
     report = []
-    for kind, dirs in (("miracl", a.miracl), ("b80", a.b80), ("f1", a.f1)):
+    for kind, dirs in (("miracl", a.miracl), ("b80", a.b80), ("f1", a.f1), ("e1", a.e1)):
         for d in dirs:
             if kind == "miracl":
                 run, hits, groups = score_miracl(Path(d))
             elif kind == "b80":
                 run, hits, groups = score_gold(Path(d), lambda e, c: "lang:" + (e.get("language") if e.get("language") in ("en", "ko") else "other"))
-            else:
+            elif kind == "f1":
                 run, hits, groups = score_gold(Path(d), lambda e, c: f"class:{c}")
+            else:
+                run, hits, groups = score_gold(Path(d), e1_groups)
             same, n = prefix_agreement(run["rows"])
             entry = {"kind": kind, "dir": Path(d).name, "model": run["name"], "bundle": run["bundle"],
                      "fingerprint": run["fingerprint"], "chunks": run["chunks"], "commit": run["commit"],

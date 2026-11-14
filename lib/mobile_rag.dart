@@ -125,9 +125,8 @@ class MobileRag {
   ///   call does not pass `vectorWeight` / `bm25Weight`. Default 0.2 / 0.8,
   ///   which suits the English-only default model. With a multilingual model
   ///   such as KoEn-E5-Tiny, more vector weight finds answers that share few
-  ///   words with the question; the KoEn-E5-Tiny recipe in
-  ///   `docs/guides/model_setup.md` uses 0.5 / 0.5 for Korean and English
-  ///   documents. Each must be between 0.0
+  ///   words with the question; `docs/guides/model_setup.md` lists what each
+  ///   weight found with KoEn-E5-Tiny. Each must be between 0.0
   ///   and 1.0, and not both 0.0.
   /// - [onProgress] - Callback for initialization progress updates
   ///

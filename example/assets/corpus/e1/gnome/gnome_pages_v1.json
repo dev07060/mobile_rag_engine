@@ -1,0 +1,713 @@
+{
+ "source": "https://help.gnome.org/gnome-help/",
+ "fetched": "2026-11-14",
+ "license": "CC BY-SA 3.0 Unported",
+ "pages": [
+  {
+   "page": "backup-how",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/backup-how.html",
+   "title": "How to back up",
+   "raw_sha256": "90094a8fa2fb5815d019689a9014cafc95ce8cf924aed218859219766a8589a3",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "Tiffany Antopolski"
+   ],
+   "editors": [
+    "Michael Hill",
+    "Klein Kravis"
+   ],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_backup-how.md",
+   "md_sha256": "c2f4f22c8b436c88e58549c6e02cf111f409428f340e4f3c6f240c20e071463d"
+  },
+  {
+   "page": "bluetooth-connect-device",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/bluetooth-connect-device.html",
+   "title": "Connect your computer to a Bluetooth device",
+   "raw_sha256": "cccf1594f6b19c06ec46baaa18b12484a1bf81d4f526d32c8419ac2098a27502",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "Jim Campbell",
+    "Paul W. Frields",
+    "Shaun McCance"
+   ],
+   "editors": [
+    "Michael Hill",
+    "Ekaterina Gerasimova",
+    "David King"
+   ],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_bluetooth-connect-device.md",
+   "md_sha256": "a87564dc63ed89e9eb98a645556681296cf31b20190ddfd92ca2458ef703bcce"
+  },
+  {
+   "page": "display-night-light",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/display-night-light.html",
+   "title": "Adjust the color temperature of your screen",
+   "raw_sha256": "69e0c11aa7e2ba28af1969be1ba7a419d9211c83f91a8b211c1c03d95cbd8dd5",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "Michael Hill"
+   ],
+   "editors": [],
+   "translators": [],
+   "copyright": [
+    "© 2018 Michael Hill"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_display-night-light.md",
+   "md_sha256": "bd89b308df6cb5e2d9ed3ce01613155a7207e48e086cf7f30fd397981fa9cb55"
+  },
+  {
+   "page": "files-delete",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/files-delete.html",
+   "title": "Delete files and folders",
+   "raw_sha256": "1d0b96b24b7f59f301838066cc91f566ec586e46893720a749b36af8d848e9ff",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "Cristopher Thomas",
+    "Shaun McCance",
+    "Jim Campbell"
+   ],
+   "editors": [
+    "Michael Hill",
+    "David King"
+   ],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_files-delete.md",
+   "md_sha256": "c9b32fb030b31e56fae8b99f18df9323d209bf1129b1380f8a02ba05759d7282"
+  },
+  {
+   "page": "files-recover",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/files-recover.html",
+   "title": "Recover a file from the Trash",
+   "raw_sha256": "f4861f82515f62dfdc6d8caf9a0725e5b26cd5f81bafd49b9f19a70dfa9455db",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "GNOME Documentation Project"
+   ],
+   "editors": [
+    "David King"
+   ],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_files-recover.md",
+   "md_sha256": "b21d63ddf1f39f198355026cb90c96c76e95e95e69f48c2e615af0d461ba1eaf"
+  },
+  {
+   "page": "files-share",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/files-share.html",
+   "title": "Share files by email",
+   "raw_sha256": "8078b98124aa7e2b1de14083c06a7b4de583f606efac24561cc484e815e6fd62",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "Shaun McCance"
+   ],
+   "editors": [
+    "Michael Hill"
+   ],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_files-share.md",
+   "md_sha256": "17bd1e2b0a97bbf62f151f31a06c808ecda247093f39188b00619961a30880cb"
+  },
+  {
+   "page": "keyboard-shortcuts-set",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/keyboard-shortcuts-set.html",
+   "title": "Set keyboard shortcuts",
+   "raw_sha256": "1687ddcb19445549c29a2f22e673fe3c192060b2f42fd5d53cb4db612ec51bc3",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "Michael Hill",
+    "Julita Inca"
+   ],
+   "editors": [
+    "Juanjo Marín",
+    "Shobha Tyagi",
+    "Ekaterina Gerasimova",
+    "Andre Klapper"
+   ],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_keyboard-shortcuts-set.md",
+   "md_sha256": "f1cb86b30f8acb2561251d320ef2b27c3eb34175007c75d78218bc9ce8ed552e"
+  },
+  {
+   "page": "net-wireless-connect",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/net-wireless-connect.html",
+   "title": "Connect to a wireless network",
+   "raw_sha256": "301f4caa4f8f637c5f8b7a9b2781e585f7f51e2eec3811163bf0a3286f71f7c8",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "GNOME Documentation Project"
+   ],
+   "editors": [
+    "Michael Hill"
+   ],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_net-wireless-connect.md",
+   "md_sha256": "10734f6b26af018719d4b14401c9208e6cfab512f3f230b6490c3db510fba968"
+  },
+  {
+   "page": "net-wireless-hidden",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/net-wireless-hidden.html",
+   "title": "Connect to a hidden wireless network",
+   "raw_sha256": "4f7038b284c6f75c7d0485eba3041218c406da6aaec21bdae2a6e05515aead20",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "GNOME Documentation Project"
+   ],
+   "editors": [
+    "Michael Hill",
+    "Ekaterina Gerasimova"
+   ],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_net-wireless-hidden.md",
+   "md_sha256": "3b4d29bf76321986efcb7d68ea49274a4a28d92d3e95af11749724ec303451a1"
+  },
+  {
+   "page": "power-autosuspend",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/power-autosuspend.html",
+   "title": "Set up automatic suspend",
+   "raw_sha256": "854840cca8b7327056d7aa4dba1f8398ff440e2d3a97737b97bd232596ae0925",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "Michael Hill"
+   ],
+   "editors": [],
+   "translators": [],
+   "copyright": [
+    "© 2016 Michael Hill"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_power-autosuspend.md",
+   "md_sha256": "9ec125213411f6109149dc3c427f61eca42eec176703163ac963ea40c35d1ada"
+  },
+  {
+   "page": "power-batterylife",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/power-batterylife.html",
+   "title": "Use less power and improve battery life",
+   "raw_sha256": "acfeb0d6b97dc5e8c577e43cafc4c415cf0e5733fd41944042d44bbd867d6e2e",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "GNOME Documentation Project",
+    "Phil Bull"
+   ],
+   "editors": [
+    "Ekaterina Gerasimova",
+    "Michael Hill"
+   ],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_power-batterylife.md",
+   "md_sha256": "68ad43c9341a254cf822c63b99d344bd8b8ea2424f8e55bd4b824fb5fcf463ef"
+  },
+  {
+   "page": "power-whydim",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/power-whydim.html",
+   "title": "Why does my screen go dim after a while?",
+   "raw_sha256": "a8921afa04982703a742154ced6b90e07fc1ba0af02fb22ed0f1952438d7fe5e",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "GNOME Documentation Project"
+   ],
+   "editors": [
+    "Michael Hill",
+    "Ekaterina Gerasimova"
+   ],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_power-whydim.md",
+   "md_sha256": "5e2395d81709bdeddb1d9817b6ce60c18c68dc1346a46bb38cc50d1178295f87"
+  },
+  {
+   "page": "printing-2sided",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/printing-2sided.html",
+   "title": "Print two-sided and multi-page layouts",
+   "raw_sha256": "0de03e5733889c91442e16146c9c8c08ccb9d8a6786a72ba25c18b7a27210cd3",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "Phil Bull",
+    "Jim Campbell"
+   ],
+   "editors": [],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_printing-2sided.md",
+   "md_sha256": "8f99eadb1c83c76fa488b2511021bae5122f5add4a816bc220b9456043fef355"
+  },
+  {
+   "page": "printing-cancel-job",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/printing-cancel-job.html",
+   "title": "Cancel, pause or release a print job",
+   "raw_sha256": "89795a9140645cc728823a382dbb2833518895a113d5fbb8010fc0d66eab6033",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "Phil Bull",
+    "Jim Campbell"
+   ],
+   "editors": [
+    "Jana Svarova"
+   ],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_printing-cancel-job.md",
+   "md_sha256": "4cad71027b35e71a3f655fc87812afeeebfecdc5eed9f3ef3a6e3e46c5bb0d33"
+  },
+  {
+   "page": "sound-volume",
+   "lang": "en",
+   "url": "https://help.gnome.org/gnome-help/sound-volume.html",
+   "title": "Change the sound volume",
+   "raw_sha256": "bd8b47e7519cf1dc8ace944fbb77bbebaeebad38166ac341ea2e5555743cb5cb",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "Phil Bull",
+    "Shaun McCance"
+   ],
+   "editors": [
+    "Michael Hill"
+   ],
+   "translators": [],
+   "copyright": [],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.0,
+   "file": "example/assets/corpus/e1/gnome/en/gnome_en_sound-volume.md",
+   "md_sha256": "cdadb2f18252bd85e319b61aa10b2a52515ae509f88047840efc995a0ec28e69"
+  },
+  {
+   "page": "accounts-add",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/accounts-add.html.ko",
+   "title": "계정 추가",
+   "raw_sha256": "51e29bc880b574c7dc85576b024ee99d329f0a25c5093499ab054916f07c354a",
+   "dropped_untranslated_blocks": 1,
+   "authors": [
+    "Jim Campbell"
+   ],
+   "editors": [
+    "Michael Hill",
+    "Ekaterina Gerasimova",
+    "Shaun McCance",
+    "Klein Kravis"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 1.0,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_accounts-add.md",
+   "md_sha256": "85782c570a34f9f9c1757f0a290b6073477445921fd72885ba1d5b6770335493"
+  },
+  {
+   "page": "disk-check",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/disk-check.html.ko",
+   "title": "하드 디스크 문제 확인",
+   "raw_sha256": "18c8c8af695bc17fdd61bdc67068e3c98a4b3b5f049607ebc1d0e71ea8818631",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "그놈 문서 프로젝트",
+    "Natalia Ruz Leiva"
+   ],
+   "editors": [
+    "Michael Hill"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.956,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_disk-check.md",
+   "md_sha256": "faea2073a7aaf37ce3cf2081dd6a0ce2c63a907941d2f1ece3d005a667c37b1d"
+  },
+  {
+   "page": "disk-partitions",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/disk-partitions.html.ko",
+   "title": "볼륨 및 분할 영역 관리하기",
+   "raw_sha256": "fccbde371503b59e2c4d555121c23e6b784c71e2449f53582462f778c22edd0e",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "그놈 문서 프로젝트"
+   ],
+   "editors": [],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.976,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_disk-partitions.md",
+   "md_sha256": "c5bc633b8c4b8009d61e60b25ab9070eecb8d915c61d783edb60696a59f65a40"
+  },
+  {
+   "page": "files-rename",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/files-rename.html.ko",
+   "title": "파일 또는 폴더 이름 바꾸기",
+   "raw_sha256": "cc7549ad46ef5dea8b52e89254e7ba542f260cb18a43b0297ce24d6a7f79f12b",
+   "dropped_untranslated_blocks": 1,
+   "authors": [
+    "그놈 문서 프로젝트",
+    "Shaun McCance",
+    "Jim Campbell"
+   ],
+   "editors": [
+    "Michael Hill",
+    "David King"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.91,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_files-rename.md",
+   "md_sha256": "5ffe871c68ccf146c96c7ff7651faebc19e80f79ca1c0fb9205f7b42cfb11dc9"
+  },
+  {
+   "page": "files-search",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/files-search.html.ko",
+   "title": "파일 검색",
+   "raw_sha256": "4652dbf4d1c63f9c0c74d5e43adb7a3902fc733260cdfb1b53f20d04c714c547",
+   "dropped_untranslated_blocks": 3,
+   "authors": [
+    "그놈 문서 프로젝트",
+    "Shaun McCance"
+   ],
+   "editors": [
+    "Michael Hill",
+    "David King",
+    "Jim Campbell"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.966,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_files-search.md",
+   "md_sha256": "90ac8f8d229951a5c2946d1037d0d744d31f9e8b5277e6ea03302ac6dec52121"
+  },
+  {
+   "page": "hardware-cardreader",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/hardware-cardreader.html.ko",
+   "title": "미디어 카드 리더 문제",
+   "raw_sha256": "e81d5ca0bfba50826bc23daac7870f488e4733493d3e18f56b361dcd88d7e52b",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "그놈 문서 프로젝트"
+   ],
+   "editors": [
+    "Michael Hill"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.943,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_hardware-cardreader.md",
+   "md_sha256": "157308980b4135ff383f1c21388b65e11874a397e865831d751551bb13878db8"
+  },
+  {
+   "page": "look-background",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/look-background.html.ko",
+   "title": "데스크톱 모양새 바꾸기",
+   "raw_sha256": "fc1aa7dfb1e25fc2d02812920095a99fa3c2a31b3c17286df4d0ed646926bece",
+   "dropped_untranslated_blocks": 3,
+   "authors": [
+    "그놈 문서 프로젝트",
+    "April Gonzales",
+    "Natalia Ruz Leiva",
+    "Shaun McCance",
+    "Andre Klapper"
+   ],
+   "editors": [
+    "Michael Hill",
+    "Shobha Tyagi",
+    "Ekaterina Gerasimova",
+    "Ivan Stanton"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 1.0,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_look-background.md",
+   "md_sha256": "286ee2043dc6eee8ea00fbb8a99710971e750ca8e641650dbd11614d1a7cbefc"
+  },
+  {
+   "page": "look-resolution",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/look-resolution.html.ko",
+   "title": "화면 해상도 또는 방향 바꾸기",
+   "raw_sha256": "b07ccdffa8e4ac5870941d0839148d208a0335fd00210ca87d75b5ce78f86fc3",
+   "dropped_untranslated_blocks": 3,
+   "authors": [
+    "그놈 문서 프로젝트",
+    "Natalia Ruz Leiva"
+   ],
+   "editors": [
+    "Michael Hill",
+    "Shobha Tyagi",
+    "Ekaterina Gerasimova",
+    "Emanuel Cisár"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.946,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_look-resolution.md",
+   "md_sha256": "889e4575567a50db6bddd85c32488307d38034e3e4e8ae6d895d7cb4d984740b"
+  },
+  {
+   "page": "printing-setup",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/printing-setup.html.ko",
+   "title": "로컬 프린터 설정",
+   "raw_sha256": "6baa223dfd580432083fafaa12aed1b37bc83a0447ebd766f580018cae8a3b6f",
+   "dropped_untranslated_blocks": 1,
+   "authors": [
+    "Phil Bull",
+    "Jim Campbell",
+    "Paul W. Frields",
+    "Shaun McCance"
+   ],
+   "editors": [
+    "Michael Hill"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.994,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_printing-setup.md",
+   "md_sha256": "88175ccc89fb3ae955169587b9b02e3111138added61f4778174eaeabf1dc5f6"
+  },
+  {
+   "page": "privacy-history-recent-off",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/privacy-history-recent-off.html.ko",
+   "title": "파일 사용 내역 추적 끄거나 제한하기",
+   "raw_sha256": "1e087e7aba5f84e78f7d6199612d6e98af484691eee8536ee0616bfdb2e47356",
+   "dropped_untranslated_blocks": 2,
+   "authors": [
+    "Jim Campbell"
+   ],
+   "editors": [
+    "Michael Hill"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 1.0,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_privacy-history-recent-off.md",
+   "md_sha256": "5a77f3b35908cc3975475b31b48bf9f72d321b823603e3faf892c2ff356aee34"
+  },
+  {
+   "page": "shell-notifications",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/shell-notifications.html.ko",
+   "title": "알림 및 알림 목록",
+   "raw_sha256": "f85a11fcde474b972c159965fc9c2b0b05df184efeac755d63445c3429088360",
+   "dropped_untranslated_blocks": 2,
+   "authors": [
+    "Marina Zhurakhinskaya"
+   ],
+   "editors": [
+    "Michael Hill",
+    "Ekaterina Gerasimova",
+    "Petr Kovar"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.976,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_shell-notifications.md",
+   "md_sha256": "5eebd574ea9792e887697c174524f135e86611fb8a4adb144a508c1afb367128"
+  },
+  {
+   "page": "sound-usemic",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/sound-usemic.html.ko",
+   "title": "다른 마이크로폰 사용",
+   "raw_sha256": "61b2604f2c97a9c75dd2945856c6d9fb4947439aa2d4d56e1b5ee5a3c24ca3ce",
+   "dropped_untranslated_blocks": 0,
+   "authors": [
+    "Shaun McCance"
+   ],
+   "editors": [
+    "Michael Hill",
+    "Ekaterina Gerasimova"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 0.981,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_sound-usemic.md",
+   "md_sha256": "669202c9c948d56232fa399c06884ac609212ef86cf4bb7920907daa4e3046d6"
+  },
+  {
+   "page": "user-add",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/user-add.html.ko",
+   "title": "새 사용자 계정 추가",
+   "raw_sha256": "92b3e4b96468a9437f9717eca88143567e90266ff26180f9ac1625a0f86b0b46",
+   "dropped_untranslated_blocks": 3,
+   "authors": [
+    "그놈 문서 프로젝트",
+    "Shaun McCance"
+   ],
+   "editors": [
+    "Michael Hill",
+    "Ekaterina Gerasimova"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 1.0,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_user-add.md",
+   "md_sha256": "dfeb620575e721bba819628dddd3e79c94e5d141736a4e9a7bd2702ddbf95b2b"
+  },
+  {
+   "page": "user-autologin",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/user-autologin.html.ko",
+   "title": "자동으로 로그인",
+   "raw_sha256": "7aff4c184cc97d3a09e313620971ec20d243a909eca6766896fd678c1e46711b",
+   "dropped_untranslated_blocks": 2,
+   "authors": [
+    "Ekaterina Gerasimova"
+   ],
+   "editors": [
+    "Michael Hill"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2013 Ekaterina Gerasimova",
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 1.0,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_user-autologin.md",
+   "md_sha256": "dcec7ab99a06c6f47293e6c404ab3a0dbc9e016565027c9b06c5edd10779fd87"
+  },
+  {
+   "page": "user-changepassword",
+   "lang": "ko",
+   "url": "https://help.gnome.org/gnome-help/user-changepassword.html.ko",
+   "title": "암호 바꾸기",
+   "raw_sha256": "f6697bd430f9e99ef834a9525751ba187c8286e497e019343ec922de24707e11",
+   "dropped_untranslated_blocks": 2,
+   "authors": [
+    "그놈 문서 프로젝트"
+   ],
+   "editors": [
+    "Michael Hill",
+    "Ekaterina Gerasimova"
+   ],
+   "translators": [
+    "조성호"
+   ],
+   "copyright": [
+    "© 2021, 2022, 2023 조성호"
+   ],
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+   "hangul_share": 1.0,
+   "file": "example/assets/corpus/e1/gnome/ko/gnome_ko_user-changepassword.md",
+   "md_sha256": "404946b5115c633ca245bb3e80cd27cd1e95629fd096ad1cb7fa076177f600bb"
+  }
+ ]
+}
