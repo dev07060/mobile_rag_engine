@@ -139,9 +139,9 @@
 
 | 확인 | 결과 |
 |---|---|
-| 오프라인 재결합(`f7_fusion_compare.py`)이 엔진 하네스 결과를 재현하는가 | 아래 "다시 만들기" 뒤에 채운다 |
+| 오프라인 재결합(`f7_fusion_compare.py`)이 엔진 하네스 결과를 재현하는가 (질문 90 × 프로필 5) | `ask` 조건: MiniLM 450/450, KoEn 450/450, BGE-m3 450/450. 하네스 조건(topK 100): 450/450, 450/450, 449/450(다른 1건은 BM25 점수 동점) |
 | KoEn `--init-weights 0.5,0.5`: 무게 없는 `prepareAsk`가 0.5/0.5 명시와 같은 구절을 내는가 | 90개 중 89개 같음. 1개는 같은 무게로 두 번 불러도 생기는 BM25 동점 순서 차이로 추정(확인하지 않음). 정답 구절이 프롬프트에 든 질문 76/90(0.5/0.5 오프라인 76과 같음) |
-| 앱("App docs" 화면의 코드)이 하네스와 같은 상위 5개를 내는가 | 아래 "example 앱" 절 |
+| 앱("App docs" 화면의 코드)이 하네스와 같은 결과를 내는가 | 질문 120 × 무게 6 = 720건에서 정답 적중이 MiniLM 720/720, KoEn 720/720 같다. 상위 5개 문서 순서는 715/720, 709/720 같고, 다른 건은 모두 4~5위의 순서 차이다(앱은 DB를 새로 만들어 색인한다). 아래 "example 앱" 절 |
 
 ## example 앱
 
@@ -150,16 +150,52 @@ E1과 같은 PR로 example 앱을 바꿨다(범위는 `docs/milestones.md` E1).
 - **모델 선택:** `--dart-define=EXAMPLE_MODEL=minilm|koen`. Model Pack(`assets/models/<이름>/model-pack.json`)으로 초기화한다. KoEn이면 레시피대로 `defaultVectorWeight: 0.5, defaultBm25Weight: 0.5`를 넣고, MiniLM은 엔진 기본값을 쓴다. 모델마다 DB 파일을 따로 쓴다. 상태 카드에 모델, 언어, 차원, 무게를 보인다.
 - **"App docs" 화면:** E1 문서 56개를 `e1_app_docs` 컬렉션에 넣고(하네스와 같이 자산을 파일로 복사해 `addDocumentFromFile`), 질문 120개를 언어·유형별로 고르거나 직접 입력해 상위 5개를 본다. 무게(앱 기본, 0.2/0.8, 0.5/0.5, 0.6/0.4, 벡터만, BM25만)를 바꿔 볼 수 있고, 목록의 질문이면 정답이 상위 5개에 들었는지 표시한다. 검색은 하네스의 `ask` 조건과 같은 `searchMeta(topK: 5)`다.
 - **`example/README.md`:** 모델 준비 안내를 Model Pack과 KoEn 레시피로 고쳤다(전에는 BGE-m3를 curl로 받는 안내였다).
-- **앱 확인:** `example/integration_test/e1_app_docs_parity_test.dart`가 앱 코드로 문서를 넣고 질문 120개 × 무게 6개를 돌려, 결과를 하네스 덤프와 비교한다([`scripts/e1/compare_app_parity.py`](../../../scripts/e1/compare_app_parity.py)). 결과는 아래에 채운다.
+- **앱 확인:** `example/integration_test/e1_app_docs_parity_test.dart`가 앱 코드로 문서를 넣고 질문 120개 × 무게 6개를 돌려, 결과를 하네스 덤프와 비교한다([`scripts/e1/compare_app_parity.py`](../../../scripts/e1/compare_app_parity.py), 실행은 [`scripts/e1/run_app_parity.sh`](../../../scripts/e1/run_app_parity.sh)). 앱은 macOS profile 빌드로 빌드됐다(Model Pack 두 개와 PDF를 넣어 162.5MB).
+
+| 모델 | 앱 기본 | 0.2/0.8 | 0.5/0.5 | 0.6/0.4 | 벡터만 | BM25만 | 기본 = 레시피 명시 |
+|---|---|---|---|---|---|---|---|
+| MiniLM (앱 기본 = 0.2/0.8) | 56 | 56 | 56 | 43 | 40 | 59 | 120/120 (2개는 첫 호출에서 달라 다시 불러 같음) |
+| KoEn (앱 기본 = 0.5/0.5) | 76 | 66 | 76 | 76 | 79 | 59 | 120/120 (3개는 첫 호출에서 달라 다시 불러 같음) |
+
+- 수치는 하네스 덤프의 오프라인 계산과 무게마다 같다.
+- "첫 호출에서 다름"은 같은 무게로 두 번 불러도 생기는 차이로 보고(BM25 동점 순서), 테스트는 다섯 번 안에 한 번이라도 같으면 같다고 센다. 동점 순서는 후보 목록에 적었다.
 
 ## 측정 조건 (규칙 9)
 
 | 항목 | 값 |
 |---|---|
 | 모델 | MiniLM `sentence-transformers/all-MiniLM-L6-v2` rev `1110a243` (Model Pack `stable-minilm-l6-v2-arm64-en`) `model.onnx|384|f32+vabq:none|sha256:e9246dc32f332cb687c5d1ea0c0c51d3`; KoEn-E5-Tiny rev `5cf599a8` int8 arm64 `model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413`; BGE-m3 `model.onnx|1024|f32+vabq:none|sha256:b089a980c41f6158f8447400dd5b2abb` |
-| 엔진 | 아래 "실행 기록". profile 빌드, Rust 기능 `vector_faer,vector_quant_i8`, 실행마다 새 DB |
+| 엔진 | profile 빌드, Rust 기능 `vector_faer,vector_quant_i8`, 실행마다 새 DB. 커밋은 아래 실행 기록 |
 | 기기·도구 | Apple M3 Pro, macOS 27.2.1, Xcode 27.1 (27A9275), Flutter 3.35.5, Dart 3.9.2, rustc 1.91.1. Xcode 27 우회(링커 `-no_fixup_chains`, `ARCHS = arm64`, Pod 배포 대상 14.0)는 `run_passage_eval.sh`가 복사본에만 넣는다 |
 | 자료·청크 | 문서 56개, 질문 120개(답 있음 90), 청크 MiniLM 2,330 / KoEn·BGE-m3 2,319 |
 | 날짜 | 2026-11-14(KST) |
 | 다른 작업 | 실행은 하나씩 차례로 돌렸다. 같은 Mac에서 다른 Claude 세션이 열려 있었다(실행 끝 부하 평균 6~7). 검색 시간은 이 문서에서 쓰지 않는다 |
 | 결과 파일 | [`results_e1.json`](results_e1.json)(`e1_report.py --json`) |
+
+### 실행 기록
+
+| 실행 | 커밋 | 바뀐 추적 파일 (실행 때) | 시간 | 끝난 시각 (UTC) |
+|---|---|---|---|---|
+| MiniLM 하네스 (`e1_minilm`) | `1755192` | 없음 | 33초 | 05:14 |
+| KoEn 하네스 (`e1_koen`) | `1755192` | 없음 | 29초 | 05:15 |
+| KoEn `--init-weights 0.5,0.5` | `9ac2b61` | 고친 정답 파일(e1q-066, 아래), `example/lib`의 앱 파일(하네스가 import하지 않음), 문서와 스크립트 | 38초 | 05:11 |
+| BGE-m3 하네스 (`e1_bgem3`) | `9ac2b61` | 같음 | 106초 | 05:13 |
+| 앱 확인 MiniLM / KoEn | `0076037` | 없음 | 221초 / 35초 | 2026-11-14 |
+
+- 하네스는 `example/integration_test/hybrid_passage_relevance_measure_test.dart`이고 `example/lib/profiling/`만 import한다. `9ac2b61` 실행 때 바뀌어 있던 앱 파일은 하네스 빌드에 들어가지 않는다.
+- MiniLM·KoEn은 e1q-066 정답 구절을 고친 뒤 다시 쟀다. 고치기 전 실행(`9ac2b61`)과 오프라인 수치가 모두 같았다.
+
+## 다시 만들기
+
+```bash
+python3 scripts/e1/build_e1_bundle.py            # cargo로 PDF 글과 BM25 토큰을 뽑는다
+scripts/eval/run_passage_eval.sh --model <MiniLM pack dir> --name e1_minilm --bundle e1 --dump-candidates --out build/eval_results/e1_minilm
+scripts/eval/run_passage_eval.sh --model <KoEn dir> --name e1_koen --bundle e1 --dump-candidates --out build/eval_results/e1_koen
+scripts/eval/run_passage_eval.sh --model <BGE-m3 dir> --name e1_bgem3 --bundle e1 --dump-candidates --out build/eval_results/e1_bgem3
+python3 -I scripts/e1/e1_report.py build/eval_results/e1_minilm build/eval_results/e1_koen build/eval_results/e1_bgem3 --json docs/perf/e1-app-docs/results_e1.json
+python3 -I scripts/eval/f7_fusion_compare.py build/eval_results/e1_minilm build/eval_results/e1_koen build/eval_results/e1_bgem3
+scripts/e1/run_app_parity.sh koen   # 모델 파일을 example/assets/models/koen/에 둔 뒤
+python3 -I scripts/e1/compare_app_parity.py build/eval_results/e1_app_koen/e1_app_parity_koen.json build/eval_results/e1_koen
+```
+
+GNOME 도움말 쪽을 다시 받으려면 `example/assets/corpus/e1/gnome/gnome_pages_v1.json`의 URL을 받아 `python3 -I scripts/e1/gnome_help_to_md.py --raw <dir> --out example/assets/corpus/e1/gnome`로 바꾼다. 쪽은 그 뒤 바뀌었을 수 있으니 `raw_sha256`으로 같은지 확인한다.
