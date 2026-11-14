@@ -9,7 +9,7 @@ The app initializes from a Model Pack and picks the model at build time:
 | `--dart-define=EXAMPLE_MODEL=` | Model | Languages | Hybrid weights the app sets |
 |---|---|---|---|
 | `minilm` (default) | MiniLM, the default Model Pack | English | none, the engine default (vector 0.2 / BM25 0.8) |
-| `koen` | KoEn-E5-Tiny | Korean, English | vector 0.5 / BM25 0.5, from the [KoEn-E5-Tiny recipe](../docs/guides/model_setup.md#korean-documents-koen-e5-tiny) |
+| `koen` | KoEn-E5-Tiny | Korean, English | vector 0.5 / BM25 0.5, this app's choice; measurements in [Model Setup](../docs/guides/model_setup.md#korean-documents-koen-e5-tiny) |
 
 ```dart
 await MobileRag.initialize(
