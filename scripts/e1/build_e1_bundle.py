@@ -42,7 +42,7 @@ CORPUS = EXAMPLE / "assets" / "corpus" / "e1"
 PDFS = {"e1_pdf_eng": ("assets/sample_data/sample_eng.pdf", "en", "IFRS 17 Insurance Contracts (IFRS Foundation)"),
         "e1_pdf_kor": ("assets/sample_data/sample_kor.pdf", "ko", "군 장병 피싱·스캠 예방 서비스 시장 조사 보고서")}
 DATASET_ID = "e1_app_docs_v1"
-AUTHOR = "session_draft"  # becomes "session_draft+human_review" after review
+AUTHOR = "session_draft+human_review"  # session drafts, reviewed and confirmed by the maintainer (2026-11-14)
 SEED = 20261114
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

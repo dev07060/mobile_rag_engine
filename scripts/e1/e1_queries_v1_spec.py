@@ -1,4 +1,4 @@
-"""E1 query spec (session drafts, 2026-11-14). Edited by hand.
+"""E1 query spec (session drafts 2026-11-14, maintainer review applied 2026-11-14). Edited by hand.
 
 Each row: (item_id, language, intent, target_source_key or None, gold_passage or None, query)
 intent: lexical (asked with the document's words) | paraphrase (asked in other
@@ -35,17 +35,17 @@ ROWS = [
    'What is the keyboard shortcut to lock the screen?'),
   # ---------------- English: GNOME Help, paraphrase
   ('e1q-008','en','paraphrase',GE+'files_delete','Press and hold the Shift key, then press the Delete key on your keyboard.',
-   'I want to get rid of something right away without it going to the bin first. How?'),
+   'How do I delete a file for good without it going to the trash first?'),
   ('e1q-009','en','paraphrase',GE+'files_recover','There are a number of recovery tools available that are sometimes able to recover files that were permanently deleted.',
    'Is there any way to bring back something I wiped for good?'),
   ('e1q-010','en','paraphrase',GE+'power_autosuspend','Different intervals can be specified for running on battery or plugged in.',
    'Can my laptop go to sleep by itself with different timing when it is unplugged?'),
   ('e1q-011','en','paraphrase',GE+'power_batterylife','Powering the screen accounts for a significant fraction of a laptop power consumption.',
-   'What eats the most energy on a notebook?'),
+   "Does the display use a lot of my laptop's battery?"),
   ('e1q-012','en','paraphrase',GE+'net_wireless_connect','A stronger connection to a wireless network does not necessarily mean that you have a faster internet connection',
    'My Wi-Fi shows full bars, so why are downloads still slow?'),
   ('e1q-013','en','paraphrase',GE+'net_wireless_hidden','In practice, this is not the case; the network is slightly harder to find but it is still detectable.',
-   "Does making my router's name invisible keep strangers out?"),
+   'Does hiding my Wi-Fi network name make it more secure?'),
   ('e1q-014','en','paraphrase',GE+'printing_cancel_job','remove the paper from the printer’s paper input tray',
    "A huge document keeps coming out and won't stop. What can I do as a last resort?"),
   ('e1q-015','en','paraphrase',GE+'sound_volume','You can change the volume for one application and leave the volume for others unchanged.',
@@ -77,9 +77,9 @@ ROWS = [
   ('e1q-027','en','paraphrase',OE+'01','Switches, schedules and scenes run on the hub itself, so they keep working during an internet outage.',
    'Will my lamps still follow their timers if my broadband goes out?'),
   ('e1q-028','en','paraphrase',OE+'01','Hold the button on the back of the hub for 10 seconds until the ring light turns amber.',
-   'How do I wipe the hub back to how it came out of the box?'),
+   'How do I factory reset the hub?'),
   ('e1q-029','en','paraphrase',OE+'02','Sunrise Wake: bedroom lights fade in over 15, 30 or 45 minutes before your alarm.',
-   'Can the lamps where I sleep slowly brighten before I have to get up?'),
+   'Can my bedroom lights turn on gradually before my alarm goes off?'),
   ('e1q-030','en','paraphrase',OE+'03','Solid red: the Wi-Fi password was wrong.',
    'The little light on my hub is glowing red without flashing. What went wrong?'),
   ('e1q-031','en','paraphrase',OE+'04','without Plus, clips are kept for 24 hours',
@@ -113,7 +113,7 @@ ROWS = [
   ('e1q-044','en','paraphrase',PE,'the coverage period of each contract in the group (including insurance contract services arising from all premiums within the contract boundary determined at that date applying paragraph 34) is one year or less',
    'When may an insurer use the simplified method for short policies?'),
   ('e1q-045','en','paraphrase',PE,'An entity shall not recognise as a liability or as an asset any amounts relating to expected premiums or expected claims outside the boundary of the insurance contract.',
-   'Should money tied to future policies beyond the current agreement go on the balance sheet?'),
+   "Do expected premiums from future renewals count in the current contract's liability?"),
   # ---------------- English: no answer
   ('e1q-046','en','no_answer',None,None,'What is the warranty period for the Lumo Hub?'),
   ('e1q-047','en','no_answer',None,None,'How do I change the language of the Lumo app?'),
@@ -139,7 +139,7 @@ ROWS = [
   ('e1q-063','ko','lexical',GK+'shell_notifications','시계를 누르거나 Super+V 키를 누르면 나타납니다.',
    '알림 목록은 어떤 키를 누르면 나타나나요?'),
   ('e1q-064','ko','lexical',GK+'disk_check','하드 디스크는 자체 상태 검사 도구 SMART(자체 감시, 분석, 보고 기술)가 있어',
-   '하드 디스크의 SMART 상태 검사 도구는 무엇인가요?'),
+   '하드 디스크 자체 상태 검사 도구 이름이 뭐예요?'),
   ('e1q-065','ko','lexical',GK+'look_resolution','되돌리기 전에 20초 동안 새 설정을 적용합니다.',
    '해상도를 바꾸면 되돌리기 전에 새 설정을 몇 초 동안 적용하나요?'),
   ('e1q-066','ko','lexical',GK+'user_autologin','이 설정을 바꿀 수 없습니다. 이 설정을 바꿔줄 수 있는 시스템 관리자에게 연락합니다.',
@@ -149,7 +149,7 @@ ROWS = [
   # ---------------- Korean: GNOME Help, paraphrase
   ('e1q-068','ko','paraphrase',GK+'files_rename','파일 이름에는 /(슬래시) 문자를 제외하고 어떤 문자든 사용할 수 있습니다.',
    '파일명에 쓰면 안 되는 기호가 뭐야?'),
-  ('e1q-069','ko','paraphrase',GK+'files_rename','어떤 파일 시스템에서는 파일 이름의 길이가 255 글자를 넘을 수 없습니다.',
+  ('e1q-069','ko','paraphrase',GK+'files_rename','255 글자 제한은 파일 이름과 파일 경로 모두(이를테면, /home/cheolsoo/Documents/work/business-proposals/… )에 해당하기에 가능하다면 긴 파일 이름 및 긴 폴더 이름을 피해야 합니다.',
    '폴더 경로까지 합쳐서 너무 길면 저장이 안 될 수도 있어?'),
   ('e1q-070','ko','paraphrase',GK+'user_changepassword','여러분의 계정이 아닌 사용자 계정을 편집하려면 관리자 권한이 필요합니다.',
    '다른 사람 로그인 비번을 내가 대신 바꿀 수 있어?'),
@@ -158,9 +158,9 @@ ROWS = [
   ('e1q-072','ko','paraphrase',GK+'shell_notifications','잠금 화면 알림 스위치를 끕니다.',
    'PC가 잠겨 있을 때 메시지 미리보기가 안 보이게 하려면?'),
   ('e1q-073','ko','paraphrase',GK+'sound_usemic','USB 마이크로폰은 별도의 오디오 장치로 동작하며, 어떤 마이크로폰을 기본으로 사용할 지 지정해야합니다.',
-   'USB로 꽂는 녹음 장비를 새로 샀는데 따로 해 줘야 할 게 있어?'),
+   'USB 마이크를 새로 샀는데 따로 설정해야 돼?'),
   ('e1q-074','ko','paraphrase',GK+'disk_partitions','이 유틸리티로 디스크의 데이터를 완전히 지울 수 있습니다.',
-   '저장 장치 관리 도구를 잘못 쓰면 자료가 날아갈 수도 있어?'),
+   '디스크 프로그램 잘못 만지면 데이터 날아가?'),
   ('e1q-075','ko','paraphrase',GK+'printing_setup','프린터를 네트워크에 연결했다면 자동으로 설정하지 않습니다.',
    '와이파이로 붙는 복합기도 저절로 잡히나요?'),
   ('e1q-076','ko','paraphrase',GK+'look_background','를 눌러 가지고 있는 사진 중 하나를 활용할 수 있습니다',
@@ -190,7 +190,7 @@ ROWS = [
   ('e1q-087','ko','paraphrase',OK+'02','3.0부터 iOS 16 이상이 필요합니다.',
    '옛날 아이폰에서도 최신 가계부 앱을 받을 수 있나요?'),
   ('e1q-088','ko','paraphrase',OK+'02','월말에 할부 결제가 두 번 집계되던 문제를 고쳤습니다.',
-   '나눠서 낸 결제가 이번 달에 중복으로 잡혀 있던데 해결됐어?'),
+   '할부가 두 번 찍혀 있던데 해결됐어?'),
   ('e1q-089','ko','paraphrase',OK+'03','은행 점검 시간(대부분 밤 11시 30분부터 새벽 0시 30분까지)에는 일부 내역이 빠질 수 있습니다.',
    '한밤중에 보니 카드 쓴 기록 몇 개가 안 보여요'),
   ('e1q-090','ko','paraphrase',OK+'04','구독 해지는 앱이 아니라 앱스토어나 구글 플레이의 구독 관리에서 합니다.',
@@ -208,7 +208,7 @@ ROWS = [
   ('e1q-096','ko','paraphrase',OK+'09','결제 대행사 연동 심사가 끝나지 않았기 때문이다.',
    '신규 서비스 오픈이 왜 늦춰졌어?'),
   ('e1q-097','ko','paraphrase',OK+'10','USB 저장장치: 기본 차단.',
-   '업무 PC에 이동식 메모리를 꽂아도 돼?'),
+   '회사 컴퓨터에 USB 꽂아도 돼?'),
   ('e1q-098','ko','paraphrase',OK+'11','쓰지 않은 연차는 다음 해로 넘어가지 않습니다.',
    '올해 못 쓴 휴가를 내년에 쓸 수 있나?'),
   # ---------------- Korean: PDF (market research report), lexical
@@ -230,7 +230,7 @@ ROWS = [
   # ---------------- Korean: no answer
   ('e1q-106','ko','no_answer',None,None,'모아가계부에 주식 계좌도 연결할 수 있나요?'),
   ('e1q-107','ko','no_answer',None,None,'모아가계부 다크 모드는 어떻게 켜나요?'),
-  ('e1q-108','ko','no_answer',None,None,'해외 출장 숙박비 한도는 얼마인가요?'),
+  ('e1q-108','ko','no_answer',None,None,'출장 가기 전에 경비를 미리 받을 수 있나요?'),
   ('e1q-109','ko','no_answer',None,None,'경조사 휴가는 며칠인가요?'),
   ('e1q-110','ko','no_answer',None,None,'사내 식당은 몇 시에 여나요?'),
   ('e1q-111','ko','no_answer',None,None,'법인카드를 잃어버리면 어떻게 신고하나요?'),
@@ -240,7 +240,7 @@ ROWS = [
   ('e1q-115','ko','no_answer',None,None,'회의실 예약은 어떻게 하나요?'),
   ('e1q-116','ko','no_answer',None,None,'주차 지원금은 한 달에 얼마인가요?'),
   ('e1q-117','ko','no_answer',None,None,'가계부 위젯 크기를 바꾸려면?'),
-  ('e1q-118','ko','no_answer',None,None,'출장 갈 때 택시비도 정산되나요?'),
+  ('e1q-118','ko','no_answer',None,None,'출장 일정이 주말에 걸리면 휴일 근무로 인정되나요?'),
   ('e1q-119','ko','no_answer',None,None,'사내 동호회 지원금은 얼마인가요?'),
   ('e1q-120','ko','no_answer',None,None,'모아가계부 앱을 열 때 잠금 비밀번호를 걸 수 있나요?'),
 ]

@@ -3,7 +3,7 @@
     "queries": 120,
     "sources": 56,
     "seed": 20261114,
-    "author": "session_draft",
+    "author": "session_draft+human_review",
     "by_language": {
       "en": 60,
       "ko": 60
@@ -18,20 +18,20 @@
     },
     "by_measured_class_and_language": {
       "high/en": 13,
-      "high/ko": 7,
+      "high/ko": 8,
       "no_answer/en": 15,
       "no_answer/ko": 15,
-      "none/en": 9,
-      "none/ko": 18,
-      "partial/en": 23,
-      "partial/ko": 20
+      "none/en": 8,
+      "none/ko": 14,
+      "partial/en": 24,
+      "partial/ko": 23
     },
     "by_intent_and_measured": {
-      "lexical/high": 20,
-      "lexical/partial": 20,
+      "lexical/high": 21,
+      "lexical/partial": 19,
       "no_answer/no_answer": 30,
-      "paraphrase/none": 27,
-      "paraphrase/partial": 23
+      "paraphrase/none": 22,
+      "paraphrase/partial": 28
     },
     "by_doc_kind": {
       "-/en": 15,
@@ -50,7 +50,6 @@
       "tune/ko": 29
     },
     "zero_overlap_with_whole_doc": [
-      "e1q-073",
       "e1q-089",
       "e1q-094",
       "e1q-095"
@@ -186,12 +185,13 @@
       "language": "en",
       "intent": "paraphrase",
       "split": "tune",
-      "query_tokens": 15,
+      "query_tokens": 13,
       "source_key": "gnome_en_files_delete",
       "doc_kind": "gnome",
-      "overlap_gold": 0.067,
-      "overlap_doc": 0.467,
+      "overlap_gold": 0.154,
+      "overlap_doc": 0.769,
       "shared_with_gold": [
+        "delet",
         "the"
       ],
       "measured": "partial"
@@ -233,12 +233,13 @@
       "language": "en",
       "intent": "paraphrase",
       "split": "tune",
-      "query_tokens": 7,
+      "query_tokens": 9,
       "source_key": "gnome_en_power_batterylife",
       "doc_kind": "gnome",
-      "overlap_gold": 0.143,
-      "overlap_doc": 0.571,
+      "overlap_gold": 0.222,
+      "overlap_doc": 0.556,
       "shared_with_gold": [
+        "of",
         "the"
       ],
       "measured": "partial"
@@ -261,13 +262,16 @@
       "language": "en",
       "intent": "paraphrase",
       "split": "check",
-      "query_tokens": 9,
+      "query_tokens": 11,
       "source_key": "gnome_en_net_wireless_hidden",
       "doc_kind": "gnome",
-      "overlap_gold": 0.0,
-      "overlap_doc": 0.111,
-      "shared_with_gold": [],
-      "measured": "none"
+      "overlap_gold": 0.182,
+      "overlap_doc": 0.636,
+      "shared_with_gold": [
+        "it",
+        "network"
+      ],
+      "measured": "partial"
     },
     {
       "item_id": "e1q-014",
@@ -514,15 +518,13 @@
       "language": "en",
       "intent": "paraphrase",
       "split": "tune",
-      "query_tokens": 12,
+      "query_tokens": 6,
       "source_key": "e1_own_en_01",
       "doc_kind": "own",
       "overlap_gold": 0.333,
-      "overlap_doc": 0.667,
+      "overlap_doc": 1.0,
       "shared_with_gold": [
-        "back",
         "hub",
-        "of",
         "the"
       ],
       "measured": "partial"
@@ -532,13 +534,16 @@
       "language": "en",
       "intent": "paraphrase",
       "split": "check",
-      "query_tokens": 12,
+      "query_tokens": 11,
       "source_key": "e1_own_en_02",
       "doc_kind": "own",
-      "overlap_gold": 0.083,
-      "overlap_doc": 0.25,
+      "overlap_gold": 0.364,
+      "overlap_doc": 0.455,
       "shared_with_gold": [
-        "befor"
+        "alarm",
+        "bedroom",
+        "befor",
+        "light"
       ],
       "measured": "partial"
     },
@@ -802,14 +807,16 @@
       "language": "en",
       "intent": "paraphrase",
       "split": "check",
-      "query_tokens": 14,
+      "query_tokens": 12,
       "source_key": "e1_pdf_eng",
       "doc_kind": "pdf",
-      "overlap_gold": 0.143,
-      "overlap_doc": 0.786,
+      "overlap_gold": 0.333,
+      "overlap_doc": 0.917,
       "shared_with_gold": [
-        "the",
-        "to"
+        "expect",
+        "liabil",
+        "premium",
+        "the"
       ],
       "measured": "partial"
     },
@@ -989,21 +996,21 @@
       "language": "ko",
       "intent": "lexical",
       "split": "tune",
-      "query_tokens": 16,
+      "query_tokens": 14,
       "source_key": "gnome_ko_disk_check",
       "doc_kind": "gnome",
-      "overlap_gold": 0.438,
-      "overlap_doc": 0.438,
+      "overlap_gold": 0.5,
+      "overlap_doc": 0.571,
       "shared_with_gold": [
-        "smart",
         "검사",
         "도구",
         "디스",
         "상태",
         "스크",
+        "자체",
         "하드"
       ],
-      "measured": "partial"
+      "measured": "high"
     },
     {
       "item_id": "e1q-065",
@@ -1092,10 +1099,13 @@
       "query_tokens": 17,
       "source_key": "gnome_ko_files_rename",
       "doc_kind": "gnome",
-      "overlap_gold": 0.0,
+      "overlap_gold": 0.118,
       "overlap_doc": 0.176,
-      "shared_with_gold": [],
-      "measured": "none"
+      "shared_with_gold": [
+        "경로",
+        "폴더"
+      ],
+      "measured": "partial"
     },
     {
       "item_id": "e1q-070",
@@ -1141,26 +1151,37 @@
       "language": "ko",
       "intent": "paraphrase",
       "split": "tune",
-      "query_tokens": 16,
+      "query_tokens": 15,
       "source_key": "gnome_ko_sound_usemic",
       "doc_kind": "gnome",
-      "overlap_gold": 0.0,
-      "overlap_doc": 0.0,
-      "shared_with_gold": [],
-      "measured": "none"
+      "overlap_gold": 0.333,
+      "overlap_doc": 0.333,
+      "shared_with_gold": [
+        "usb",
+        "마이",
+        "이크",
+        "정해",
+        "해야"
+      ],
+      "measured": "partial"
     },
     {
       "item_id": "e1q-074",
       "language": "ko",
       "intent": "paraphrase",
       "split": "check",
-      "query_tokens": 16,
+      "query_tokens": 17,
       "source_key": "gnome_ko_disk_partitions",
       "doc_kind": "gnome",
-      "overlap_gold": 0.0,
-      "overlap_doc": 0.25,
-      "shared_with_gold": [],
-      "measured": "none"
+      "overlap_gold": 0.235,
+      "overlap_doc": 0.529,
+      "shared_with_gold": [
+        "데이",
+        "디스",
+        "스크",
+        "이터"
+      ],
+      "measured": "partial"
     },
     {
       "item_id": "e1q-075",
@@ -1395,15 +1416,15 @@
       "language": "ko",
       "intent": "paraphrase",
       "split": "check",
-      "query_tokens": 21,
+      "query_tokens": 13,
       "source_key": "e1_own_ko_02",
       "doc_kind": "own",
-      "overlap_gold": 0.143,
-      "overlap_doc": 0.238,
+      "overlap_gold": 0.231,
+      "overlap_doc": 0.231,
       "shared_with_gold": [
-        "결제",
-        "결제가",
-        "제가"
+        "두",
+        "번",
+        "할부"
       ],
       "measured": "partial"
     },
@@ -1524,13 +1545,15 @@
       "language": "ko",
       "intent": "paraphrase",
       "split": "check",
-      "query_tokens": 13,
+      "query_tokens": 10,
       "source_key": "e1_own_ko_10",
       "doc_kind": "own",
-      "overlap_gold": 0.0,
-      "overlap_doc": 0.077,
-      "shared_with_gold": [],
-      "measured": "none"
+      "overlap_gold": 0.1,
+      "overlap_doc": 0.1,
+      "shared_with_gold": [
+        "usb"
+      ],
+      "measured": "partial"
     },
     {
       "item_id": "e1q-098",
@@ -1711,7 +1734,7 @@
       "language": "ko",
       "intent": "no_answer",
       "split": "check",
-      "query_tokens": 13,
+      "query_tokens": 12,
       "measured": "no_answer"
     },
     {
@@ -1791,7 +1814,7 @@
       "language": "ko",
       "intent": "no_answer",
       "split": "tune",
-      "query_tokens": 12,
+      "query_tokens": 19,
       "measured": "no_answer"
     },
     {
