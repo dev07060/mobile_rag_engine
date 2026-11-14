@@ -1,0 +1,4279 @@
+[
+ {
+  "dir": "e1_minilm",
+  "model": "e1_minilm",
+  "fingerprint": "model.onnx|384|f32+vabq:none|sha256:e9246dc32f332cb687c5d1ea0c0c51d3",
+  "commit": "1755192bf3e7c878bcfea8e514af027914279fb7",
+  "dirty": [],
+  "chunks": 2330,
+  "elapsed_seconds": 33,
+  "finished_at_utc": "2026-11-14T05:14:40+00:00",
+  "dataset_sha256": {
+   "manifest": "65884105daedc91ccf484cc01ebfb647f879c4a2673a2f288818baacfab8bd9d",
+   "evalset": "1e556737fdc51b6cafe4c10683357606b0aad45ce86620ce161937926d79aff9",
+   "gold": "88ba082d208ca2801bfab0b335390686ed1a91b697151fd4e38503d30207bf3e",
+   "no_answer": "a83afa22da25566dc60ef8bdc9eede309aadca7315013a630426e2bd80bf101e"
+  },
+  "answerable": 90,
+  "gold_not_in_any_chunk": [],
+  "table": {
+   "all": {
+    "vector only": {
+     "hits": 40,
+     "of": 90,
+     "new": 9,
+     "lost": 25,
+     "sign_p": 0.009
+    },
+    "bm25 only": {
+     "hits": 59,
+     "of": 90,
+     "new": 4,
+     "lost": 1,
+     "sign_p": 0.375
+    },
+    "rrf 0.2": {
+     "hits": 56,
+     "of": 90,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 56,
+     "of": 90,
+     "new": 5,
+     "lost": 5,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 43,
+     "of": 90,
+     "new": 6,
+     "lost": 19,
+     "sign_p": 0.0146
+    }
+   },
+   "en": {
+    "vector only": {
+     "hits": 38,
+     "of": 45,
+     "new": 8,
+     "lost": 2,
+     "sign_p": 0.1094
+    },
+    "bm25 only": {
+     "hits": 31,
+     "of": 45,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 32,
+     "of": 45,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 35,
+     "of": 45,
+     "new": 4,
+     "lost": 1,
+     "sign_p": 0.375
+    },
+    "rrf 0.6": {
+     "hits": 36,
+     "of": 45,
+     "new": 5,
+     "lost": 1,
+     "sign_p": 0.2188
+    }
+   },
+   "en|lexical": {
+    "vector only": {
+     "hits": 17,
+     "of": 20,
+     "new": 0,
+     "lost": 2,
+     "sign_p": 0.5
+    },
+    "bm25 only": {
+     "hits": 19,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 19,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 18,
+     "of": 20,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 18,
+     "of": 20,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    }
+   },
+   "en|class:high": {
+    "vector only": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "en|doc:gnome": {
+    "vector only": {
+     "hits": 15,
+     "of": 18,
+     "new": 4,
+     "lost": 2,
+     "sign_p": 0.6875
+    },
+    "bm25 only": {
+     "hits": 12,
+     "of": 18,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 13,
+     "of": 18,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 14,
+     "of": 18,
+     "new": 2,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 14,
+     "of": 18,
+     "new": 2,
+     "lost": 1,
+     "sign_p": 1.0
+    }
+   },
+   "split:check": {
+    "vector only": {
+     "hits": 19,
+     "of": 46,
+     "new": 4,
+     "lost": 13,
+     "sign_p": 0.049
+    },
+    "bm25 only": {
+     "hits": 29,
+     "of": 46,
+     "new": 2,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 28,
+     "of": 46,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 30,
+     "of": 46,
+     "new": 4,
+     "lost": 2,
+     "sign_p": 0.6875
+    },
+    "rrf 0.6": {
+     "hits": 22,
+     "of": 46,
+     "new": 4,
+     "lost": 10,
+     "sign_p": 0.1796
+    }
+   },
+   "en|split:check": {
+    "vector only": {
+     "hits": 18,
+     "of": 23,
+     "new": 4,
+     "lost": 2,
+     "sign_p": 0.6875
+    },
+    "bm25 only": {
+     "hits": 15,
+     "of": 23,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 16,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 19,
+     "of": 23,
+     "new": 4,
+     "lost": 1,
+     "sign_p": 0.375
+    },
+    "rrf 0.6": {
+     "hits": 19,
+     "of": 23,
+     "new": 4,
+     "lost": 1,
+     "sign_p": 0.375
+    }
+   },
+   "en|class:partial": {
+    "vector only": {
+     "hits": 16,
+     "of": 23,
+     "new": 3,
+     "lost": 2,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 15,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 15,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 16,
+     "of": 23,
+     "new": 2,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 16,
+     "of": 23,
+     "new": 2,
+     "lost": 1,
+     "sign_p": 1.0
+    }
+   },
+   "split:tune": {
+    "vector only": {
+     "hits": 21,
+     "of": 44,
+     "new": 5,
+     "lost": 12,
+     "sign_p": 0.1435
+    },
+    "bm25 only": {
+     "hits": 30,
+     "of": 44,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.2": {
+     "hits": 28,
+     "of": 44,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 26,
+     "of": 44,
+     "new": 1,
+     "lost": 3,
+     "sign_p": 0.625
+    },
+    "rrf 0.6": {
+     "hits": 21,
+     "of": 44,
+     "new": 2,
+     "lost": 9,
+     "sign_p": 0.0654
+    }
+   },
+   "en|split:tune": {
+    "vector only": {
+     "hits": 20,
+     "of": 22,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "bm25 only": {
+     "hits": 16,
+     "of": 22,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 16,
+     "of": 22,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 16,
+     "of": 22,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 17,
+     "of": 22,
+     "new": 1,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "en|paraphrase": {
+    "vector only": {
+     "hits": 21,
+     "of": 25,
+     "new": 8,
+     "lost": 0,
+     "sign_p": 0.0078
+    },
+    "bm25 only": {
+     "hits": 12,
+     "of": 25,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 13,
+     "of": 25,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 17,
+     "of": 25,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "rrf 0.6": {
+     "hits": 18,
+     "of": 25,
+     "new": 5,
+     "lost": 0,
+     "sign_p": 0.0625
+    }
+   },
+   "en|class:none": {
+    "vector only": {
+     "hits": 9,
+     "of": 9,
+     "new": 5,
+     "lost": 0,
+     "sign_p": 0.0625
+    },
+    "bm25 only": {
+     "hits": 3,
+     "of": 9,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 4,
+     "of": 9,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 6,
+     "of": 9,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.6": {
+     "hits": 7,
+     "of": 9,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    }
+   },
+   "en|doc:own": {
+    "vector only": {
+     "hits": 19,
+     "of": 20,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "bm25 only": {
+     "hits": 15,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 15,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 17,
+     "of": 20,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.6": {
+     "hits": 18,
+     "of": 20,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    }
+   },
+   "en|doc:pdf": {
+    "vector only": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "ko": {
+    "vector only": {
+     "hits": 2,
+     "of": 45,
+     "new": 1,
+     "lost": 23,
+     "sign_p": 0.0
+    },
+    "bm25 only": {
+     "hits": 28,
+     "of": 45,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "rrf 0.2": {
+     "hits": 24,
+     "of": 45,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 21,
+     "of": 45,
+     "new": 1,
+     "lost": 4,
+     "sign_p": 0.375
+    },
+    "rrf 0.6": {
+     "hits": 7,
+     "of": 45,
+     "new": 1,
+     "lost": 18,
+     "sign_p": 0.0001
+    }
+   },
+   "ko|lexical": {
+    "vector only": {
+     "hits": 1,
+     "of": 20,
+     "new": 0,
+     "lost": 16,
+     "sign_p": 0.0
+    },
+    "bm25 only": {
+     "hits": 20,
+     "of": 20,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    },
+    "rrf 0.2": {
+     "hits": 17,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 16,
+     "of": 20,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 6,
+     "of": 20,
+     "new": 0,
+     "lost": 11,
+     "sign_p": 0.001
+    }
+   },
+   "ko|class:partial": {
+    "vector only": {
+     "hits": 1,
+     "of": 20,
+     "new": 0,
+     "lost": 15,
+     "sign_p": 0.0001
+    },
+    "bm25 only": {
+     "hits": 18,
+     "of": 20,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.2": {
+     "hits": 16,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 14,
+     "of": 20,
+     "new": 0,
+     "lost": 2,
+     "sign_p": 0.5
+    },
+    "rrf 0.6": {
+     "hits": 4,
+     "of": 20,
+     "new": 0,
+     "lost": 12,
+     "sign_p": 0.0005
+    }
+   },
+   "ko|doc:gnome": {
+    "vector only": {
+     "hits": 1,
+     "of": 18,
+     "new": 1,
+     "lost": 9,
+     "sign_p": 0.0215
+    },
+    "bm25 only": {
+     "hits": 10,
+     "of": 18,
+     "new": 1,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 9,
+     "of": 18,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 8,
+     "of": 18,
+     "new": 1,
+     "lost": 2,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 2,
+     "of": 18,
+     "new": 1,
+     "lost": 8,
+     "sign_p": 0.0391
+    }
+   },
+   "ko|split:tune": {
+    "vector only": {
+     "hits": 1,
+     "of": 22,
+     "new": 1,
+     "lost": 12,
+     "sign_p": 0.0034
+    },
+    "bm25 only": {
+     "hits": 14,
+     "of": 22,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.2": {
+     "hits": 12,
+     "of": 22,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 10,
+     "of": 22,
+     "new": 1,
+     "lost": 3,
+     "sign_p": 0.625
+    },
+    "rrf 0.6": {
+     "hits": 4,
+     "of": 22,
+     "new": 1,
+     "lost": 9,
+     "sign_p": 0.0215
+    }
+   },
+   "ko|split:check": {
+    "vector only": {
+     "hits": 1,
+     "of": 23,
+     "new": 0,
+     "lost": 11,
+     "sign_p": 0.001
+    },
+    "bm25 only": {
+     "hits": 14,
+     "of": 23,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.2": {
+     "hits": 12,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 11,
+     "of": 23,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 3,
+     "of": 23,
+     "new": 0,
+     "lost": 9,
+     "sign_p": 0.0039
+    }
+   },
+   "ko|paraphrase": {
+    "vector only": {
+     "hits": 1,
+     "of": 25,
+     "new": 1,
+     "lost": 7,
+     "sign_p": 0.0703
+    },
+    "bm25 only": {
+     "hits": 8,
+     "of": 25,
+     "new": 1,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 7,
+     "of": 25,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 5,
+     "of": 25,
+     "new": 1,
+     "lost": 3,
+     "sign_p": 0.625
+    },
+    "rrf 0.6": {
+     "hits": 1,
+     "of": 25,
+     "new": 1,
+     "lost": 7,
+     "sign_p": 0.0703
+    }
+   },
+   "ko|class:none": {
+    "vector only": {
+     "hits": 1,
+     "of": 18,
+     "new": 1,
+     "lost": 3,
+     "sign_p": 0.625
+    },
+    "bm25 only": {
+     "hits": 3,
+     "of": 18,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 3,
+     "of": 18,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 2,
+     "of": 18,
+     "new": 1,
+     "lost": 2,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 1,
+     "of": 18,
+     "new": 1,
+     "lost": 3,
+     "sign_p": 0.625
+    }
+   },
+   "ko|doc:own": {
+    "vector only": {
+     "hits": 1,
+     "of": 20,
+     "new": 0,
+     "lost": 10,
+     "sign_p": 0.002
+    },
+    "bm25 only": {
+     "hits": 12,
+     "of": 20,
+     "new": 1,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 11,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 10,
+     "of": 20,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 4,
+     "of": 20,
+     "new": 0,
+     "lost": 7,
+     "sign_p": 0.0156
+    }
+   },
+   "ko|class:high": {
+    "vector only": {
+     "hits": 0,
+     "of": 7,
+     "new": 0,
+     "lost": 5,
+     "sign_p": 0.0625
+    },
+    "bm25 only": {
+     "hits": 7,
+     "of": 7,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.2": {
+     "hits": 5,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 5,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 2,
+     "of": 7,
+     "new": 0,
+     "lost": 3,
+     "sign_p": 0.25
+    }
+   },
+   "ko|doc:pdf": {
+    "vector only": {
+     "hits": 0,
+     "of": 7,
+     "new": 0,
+     "lost": 4,
+     "sign_p": 0.125
+    },
+    "bm25 only": {
+     "hits": 6,
+     "of": 7,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.2": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 3,
+     "of": 7,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 1,
+     "of": 7,
+     "new": 0,
+     "lost": 3,
+     "sign_p": 0.25
+    }
+   }
+  },
+  "wall": {
+   "en": {
+    "queries": 60,
+    "bm25_20_full": 60,
+    "top5_slots_in_full": 300,
+    "top5_slots_from_bm25_list": 300,
+    "vector_hit_default_miss": 8,
+    "of_which_bm25_full": 8,
+    "recovered_by_0.5": 4,
+    "recovered_by_0.6": 5
+   },
+   "ko": {
+    "queries": 60,
+    "bm25_20_full": 39,
+    "top5_slots_in_full": 195,
+    "top5_slots_from_bm25_list": 195,
+    "vector_hit_default_miss": 1,
+    "of_which_bm25_full": 1,
+    "recovered_by_0.5": 1,
+    "recovered_by_0.6": 1
+   }
+  },
+  "misses": {
+   "rrf 0.2|en": {
+    "missed": 13,
+    "by_class": {
+     "partial": 8,
+     "none": 5
+    },
+    "answer_in_a_20_list": 9,
+    "answer_in_a_400_list": 13,
+    "top1_from_a_pdf": 3,
+    "ids": [
+     "e1q-008",
+     "e1q-009",
+     "e1q-011",
+     "e1q-013",
+     "e1q-016",
+     "e1q-029",
+     "e1q-034",
+     "e1q-035",
+     "e1q-036",
+     "e1q-038",
+     "e1q-043",
+     "e1q-044",
+     "e1q-045"
+    ]
+   },
+   "rrf 0.2|ko": {
+    "missed": 21,
+    "by_class": {
+     "partial": 4,
+     "none": 15,
+     "high": 2
+    },
+    "answer_in_a_20_list": 14,
+    "answer_in_a_400_list": 21,
+    "top1_from_a_pdf": 3,
+    "ids": [
+     "e1q-066",
+     "e1q-068",
+     "e1q-070",
+     "e1q-071",
+     "e1q-072",
+     "e1q-073",
+     "e1q-074",
+     "e1q-075",
+     "e1q-076",
+     "e1q-087",
+     "e1q-089",
+     "e1q-090",
+     "e1q-093",
+     "e1q-094",
+     "e1q-095",
+     "e1q-096",
+     "e1q-097",
+     "e1q-098",
+     "e1q-100",
+     "e1q-103",
+     "e1q-105"
+    ]
+   },
+   "rrf 0.5|en": {
+    "missed": 10,
+    "by_class": {
+     "partial": 7,
+     "none": 3
+    },
+    "answer_in_a_20_list": 6,
+    "answer_in_a_400_list": 10,
+    "top1_from_a_pdf": 3,
+    "ids": [
+     "e1q-005",
+     "e1q-008",
+     "e1q-011",
+     "e1q-016",
+     "e1q-034",
+     "e1q-035",
+     "e1q-038",
+     "e1q-043",
+     "e1q-044",
+     "e1q-045"
+    ]
+   },
+   "rrf 0.5|ko": {
+    "missed": 24,
+    "by_class": {
+     "partial": 6,
+     "none": 16,
+     "high": 2
+    },
+    "answer_in_a_20_list": 17,
+    "answer_in_a_400_list": 24,
+    "top1_from_a_pdf": 6,
+    "ids": [
+     "e1q-066",
+     "e1q-068",
+     "e1q-069",
+     "e1q-070",
+     "e1q-071",
+     "e1q-072",
+     "e1q-074",
+     "e1q-075",
+     "e1q-076",
+     "e1q-078",
+     "e1q-083",
+     "e1q-087",
+     "e1q-089",
+     "e1q-090",
+     "e1q-093",
+     "e1q-094",
+     "e1q-095",
+     "e1q-096",
+     "e1q-097",
+     "e1q-098",
+     "e1q-100",
+     "e1q-103",
+     "e1q-104",
+     "e1q-105"
+    ]
+   }
+  },
+  "no_answer": {
+   "en": {
+    "queries": 15,
+    "top1_kind": {
+     "rrf 0.2": {
+      "own": 10,
+      "pdf": 3,
+      "gnome": 2
+     },
+     "rrf 0.5": {
+      "own": 10,
+      "pdf": 3,
+      "gnome": 2
+     }
+    },
+    "top1_same_language": 15,
+    "bm25_20_sizes": [
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20
+    ],
+    "vector_top1_similarity": [
+     0.48962414264678955,
+     0.4852825403213501,
+     0.4651672840118408,
+     0.3132596015930176,
+     0.35320568084716797,
+     0.3716024160385132,
+     0.4180854558944702,
+     0.34542369842529297,
+     0.2580794095993042,
+     0.5907005667686462,
+     0.5285782217979431,
+     0.4185537099838257,
+     0.5755922794342041,
+     0.5510281324386597,
+     0.6014934182167053
+    ],
+    "rows": [
+     {
+      "item_id": "e1q-046",
+      "query": "What is the warranty period for the Lumo Hub?",
+      "top1_0.2": "e1_own_en_03",
+      "top1_0.5": "e1_own_en_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.48962414264678955
+     },
+     {
+      "item_id": "e1q-047",
+      "query": "How do I change the language of the Lumo app?",
+      "top1_0.2": "e1_own_en_04",
+      "top1_0.5": "e1_own_en_04",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.4852825403213501
+     },
+     {
+      "item_id": "e1q-048",
+      "query": "Can I control Lumo lights from a smartwatch?",
+      "top1_0.2": "e1_own_en_01",
+      "top1_0.5": "e1_own_en_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.4651672840118408
+     },
+     {
+      "item_id": "e1q-049",
+      "query": "What is the dress code for client meetings?",
+      "top1_0.2": "e1_pdf_eng",
+      "top1_0.5": "e1_pdf_eng",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.3132596015930176
+     },
+     {
+      "item_id": "e1q-050",
+      "query": "How many sick days do employees get per year?",
+      "top1_0.2": "e1_own_en_04",
+      "top1_0.5": "e1_own_en_04",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.35320568084716797
+     },
+     {
+      "item_id": "e1q-051",
+      "query": "What is the company's 401(k) matching rate?",
+      "top1_0.2": "e1_pdf_eng",
+      "top1_0.5": "e1_pdf_eng",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.3716024160385132
+     },
+     {
+      "item_id": "e1q-052",
+      "query": "What time does the office close on Fridays?",
+      "top1_0.2": "e1_own_en_02",
+      "top1_0.5": "e1_own_en_02",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.4180854558944702
+     },
+     {
+      "item_id": "e1q-053",
+      "query": "How do I turn on two-factor authentication for my work account?",
+      "top1_0.2": "e1_own_en_10",
+      "top1_0.5": "e1_own_en_10",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.34542369842529297
+     },
+     {
+      "item_id": "e1q-054",
+      "query": "Is there free parking at the office?",
+      "top1_0.2": "e1_pdf_eng",
+      "top1_0.5": "e1_pdf_eng",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.2580794095993042
+     },
+     {
+      "item_id": "e1q-055",
+      "query": "How do I calibrate the colors of my monitor?",
+      "top1_0.2": "gnome_en_display_night_light",
+      "top1_0.5": "gnome_en_display_night_light",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5907005667686462
+     },
+     {
+      "item_id": "e1q-056",
+      "query": "How do I export my Lumo energy data to a spreadsheet?",
+      "top1_0.2": "e1_own_en_06",
+      "top1_0.5": "e1_own_en_06",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5285782217979431
+     },
+     {
+      "item_id": "e1q-057",
+      "query": "When is the next company all-hands meeting?",
+      "top1_0.2": "e1_own_en_08",
+      "top1_0.5": "e1_own_en_08",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.4185537099838257
+     },
+     {
+      "item_id": "e1q-058",
+      "query": "How do I reset my Lumo account password?",
+      "top1_0.2": "e1_own_en_01",
+      "top1_0.5": "e1_own_en_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5755922794342041
+     },
+     {
+      "item_id": "e1q-059",
+      "query": "Will Atlas launch with a mobile app?",
+      "top1_0.2": "e1_own_en_09",
+      "top1_0.5": "e1_own_en_09",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5510281324386597
+     },
+     {
+      "item_id": "e1q-060",
+      "query": "How do I clear a paper jam in the printer?",
+      "top1_0.2": "gnome_en_printing_cancel_job",
+      "top1_0.5": "gnome_en_printing_cancel_job",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6014934182167053
+     }
+    ],
+    "similarity_summary": {
+     "no_answer_median": 0.465,
+     "no_answer_max": 0.601,
+     "answered_vector_hit_median": 0.541,
+     "answered_vector_hit_min": 0.353,
+     "no_answer_above_answered_min": 11
+    }
+   },
+   "ko": {
+    "queries": 15,
+    "top1_kind": {
+     "rrf 0.2": {
+      "own": 11,
+      "pdf": 2,
+      "gnome": 2
+     },
+     "rrf 0.5": {
+      "own": 12,
+      "pdf": 1,
+      "gnome": 2
+     }
+    },
+    "top1_same_language": 15,
+    "bm25_20_sizes": [
+     20,
+     12,
+     8,
+     13,
+     8,
+     20,
+     20,
+     15,
+     10,
+     16,
+     15,
+     20,
+     20,
+     6,
+     20
+    ],
+    "vector_top1_similarity": [
+     0.7141879796981812,
+     0.6831280589103699,
+     0.7209837436676025,
+     0.7082554697990417,
+     0.768608033657074,
+     0.7323400378227234,
+     0.7209374904632568,
+     0.6699079275131226,
+     0.675697386264801,
+     0.6369677782058716,
+     0.7100809216499329,
+     0.5432916283607483,
+     0.6860565543174744,
+     0.7226813435554504,
+     0.7944597005844116
+    ],
+    "rows": [
+     {
+      "item_id": "e1q-106",
+      "query": "모아가계부에 주식 계좌도 연결할 수 있나요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.7141879796981812
+     },
+     {
+      "item_id": "e1q-107",
+      "query": "모아가계부 다크 모드는 어떻게 켜나요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_04",
+      "bm25_20": 12,
+      "vector_top1_similarity": 0.6831280589103699
+     },
+     {
+      "item_id": "e1q-108",
+      "query": "해외 출장 숙박비 한도는 얼마인가요?",
+      "top1_0.2": "e1_own_ko_07",
+      "top1_0.5": "e1_own_ko_07",
+      "bm25_20": 8,
+      "vector_top1_similarity": 0.7209837436676025
+     },
+     {
+      "item_id": "e1q-109",
+      "query": "경조사 휴가는 며칠인가요?",
+      "top1_0.2": "e1_pdf_kor",
+      "top1_0.5": "e1_pdf_kor",
+      "bm25_20": 13,
+      "vector_top1_similarity": 0.7082554697990417
+     },
+     {
+      "item_id": "e1q-110",
+      "query": "사내 식당은 몇 시에 여나요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 8,
+      "vector_top1_similarity": 0.768608033657074
+     },
+     {
+      "item_id": "e1q-111",
+      "query": "법인카드를 잃어버리면 어떻게 신고하나요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.7323400378227234
+     },
+     {
+      "item_id": "e1q-112",
+      "query": "프린터 잉크 잔량은 어디서 확인하나요?",
+      "top1_0.2": "gnome_ko_user_add",
+      "top1_0.5": "gnome_ko_user_add",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.7209374904632568
+     },
+     {
+      "item_id": "e1q-113",
+      "query": "모아가계부 고객센터 전화번호는 뭐예요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 15,
+      "vector_top1_similarity": 0.6699079275131226
+     },
+     {
+      "item_id": "e1q-114",
+      "query": "회사 건강검진은 언제 받나요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 10,
+      "vector_top1_similarity": 0.675697386264801
+     },
+     {
+      "item_id": "e1q-115",
+      "query": "회의실 예약은 어떻게 하나요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 16,
+      "vector_top1_similarity": 0.6369677782058716
+     },
+     {
+      "item_id": "e1q-116",
+      "query": "주차 지원금은 한 달에 얼마인가요?",
+      "top1_0.2": "gnome_ko_files_search",
+      "top1_0.5": "e1_own_ko_04",
+      "bm25_20": 15,
+      "vector_top1_similarity": 0.7100809216499329
+     },
+     {
+      "item_id": "e1q-117",
+      "query": "가계부 위젯 크기를 바꾸려면?",
+      "top1_0.2": "e1_own_ko_02",
+      "top1_0.5": "gnome_ko_look_resolution",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5432916283607483
+     },
+     {
+      "item_id": "e1q-118",
+      "query": "출장 갈 때 택시비도 정산되나요?",
+      "top1_0.2": "e1_pdf_kor",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6860565543174744
+     },
+     {
+      "item_id": "e1q-119",
+      "query": "사내 동호회 지원금은 얼마인가요?",
+      "top1_0.2": "e1_own_ko_04",
+      "top1_0.5": "e1_own_ko_04",
+      "bm25_20": 6,
+      "vector_top1_similarity": 0.7226813435554504
+     },
+     {
+      "item_id": "e1q-120",
+      "query": "모아가계부 앱을 열 때 잠금 비밀번호를 걸 수 있나요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.7944597005844116
+     }
+    ],
+    "similarity_summary": {
+     "no_answer_median": 0.71,
+     "no_answer_max": 0.794,
+     "answered_vector_hit_median": 0.619,
+     "answered_vector_hit_min": 0.553,
+     "no_answer_above_answered_min": 14
+    }
+   }
+  }
+ },
+ {
+  "dir": "e1_koen",
+  "model": "e1_koen",
+  "fingerprint": "model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413",
+  "commit": "1755192bf3e7c878bcfea8e514af027914279fb7",
+  "dirty": [],
+  "chunks": 2319,
+  "elapsed_seconds": 29,
+  "finished_at_utc": "2026-11-14T05:15:10+00:00",
+  "dataset_sha256": {
+   "manifest": "65884105daedc91ccf484cc01ebfb647f879c4a2673a2f288818baacfab8bd9d",
+   "evalset": "1e556737fdc51b6cafe4c10683357606b0aad45ce86620ce161937926d79aff9",
+   "gold": "88ba082d208ca2801bfab0b335390686ed1a91b697151fd4e38503d30207bf3e",
+   "no_answer": "a83afa22da25566dc60ef8bdc9eede309aadca7315013a630426e2bd80bf101e"
+  },
+  "answerable": 90,
+  "gold_not_in_any_chunk": [],
+  "table": {
+   "all": {
+    "vector only": {
+     "hits": 79,
+     "of": 90,
+     "new": 15,
+     "lost": 2,
+     "sign_p": 0.0023
+    },
+    "bm25 only": {
+     "hits": 59,
+     "of": 90,
+     "new": 0,
+     "lost": 7,
+     "sign_p": 0.0156
+    },
+    "rrf 0.2": {
+     "hits": 66,
+     "of": 90,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 76,
+     "of": 90,
+     "new": 11,
+     "lost": 1,
+     "sign_p": 0.0063
+    },
+    "rrf 0.6": {
+     "hits": 76,
+     "of": 90,
+     "new": 11,
+     "lost": 1,
+     "sign_p": 0.0063
+    }
+   },
+   "en": {
+    "vector only": {
+     "hits": 38,
+     "of": 45,
+     "new": 8,
+     "lost": 1,
+     "sign_p": 0.0391
+    },
+    "bm25 only": {
+     "hits": 31,
+     "of": 45,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 31,
+     "of": 45,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 35,
+     "of": 45,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "rrf 0.6": {
+     "hits": 35,
+     "of": 45,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    }
+   },
+   "en|lexical": {
+    "vector only": {
+     "hits": 18,
+     "of": 20,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 19,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 19,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 19,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 19,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "en|class:high": {
+    "vector only": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "en|doc:gnome": {
+    "vector only": {
+     "hits": 15,
+     "of": 18,
+     "new": 4,
+     "lost": 1,
+     "sign_p": 0.375
+    },
+    "bm25 only": {
+     "hits": 12,
+     "of": 18,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 12,
+     "of": 18,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 13,
+     "of": 18,
+     "new": 1,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 13,
+     "of": 18,
+     "new": 1,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "split:check": {
+    "vector only": {
+     "hits": 41,
+     "of": 46,
+     "new": 9,
+     "lost": 2,
+     "sign_p": 0.0654
+    },
+    "bm25 only": {
+     "hits": 29,
+     "of": 46,
+     "new": 0,
+     "lost": 5,
+     "sign_p": 0.0625
+    },
+    "rrf 0.2": {
+     "hits": 34,
+     "of": 46,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 39,
+     "of": 46,
+     "new": 6,
+     "lost": 1,
+     "sign_p": 0.125
+    },
+    "rrf 0.6": {
+     "hits": 39,
+     "of": 46,
+     "new": 6,
+     "lost": 1,
+     "sign_p": 0.125
+    }
+   },
+   "en|split:check": {
+    "vector only": {
+     "hits": 20,
+     "of": 23,
+     "new": 6,
+     "lost": 1,
+     "sign_p": 0.125
+    },
+    "bm25 only": {
+     "hits": 15,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 15,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 18,
+     "of": 23,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    },
+    "rrf 0.6": {
+     "hits": 18,
+     "of": 23,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    }
+   },
+   "en|class:partial": {
+    "vector only": {
+     "hits": 18,
+     "of": 23,
+     "new": 4,
+     "lost": 1,
+     "sign_p": 0.375
+    },
+    "bm25 only": {
+     "hits": 15,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 15,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 17,
+     "of": 23,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.6": {
+     "hits": 17,
+     "of": 23,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    }
+   },
+   "split:tune": {
+    "vector only": {
+     "hits": 38,
+     "of": 44,
+     "new": 6,
+     "lost": 0,
+     "sign_p": 0.0312
+    },
+    "bm25 only": {
+     "hits": 30,
+     "of": 44,
+     "new": 0,
+     "lost": 2,
+     "sign_p": 0.5
+    },
+    "rrf 0.2": {
+     "hits": 32,
+     "of": 44,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 37,
+     "of": 44,
+     "new": 5,
+     "lost": 0,
+     "sign_p": 0.0625
+    },
+    "rrf 0.6": {
+     "hits": 37,
+     "of": 44,
+     "new": 5,
+     "lost": 0,
+     "sign_p": 0.0625
+    }
+   },
+   "en|split:tune": {
+    "vector only": {
+     "hits": 18,
+     "of": 22,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "bm25 only": {
+     "hits": 16,
+     "of": 22,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 16,
+     "of": 22,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 17,
+     "of": 22,
+     "new": 1,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 17,
+     "of": 22,
+     "new": 1,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "en|paraphrase": {
+    "vector only": {
+     "hits": 20,
+     "of": 25,
+     "new": 8,
+     "lost": 0,
+     "sign_p": 0.0078
+    },
+    "bm25 only": {
+     "hits": 12,
+     "of": 25,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 12,
+     "of": 25,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 16,
+     "of": 25,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "rrf 0.6": {
+     "hits": 16,
+     "of": 25,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    }
+   },
+   "en|class:none": {
+    "vector only": {
+     "hits": 7,
+     "of": 9,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "bm25 only": {
+     "hits": 3,
+     "of": 9,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 3,
+     "of": 9,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 5,
+     "of": 9,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.6": {
+     "hits": 5,
+     "of": 9,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    }
+   },
+   "en|doc:own": {
+    "vector only": {
+     "hits": 19,
+     "of": 20,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "bm25 only": {
+     "hits": 15,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 15,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 18,
+     "of": 20,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    },
+    "rrf 0.6": {
+     "hits": 18,
+     "of": 20,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    }
+   },
+   "en|doc:pdf": {
+    "vector only": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "ko": {
+    "vector only": {
+     "hits": 41,
+     "of": 45,
+     "new": 7,
+     "lost": 1,
+     "sign_p": 0.0703
+    },
+    "bm25 only": {
+     "hits": 28,
+     "of": 45,
+     "new": 0,
+     "lost": 7,
+     "sign_p": 0.0156
+    },
+    "rrf 0.2": {
+     "hits": 35,
+     "of": 45,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 41,
+     "of": 45,
+     "new": 7,
+     "lost": 1,
+     "sign_p": 0.0703
+    },
+    "rrf 0.6": {
+     "hits": 41,
+     "of": 45,
+     "new": 7,
+     "lost": 1,
+     "sign_p": 0.0703
+    }
+   },
+   "ko|lexical": {
+    "vector only": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "ko|class:partial": {
+    "vector only": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 18,
+     "of": 20,
+     "new": 0,
+     "lost": 2,
+     "sign_p": 0.5
+    },
+    "rrf 0.2": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "ko|doc:gnome": {
+    "vector only": {
+     "hits": 15,
+     "of": 18,
+     "new": 4,
+     "lost": 1,
+     "sign_p": 0.375
+    },
+    "bm25 only": {
+     "hits": 10,
+     "of": 18,
+     "new": 0,
+     "lost": 2,
+     "sign_p": 0.5
+    },
+    "rrf 0.2": {
+     "hits": 12,
+     "of": 18,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 15,
+     "of": 18,
+     "new": 4,
+     "lost": 1,
+     "sign_p": 0.375
+    },
+    "rrf 0.6": {
+     "hits": 15,
+     "of": 18,
+     "new": 4,
+     "lost": 1,
+     "sign_p": 0.375
+    }
+   },
+   "ko|split:tune": {
+    "vector only": {
+     "hits": 20,
+     "of": 22,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "bm25 only": {
+     "hits": 14,
+     "of": 22,
+     "new": 0,
+     "lost": 2,
+     "sign_p": 0.5
+    },
+    "rrf 0.2": {
+     "hits": 16,
+     "of": 22,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 20,
+     "of": 22,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "rrf 0.6": {
+     "hits": 20,
+     "of": 22,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    }
+   },
+   "ko|split:check": {
+    "vector only": {
+     "hits": 21,
+     "of": 23,
+     "new": 3,
+     "lost": 1,
+     "sign_p": 0.625
+    },
+    "bm25 only": {
+     "hits": 14,
+     "of": 23,
+     "new": 0,
+     "lost": 5,
+     "sign_p": 0.0625
+    },
+    "rrf 0.2": {
+     "hits": 19,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 21,
+     "of": 23,
+     "new": 3,
+     "lost": 1,
+     "sign_p": 0.625
+    },
+    "rrf 0.6": {
+     "hits": 21,
+     "of": 23,
+     "new": 3,
+     "lost": 1,
+     "sign_p": 0.625
+    }
+   },
+   "ko|paraphrase": {
+    "vector only": {
+     "hits": 21,
+     "of": 25,
+     "new": 7,
+     "lost": 1,
+     "sign_p": 0.0703
+    },
+    "bm25 only": {
+     "hits": 8,
+     "of": 25,
+     "new": 0,
+     "lost": 7,
+     "sign_p": 0.0156
+    },
+    "rrf 0.2": {
+     "hits": 15,
+     "of": 25,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 21,
+     "of": 25,
+     "new": 7,
+     "lost": 1,
+     "sign_p": 0.0703
+    },
+    "rrf 0.6": {
+     "hits": 21,
+     "of": 25,
+     "new": 7,
+     "lost": 1,
+     "sign_p": 0.0703
+    }
+   },
+   "ko|class:none": {
+    "vector only": {
+     "hits": 14,
+     "of": 18,
+     "new": 7,
+     "lost": 1,
+     "sign_p": 0.0703
+    },
+    "bm25 only": {
+     "hits": 3,
+     "of": 18,
+     "new": 0,
+     "lost": 5,
+     "sign_p": 0.0625
+    },
+    "rrf 0.2": {
+     "hits": 8,
+     "of": 18,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 14,
+     "of": 18,
+     "new": 7,
+     "lost": 1,
+     "sign_p": 0.0703
+    },
+    "rrf 0.6": {
+     "hits": 14,
+     "of": 18,
+     "new": 7,
+     "lost": 1,
+     "sign_p": 0.0703
+    }
+   },
+   "ko|doc:own": {
+    "vector only": {
+     "hits": 19,
+     "of": 20,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    },
+    "bm25 only": {
+     "hits": 12,
+     "of": 20,
+     "new": 0,
+     "lost": 4,
+     "sign_p": 0.125
+    },
+    "rrf 0.2": {
+     "hits": 16,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 19,
+     "of": 20,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    },
+    "rrf 0.6": {
+     "hits": 19,
+     "of": 20,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    }
+   },
+   "ko|class:high": {
+    "vector only": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "ko|doc:pdf": {
+    "vector only": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 6,
+     "of": 7,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   }
+  },
+  "wall": {
+   "en": {
+    "queries": 60,
+    "bm25_20_full": 60,
+    "top5_slots_in_full": 300,
+    "top5_slots_from_bm25_list": 300,
+    "vector_hit_default_miss": 8,
+    "of_which_bm25_full": 8,
+    "recovered_by_0.5": 4,
+    "recovered_by_0.6": 4
+   },
+   "ko": {
+    "queries": 60,
+    "bm25_20_full": 38,
+    "top5_slots_in_full": 190,
+    "top5_slots_from_bm25_list": 190,
+    "vector_hit_default_miss": 7,
+    "of_which_bm25_full": 5,
+    "recovered_by_0.5": 7,
+    "recovered_by_0.6": 7
+   }
+  },
+  "misses": {
+   "rrf 0.2|en": {
+    "missed": 14,
+    "by_class": {
+     "partial": 8,
+     "none": 6
+    },
+    "answer_in_a_20_list": 10,
+    "answer_in_a_400_list": 14,
+    "top1_from_a_pdf": 4,
+    "ids": [
+     "e1q-008",
+     "e1q-009",
+     "e1q-011",
+     "e1q-012",
+     "e1q-013",
+     "e1q-016",
+     "e1q-029",
+     "e1q-034",
+     "e1q-035",
+     "e1q-036",
+     "e1q-038",
+     "e1q-043",
+     "e1q-044",
+     "e1q-045"
+    ]
+   },
+   "rrf 0.2|ko": {
+    "missed": 10,
+    "by_class": {
+     "none": 10
+    },
+    "answer_in_a_20_list": 9,
+    "answer_in_a_400_list": 10,
+    "top1_from_a_pdf": 0,
+    "ids": [
+     "e1q-070",
+     "e1q-071",
+     "e1q-073",
+     "e1q-074",
+     "e1q-075",
+     "e1q-076",
+     "e1q-089",
+     "e1q-094",
+     "e1q-095",
+     "e1q-098"
+    ]
+   },
+   "rrf 0.5|en": {
+    "missed": 10,
+    "by_class": {
+     "partial": 6,
+     "none": 4
+    },
+    "answer_in_a_20_list": 6,
+    "answer_in_a_400_list": 10,
+    "top1_from_a_pdf": 4,
+    "ids": [
+     "e1q-008",
+     "e1q-009",
+     "e1q-011",
+     "e1q-013",
+     "e1q-016",
+     "e1q-035",
+     "e1q-036",
+     "e1q-043",
+     "e1q-044",
+     "e1q-045"
+    ]
+   },
+   "rrf 0.5|ko": {
+    "missed": 4,
+    "by_class": {
+     "none": 4
+    },
+    "answer_in_a_20_list": 3,
+    "answer_in_a_400_list": 4,
+    "top1_from_a_pdf": 0,
+    "ids": [
+     "e1q-074",
+     "e1q-075",
+     "e1q-078",
+     "e1q-089"
+    ]
+   }
+  },
+  "no_answer": {
+   "en": {
+    "queries": 15,
+    "top1_kind": {
+     "rrf 0.2": {
+      "own": 11,
+      "pdf": 2,
+      "gnome": 2
+     },
+     "rrf 0.5": {
+      "own": 11,
+      "pdf": 1,
+      "gnome": 3
+     }
+    },
+    "top1_same_language": 15,
+    "bm25_20_sizes": [
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20
+    ],
+    "vector_top1_similarity": [
+     0.5571293234825134,
+     0.5694454908370972,
+     0.5486120581626892,
+     0.35802412033081055,
+     0.37691909074783325,
+     0.38525640964508057,
+     0.47099268436431885,
+     0.49111461639404297,
+     0.3644382953643799,
+     0.5570315718650818,
+     0.5371480584144592,
+     0.4801100492477417,
+     0.6398937702178955,
+     0.6078994274139404,
+     0.6014418601989746
+    ],
+    "rows": [
+     {
+      "item_id": "e1q-046",
+      "query": "What is the warranty period for the Lumo Hub?",
+      "top1_0.2": "e1_own_en_03",
+      "top1_0.5": "e1_own_en_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5571293234825134
+     },
+     {
+      "item_id": "e1q-047",
+      "query": "How do I change the language of the Lumo app?",
+      "top1_0.2": "e1_own_en_04",
+      "top1_0.5": "e1_own_en_04",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5694454908370972
+     },
+     {
+      "item_id": "e1q-048",
+      "query": "Can I control Lumo lights from a smartwatch?",
+      "top1_0.2": "e1_own_en_01",
+      "top1_0.5": "e1_own_en_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5486120581626892
+     },
+     {
+      "item_id": "e1q-049",
+      "query": "What is the dress code for client meetings?",
+      "top1_0.2": "e1_own_en_09",
+      "top1_0.5": "e1_own_en_09",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.35802412033081055
+     },
+     {
+      "item_id": "e1q-050",
+      "query": "How many sick days do employees get per year?",
+      "top1_0.2": "e1_own_en_11",
+      "top1_0.5": "e1_own_en_11",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.37691909074783325
+     },
+     {
+      "item_id": "e1q-051",
+      "query": "What is the company's 401(k) matching rate?",
+      "top1_0.2": "e1_pdf_eng",
+      "top1_0.5": "e1_pdf_eng",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.38525640964508057
+     },
+     {
+      "item_id": "e1q-052",
+      "query": "What time does the office close on Fridays?",
+      "top1_0.2": "e1_own_en_02",
+      "top1_0.5": "e1_own_en_02",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.47099268436431885
+     },
+     {
+      "item_id": "e1q-053",
+      "query": "How do I turn on two-factor authentication for my work account?",
+      "top1_0.2": "e1_own_en_10",
+      "top1_0.5": "e1_own_en_10",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.49111461639404297
+     },
+     {
+      "item_id": "e1q-054",
+      "query": "Is there free parking at the office?",
+      "top1_0.2": "e1_pdf_eng",
+      "top1_0.5": "gnome_en_files_delete",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.3644382953643799
+     },
+     {
+      "item_id": "e1q-055",
+      "query": "How do I calibrate the colors of my monitor?",
+      "top1_0.2": "gnome_en_display_night_light",
+      "top1_0.5": "gnome_en_display_night_light",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5570315718650818
+     },
+     {
+      "item_id": "e1q-056",
+      "query": "How do I export my Lumo energy data to a spreadsheet?",
+      "top1_0.2": "e1_own_en_06",
+      "top1_0.5": "e1_own_en_05",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5371480584144592
+     },
+     {
+      "item_id": "e1q-057",
+      "query": "When is the next company all-hands meeting?",
+      "top1_0.2": "e1_own_en_08",
+      "top1_0.5": "e1_own_en_09",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.4801100492477417
+     },
+     {
+      "item_id": "e1q-058",
+      "query": "How do I reset my Lumo account password?",
+      "top1_0.2": "e1_own_en_01",
+      "top1_0.5": "e1_own_en_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6398937702178955
+     },
+     {
+      "item_id": "e1q-059",
+      "query": "Will Atlas launch with a mobile app?",
+      "top1_0.2": "e1_own_en_09",
+      "top1_0.5": "e1_own_en_09",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6078994274139404
+     },
+     {
+      "item_id": "e1q-060",
+      "query": "How do I clear a paper jam in the printer?",
+      "top1_0.2": "gnome_en_printing_cancel_job",
+      "top1_0.5": "gnome_en_printing_cancel_job",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6014418601989746
+     }
+    ],
+    "similarity_summary": {
+     "no_answer_median": 0.537,
+     "no_answer_max": 0.64,
+     "answered_vector_hit_median": 0.592,
+     "answered_vector_hit_min": 0.454,
+     "no_answer_above_answered_min": 11
+    }
+   },
+   "ko": {
+    "queries": 15,
+    "top1_kind": {
+     "rrf 0.2": {
+      "own": 13,
+      "gnome": 2
+     },
+     "rrf 0.5": {
+      "own": 13,
+      "gnome": 2
+     }
+    },
+    "top1_same_language": 15,
+    "bm25_20_sizes": [
+     20,
+     12,
+     8,
+     12,
+     8,
+     20,
+     20,
+     14,
+     10,
+     16,
+     15,
+     20,
+     20,
+     6,
+     20
+    ],
+    "vector_top1_similarity": [
+     0.6361958980560303,
+     0.6128219962120056,
+     0.5571173429489136,
+     0.4149514436721802,
+     0.426952600479126,
+     0.41954660415649414,
+     0.4736723303794861,
+     0.6983509659767151,
+     0.3706260919570923,
+     0.403881311416626,
+     0.3730335235595703,
+     0.5262308716773987,
+     0.6243163347244263,
+     0.34080857038497925,
+     0.5908651351928711
+    ],
+    "rows": [
+     {
+      "item_id": "e1q-106",
+      "query": "모아가계부에 주식 계좌도 연결할 수 있나요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6361958980560303
+     },
+     {
+      "item_id": "e1q-107",
+      "query": "모아가계부 다크 모드는 어떻게 켜나요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 12,
+      "vector_top1_similarity": 0.6128219962120056
+     },
+     {
+      "item_id": "e1q-108",
+      "query": "해외 출장 숙박비 한도는 얼마인가요?",
+      "top1_0.2": "e1_own_ko_07",
+      "top1_0.5": "e1_own_ko_07",
+      "bm25_20": 8,
+      "vector_top1_similarity": 0.5571173429489136
+     },
+     {
+      "item_id": "e1q-109",
+      "query": "경조사 휴가는 며칠인가요?",
+      "top1_0.2": "e1_own_ko_11",
+      "top1_0.5": "e1_own_ko_11",
+      "bm25_20": 12,
+      "vector_top1_similarity": 0.4149514436721802
+     },
+     {
+      "item_id": "e1q-110",
+      "query": "사내 식당은 몇 시에 여나요?",
+      "top1_0.2": "e1_own_ko_12",
+      "top1_0.5": "e1_own_ko_12",
+      "bm25_20": 8,
+      "vector_top1_similarity": 0.426952600479126
+     },
+     {
+      "item_id": "e1q-111",
+      "query": "법인카드를 잃어버리면 어떻게 신고하나요?",
+      "top1_0.2": "gnome_ko_hardware_cardreader",
+      "top1_0.5": "gnome_ko_hardware_cardreader",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.41954660415649414
+     },
+     {
+      "item_id": "e1q-112",
+      "query": "프린터 잉크 잔량은 어디서 확인하나요?",
+      "top1_0.2": "gnome_ko_printing_setup",
+      "top1_0.5": "gnome_ko_printing_setup",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.4736723303794861
+     },
+     {
+      "item_id": "e1q-113",
+      "query": "모아가계부 고객센터 전화번호는 뭐예요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 14,
+      "vector_top1_similarity": 0.6983509659767151
+     },
+     {
+      "item_id": "e1q-114",
+      "query": "회사 건강검진은 언제 받나요?",
+      "top1_0.2": "e1_own_ko_05",
+      "top1_0.5": "e1_own_ko_08",
+      "bm25_20": 10,
+      "vector_top1_similarity": 0.3706260919570923
+     },
+     {
+      "item_id": "e1q-115",
+      "query": "회의실 예약은 어떻게 하나요?",
+      "top1_0.2": "e1_own_ko_09",
+      "top1_0.5": "e1_own_ko_09",
+      "bm25_20": 16,
+      "vector_top1_similarity": 0.403881311416626
+     },
+     {
+      "item_id": "e1q-116",
+      "query": "주차 지원금은 한 달에 얼마인가요?",
+      "top1_0.2": "e1_own_ko_04",
+      "top1_0.5": "e1_own_ko_04",
+      "bm25_20": 15,
+      "vector_top1_similarity": 0.3730335235595703
+     },
+     {
+      "item_id": "e1q-117",
+      "query": "가계부 위젯 크기를 바꾸려면?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5262308716773987
+     },
+     {
+      "item_id": "e1q-118",
+      "query": "출장 갈 때 택시비도 정산되나요?",
+      "top1_0.2": "e1_own_ko_07",
+      "top1_0.5": "e1_own_ko_07",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6243163347244263
+     },
+     {
+      "item_id": "e1q-119",
+      "query": "사내 동호회 지원금은 얼마인가요?",
+      "top1_0.2": "e1_own_ko_12",
+      "top1_0.5": "e1_own_ko_12",
+      "bm25_20": 6,
+      "vector_top1_similarity": 0.34080857038497925
+     },
+     {
+      "item_id": "e1q-120",
+      "query": "모아가계부 앱을 열 때 잠금 비밀번호를 걸 수 있나요?",
+      "top1_0.2": "e1_own_ko_03",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5908651351928711
+     }
+    ],
+    "similarity_summary": {
+     "no_answer_median": 0.474,
+     "no_answer_max": 0.698,
+     "answered_vector_hit_median": 0.54,
+     "answered_vector_hit_min": 0.388,
+     "no_answer_above_answered_min": 12
+    }
+   }
+  }
+ },
+ {
+  "dir": "e1_bgem3",
+  "model": "e1_bgem3",
+  "fingerprint": "model.onnx|1024|f32+vabq:none|sha256:b089a980c41f6158f8447400dd5b2abb",
+  "commit": "9ac2b61574d53e99331f5c76f8e8c83240bd2c20",
+  "dirty": [
+   ".gitignore",
+   "example/README.md",
+   "example/assets/corpus/README.md",
+   "example/assets/evalsets/e1/e1_evalset_v1.jsonl",
+   "example/assets/evalsets/e1/e1_overlap_v1.json",
+   "example/assets/evalsets/e1/e1_passage_gold_v1.jsonl",
+   "example/lib/main.dart",
+   "example/lib/services/rag_controller.dart",
+   "scripts/e1/e1_queries_v1_spec.py",
+   "scripts/f2/f2_0_compare.py"
+  ],
+  "chunks": 2319,
+  "elapsed_seconds": 106,
+  "finished_at_utc": "2026-11-14T05:13:09+00:00",
+  "dataset_sha256": {
+   "manifest": "65884105daedc91ccf484cc01ebfb647f879c4a2673a2f288818baacfab8bd9d",
+   "evalset": "1e556737fdc51b6cafe4c10683357606b0aad45ce86620ce161937926d79aff9",
+   "gold": "88ba082d208ca2801bfab0b335390686ed1a91b697151fd4e38503d30207bf3e",
+   "no_answer": "a83afa22da25566dc60ef8bdc9eede309aadca7315013a630426e2bd80bf101e"
+  },
+  "answerable": 90,
+  "gold_not_in_any_chunk": [],
+  "table": {
+   "all": {
+    "vector only": {
+     "hits": 83,
+     "of": 90,
+     "new": 18,
+     "lost": 2,
+     "sign_p": 0.0004
+    },
+    "bm25 only": {
+     "hits": 59,
+     "of": 90,
+     "new": 0,
+     "lost": 8,
+     "sign_p": 0.0078
+    },
+    "rrf 0.2": {
+     "hits": 67,
+     "of": 90,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 78,
+     "of": 90,
+     "new": 12,
+     "lost": 1,
+     "sign_p": 0.0034
+    },
+    "rrf 0.6": {
+     "hits": 79,
+     "of": 90,
+     "new": 13,
+     "lost": 1,
+     "sign_p": 0.0018
+    }
+   },
+   "en": {
+    "vector only": {
+     "hits": 41,
+     "of": 45,
+     "new": 10,
+     "lost": 1,
+     "sign_p": 0.0117
+    },
+    "bm25 only": {
+     "hits": 31,
+     "of": 45,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 32,
+     "of": 45,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 37,
+     "of": 45,
+     "new": 6,
+     "lost": 1,
+     "sign_p": 0.125
+    },
+    "rrf 0.6": {
+     "hits": 39,
+     "of": 45,
+     "new": 7,
+     "lost": 0,
+     "sign_p": 0.0156
+    }
+   },
+   "en|lexical": {
+    "vector only": {
+     "hits": 19,
+     "of": 20,
+     "new": 1,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 19,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 19,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 18,
+     "of": 20,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 19,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "en|class:high": {
+    "vector only": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 13,
+     "of": 13,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "en|doc:gnome": {
+    "vector only": {
+     "hits": 16,
+     "of": 18,
+     "new": 4,
+     "lost": 1,
+     "sign_p": 0.375
+    },
+    "bm25 only": {
+     "hits": 12,
+     "of": 18,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 13,
+     "of": 18,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 14,
+     "of": 18,
+     "new": 2,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 15,
+     "of": 18,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    }
+   },
+   "split:check": {
+    "vector only": {
+     "hits": 41,
+     "of": 46,
+     "new": 9,
+     "lost": 2,
+     "sign_p": 0.0654
+    },
+    "bm25 only": {
+     "hits": 29,
+     "of": 46,
+     "new": 0,
+     "lost": 5,
+     "sign_p": 0.0625
+    },
+    "rrf 0.2": {
+     "hits": 34,
+     "of": 46,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 41,
+     "of": 46,
+     "new": 8,
+     "lost": 1,
+     "sign_p": 0.0391
+    },
+    "rrf 0.6": {
+     "hits": 41,
+     "of": 46,
+     "new": 8,
+     "lost": 1,
+     "sign_p": 0.0391
+    }
+   },
+   "en|split:check": {
+    "vector only": {
+     "hits": 20,
+     "of": 23,
+     "new": 5,
+     "lost": 1,
+     "sign_p": 0.2188
+    },
+    "bm25 only": {
+     "hits": 15,
+     "of": 23,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 16,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 20,
+     "of": 23,
+     "new": 5,
+     "lost": 1,
+     "sign_p": 0.2188
+    },
+    "rrf 0.6": {
+     "hits": 21,
+     "of": 23,
+     "new": 5,
+     "lost": 0,
+     "sign_p": 0.0625
+    }
+   },
+   "en|class:partial": {
+    "vector only": {
+     "hits": 19,
+     "of": 23,
+     "new": 5,
+     "lost": 1,
+     "sign_p": 0.2188
+    },
+    "bm25 only": {
+     "hits": 15,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 15,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 17,
+     "of": 23,
+     "new": 3,
+     "lost": 1,
+     "sign_p": 0.625
+    },
+    "rrf 0.6": {
+     "hits": 18,
+     "of": 23,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    }
+   },
+   "split:tune": {
+    "vector only": {
+     "hits": 42,
+     "of": 44,
+     "new": 9,
+     "lost": 0,
+     "sign_p": 0.0039
+    },
+    "bm25 only": {
+     "hits": 30,
+     "of": 44,
+     "new": 0,
+     "lost": 3,
+     "sign_p": 0.25
+    },
+    "rrf 0.2": {
+     "hits": 33,
+     "of": 44,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 37,
+     "of": 44,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "rrf 0.6": {
+     "hits": 38,
+     "of": 44,
+     "new": 5,
+     "lost": 0,
+     "sign_p": 0.0625
+    }
+   },
+   "en|split:tune": {
+    "vector only": {
+     "hits": 21,
+     "of": 22,
+     "new": 5,
+     "lost": 0,
+     "sign_p": 0.0625
+    },
+    "bm25 only": {
+     "hits": 16,
+     "of": 22,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 16,
+     "of": 22,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 17,
+     "of": 22,
+     "new": 1,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 18,
+     "of": 22,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    }
+   },
+   "en|paraphrase": {
+    "vector only": {
+     "hits": 22,
+     "of": 25,
+     "new": 9,
+     "lost": 0,
+     "sign_p": 0.0039
+    },
+    "bm25 only": {
+     "hits": 12,
+     "of": 25,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 13,
+     "of": 25,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 19,
+     "of": 25,
+     "new": 6,
+     "lost": 0,
+     "sign_p": 0.0312
+    },
+    "rrf 0.6": {
+     "hits": 20,
+     "of": 25,
+     "new": 7,
+     "lost": 0,
+     "sign_p": 0.0156
+    }
+   },
+   "en|class:none": {
+    "vector only": {
+     "hits": 9,
+     "of": 9,
+     "new": 5,
+     "lost": 0,
+     "sign_p": 0.0625
+    },
+    "bm25 only": {
+     "hits": 3,
+     "of": 9,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 4,
+     "of": 9,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 7,
+     "of": 9,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    },
+    "rrf 0.6": {
+     "hits": 8,
+     "of": 9,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    }
+   },
+   "en|doc:own": {
+    "vector only": {
+     "hits": 20,
+     "of": 20,
+     "new": 5,
+     "lost": 0,
+     "sign_p": 0.0625
+    },
+    "bm25 only": {
+     "hits": 15,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 15,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 19,
+     "of": 20,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "rrf 0.6": {
+     "hits": 20,
+     "of": 20,
+     "new": 5,
+     "lost": 0,
+     "sign_p": 0.0625
+    }
+   },
+   "en|doc:pdf": {
+    "vector only": {
+     "hits": 5,
+     "of": 7,
+     "new": 1,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 4,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "ko": {
+    "vector only": {
+     "hits": 42,
+     "of": 45,
+     "new": 8,
+     "lost": 1,
+     "sign_p": 0.0391
+    },
+    "bm25 only": {
+     "hits": 28,
+     "of": 45,
+     "new": 0,
+     "lost": 7,
+     "sign_p": 0.0156
+    },
+    "rrf 0.2": {
+     "hits": 35,
+     "of": 45,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 41,
+     "of": 45,
+     "new": 6,
+     "lost": 0,
+     "sign_p": 0.0312
+    },
+    "rrf 0.6": {
+     "hits": 40,
+     "of": 45,
+     "new": 6,
+     "lost": 1,
+     "sign_p": 0.125
+    }
+   },
+   "ko|lexical": {
+    "vector only": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "ko|class:partial": {
+    "vector only": {
+     "hits": 19,
+     "of": 20,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 18,
+     "of": 20,
+     "new": 0,
+     "lost": 2,
+     "sign_p": 0.5
+    },
+    "rrf 0.2": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 20,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 19,
+     "of": 20,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    }
+   },
+   "ko|doc:gnome": {
+    "vector only": {
+     "hits": 17,
+     "of": 18,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "bm25 only": {
+     "hits": 10,
+     "of": 18,
+     "new": 0,
+     "lost": 3,
+     "sign_p": 0.25
+    },
+    "rrf 0.2": {
+     "hits": 13,
+     "of": 18,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 16,
+     "of": 18,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    },
+    "rrf 0.6": {
+     "hits": 16,
+     "of": 18,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    }
+   },
+   "ko|split:tune": {
+    "vector only": {
+     "hits": 21,
+     "of": 22,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "bm25 only": {
+     "hits": 14,
+     "of": 22,
+     "new": 0,
+     "lost": 3,
+     "sign_p": 0.25
+    },
+    "rrf 0.2": {
+     "hits": 17,
+     "of": 22,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 20,
+     "of": 22,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    },
+    "rrf 0.6": {
+     "hits": 20,
+     "of": 22,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    }
+   },
+   "ko|split:check": {
+    "vector only": {
+     "hits": 21,
+     "of": 23,
+     "new": 4,
+     "lost": 1,
+     "sign_p": 0.375
+    },
+    "bm25 only": {
+     "hits": 14,
+     "of": 23,
+     "new": 0,
+     "lost": 4,
+     "sign_p": 0.125
+    },
+    "rrf 0.2": {
+     "hits": 18,
+     "of": 23,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 21,
+     "of": 23,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    },
+    "rrf 0.6": {
+     "hits": 20,
+     "of": 23,
+     "new": 3,
+     "lost": 1,
+     "sign_p": 0.625
+    }
+   },
+   "ko|paraphrase": {
+    "vector only": {
+     "hits": 22,
+     "of": 25,
+     "new": 8,
+     "lost": 1,
+     "sign_p": 0.0391
+    },
+    "bm25 only": {
+     "hits": 8,
+     "of": 25,
+     "new": 0,
+     "lost": 7,
+     "sign_p": 0.0156
+    },
+    "rrf 0.2": {
+     "hits": 15,
+     "of": 25,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 21,
+     "of": 25,
+     "new": 6,
+     "lost": 0,
+     "sign_p": 0.0312
+    },
+    "rrf 0.6": {
+     "hits": 20,
+     "of": 25,
+     "new": 6,
+     "lost": 1,
+     "sign_p": 0.125
+    }
+   },
+   "ko|class:none": {
+    "vector only": {
+     "hits": 16,
+     "of": 18,
+     "new": 8,
+     "lost": 0,
+     "sign_p": 0.0078
+    },
+    "bm25 only": {
+     "hits": 3,
+     "of": 18,
+     "new": 0,
+     "lost": 5,
+     "sign_p": 0.0625
+    },
+    "rrf 0.2": {
+     "hits": 8,
+     "of": 18,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 14,
+     "of": 18,
+     "new": 6,
+     "lost": 0,
+     "sign_p": 0.0312
+    },
+    "rrf 0.6": {
+     "hits": 14,
+     "of": 18,
+     "new": 6,
+     "lost": 0,
+     "sign_p": 0.0312
+    }
+   },
+   "ko|doc:own": {
+    "vector only": {
+     "hits": 18,
+     "of": 20,
+     "new": 4,
+     "lost": 1,
+     "sign_p": 0.375
+    },
+    "bm25 only": {
+     "hits": 12,
+     "of": 20,
+     "new": 0,
+     "lost": 3,
+     "sign_p": 0.25
+    },
+    "rrf 0.2": {
+     "hits": 15,
+     "of": 20,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 18,
+     "of": 20,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    },
+    "rrf 0.6": {
+     "hits": 17,
+     "of": 20,
+     "new": 3,
+     "lost": 1,
+     "sign_p": 0.625
+    }
+   },
+   "ko|class:high": {
+    "vector only": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
+   "ko|doc:pdf": {
+    "vector only": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 6,
+     "of": 7,
+     "new": 0,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 7,
+     "of": 7,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   }
+  },
+  "wall": {
+   "en": {
+    "queries": 60,
+    "bm25_20_full": 60,
+    "top5_slots_in_full": 300,
+    "top5_slots_from_bm25_list": 300,
+    "vector_hit_default_miss": 10,
+    "of_which_bm25_full": 10,
+    "recovered_by_0.5": 6,
+    "recovered_by_0.6": 7
+   },
+   "ko": {
+    "queries": 60,
+    "bm25_20_full": 38,
+    "top5_slots_in_full": 190,
+    "top5_slots_from_bm25_list": 190,
+    "vector_hit_default_miss": 8,
+    "of_which_bm25_full": 6,
+    "recovered_by_0.5": 6,
+    "recovered_by_0.6": 6
+   }
+  },
+  "misses": {
+   "rrf 0.2|en": {
+    "missed": 13,
+    "by_class": {
+     "partial": 8,
+     "none": 5
+    },
+    "answer_in_a_20_list": 12,
+    "answer_in_a_400_list": 13,
+    "top1_from_a_pdf": 4,
+    "ids": [
+     "e1q-008",
+     "e1q-009",
+     "e1q-011",
+     "e1q-013",
+     "e1q-016",
+     "e1q-029",
+     "e1q-034",
+     "e1q-035",
+     "e1q-036",
+     "e1q-038",
+     "e1q-043",
+     "e1q-044",
+     "e1q-045"
+    ]
+   },
+   "rrf 0.2|ko": {
+    "missed": 10,
+    "by_class": {
+     "none": 10
+    },
+    "answer_in_a_20_list": 10,
+    "answer_in_a_400_list": 10,
+    "top1_from_a_pdf": 1,
+    "ids": [
+     "e1q-071",
+     "e1q-073",
+     "e1q-074",
+     "e1q-075",
+     "e1q-076",
+     "e1q-089",
+     "e1q-094",
+     "e1q-095",
+     "e1q-097",
+     "e1q-098"
+    ]
+   },
+   "rrf 0.5|en": {
+    "missed": 8,
+    "by_class": {
+     "partial": 6,
+     "none": 2
+    },
+    "answer_in_a_20_list": 7,
+    "answer_in_a_400_list": 8,
+    "top1_from_a_pdf": 3,
+    "ids": [
+     "e1q-005",
+     "e1q-008",
+     "e1q-011",
+     "e1q-016",
+     "e1q-038",
+     "e1q-043",
+     "e1q-044",
+     "e1q-045"
+    ]
+   },
+   "rrf 0.5|ko": {
+    "missed": 4,
+    "by_class": {
+     "none": 4
+    },
+    "answer_in_a_20_list": 4,
+    "answer_in_a_400_list": 4,
+    "top1_from_a_pdf": 1,
+    "ids": [
+     "e1q-074",
+     "e1q-075",
+     "e1q-089",
+     "e1q-097"
+    ]
+   }
+  },
+  "no_answer": {
+   "en": {
+    "queries": 15,
+    "top1_kind": {
+     "rrf 0.2": {
+      "own": 10,
+      "pdf": 3,
+      "gnome": 2
+     },
+     "rrf 0.5": {
+      "own": 11,
+      "pdf": 2,
+      "gnome": 2
+     }
+    },
+    "top1_same_language": 15,
+    "bm25_20_sizes": [
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20,
+     20
+    ],
+    "vector_top1_similarity": [
+     0.5967337489128113,
+     0.5812458395957947,
+     0.5757309198379517,
+     0.4714946746826172,
+     0.5525867342948914,
+     0.5068211555480957,
+     0.5187622308731079,
+     0.5526303052902222,
+     0.488697350025177,
+     0.6347135901451111,
+     0.4946025609970093,
+     0.5153643488883972,
+     0.632728099822998,
+     0.6218702793121338,
+     0.6436740756034851
+    ],
+    "rows": [
+     {
+      "item_id": "e1q-046",
+      "query": "What is the warranty period for the Lumo Hub?",
+      "top1_0.2": "e1_own_en_01",
+      "top1_0.5": "e1_own_en_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5967337489128113
+     },
+     {
+      "item_id": "e1q-047",
+      "query": "How do I change the language of the Lumo app?",
+      "top1_0.2": "e1_own_en_04",
+      "top1_0.5": "e1_own_en_04",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5812458395957947
+     },
+     {
+      "item_id": "e1q-048",
+      "query": "Can I control Lumo lights from a smartwatch?",
+      "top1_0.2": "e1_own_en_01",
+      "top1_0.5": "e1_own_en_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5757309198379517
+     },
+     {
+      "item_id": "e1q-049",
+      "query": "What is the dress code for client meetings?",
+      "top1_0.2": "e1_pdf_eng",
+      "top1_0.5": "e1_own_ko_09",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.4714946746826172
+     },
+     {
+      "item_id": "e1q-050",
+      "query": "How many sick days do employees get per year?",
+      "top1_0.2": "e1_own_en_11",
+      "top1_0.5": "e1_own_en_11",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5525867342948914
+     },
+     {
+      "item_id": "e1q-051",
+      "query": "What is the company's 401(k) matching rate?",
+      "top1_0.2": "e1_pdf_eng",
+      "top1_0.5": "e1_pdf_eng",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5068211555480957
+     },
+     {
+      "item_id": "e1q-052",
+      "query": "What time does the office close on Fridays?",
+      "top1_0.2": "e1_own_en_02",
+      "top1_0.5": "e1_own_en_02",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5187622308731079
+     },
+     {
+      "item_id": "e1q-053",
+      "query": "How do I turn on two-factor authentication for my work account?",
+      "top1_0.2": "e1_own_en_10",
+      "top1_0.5": "e1_own_en_10",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5526303052902222
+     },
+     {
+      "item_id": "e1q-054",
+      "query": "Is there free parking at the office?",
+      "top1_0.2": "e1_pdf_eng",
+      "top1_0.5": "e1_pdf_eng",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.488697350025177
+     },
+     {
+      "item_id": "e1q-055",
+      "query": "How do I calibrate the colors of my monitor?",
+      "top1_0.2": "gnome_en_display_night_light",
+      "top1_0.5": "gnome_en_display_night_light",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6347135901451111
+     },
+     {
+      "item_id": "e1q-056",
+      "query": "How do I export my Lumo energy data to a spreadsheet?",
+      "top1_0.2": "e1_own_en_06",
+      "top1_0.5": "e1_own_en_06",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.4946025609970093
+     },
+     {
+      "item_id": "e1q-057",
+      "query": "When is the next company all-hands meeting?",
+      "top1_0.2": "e1_own_en_08",
+      "top1_0.5": "e1_own_en_08",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5153643488883972
+     },
+     {
+      "item_id": "e1q-058",
+      "query": "How do I reset my Lumo account password?",
+      "top1_0.2": "e1_own_en_01",
+      "top1_0.5": "e1_own_en_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.632728099822998
+     },
+     {
+      "item_id": "e1q-059",
+      "query": "Will Atlas launch with a mobile app?",
+      "top1_0.2": "e1_own_en_09",
+      "top1_0.5": "e1_own_en_09",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6218702793121338
+     },
+     {
+      "item_id": "e1q-060",
+      "query": "How do I clear a paper jam in the printer?",
+      "top1_0.2": "gnome_en_printing_cancel_job",
+      "top1_0.5": "gnome_en_printing_cancel_job",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6436740756034851
+     }
+    ],
+    "similarity_summary": {
+     "no_answer_median": 0.553,
+     "no_answer_max": 0.644,
+     "answered_vector_hit_median": 0.649,
+     "answered_vector_hit_min": 0.514,
+     "no_answer_above_answered_min": 11
+    }
+   },
+   "ko": {
+    "queries": 15,
+    "top1_kind": {
+     "rrf 0.2": {
+      "own": 14,
+      "gnome": 1
+     },
+     "rrf 0.5": {
+      "own": 13,
+      "gnome": 2
+     }
+    },
+    "top1_same_language": 15,
+    "bm25_20_sizes": [
+     20,
+     12,
+     8,
+     12,
+     8,
+     20,
+     20,
+     14,
+     10,
+     16,
+     15,
+     20,
+     20,
+     6,
+     20
+    ],
+    "vector_top1_similarity": [
+     0.601915717124939,
+     0.5634080767631531,
+     0.6153331398963928,
+     0.5194168090820312,
+     0.5202320218086243,
+     0.537254273891449,
+     0.5898830890655518,
+     0.5924649834632874,
+     0.558690071105957,
+     0.5608649253845215,
+     0.5711159110069275,
+     0.5926840305328369,
+     0.6450170278549194,
+     0.49791550636291504,
+     0.6069750785827637
+    ],
+    "rows": [
+     {
+      "item_id": "e1q-106",
+      "query": "모아가계부에 주식 계좌도 연결할 수 있나요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.601915717124939
+     },
+     {
+      "item_id": "e1q-107",
+      "query": "모아가계부 다크 모드는 어떻게 켜나요?",
+      "top1_0.2": "e1_own_ko_02",
+      "top1_0.5": "e1_own_ko_05",
+      "bm25_20": 12,
+      "vector_top1_similarity": 0.5634080767631531
+     },
+     {
+      "item_id": "e1q-108",
+      "query": "해외 출장 숙박비 한도는 얼마인가요?",
+      "top1_0.2": "e1_own_ko_07",
+      "top1_0.5": "e1_own_ko_07",
+      "bm25_20": 8,
+      "vector_top1_similarity": 0.6153331398963928
+     },
+     {
+      "item_id": "e1q-109",
+      "query": "경조사 휴가는 며칠인가요?",
+      "top1_0.2": "e1_own_ko_11",
+      "top1_0.5": "e1_own_ko_11",
+      "bm25_20": 12,
+      "vector_top1_similarity": 0.5194168090820312
+     },
+     {
+      "item_id": "e1q-110",
+      "query": "사내 식당은 몇 시에 여나요?",
+      "top1_0.2": "e1_own_ko_12",
+      "top1_0.5": "e1_own_ko_12",
+      "bm25_20": 8,
+      "vector_top1_similarity": 0.5202320218086243
+     },
+     {
+      "item_id": "e1q-111",
+      "query": "법인카드를 잃어버리면 어떻게 신고하나요?",
+      "top1_0.2": "e1_own_ko_12",
+      "top1_0.5": "gnome_ko_hardware_cardreader",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.537254273891449
+     },
+     {
+      "item_id": "e1q-112",
+      "query": "프린터 잉크 잔량은 어디서 확인하나요?",
+      "top1_0.2": "gnome_ko_printing_setup",
+      "top1_0.5": "gnome_ko_printing_setup",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5898830890655518
+     },
+     {
+      "item_id": "e1q-113",
+      "query": "모아가계부 고객센터 전화번호는 뭐예요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 14,
+      "vector_top1_similarity": 0.5924649834632874
+     },
+     {
+      "item_id": "e1q-114",
+      "query": "회사 건강검진은 언제 받나요?",
+      "top1_0.2": "e1_own_ko_08",
+      "top1_0.5": "e1_own_ko_08",
+      "bm25_20": 10,
+      "vector_top1_similarity": 0.558690071105957
+     },
+     {
+      "item_id": "e1q-115",
+      "query": "회의실 예약은 어떻게 하나요?",
+      "top1_0.2": "e1_own_ko_09",
+      "top1_0.5": "e1_own_ko_09",
+      "bm25_20": 16,
+      "vector_top1_similarity": 0.5608649253845215
+     },
+     {
+      "item_id": "e1q-116",
+      "query": "주차 지원금은 한 달에 얼마인가요?",
+      "top1_0.2": "e1_own_ko_04",
+      "top1_0.5": "e1_own_ko_04",
+      "bm25_20": 15,
+      "vector_top1_similarity": 0.5711159110069275
+     },
+     {
+      "item_id": "e1q-117",
+      "query": "가계부 위젯 크기를 바꾸려면?",
+      "top1_0.2": "e1_own_ko_02",
+      "top1_0.5": "e1_own_ko_02",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5926840305328369
+     },
+     {
+      "item_id": "e1q-118",
+      "query": "출장 갈 때 택시비도 정산되나요?",
+      "top1_0.2": "e1_own_ko_07",
+      "top1_0.5": "e1_own_ko_07",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6450170278549194
+     },
+     {
+      "item_id": "e1q-119",
+      "query": "사내 동호회 지원금은 얼마인가요?",
+      "top1_0.2": "e1_own_ko_12",
+      "top1_0.5": "e1_own_ko_04",
+      "bm25_20": 6,
+      "vector_top1_similarity": 0.49791550636291504
+     },
+     {
+      "item_id": "e1q-120",
+      "query": "모아가계부 앱을 열 때 잠금 비밀번호를 걸 수 있나요?",
+      "top1_0.2": "e1_own_ko_03",
+      "top1_0.5": "e1_own_ko_03",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6069750785827637
+     }
+    ],
+    "similarity_summary": {
+     "no_answer_median": 0.571,
+     "no_answer_max": 0.645,
+     "answered_vector_hit_median": 0.638,
+     "answered_vector_hit_min": 0.494,
+     "no_answer_above_answered_min": 15
+    }
+   }
+  }
+ }
+]

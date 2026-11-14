@@ -10,6 +10,7 @@
 | [`f2_0_report.md`](f2_0_report.md) | 고칠 형태 (A)~(D) 비교, 결정, 구현 뒤 실제 엔진 확인 |
 | [`validation_ko.md`](validation_ko.md) | 학습에 쓰이지 않은 한국어 자료(AutoRAG, KorQuAD dev)로 다시 확인 |
 | [`validation_en.md`](validation_en.md) | 영어 자료(NFCorpus, SciFact)로 벽과 모델별 무게 확인. KoEn 레시피 문구를 영어 문서까지 넓힌 근거 |
+| [`../e1-app-docs/README.md`](../e1-app-docs/README.md) | E1: 앱 형태 문서(GNOME 도움말, 짧은 앱·사내 문서, 큰 PDF)와 질문 120개로 같은 비교(예비, 질문 검수 전) |
 
 ## 한 줄 요약
 
