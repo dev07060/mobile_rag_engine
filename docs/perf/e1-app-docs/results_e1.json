@@ -3,16 +3,16 @@
   "dir": "e1_minilm",
   "model": "e1_minilm",
   "fingerprint": "model.onnx|384|f32+vabq:none|sha256:e9246dc32f332cb687c5d1ea0c0c51d3",
-  "commit": "1755192bf3e7c878bcfea8e514af027914279fb7",
+  "commit": "0b27510b97ceeb0a59d470323a8cf9bcfcee8fba",
   "dirty": [],
   "chunks": 2330,
-  "elapsed_seconds": 33,
-  "finished_at_utc": "2026-11-14T05:14:40+00:00",
+  "elapsed_seconds": 30,
+  "finished_at_utc": "2026-11-14T05:42:20+00:00",
   "dataset_sha256": {
    "manifest": "65884105daedc91ccf484cc01ebfb647f879c4a2673a2f288818baacfab8bd9d",
-   "evalset": "1e556737fdc51b6cafe4c10683357606b0aad45ce86620ce161937926d79aff9",
-   "gold": "88ba082d208ca2801bfab0b335390686ed1a91b697151fd4e38503d30207bf3e",
-   "no_answer": "a83afa22da25566dc60ef8bdc9eede309aadca7315013a630426e2bd80bf101e"
+   "evalset": "95db8ffdc0f8dd5990df60dfac294b34a8b8ab47dc5030fdc8e31fb96f8818b5",
+   "gold": "dfd655e96d36f868d79bc0edb11439ca8af3308a83549376a388b0eb21d2f237",
+   "no_answer": "b359aec1aaa9af86336e9488b3871075d4c671ac61f77780300018accd7c302d"
   },
   "answerable": 90,
   "gold_not_in_any_chunk": [],
@@ -21,74 +21,74 @@
     "vector only": {
      "hits": 40,
      "of": 90,
-     "new": 9,
-     "lost": 25,
-     "sign_p": 0.009
+     "new": 6,
+     "lost": 26,
+     "sign_p": 0.0005
     },
     "bm25 only": {
-     "hits": 59,
+     "hits": 64,
      "of": 90,
-     "new": 4,
+     "new": 5,
      "lost": 1,
-     "sign_p": 0.375
+     "sign_p": 0.2188
     },
     "rrf 0.2": {
-     "hits": 56,
+     "hits": 60,
      "of": 90,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 56,
+     "hits": 57,
      "of": 90,
-     "new": 5,
+     "new": 2,
      "lost": 5,
-     "sign_p": 1.0
+     "sign_p": 0.4531
     },
     "rrf 0.6": {
      "hits": 43,
      "of": 90,
-     "new": 6,
-     "lost": 19,
-     "sign_p": 0.0146
+     "new": 3,
+     "lost": 20,
+     "sign_p": 0.0005
     }
    },
    "en": {
     "vector only": {
      "hits": 38,
      "of": 45,
-     "new": 8,
-     "lost": 2,
-     "sign_p": 0.1094
+     "new": 6,
+     "lost": 3,
+     "sign_p": 0.5078
     },
     "bm25 only": {
-     "hits": 31,
+     "hits": 34,
      "of": 45,
      "new": 0,
      "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 32,
+     "hits": 35,
      "of": 45,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 35,
+     "hits": 36,
      "of": 45,
-     "new": 4,
+     "new": 2,
      "lost": 1,
-     "sign_p": 0.375
+     "sign_p": 1.0
     },
     "rrf 0.6": {
      "hits": 36,
      "of": 45,
-     "new": 5,
-     "lost": 1,
-     "sign_p": 0.2188
+     "new": 3,
+     "lost": 2,
+     "sign_p": 1.0
     }
    },
    "en|lexical": {
@@ -169,19 +169,19 @@
     "vector only": {
      "hits": 15,
      "of": 18,
-     "new": 4,
+     "new": 3,
      "lost": 2,
-     "sign_p": 0.6875
+     "sign_p": 1.0
     },
     "bm25 only": {
-     "hits": 12,
+     "hits": 13,
      "of": 18,
      "new": 0,
      "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 13,
+     "hits": 14,
      "of": 18,
      "new": 0,
      "lost": 0,
@@ -190,14 +190,14 @@
     "rrf 0.5": {
      "hits": 14,
      "of": 18,
-     "new": 2,
+     "new": 1,
      "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.6": {
      "hits": 14,
      "of": 18,
-     "new": 2,
+     "new": 1,
      "lost": 1,
      "sign_p": 1.0
     }
@@ -206,110 +206,110 @@
     "vector only": {
      "hits": 19,
      "of": 46,
-     "new": 4,
-     "lost": 13,
-     "sign_p": 0.049
+     "new": 2,
+     "lost": 14,
+     "sign_p": 0.0042
     },
     "bm25 only": {
-     "hits": 29,
+     "hits": 33,
      "of": 46,
-     "new": 2,
+     "new": 3,
      "lost": 1,
-     "sign_p": 1.0
+     "sign_p": 0.625
     },
     "rrf 0.2": {
-     "hits": 28,
+     "hits": 31,
      "of": 46,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 30,
+     "hits": 31,
      "of": 46,
-     "new": 4,
+     "new": 2,
      "lost": 2,
-     "sign_p": 0.6875
+     "sign_p": 1.0
     },
     "rrf 0.6": {
      "hits": 22,
      "of": 46,
-     "new": 4,
-     "lost": 10,
-     "sign_p": 0.1796
+     "new": 2,
+     "lost": 11,
+     "sign_p": 0.0225
     }
    },
    "en|split:check": {
     "vector only": {
      "hits": 18,
      "of": 23,
-     "new": 4,
-     "lost": 2,
-     "sign_p": 0.6875
+     "new": 2,
+     "lost": 3,
+     "sign_p": 1.0
     },
     "bm25 only": {
-     "hits": 15,
+     "hits": 18,
      "of": 23,
      "new": 0,
      "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 16,
+     "hits": 19,
      "of": 23,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 19,
+     "hits": 20,
      "of": 23,
-     "new": 4,
+     "new": 2,
      "lost": 1,
-     "sign_p": 0.375
+     "sign_p": 1.0
     },
     "rrf 0.6": {
      "hits": 19,
      "of": 23,
-     "new": 4,
-     "lost": 1,
-     "sign_p": 0.375
+     "new": 2,
+     "lost": 2,
+     "sign_p": 1.0
     }
    },
    "en|class:partial": {
     "vector only": {
-     "hits": 16,
-     "of": 23,
-     "new": 3,
-     "lost": 2,
+     "hits": 17,
+     "of": 24,
+     "new": 2,
+     "lost": 3,
      "sign_p": 1.0
     },
     "bm25 only": {
-     "hits": 15,
-     "of": 23,
+     "hits": 18,
+     "of": 24,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 15,
-     "of": 23,
+     "hits": 18,
+     "of": 24,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 16,
-     "of": 23,
-     "new": 2,
+     "hits": 18,
+     "of": 24,
+     "new": 1,
      "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.6": {
-     "hits": 16,
-     "of": 23,
-     "new": 2,
-     "lost": 1,
+     "hits": 17,
+     "of": 24,
+     "new": 1,
+     "lost": 2,
      "sign_p": 1.0
     }
    },
@@ -317,19 +317,19 @@
     "vector only": {
      "hits": 21,
      "of": 44,
-     "new": 5,
+     "new": 4,
      "lost": 12,
-     "sign_p": 0.1435
+     "sign_p": 0.0768
     },
     "bm25 only": {
-     "hits": 30,
+     "hits": 31,
      "of": 44,
      "new": 2,
      "lost": 0,
      "sign_p": 0.5
     },
     "rrf 0.2": {
-     "hits": 28,
+     "hits": 29,
      "of": 44,
      "new": 0,
      "lost": 0,
@@ -338,16 +338,16 @@
     "rrf 0.5": {
      "hits": 26,
      "of": 44,
-     "new": 1,
+     "new": 0,
      "lost": 3,
-     "sign_p": 0.625
+     "sign_p": 0.25
     },
     "rrf 0.6": {
      "hits": 21,
      "of": 44,
-     "new": 2,
+     "new": 1,
      "lost": 9,
-     "sign_p": 0.0654
+     "sign_p": 0.0215
     }
    },
    "en|split:tune": {
@@ -391,93 +391,93 @@
     "vector only": {
      "hits": 21,
      "of": 25,
-     "new": 8,
-     "lost": 0,
-     "sign_p": 0.0078
+     "new": 6,
+     "lost": 1,
+     "sign_p": 0.125
     },
     "bm25 only": {
-     "hits": 12,
+     "hits": 15,
      "of": 25,
      "new": 0,
      "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 13,
+     "hits": 16,
      "of": 25,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 17,
+     "hits": 18,
      "of": 25,
-     "new": 4,
+     "new": 2,
      "lost": 0,
-     "sign_p": 0.125
+     "sign_p": 0.5
     },
     "rrf 0.6": {
      "hits": 18,
      "of": 25,
-     "new": 5,
-     "lost": 0,
-     "sign_p": 0.0625
+     "new": 3,
+     "lost": 1,
+     "sign_p": 0.625
     }
    },
    "en|class:none": {
     "vector only": {
-     "hits": 9,
-     "of": 9,
-     "new": 5,
+     "hits": 8,
+     "of": 8,
+     "new": 4,
      "lost": 0,
-     "sign_p": 0.0625
+     "sign_p": 0.125
     },
     "bm25 only": {
      "hits": 3,
-     "of": 9,
+     "of": 8,
      "new": 0,
      "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.2": {
      "hits": 4,
-     "of": 9,
+     "of": 8,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
+     "hits": 5,
+     "of": 8,
+     "new": 1,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
      "hits": 6,
-     "of": 9,
+     "of": 8,
      "new": 2,
      "lost": 0,
      "sign_p": 0.5
-    },
-    "rrf 0.6": {
-     "hits": 7,
-     "of": 9,
-     "new": 3,
-     "lost": 0,
-     "sign_p": 0.25
     }
    },
    "en|doc:own": {
     "vector only": {
      "hits": 19,
      "of": 20,
-     "new": 4,
+     "new": 3,
      "lost": 0,
-     "sign_p": 0.125
+     "sign_p": 0.25
     },
     "bm25 only": {
-     "hits": 15,
+     "hits": 16,
      "of": 20,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 15,
+     "hits": 16,
      "of": 20,
      "new": 0,
      "lost": 0,
@@ -486,16 +486,16 @@
     "rrf 0.5": {
      "hits": 17,
      "of": 20,
-     "new": 2,
+     "new": 1,
      "lost": 0,
-     "sign_p": 0.5
+     "sign_p": 1.0
     },
     "rrf 0.6": {
      "hits": 18,
      "of": 20,
-     "new": 3,
+     "new": 2,
      "lost": 0,
-     "sign_p": 0.25
+     "sign_p": 0.5
     }
    },
    "en|doc:pdf": {
@@ -503,25 +503,25 @@
      "hits": 4,
      "of": 7,
      "new": 0,
-     "lost": 0,
+     "lost": 1,
      "sign_p": 1.0
     },
     "bm25 only": {
-     "hits": 4,
+     "hits": 5,
      "of": 7,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 4,
+     "hits": 5,
      "of": 7,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 4,
+     "hits": 5,
      "of": 7,
      "new": 0,
      "lost": 0,
@@ -531,7 +531,7 @@
      "hits": 4,
      "of": 7,
      "new": 0,
-     "lost": 0,
+     "lost": 1,
      "sign_p": 1.0
     }
    },
@@ -539,19 +539,19 @@
     "vector only": {
      "hits": 2,
      "of": 45,
-     "new": 1,
+     "new": 0,
      "lost": 23,
      "sign_p": 0.0
     },
     "bm25 only": {
-     "hits": 28,
+     "hits": 30,
      "of": 45,
-     "new": 4,
+     "new": 5,
      "lost": 0,
-     "sign_p": 0.125
+     "sign_p": 0.0625
     },
     "rrf 0.2": {
-     "hits": 24,
+     "hits": 25,
      "of": 45,
      "new": 0,
      "lost": 0,
@@ -560,16 +560,16 @@
     "rrf 0.5": {
      "hits": 21,
      "of": 45,
-     "new": 1,
+     "new": 0,
      "lost": 4,
-     "sign_p": 0.375
+     "sign_p": 0.125
     },
     "rrf 0.6": {
      "hits": 7,
      "of": 45,
-     "new": 1,
+     "new": 0,
      "lost": 18,
-     "sign_p": 0.0001
+     "sign_p": 0.0
     }
    },
    "ko|lexical": {
@@ -611,36 +611,36 @@
    },
    "ko|class:partial": {
     "vector only": {
-     "hits": 1,
-     "of": 20,
+     "hits": 2,
+     "of": 23,
      "new": 0,
      "lost": 15,
      "sign_p": 0.0001
     },
     "bm25 only": {
-     "hits": 18,
-     "of": 20,
-     "new": 2,
+     "hits": 20,
+     "of": 23,
+     "new": 3,
      "lost": 0,
-     "sign_p": 0.5
+     "sign_p": 0.25
     },
     "rrf 0.2": {
-     "hits": 16,
-     "of": 20,
+     "hits": 17,
+     "of": 23,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
      "hits": 14,
-     "of": 20,
+     "of": 23,
      "new": 0,
-     "lost": 2,
-     "sign_p": 0.5
+     "lost": 3,
+     "sign_p": 0.25
     },
     "rrf 0.6": {
-     "hits": 4,
-     "of": 20,
+     "hits": 5,
+     "of": 23,
      "new": 0,
      "lost": 12,
      "sign_p": 0.0005
@@ -650,19 +650,19 @@
     "vector only": {
      "hits": 1,
      "of": 18,
-     "new": 1,
+     "new": 0,
      "lost": 9,
-     "sign_p": 0.0215
+     "sign_p": 0.0039
     },
     "bm25 only": {
-     "hits": 10,
+     "hits": 12,
      "of": 18,
-     "new": 1,
+     "new": 2,
      "lost": 0,
-     "sign_p": 1.0
+     "sign_p": 0.5
     },
     "rrf 0.2": {
-     "hits": 9,
+     "hits": 10,
      "of": 18,
      "new": 0,
      "lost": 0,
@@ -671,35 +671,35 @@
     "rrf 0.5": {
      "hits": 8,
      "of": 18,
-     "new": 1,
+     "new": 0,
      "lost": 2,
-     "sign_p": 1.0
+     "sign_p": 0.5
     },
     "rrf 0.6": {
      "hits": 2,
      "of": 18,
-     "new": 1,
+     "new": 0,
      "lost": 8,
-     "sign_p": 0.0391
+     "sign_p": 0.0078
     }
    },
    "ko|split:tune": {
     "vector only": {
      "hits": 1,
      "of": 22,
-     "new": 1,
+     "new": 0,
      "lost": 12,
-     "sign_p": 0.0034
+     "sign_p": 0.0005
     },
     "bm25 only": {
-     "hits": 14,
+     "hits": 15,
      "of": 22,
      "new": 2,
      "lost": 0,
      "sign_p": 0.5
     },
     "rrf 0.2": {
-     "hits": 12,
+     "hits": 13,
      "of": 22,
      "new": 0,
      "lost": 0,
@@ -708,16 +708,16 @@
     "rrf 0.5": {
      "hits": 10,
      "of": 22,
-     "new": 1,
+     "new": 0,
      "lost": 3,
-     "sign_p": 0.625
+     "sign_p": 0.25
     },
     "rrf 0.6": {
      "hits": 4,
      "of": 22,
-     "new": 1,
+     "new": 0,
      "lost": 9,
-     "sign_p": 0.0215
+     "sign_p": 0.0039
     }
    },
    "ko|split:check": {
@@ -729,11 +729,11 @@
      "sign_p": 0.001
     },
     "bm25 only": {
-     "hits": 14,
+     "hits": 15,
      "of": 23,
-     "new": 2,
+     "new": 3,
      "lost": 0,
-     "sign_p": 0.5
+     "sign_p": 0.25
     },
     "rrf 0.2": {
      "hits": 12,
@@ -757,23 +757,60 @@
      "sign_p": 0.0039
     }
    },
+   "ko|class:high": {
+    "vector only": {
+     "hits": 0,
+     "of": 8,
+     "new": 0,
+     "lost": 6,
+     "sign_p": 0.0312
+    },
+    "bm25 only": {
+     "hits": 8,
+     "of": 8,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.2": {
+     "hits": 6,
+     "of": 8,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 6,
+     "of": 8,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 2,
+     "of": 8,
+     "new": 0,
+     "lost": 4,
+     "sign_p": 0.125
+    }
+   },
    "ko|paraphrase": {
     "vector only": {
      "hits": 1,
      "of": 25,
-     "new": 1,
+     "new": 0,
      "lost": 7,
-     "sign_p": 0.0703
+     "sign_p": 0.0156
     },
     "bm25 only": {
-     "hits": 8,
+     "hits": 10,
      "of": 25,
-     "new": 1,
+     "new": 2,
      "lost": 0,
-     "sign_p": 1.0
+     "sign_p": 0.5
     },
     "rrf 0.2": {
-     "hits": 7,
+     "hits": 8,
      "of": 25,
      "new": 0,
      "lost": 0,
@@ -782,53 +819,53 @@
     "rrf 0.5": {
      "hits": 5,
      "of": 25,
-     "new": 1,
+     "new": 0,
      "lost": 3,
-     "sign_p": 0.625
+     "sign_p": 0.25
     },
     "rrf 0.6": {
      "hits": 1,
      "of": 25,
-     "new": 1,
+     "new": 0,
      "lost": 7,
-     "sign_p": 0.0703
+     "sign_p": 0.0156
     }
    },
    "ko|class:none": {
     "vector only": {
-     "hits": 1,
-     "of": 18,
-     "new": 1,
-     "lost": 3,
-     "sign_p": 0.625
+     "hits": 0,
+     "of": 14,
+     "new": 0,
+     "lost": 2,
+     "sign_p": 0.5
     },
     "bm25 only": {
-     "hits": 3,
-     "of": 18,
+     "hits": 2,
+     "of": 14,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 3,
-     "of": 18,
+     "hits": 2,
+     "of": 14,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 2,
-     "of": 18,
-     "new": 1,
-     "lost": 2,
+     "hits": 1,
+     "of": 14,
+     "new": 0,
+     "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.6": {
-     "hits": 1,
-     "of": 18,
-     "new": 1,
-     "lost": 3,
-     "sign_p": 0.625
+     "hits": 0,
+     "of": 14,
+     "new": 0,
+     "lost": 2,
+     "sign_p": 0.5
     }
    },
    "ko|doc:own": {
@@ -866,43 +903,6 @@
      "new": 0,
      "lost": 7,
      "sign_p": 0.0156
-    }
-   },
-   "ko|class:high": {
-    "vector only": {
-     "hits": 0,
-     "of": 7,
-     "new": 0,
-     "lost": 5,
-     "sign_p": 0.0625
-    },
-    "bm25 only": {
-     "hits": 7,
-     "of": 7,
-     "new": 2,
-     "lost": 0,
-     "sign_p": 0.5
-    },
-    "rrf 0.2": {
-     "hits": 5,
-     "of": 7,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "rrf 0.5": {
-     "hits": 5,
-     "of": 7,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "rrf 0.6": {
-     "hits": 2,
-     "of": 7,
-     "new": 0,
-     "lost": 3,
-     "sign_p": 0.25
     }
    },
    "ko|doc:pdf": {
@@ -949,65 +949,61 @@
     "bm25_20_full": 60,
     "top5_slots_in_full": 300,
     "top5_slots_from_bm25_list": 300,
-    "vector_hit_default_miss": 8,
-    "of_which_bm25_full": 8,
-    "recovered_by_0.5": 4,
-    "recovered_by_0.6": 5
+    "vector_hit_default_miss": 6,
+    "of_which_bm25_full": 6,
+    "recovered_by_0.5": 2,
+    "recovered_by_0.6": 3
    },
    "ko": {
     "queries": 60,
-    "bm25_20_full": 39,
-    "top5_slots_in_full": 195,
-    "top5_slots_from_bm25_list": 195,
-    "vector_hit_default_miss": 1,
-    "of_which_bm25_full": 1,
-    "recovered_by_0.5": 1,
-    "recovered_by_0.6": 1
+    "bm25_20_full": 38,
+    "top5_slots_in_full": 190,
+    "top5_slots_from_bm25_list": 190,
+    "vector_hit_default_miss": 0,
+    "of_which_bm25_full": 0,
+    "recovered_by_0.5": 0,
+    "recovered_by_0.6": 0
    }
   },
   "misses": {
    "rrf 0.2|en": {
-    "missed": 13,
+    "missed": 10,
     "by_class": {
-     "partial": 8,
-     "none": 5
+     "partial": 6,
+     "none": 4
     },
-    "answer_in_a_20_list": 9,
-    "answer_in_a_400_list": 13,
-    "top1_from_a_pdf": 3,
+    "answer_in_a_20_list": 7,
+    "answer_in_a_400_list": 10,
+    "top1_from_a_pdf": 2,
     "ids": [
      "e1q-008",
      "e1q-009",
      "e1q-011",
-     "e1q-013",
      "e1q-016",
-     "e1q-029",
      "e1q-034",
      "e1q-035",
      "e1q-036",
      "e1q-038",
      "e1q-043",
-     "e1q-044",
-     "e1q-045"
+     "e1q-044"
     ]
    },
    "rrf 0.2|ko": {
-    "missed": 21,
+    "missed": 20,
     "by_class": {
-     "partial": 4,
-     "none": 15,
+     "partial": 6,
+     "none": 12,
      "high": 2
     },
     "answer_in_a_20_list": 14,
-    "answer_in_a_400_list": 21,
-    "top1_from_a_pdf": 3,
+    "answer_in_a_400_list": 20,
+    "top1_from_a_pdf": 2,
     "ids": [
      "e1q-066",
      "e1q-068",
      "e1q-070",
      "e1q-071",
      "e1q-072",
-     "e1q-073",
      "e1q-074",
      "e1q-075",
      "e1q-076",
@@ -1026,14 +1022,14 @@
     ]
    },
    "rrf 0.5|en": {
-    "missed": 10,
+    "missed": 9,
     "by_class": {
-     "partial": 7,
+     "partial": 6,
      "none": 3
     },
     "answer_in_a_20_list": 6,
-    "answer_in_a_400_list": 10,
-    "top1_from_a_pdf": 3,
+    "answer_in_a_400_list": 9,
+    "top1_from_a_pdf": 2,
     "ids": [
      "e1q-005",
      "e1q-008",
@@ -1043,20 +1039,19 @@
      "e1q-035",
      "e1q-038",
      "e1q-043",
-     "e1q-044",
-     "e1q-045"
+     "e1q-044"
     ]
    },
    "rrf 0.5|ko": {
     "missed": 24,
     "by_class": {
-     "partial": 6,
-     "none": 16,
+     "partial": 9,
+     "none": 13,
      "high": 2
     },
-    "answer_in_a_20_list": 17,
+    "answer_in_a_20_list": 18,
     "answer_in_a_400_list": 24,
-    "top1_from_a_pdf": 6,
+    "top1_from_a_pdf": 5,
     "ids": [
      "e1q-066",
      "e1q-068",
@@ -1260,7 +1255,7 @@
     "similarity_summary": {
      "no_answer_median": 0.465,
      "no_answer_max": 0.601,
-     "answered_vector_hit_median": 0.541,
+     "answered_vector_hit_median": 0.551,
      "answered_vector_hit_min": 0.353,
      "no_answer_above_answered_min": 11
     }
@@ -1269,8 +1264,8 @@
     "queries": 15,
     "top1_kind": {
      "rrf 0.2": {
-      "own": 11,
-      "pdf": 2,
+      "own": 12,
+      "pdf": 1,
       "gnome": 2
      },
      "rrf 0.5": {
@@ -1283,7 +1278,7 @@
     "bm25_20_sizes": [
      20,
      12,
-     8,
+     20,
      13,
      8,
      20,
@@ -1293,14 +1288,14 @@
      16,
      15,
      20,
-     20,
+     19,
      6,
      20
     ],
     "vector_top1_similarity": [
      0.7141879796981812,
      0.6831280589103699,
-     0.7209837436676025,
+     0.7439014911651611,
      0.7082554697990417,
      0.768608033657074,
      0.7323400378227234,
@@ -1310,7 +1305,7 @@
      0.6369677782058716,
      0.7100809216499329,
      0.5432916283607483,
-     0.6860565543174744,
+     0.7923714518547058,
      0.7226813435554504,
      0.7944597005844116
     ],
@@ -1333,11 +1328,11 @@
      },
      {
       "item_id": "e1q-108",
-      "query": "해외 출장 숙박비 한도는 얼마인가요?",
-      "top1_0.2": "e1_own_ko_07",
-      "top1_0.5": "e1_own_ko_07",
-      "bm25_20": 8,
-      "vector_top1_similarity": 0.7209837436676025
+      "query": "출장 가기 전에 경비를 미리 받을 수 있나요?",
+      "top1_0.2": "e1_own_ko_01",
+      "top1_0.5": "e1_own_ko_01",
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.7439014911651611
      },
      {
       "item_id": "e1q-109",
@@ -1413,11 +1408,11 @@
      },
      {
       "item_id": "e1q-118",
-      "query": "출장 갈 때 택시비도 정산되나요?",
-      "top1_0.2": "e1_pdf_kor",
+      "query": "출장 일정이 주말에 걸리면 휴일 근무로 인정되나요?",
+      "top1_0.2": "e1_own_ko_01",
       "top1_0.5": "e1_own_ko_01",
-      "bm25_20": 20,
-      "vector_top1_similarity": 0.6860565543174744
+      "bm25_20": 19,
+      "vector_top1_similarity": 0.7923714518547058
      },
      {
       "item_id": "e1q-119",
@@ -1437,7 +1432,7 @@
      }
     ],
     "similarity_summary": {
-     "no_answer_median": 0.71,
+     "no_answer_median": 0.714,
      "no_answer_max": 0.794,
      "answered_vector_hit_median": 0.619,
      "answered_vector_hit_min": 0.553,
@@ -1450,16 +1445,16 @@
   "dir": "e1_koen",
   "model": "e1_koen",
   "fingerprint": "model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413",
-  "commit": "1755192bf3e7c878bcfea8e514af027914279fb7",
+  "commit": "0b27510b97ceeb0a59d470323a8cf9bcfcee8fba",
   "dirty": [],
   "chunks": 2319,
-  "elapsed_seconds": 29,
-  "finished_at_utc": "2026-11-14T05:15:10+00:00",
+  "elapsed_seconds": 28,
+  "finished_at_utc": "2026-11-14T05:42:50+00:00",
   "dataset_sha256": {
    "manifest": "65884105daedc91ccf484cc01ebfb647f879c4a2673a2f288818baacfab8bd9d",
-   "evalset": "1e556737fdc51b6cafe4c10683357606b0aad45ce86620ce161937926d79aff9",
-   "gold": "88ba082d208ca2801bfab0b335390686ed1a91b697151fd4e38503d30207bf3e",
-   "no_answer": "a83afa22da25566dc60ef8bdc9eede309aadca7315013a630426e2bd80bf101e"
+   "evalset": "95db8ffdc0f8dd5990df60dfac294b34a8b8ab47dc5030fdc8e31fb96f8818b5",
+   "gold": "dfd655e96d36f868d79bc0edb11439ca8af3308a83549376a388b0eb21d2f237",
+   "no_answer": "b359aec1aaa9af86336e9488b3871075d4c671ac61f77780300018accd7c302d"
   },
   "answerable": 90,
   "gold_not_in_any_chunk": [],
@@ -1468,70 +1463,70 @@
     "vector only": {
      "hits": 79,
      "of": 90,
-     "new": 15,
-     "lost": 2,
-     "sign_p": 0.0023
+     "new": 12,
+     "lost": 4,
+     "sign_p": 0.0768
     },
     "bm25 only": {
-     "hits": 59,
+     "hits": 64,
      "of": 90,
      "new": 0,
      "lost": 7,
      "sign_p": 0.0156
     },
     "rrf 0.2": {
-     "hits": 66,
+     "hits": 71,
      "of": 90,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 76,
+     "hits": 80,
      "of": 90,
-     "new": 11,
+     "new": 10,
      "lost": 1,
-     "sign_p": 0.0063
+     "sign_p": 0.0117
     },
     "rrf 0.6": {
-     "hits": 76,
+     "hits": 80,
      "of": 90,
-     "new": 11,
+     "new": 10,
      "lost": 1,
-     "sign_p": 0.0063
+     "sign_p": 0.0117
     }
    },
    "en": {
     "vector only": {
      "hits": 38,
      "of": 45,
-     "new": 8,
-     "lost": 1,
-     "sign_p": 0.0391
+     "new": 6,
+     "lost": 2,
+     "sign_p": 0.2891
     },
     "bm25 only": {
-     "hits": 31,
+     "hits": 34,
      "of": 45,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 31,
+     "hits": 34,
      "of": 45,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 35,
+     "hits": 38,
      "of": 45,
      "new": 4,
      "lost": 0,
      "sign_p": 0.125
     },
     "rrf 0.6": {
-     "hits": 35,
+     "hits": 38,
      "of": 45,
      "new": 4,
      "lost": 0,
@@ -1616,145 +1611,145 @@
     "vector only": {
      "hits": 15,
      "of": 18,
-     "new": 4,
+     "new": 3,
      "lost": 1,
-     "sign_p": 0.375
+     "sign_p": 0.625
     },
     "bm25 only": {
-     "hits": 12,
+     "hits": 13,
      "of": 18,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 12,
+     "hits": 13,
      "of": 18,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 13,
+     "hits": 15,
      "of": 18,
-     "new": 1,
+     "new": 2,
      "lost": 0,
-     "sign_p": 1.0
+     "sign_p": 0.5
     },
     "rrf 0.6": {
-     "hits": 13,
+     "hits": 15,
      "of": 18,
-     "new": 1,
+     "new": 2,
      "lost": 0,
-     "sign_p": 1.0
+     "sign_p": 0.5
     }
    },
    "split:check": {
     "vector only": {
      "hits": 41,
      "of": 46,
-     "new": 9,
-     "lost": 2,
-     "sign_p": 0.0654
+     "new": 7,
+     "lost": 4,
+     "sign_p": 0.5488
     },
     "bm25 only": {
-     "hits": 29,
+     "hits": 33,
      "of": 46,
      "new": 0,
      "lost": 5,
      "sign_p": 0.0625
     },
     "rrf 0.2": {
-     "hits": 34,
+     "hits": 38,
      "of": 46,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 39,
+     "hits": 42,
      "of": 46,
-     "new": 6,
+     "new": 5,
      "lost": 1,
-     "sign_p": 0.125
+     "sign_p": 0.2188
     },
     "rrf 0.6": {
-     "hits": 39,
+     "hits": 42,
      "of": 46,
-     "new": 6,
+     "new": 5,
      "lost": 1,
-     "sign_p": 0.125
+     "sign_p": 0.2188
     }
    },
    "en|split:check": {
     "vector only": {
      "hits": 20,
      "of": 23,
-     "new": 6,
-     "lost": 1,
-     "sign_p": 0.125
-    },
-    "bm25 only": {
-     "hits": 15,
-     "of": 23,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "rrf 0.2": {
-     "hits": 15,
-     "of": 23,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "rrf 0.5": {
-     "hits": 18,
-     "of": 23,
-     "new": 3,
-     "lost": 0,
-     "sign_p": 0.25
-    },
-    "rrf 0.6": {
-     "hits": 18,
-     "of": 23,
-     "new": 3,
-     "lost": 0,
-     "sign_p": 0.25
-    }
-   },
-   "en|class:partial": {
-    "vector only": {
-     "hits": 18,
-     "of": 23,
      "new": 4,
-     "lost": 1,
-     "sign_p": 0.375
+     "lost": 2,
+     "sign_p": 0.6875
     },
     "bm25 only": {
-     "hits": 15,
+     "hits": 18,
      "of": 23,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 15,
+     "hits": 18,
      "of": 23,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 17,
+     "hits": 20,
      "of": 23,
      "new": 2,
      "lost": 0,
      "sign_p": 0.5
     },
     "rrf 0.6": {
-     "hits": 17,
+     "hits": 20,
      "of": 23,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    }
+   },
+   "en|class:partial": {
+    "vector only": {
+     "hits": 19,
+     "of": 24,
+     "new": 3,
+     "lost": 2,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 18,
+     "of": 24,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 18,
+     "of": 24,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 20,
+     "of": 24,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.6": {
+     "hits": 20,
+     "of": 24,
      "new": 2,
      "lost": 0,
      "sign_p": 0.5
@@ -1764,33 +1759,33 @@
     "vector only": {
      "hits": 38,
      "of": 44,
-     "new": 6,
+     "new": 5,
      "lost": 0,
-     "sign_p": 0.0312
+     "sign_p": 0.0625
     },
     "bm25 only": {
-     "hits": 30,
+     "hits": 31,
      "of": 44,
      "new": 0,
      "lost": 2,
      "sign_p": 0.5
     },
     "rrf 0.2": {
-     "hits": 32,
+     "hits": 33,
      "of": 44,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 37,
+     "hits": 38,
      "of": 44,
      "new": 5,
      "lost": 0,
      "sign_p": 0.0625
     },
     "rrf 0.6": {
-     "hits": 37,
+     "hits": 38,
      "of": 44,
      "new": 5,
      "lost": 0,
@@ -1820,51 +1815,51 @@
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 17,
+     "hits": 18,
      "of": 22,
-     "new": 1,
+     "new": 2,
      "lost": 0,
-     "sign_p": 1.0
+     "sign_p": 0.5
     },
     "rrf 0.6": {
-     "hits": 17,
+     "hits": 18,
      "of": 22,
-     "new": 1,
+     "new": 2,
      "lost": 0,
-     "sign_p": 1.0
+     "sign_p": 0.5
     }
    },
    "en|paraphrase": {
     "vector only": {
      "hits": 20,
      "of": 25,
-     "new": 8,
-     "lost": 0,
-     "sign_p": 0.0078
+     "new": 6,
+     "lost": 1,
+     "sign_p": 0.125
     },
     "bm25 only": {
-     "hits": 12,
+     "hits": 15,
      "of": 25,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 12,
+     "hits": 15,
      "of": 25,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 16,
+     "hits": 19,
      "of": 25,
      "new": 4,
      "lost": 0,
      "sign_p": 0.125
     },
     "rrf 0.6": {
-     "hits": 16,
+     "hits": 19,
      "of": 25,
      "new": 4,
      "lost": 0,
@@ -1873,36 +1868,36 @@
    },
    "en|class:none": {
     "vector only": {
-     "hits": 7,
-     "of": 9,
-     "new": 4,
+     "hits": 6,
+     "of": 8,
+     "new": 3,
      "lost": 0,
-     "sign_p": 0.125
+     "sign_p": 0.25
     },
     "bm25 only": {
      "hits": 3,
-     "of": 9,
+     "of": 8,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
      "hits": 3,
-     "of": 9,
+     "of": 8,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
      "hits": 5,
-     "of": 9,
+     "of": 8,
      "new": 2,
      "lost": 0,
      "sign_p": 0.5
     },
     "rrf 0.6": {
      "hits": 5,
-     "of": 9,
+     "of": 8,
      "new": 2,
      "lost": 0,
      "sign_p": 0.5
@@ -1912,19 +1907,19 @@
     "vector only": {
      "hits": 19,
      "of": 20,
-     "new": 4,
+     "new": 3,
      "lost": 0,
-     "sign_p": 0.125
+     "sign_p": 0.25
     },
     "bm25 only": {
-     "hits": 15,
+     "hits": 16,
      "of": 20,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 15,
+     "hits": 16,
      "of": 20,
      "new": 0,
      "lost": 0,
@@ -1933,16 +1928,16 @@
     "rrf 0.5": {
      "hits": 18,
      "of": 20,
-     "new": 3,
+     "new": 2,
      "lost": 0,
-     "sign_p": 0.25
+     "sign_p": 0.5
     },
     "rrf 0.6": {
      "hits": 18,
      "of": 20,
-     "new": 3,
+     "new": 2,
      "lost": 0,
-     "sign_p": 0.25
+     "sign_p": 0.5
     }
    },
    "en|doc:pdf": {
@@ -1950,32 +1945,32 @@
      "hits": 4,
      "of": 7,
      "new": 0,
-     "lost": 0,
+     "lost": 1,
      "sign_p": 1.0
     },
     "bm25 only": {
-     "hits": 4,
+     "hits": 5,
      "of": 7,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 4,
+     "hits": 5,
      "of": 7,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 4,
+     "hits": 5,
      "of": 7,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.6": {
-     "hits": 4,
+     "hits": 5,
      "of": 7,
      "new": 0,
      "lost": 0,
@@ -1986,37 +1981,37 @@
     "vector only": {
      "hits": 41,
      "of": 45,
-     "new": 7,
-     "lost": 1,
-     "sign_p": 0.0703
+     "new": 6,
+     "lost": 2,
+     "sign_p": 0.2891
     },
     "bm25 only": {
-     "hits": 28,
+     "hits": 30,
      "of": 45,
      "new": 0,
      "lost": 7,
      "sign_p": 0.0156
     },
     "rrf 0.2": {
-     "hits": 35,
+     "hits": 37,
      "of": 45,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 41,
+     "hits": 42,
      "of": 45,
-     "new": 7,
+     "new": 6,
      "lost": 1,
-     "sign_p": 0.0703
+     "sign_p": 0.125
     },
     "rrf 0.6": {
-     "hits": 41,
+     "hits": 42,
      "of": 45,
-     "new": 7,
+     "new": 6,
      "lost": 1,
-     "sign_p": 0.0703
+     "sign_p": 0.125
     }
    },
    "ko|lexical": {
@@ -2058,36 +2053,36 @@
    },
    "ko|class:partial": {
     "vector only": {
-     "hits": 20,
-     "of": 20,
+     "hits": 22,
+     "of": 23,
      "new": 0,
-     "lost": 0,
+     "lost": 1,
      "sign_p": 1.0
     },
     "bm25 only": {
-     "hits": 18,
-     "of": 20,
+     "hits": 20,
+     "of": 23,
      "new": 0,
-     "lost": 2,
-     "sign_p": 0.5
+     "lost": 3,
+     "sign_p": 0.25
     },
     "rrf 0.2": {
-     "hits": 20,
-     "of": 20,
+     "hits": 23,
+     "of": 23,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 20,
-     "of": 20,
+     "hits": 23,
+     "of": 23,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.6": {
-     "hits": 20,
-     "of": 20,
+     "hits": 23,
+     "of": 23,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
@@ -2095,58 +2090,58 @@
    },
    "ko|doc:gnome": {
     "vector only": {
-     "hits": 15,
+     "hits": 16,
      "of": 18,
-     "new": 4,
+     "new": 3,
      "lost": 1,
-     "sign_p": 0.375
+     "sign_p": 0.625
     },
     "bm25 only": {
-     "hits": 10,
+     "hits": 12,
      "of": 18,
      "new": 0,
      "lost": 2,
      "sign_p": 0.5
     },
     "rrf 0.2": {
-     "hits": 12,
+     "hits": 14,
      "of": 18,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 15,
+     "hits": 16,
      "of": 18,
-     "new": 4,
+     "new": 3,
      "lost": 1,
-     "sign_p": 0.375
+     "sign_p": 0.625
     },
     "rrf 0.6": {
-     "hits": 15,
+     "hits": 16,
      "of": 18,
-     "new": 4,
+     "new": 3,
      "lost": 1,
-     "sign_p": 0.375
+     "sign_p": 0.625
     }
    },
    "ko|split:tune": {
     "vector only": {
      "hits": 20,
      "of": 22,
-     "new": 4,
+     "new": 3,
      "lost": 0,
-     "sign_p": 0.125
+     "sign_p": 0.25
     },
     "bm25 only": {
-     "hits": 14,
+     "hits": 15,
      "of": 22,
      "new": 0,
      "lost": 2,
      "sign_p": 0.5
     },
     "rrf 0.2": {
-     "hits": 16,
+     "hits": 17,
      "of": 22,
      "new": 0,
      "lost": 0,
@@ -2155,16 +2150,16 @@
     "rrf 0.5": {
      "hits": 20,
      "of": 22,
-     "new": 4,
+     "new": 3,
      "lost": 0,
-     "sign_p": 0.125
+     "sign_p": 0.25
     },
     "rrf 0.6": {
      "hits": 20,
      "of": 22,
-     "new": 4,
+     "new": 3,
      "lost": 0,
-     "sign_p": 0.125
+     "sign_p": 0.25
     }
    },
    "ko|split:check": {
@@ -2172,119 +2167,156 @@
      "hits": 21,
      "of": 23,
      "new": 3,
-     "lost": 1,
-     "sign_p": 0.625
+     "lost": 2,
+     "sign_p": 1.0
     },
     "bm25 only": {
-     "hits": 14,
+     "hits": 15,
      "of": 23,
      "new": 0,
      "lost": 5,
      "sign_p": 0.0625
     },
     "rrf 0.2": {
-     "hits": 19,
+     "hits": 20,
      "of": 23,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 21,
+     "hits": 22,
      "of": 23,
      "new": 3,
      "lost": 1,
      "sign_p": 0.625
     },
     "rrf 0.6": {
-     "hits": 21,
+     "hits": 22,
      "of": 23,
      "new": 3,
      "lost": 1,
      "sign_p": 0.625
+    }
+   },
+   "ko|class:high": {
+    "vector only": {
+     "hits": 8,
+     "of": 8,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 8,
+     "of": 8,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 8,
+     "of": 8,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 8,
+     "of": 8,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 8,
+     "of": 8,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
     }
    },
    "ko|paraphrase": {
     "vector only": {
      "hits": 21,
      "of": 25,
-     "new": 7,
-     "lost": 1,
-     "sign_p": 0.0703
+     "new": 6,
+     "lost": 2,
+     "sign_p": 0.2891
     },
     "bm25 only": {
-     "hits": 8,
+     "hits": 10,
      "of": 25,
      "new": 0,
      "lost": 7,
      "sign_p": 0.0156
     },
     "rrf 0.2": {
-     "hits": 15,
+     "hits": 17,
      "of": 25,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 21,
+     "hits": 22,
      "of": 25,
-     "new": 7,
+     "new": 6,
      "lost": 1,
-     "sign_p": 0.0703
+     "sign_p": 0.125
     },
     "rrf 0.6": {
-     "hits": 21,
+     "hits": 22,
      "of": 25,
-     "new": 7,
+     "new": 6,
      "lost": 1,
-     "sign_p": 0.0703
+     "sign_p": 0.125
     }
    },
    "ko|class:none": {
     "vector only": {
-     "hits": 14,
-     "of": 18,
-     "new": 7,
+     "hits": 11,
+     "of": 14,
+     "new": 6,
      "lost": 1,
-     "sign_p": 0.0703
+     "sign_p": 0.125
     },
     "bm25 only": {
-     "hits": 3,
-     "of": 18,
+     "hits": 2,
+     "of": 14,
      "new": 0,
-     "lost": 5,
-     "sign_p": 0.0625
+     "lost": 4,
+     "sign_p": 0.125
     },
     "rrf 0.2": {
-     "hits": 8,
-     "of": 18,
+     "hits": 6,
+     "of": 14,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 14,
-     "of": 18,
-     "new": 7,
+     "hits": 11,
+     "of": 14,
+     "new": 6,
      "lost": 1,
-     "sign_p": 0.0703
+     "sign_p": 0.125
     },
     "rrf 0.6": {
-     "hits": 14,
-     "of": 18,
-     "new": 7,
+     "hits": 11,
+     "of": 14,
+     "new": 6,
      "lost": 1,
-     "sign_p": 0.0703
+     "sign_p": 0.125
     }
    },
    "ko|doc:own": {
     "vector only": {
-     "hits": 19,
+     "hits": 18,
      "of": 20,
      "new": 3,
-     "lost": 0,
-     "sign_p": 0.25
+     "lost": 1,
+     "sign_p": 0.625
     },
     "bm25 only": {
      "hits": 12,
@@ -2313,43 +2345,6 @@
      "new": 3,
      "lost": 0,
      "sign_p": 0.25
-    }
-   },
-   "ko|class:high": {
-    "vector only": {
-     "hits": 7,
-     "of": 7,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "bm25 only": {
-     "hits": 7,
-     "of": 7,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "rrf 0.2": {
-     "hits": 7,
-     "of": 7,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "rrf 0.5": {
-     "hits": 7,
-     "of": 7,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "rrf 0.6": {
-     "hits": 7,
-     "of": 7,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
     }
    },
    "ko|doc:pdf": {
@@ -2396,62 +2391,57 @@
     "bm25_20_full": 60,
     "top5_slots_in_full": 300,
     "top5_slots_from_bm25_list": 300,
-    "vector_hit_default_miss": 8,
-    "of_which_bm25_full": 8,
+    "vector_hit_default_miss": 6,
+    "of_which_bm25_full": 6,
     "recovered_by_0.5": 4,
     "recovered_by_0.6": 4
    },
    "ko": {
     "queries": 60,
-    "bm25_20_full": 38,
-    "top5_slots_in_full": 190,
-    "top5_slots_from_bm25_list": 190,
-    "vector_hit_default_miss": 7,
-    "of_which_bm25_full": 5,
-    "recovered_by_0.5": 7,
-    "recovered_by_0.6": 7
+    "bm25_20_full": 37,
+    "top5_slots_in_full": 185,
+    "top5_slots_from_bm25_list": 185,
+    "vector_hit_default_miss": 6,
+    "of_which_bm25_full": 4,
+    "recovered_by_0.5": 6,
+    "recovered_by_0.6": 6
    }
   },
   "misses": {
    "rrf 0.2|en": {
-    "missed": 14,
+    "missed": 11,
     "by_class": {
-     "partial": 8,
-     "none": 6
+     "partial": 6,
+     "none": 5
     },
-    "answer_in_a_20_list": 10,
-    "answer_in_a_400_list": 14,
-    "top1_from_a_pdf": 4,
+    "answer_in_a_20_list": 9,
+    "answer_in_a_400_list": 11,
+    "top1_from_a_pdf": 3,
     "ids": [
      "e1q-008",
      "e1q-009",
      "e1q-011",
      "e1q-012",
-     "e1q-013",
      "e1q-016",
-     "e1q-029",
      "e1q-034",
      "e1q-035",
      "e1q-036",
      "e1q-038",
      "e1q-043",
-     "e1q-044",
-     "e1q-045"
+     "e1q-044"
     ]
    },
    "rrf 0.2|ko": {
-    "missed": 10,
+    "missed": 8,
     "by_class": {
-     "none": 10
+     "none": 8
     },
-    "answer_in_a_20_list": 9,
-    "answer_in_a_400_list": 10,
+    "answer_in_a_20_list": 7,
+    "answer_in_a_400_list": 8,
     "top1_from_a_pdf": 0,
     "ids": [
      "e1q-070",
      "e1q-071",
-     "e1q-073",
-     "e1q-074",
      "e1q-075",
      "e1q-076",
      "e1q-089",
@@ -2461,37 +2451,33 @@
     ]
    },
    "rrf 0.5|en": {
-    "missed": 10,
+    "missed": 7,
     "by_class": {
-     "partial": 6,
-     "none": 4
+     "partial": 4,
+     "none": 3
     },
-    "answer_in_a_20_list": 6,
-    "answer_in_a_400_list": 10,
-    "top1_from_a_pdf": 4,
+    "answer_in_a_20_list": 5,
+    "answer_in_a_400_list": 7,
+    "top1_from_a_pdf": 3,
     "ids": [
      "e1q-008",
      "e1q-009",
-     "e1q-011",
-     "e1q-013",
      "e1q-016",
      "e1q-035",
      "e1q-036",
      "e1q-043",
-     "e1q-044",
-     "e1q-045"
+     "e1q-044"
     ]
    },
    "rrf 0.5|ko": {
-    "missed": 4,
+    "missed": 3,
     "by_class": {
-     "none": 4
+     "none": 3
     },
-    "answer_in_a_20_list": 3,
-    "answer_in_a_400_list": 4,
+    "answer_in_a_20_list": 2,
+    "answer_in_a_400_list": 3,
     "top1_from_a_pdf": 0,
     "ids": [
-     "e1q-074",
      "e1q-075",
      "e1q-078",
      "e1q-089"
@@ -2673,7 +2659,7 @@
     "similarity_summary": {
      "no_answer_median": 0.537,
      "no_answer_max": 0.64,
-     "answered_vector_hit_median": 0.592,
+     "answered_vector_hit_median": 0.619,
      "answered_vector_hit_min": 0.454,
      "no_answer_above_answered_min": 11
     }
@@ -2694,7 +2680,7 @@
     "bm25_20_sizes": [
      20,
      12,
-     8,
+     20,
      12,
      8,
      20,
@@ -2704,14 +2690,14 @@
      16,
      15,
      20,
-     20,
+     19,
      6,
      20
     ],
     "vector_top1_similarity": [
      0.6361958980560303,
      0.6128219962120056,
-     0.5571173429489136,
+     0.5399336218833923,
      0.4149514436721802,
      0.426952600479126,
      0.41954660415649414,
@@ -2721,7 +2707,7 @@
      0.403881311416626,
      0.3730335235595703,
      0.5262308716773987,
-     0.6243163347244263,
+     0.5107859969139099,
      0.34080857038497925,
      0.5908651351928711
     ],
@@ -2744,11 +2730,11 @@
      },
      {
       "item_id": "e1q-108",
-      "query": "해외 출장 숙박비 한도는 얼마인가요?",
+      "query": "출장 가기 전에 경비를 미리 받을 수 있나요?",
       "top1_0.2": "e1_own_ko_07",
       "top1_0.5": "e1_own_ko_07",
-      "bm25_20": 8,
-      "vector_top1_similarity": 0.5571173429489136
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.5399336218833923
      },
      {
       "item_id": "e1q-109",
@@ -2824,11 +2810,11 @@
      },
      {
       "item_id": "e1q-118",
-      "query": "출장 갈 때 택시비도 정산되나요?",
+      "query": "출장 일정이 주말에 걸리면 휴일 근무로 인정되나요?",
       "top1_0.2": "e1_own_ko_07",
       "top1_0.5": "e1_own_ko_07",
-      "bm25_20": 20,
-      "vector_top1_similarity": 0.6243163347244263
+      "bm25_20": 19,
+      "vector_top1_similarity": 0.5107859969139099
      },
      {
       "item_id": "e1q-119",
@@ -2850,7 +2836,7 @@
     "similarity_summary": {
      "no_answer_median": 0.474,
      "no_answer_max": 0.698,
-     "answered_vector_hit_median": 0.54,
+     "answered_vector_hit_median": 0.549,
      "answered_vector_hit_min": 0.388,
      "no_answer_above_answered_min": 12
     }
@@ -2861,103 +2847,92 @@
   "dir": "e1_bgem3",
   "model": "e1_bgem3",
   "fingerprint": "model.onnx|1024|f32+vabq:none|sha256:b089a980c41f6158f8447400dd5b2abb",
-  "commit": "9ac2b61574d53e99331f5c76f8e8c83240bd2c20",
-  "dirty": [
-   ".gitignore",
-   "example/README.md",
-   "example/assets/corpus/README.md",
-   "example/assets/evalsets/e1/e1_evalset_v1.jsonl",
-   "example/assets/evalsets/e1/e1_overlap_v1.json",
-   "example/assets/evalsets/e1/e1_passage_gold_v1.jsonl",
-   "example/lib/main.dart",
-   "example/lib/services/rag_controller.dart",
-   "scripts/e1/e1_queries_v1_spec.py",
-   "scripts/f2/f2_0_compare.py"
-  ],
+  "commit": "0b27510b97ceeb0a59d470323a8cf9bcfcee8fba",
+  "dirty": [],
   "chunks": 2319,
-  "elapsed_seconds": 106,
-  "finished_at_utc": "2026-11-14T05:13:09+00:00",
+  "elapsed_seconds": 91,
+  "finished_at_utc": "2026-11-14T05:44:21+00:00",
   "dataset_sha256": {
    "manifest": "65884105daedc91ccf484cc01ebfb647f879c4a2673a2f288818baacfab8bd9d",
-   "evalset": "1e556737fdc51b6cafe4c10683357606b0aad45ce86620ce161937926d79aff9",
-   "gold": "88ba082d208ca2801bfab0b335390686ed1a91b697151fd4e38503d30207bf3e",
-   "no_answer": "a83afa22da25566dc60ef8bdc9eede309aadca7315013a630426e2bd80bf101e"
+   "evalset": "95db8ffdc0f8dd5990df60dfac294b34a8b8ab47dc5030fdc8e31fb96f8818b5",
+   "gold": "dfd655e96d36f868d79bc0edb11439ca8af3308a83549376a388b0eb21d2f237",
+   "no_answer": "b359aec1aaa9af86336e9488b3871075d4c671ac61f77780300018accd7c302d"
   },
   "answerable": 90,
   "gold_not_in_any_chunk": [],
   "table": {
    "all": {
     "vector only": {
-     "hits": 83,
+     "hits": 85,
      "of": 90,
-     "new": 18,
+     "new": 15,
      "lost": 2,
-     "sign_p": 0.0004
+     "sign_p": 0.0023
     },
     "bm25 only": {
-     "hits": 59,
+     "hits": 64,
      "of": 90,
      "new": 0,
      "lost": 8,
      "sign_p": 0.0078
     },
     "rrf 0.2": {
-     "hits": 67,
+     "hits": 72,
      "of": 90,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 78,
+     "hits": 80,
      "of": 90,
-     "new": 12,
+     "new": 9,
      "lost": 1,
-     "sign_p": 0.0034
+     "sign_p": 0.0215
     },
     "rrf 0.6": {
-     "hits": 79,
+     "hits": 82,
      "of": 90,
-     "new": 13,
+     "new": 11,
      "lost": 1,
-     "sign_p": 0.0018
+     "sign_p": 0.0063
     }
    },
    "en": {
     "vector only": {
-     "hits": 41,
+     "hits": 43,
      "of": 45,
-     "new": 10,
+     "new": 9,
      "lost": 1,
-     "sign_p": 0.0117
+     "sign_p": 0.0215
     },
     "bm25 only": {
-     "hits": 31,
+     "hits": 34,
      "of": 45,
      "new": 0,
      "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 32,
+     "hits": 35,
      "of": 45,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 37,
+     "hits": 38,
      "of": 45,
-     "new": 6,
+     "new": 4,
      "lost": 1,
-     "sign_p": 0.125
+     "sign_p": 0.375
     },
     "rrf 0.6": {
-     "hits": 39,
+     "hits": 41,
      "of": 45,
-     "new": 7,
+     "new": 6,
      "lost": 0,
-     "sign_p": 0.0156
+     "sign_p": 0.0312
     }
    },
    "en|lexical": {
@@ -3036,21 +3011,21 @@
    },
    "en|doc:gnome": {
     "vector only": {
-     "hits": 16,
+     "hits": 17,
      "of": 18,
      "new": 4,
      "lost": 1,
      "sign_p": 0.375
     },
     "bm25 only": {
-     "hits": 12,
+     "hits": 13,
      "of": 18,
      "new": 0,
      "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 13,
+     "hits": 14,
      "of": 18,
      "new": 0,
      "lost": 0,
@@ -3059,12 +3034,12 @@
     "rrf 0.5": {
      "hits": 14,
      "of": 18,
-     "new": 2,
+     "new": 1,
      "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.6": {
-     "hits": 15,
+     "hits": 16,
      "of": 18,
      "new": 2,
      "lost": 0,
@@ -3073,110 +3048,110 @@
    },
    "split:check": {
     "vector only": {
-     "hits": 41,
+     "hits": 42,
      "of": 46,
-     "new": 9,
+     "new": 6,
      "lost": 2,
-     "sign_p": 0.0654
+     "sign_p": 0.2891
     },
     "bm25 only": {
-     "hits": 29,
+     "hits": 33,
      "of": 46,
      "new": 0,
      "lost": 5,
      "sign_p": 0.0625
     },
     "rrf 0.2": {
-     "hits": 34,
+     "hits": 38,
      "of": 46,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 41,
+     "hits": 43,
      "of": 46,
-     "new": 8,
+     "new": 6,
      "lost": 1,
-     "sign_p": 0.0391
+     "sign_p": 0.125
     },
     "rrf 0.6": {
-     "hits": 41,
+     "hits": 43,
      "of": 46,
-     "new": 8,
+     "new": 6,
      "lost": 1,
-     "sign_p": 0.0391
+     "sign_p": 0.125
     }
    },
    "en|split:check": {
     "vector only": {
-     "hits": 20,
-     "of": 23,
-     "new": 5,
-     "lost": 1,
-     "sign_p": 0.2188
-    },
-    "bm25 only": {
-     "hits": 15,
-     "of": 23,
-     "new": 0,
-     "lost": 1,
-     "sign_p": 1.0
-    },
-    "rrf 0.2": {
-     "hits": 16,
-     "of": 23,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "rrf 0.5": {
-     "hits": 20,
-     "of": 23,
-     "new": 5,
-     "lost": 1,
-     "sign_p": 0.2188
-    },
-    "rrf 0.6": {
      "hits": 21,
      "of": 23,
-     "new": 5,
-     "lost": 0,
-     "sign_p": 0.0625
-    }
-   },
-   "en|class:partial": {
-    "vector only": {
-     "hits": 19,
-     "of": 23,
-     "new": 5,
+     "new": 3,
      "lost": 1,
-     "sign_p": 0.2188
+     "sign_p": 0.625
     },
     "bm25 only": {
-     "hits": 15,
+     "hits": 18,
      "of": 23,
      "new": 0,
-     "lost": 0,
+     "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 15,
+     "hits": 19,
      "of": 23,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 17,
+     "hits": 21,
      "of": 23,
      "new": 3,
      "lost": 1,
      "sign_p": 0.625
     },
     "rrf 0.6": {
-     "hits": 18,
+     "hits": 22,
      "of": 23,
+     "new": 3,
+     "lost": 0,
+     "sign_p": 0.25
+    }
+   },
+   "en|class:partial": {
+    "vector only": {
+     "hits": 22,
+     "of": 24,
+     "new": 5,
+     "lost": 1,
+     "sign_p": 0.2188
+    },
+    "bm25 only": {
+     "hits": 18,
+     "of": 24,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 18,
+     "of": 24,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 19,
+     "of": 24,
+     "new": 2,
+     "lost": 1,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 21,
+     "of": 24,
      "new": 3,
      "lost": 0,
      "sign_p": 0.25
@@ -3184,21 +3159,21 @@
    },
    "split:tune": {
     "vector only": {
-     "hits": 42,
+     "hits": 43,
      "of": 44,
      "new": 9,
      "lost": 0,
      "sign_p": 0.0039
     },
     "bm25 only": {
-     "hits": 30,
+     "hits": 31,
      "of": 44,
      "new": 0,
      "lost": 3,
      "sign_p": 0.25
     },
     "rrf 0.2": {
-     "hits": 33,
+     "hits": 34,
      "of": 44,
      "new": 0,
      "lost": 0,
@@ -3207,12 +3182,12 @@
     "rrf 0.5": {
      "hits": 37,
      "of": 44,
-     "new": 4,
+     "new": 3,
      "lost": 0,
-     "sign_p": 0.125
+     "sign_p": 0.25
     },
     "rrf 0.6": {
-     "hits": 38,
+     "hits": 39,
      "of": 44,
      "new": 5,
      "lost": 0,
@@ -3221,11 +3196,11 @@
    },
    "en|split:tune": {
     "vector only": {
-     "hits": 21,
+     "hits": 22,
      "of": 22,
-     "new": 5,
+     "new": 6,
      "lost": 0,
-     "sign_p": 0.0625
+     "sign_p": 0.0312
     },
     "bm25 only": {
      "hits": 16,
@@ -3249,104 +3224,104 @@
      "sign_p": 1.0
     },
     "rrf 0.6": {
-     "hits": 18,
+     "hits": 19,
      "of": 22,
-     "new": 2,
+     "new": 3,
      "lost": 0,
-     "sign_p": 0.5
+     "sign_p": 0.25
     }
    },
    "en|paraphrase": {
     "vector only": {
-     "hits": 22,
+     "hits": 24,
      "of": 25,
-     "new": 9,
+     "new": 8,
      "lost": 0,
-     "sign_p": 0.0039
+     "sign_p": 0.0078
     },
     "bm25 only": {
-     "hits": 12,
+     "hits": 15,
      "of": 25,
      "new": 0,
      "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 13,
+     "hits": 16,
      "of": 25,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 19,
+     "hits": 20,
+     "of": 25,
+     "new": 4,
+     "lost": 0,
+     "sign_p": 0.125
+    },
+    "rrf 0.6": {
+     "hits": 22,
      "of": 25,
      "new": 6,
      "lost": 0,
      "sign_p": 0.0312
-    },
-    "rrf 0.6": {
-     "hits": 20,
-     "of": 25,
-     "new": 7,
-     "lost": 0,
-     "sign_p": 0.0156
     }
    },
    "en|class:none": {
     "vector only": {
-     "hits": 9,
-     "of": 9,
-     "new": 5,
+     "hits": 8,
+     "of": 8,
+     "new": 4,
      "lost": 0,
-     "sign_p": 0.0625
+     "sign_p": 0.125
     },
     "bm25 only": {
      "hits": 3,
-     "of": 9,
+     "of": 8,
      "new": 0,
      "lost": 1,
      "sign_p": 1.0
     },
     "rrf 0.2": {
      "hits": 4,
-     "of": 9,
+     "of": 8,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
+     "hits": 6,
+     "of": 8,
+     "new": 2,
+     "lost": 0,
+     "sign_p": 0.5
+    },
+    "rrf 0.6": {
      "hits": 7,
-     "of": 9,
+     "of": 8,
      "new": 3,
      "lost": 0,
      "sign_p": 0.25
-    },
-    "rrf 0.6": {
-     "hits": 8,
-     "of": 9,
-     "new": 4,
-     "lost": 0,
-     "sign_p": 0.125
     }
    },
    "en|doc:own": {
     "vector only": {
      "hits": 20,
      "of": 20,
-     "new": 5,
+     "new": 4,
      "lost": 0,
-     "sign_p": 0.0625
+     "sign_p": 0.125
     },
     "bm25 only": {
-     "hits": 15,
+     "hits": 16,
      "of": 20,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 15,
+     "hits": 16,
      "of": 20,
      "new": 0,
      "lost": 0,
@@ -3355,49 +3330,49 @@
     "rrf 0.5": {
      "hits": 19,
      "of": 20,
-     "new": 4,
+     "new": 3,
      "lost": 0,
-     "sign_p": 0.125
+     "sign_p": 0.25
     },
     "rrf 0.6": {
      "hits": 20,
      "of": 20,
-     "new": 5,
+     "new": 4,
      "lost": 0,
-     "sign_p": 0.0625
+     "sign_p": 0.125
     }
    },
    "en|doc:pdf": {
     "vector only": {
-     "hits": 5,
+     "hits": 6,
      "of": 7,
      "new": 1,
      "lost": 0,
      "sign_p": 1.0
     },
     "bm25 only": {
-     "hits": 4,
+     "hits": 5,
      "of": 7,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.2": {
-     "hits": 4,
+     "hits": 5,
      "of": 7,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 4,
+     "hits": 5,
      "of": 7,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.6": {
-     "hits": 4,
+     "hits": 5,
      "of": 7,
      "new": 0,
      "lost": 0,
@@ -3408,37 +3383,37 @@
     "vector only": {
      "hits": 42,
      "of": 45,
-     "new": 8,
+     "new": 6,
      "lost": 1,
-     "sign_p": 0.0391
+     "sign_p": 0.125
     },
     "bm25 only": {
-     "hits": 28,
+     "hits": 30,
      "of": 45,
      "new": 0,
      "lost": 7,
      "sign_p": 0.0156
     },
     "rrf 0.2": {
-     "hits": 35,
+     "hits": 37,
      "of": 45,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 41,
+     "hits": 42,
      "of": 45,
-     "new": 6,
+     "new": 5,
      "lost": 0,
-     "sign_p": 0.0312
+     "sign_p": 0.0625
     },
     "rrf 0.6": {
-     "hits": 40,
+     "hits": 41,
      "of": 45,
-     "new": 6,
+     "new": 5,
      "lost": 1,
-     "sign_p": 0.125
+     "sign_p": 0.2188
     }
    },
    "ko|lexical": {
@@ -3480,36 +3455,36 @@
    },
    "ko|class:partial": {
     "vector only": {
-     "hits": 19,
-     "of": 20,
+     "hits": 21,
+     "of": 23,
      "new": 0,
      "lost": 1,
      "sign_p": 1.0
     },
     "bm25 only": {
-     "hits": 18,
-     "of": 20,
+     "hits": 20,
+     "of": 23,
      "new": 0,
      "lost": 2,
      "sign_p": 0.5
     },
     "rrf 0.2": {
-     "hits": 20,
-     "of": 20,
+     "hits": 22,
+     "of": 23,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 20,
-     "of": 20,
+     "hits": 22,
+     "of": 23,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.6": {
-     "hits": 19,
-     "of": 20,
+     "hits": 21,
+     "of": 23,
      "new": 0,
      "lost": 1,
      "sign_p": 1.0
@@ -3519,56 +3494,56 @@
     "vector only": {
      "hits": 17,
      "of": 18,
-     "new": 4,
+     "new": 2,
      "lost": 0,
-     "sign_p": 0.125
+     "sign_p": 0.5
     },
     "bm25 only": {
-     "hits": 10,
+     "hits": 12,
      "of": 18,
      "new": 0,
      "lost": 3,
      "sign_p": 0.25
     },
     "rrf 0.2": {
-     "hits": 13,
+     "hits": 15,
      "of": 18,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 16,
+     "hits": 17,
      "of": 18,
-     "new": 3,
+     "new": 2,
      "lost": 0,
-     "sign_p": 0.25
+     "sign_p": 0.5
     },
     "rrf 0.6": {
-     "hits": 16,
+     "hits": 17,
      "of": 18,
-     "new": 3,
+     "new": 2,
      "lost": 0,
-     "sign_p": 0.25
+     "sign_p": 0.5
     }
    },
    "ko|split:tune": {
     "vector only": {
      "hits": 21,
      "of": 22,
-     "new": 4,
+     "new": 3,
      "lost": 0,
-     "sign_p": 0.125
+     "sign_p": 0.25
     },
     "bm25 only": {
-     "hits": 14,
+     "hits": 15,
      "of": 22,
      "new": 0,
      "lost": 3,
      "sign_p": 0.25
     },
     "rrf 0.2": {
-     "hits": 17,
+     "hits": 18,
      "of": 22,
      "new": 0,
      "lost": 0,
@@ -3577,127 +3552,164 @@
     "rrf 0.5": {
      "hits": 20,
      "of": 22,
-     "new": 3,
+     "new": 2,
      "lost": 0,
-     "sign_p": 0.25
+     "sign_p": 0.5
     },
     "rrf 0.6": {
      "hits": 20,
      "of": 22,
-     "new": 3,
+     "new": 2,
      "lost": 0,
-     "sign_p": 0.25
+     "sign_p": 0.5
     }
    },
    "ko|split:check": {
     "vector only": {
      "hits": 21,
      "of": 23,
-     "new": 4,
+     "new": 3,
      "lost": 1,
-     "sign_p": 0.375
+     "sign_p": 0.625
     },
     "bm25 only": {
-     "hits": 14,
+     "hits": 15,
      "of": 23,
      "new": 0,
      "lost": 4,
      "sign_p": 0.125
     },
     "rrf 0.2": {
-     "hits": 18,
+     "hits": 19,
      "of": 23,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 21,
+     "hits": 22,
      "of": 23,
      "new": 3,
      "lost": 0,
      "sign_p": 0.25
     },
     "rrf 0.6": {
-     "hits": 20,
+     "hits": 21,
      "of": 23,
      "new": 3,
      "lost": 1,
      "sign_p": 0.625
     }
    },
+   "ko|class:high": {
+    "vector only": {
+     "hits": 8,
+     "of": 8,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "bm25 only": {
+     "hits": 8,
+     "of": 8,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.2": {
+     "hits": 8,
+     "of": 8,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.5": {
+     "hits": 8,
+     "of": 8,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    },
+    "rrf 0.6": {
+     "hits": 8,
+     "of": 8,
+     "new": 0,
+     "lost": 0,
+     "sign_p": 1.0
+    }
+   },
    "ko|paraphrase": {
     "vector only": {
      "hits": 22,
      "of": 25,
-     "new": 8,
+     "new": 6,
      "lost": 1,
-     "sign_p": 0.0391
+     "sign_p": 0.125
     },
     "bm25 only": {
-     "hits": 8,
+     "hits": 10,
      "of": 25,
      "new": 0,
      "lost": 7,
      "sign_p": 0.0156
     },
     "rrf 0.2": {
-     "hits": 15,
+     "hits": 17,
      "of": 25,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 21,
+     "hits": 22,
      "of": 25,
-     "new": 6,
+     "new": 5,
      "lost": 0,
-     "sign_p": 0.0312
+     "sign_p": 0.0625
     },
     "rrf 0.6": {
-     "hits": 20,
+     "hits": 21,
      "of": 25,
-     "new": 6,
+     "new": 5,
      "lost": 1,
-     "sign_p": 0.125
+     "sign_p": 0.2188
     }
    },
    "ko|class:none": {
     "vector only": {
-     "hits": 16,
-     "of": 18,
-     "new": 8,
+     "hits": 13,
+     "of": 14,
+     "new": 6,
      "lost": 0,
-     "sign_p": 0.0078
+     "sign_p": 0.0312
     },
     "bm25 only": {
-     "hits": 3,
-     "of": 18,
+     "hits": 2,
+     "of": 14,
      "new": 0,
      "lost": 5,
      "sign_p": 0.0625
     },
     "rrf 0.2": {
-     "hits": 8,
-     "of": 18,
+     "hits": 7,
+     "of": 14,
      "new": 0,
      "lost": 0,
      "sign_p": 1.0
     },
     "rrf 0.5": {
-     "hits": 14,
-     "of": 18,
-     "new": 6,
+     "hits": 12,
+     "of": 14,
+     "new": 5,
      "lost": 0,
-     "sign_p": 0.0312
+     "sign_p": 0.0625
     },
     "rrf 0.6": {
-     "hits": 14,
-     "of": 18,
-     "new": 6,
+     "hits": 12,
+     "of": 14,
+     "new": 5,
      "lost": 0,
-     "sign_p": 0.0312
+     "sign_p": 0.0625
     }
    },
    "ko|doc:own": {
@@ -3735,43 +3747,6 @@
      "new": 3,
      "lost": 1,
      "sign_p": 0.625
-    }
-   },
-   "ko|class:high": {
-    "vector only": {
-     "hits": 7,
-     "of": 7,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "bm25 only": {
-     "hits": 7,
-     "of": 7,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "rrf 0.2": {
-     "hits": 7,
-     "of": 7,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "rrf 0.5": {
-     "hits": 7,
-     "of": 7,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
-    },
-    "rrf 0.6": {
-     "hits": 7,
-     "of": 7,
-     "new": 0,
-     "lost": 0,
-     "sign_p": 1.0
     }
    },
    "ko|doc:pdf": {
@@ -3818,60 +3793,56 @@
     "bm25_20_full": 60,
     "top5_slots_in_full": 300,
     "top5_slots_from_bm25_list": 300,
-    "vector_hit_default_miss": 10,
-    "of_which_bm25_full": 10,
-    "recovered_by_0.5": 6,
-    "recovered_by_0.6": 7
+    "vector_hit_default_miss": 9,
+    "of_which_bm25_full": 9,
+    "recovered_by_0.5": 4,
+    "recovered_by_0.6": 6
    },
    "ko": {
     "queries": 60,
-    "bm25_20_full": 38,
-    "top5_slots_in_full": 190,
-    "top5_slots_from_bm25_list": 190,
-    "vector_hit_default_miss": 8,
-    "of_which_bm25_full": 6,
-    "recovered_by_0.5": 6,
-    "recovered_by_0.6": 6
+    "bm25_20_full": 37,
+    "top5_slots_in_full": 185,
+    "top5_slots_from_bm25_list": 185,
+    "vector_hit_default_miss": 6,
+    "of_which_bm25_full": 4,
+    "recovered_by_0.5": 5,
+    "recovered_by_0.6": 5
    }
   },
   "misses": {
    "rrf 0.2|en": {
-    "missed": 13,
+    "missed": 10,
     "by_class": {
-     "partial": 8,
-     "none": 5
+     "partial": 6,
+     "none": 4
     },
-    "answer_in_a_20_list": 12,
-    "answer_in_a_400_list": 13,
-    "top1_from_a_pdf": 4,
+    "answer_in_a_20_list": 9,
+    "answer_in_a_400_list": 10,
+    "top1_from_a_pdf": 3,
     "ids": [
      "e1q-008",
      "e1q-009",
      "e1q-011",
-     "e1q-013",
      "e1q-016",
-     "e1q-029",
      "e1q-034",
      "e1q-035",
      "e1q-036",
      "e1q-038",
      "e1q-043",
-     "e1q-044",
-     "e1q-045"
+     "e1q-044"
     ]
    },
    "rrf 0.2|ko": {
-    "missed": 10,
+    "missed": 8,
     "by_class": {
-     "none": 10
+     "none": 7,
+     "partial": 1
     },
-    "answer_in_a_20_list": 10,
-    "answer_in_a_400_list": 10,
-    "top1_from_a_pdf": 1,
+    "answer_in_a_20_list": 8,
+    "answer_in_a_400_list": 8,
+    "top1_from_a_pdf": 0,
     "ids": [
      "e1q-071",
-     "e1q-073",
-     "e1q-074",
      "e1q-075",
      "e1q-076",
      "e1q-089",
@@ -3882,14 +3853,14 @@
     ]
    },
    "rrf 0.5|en": {
-    "missed": 8,
+    "missed": 7,
     "by_class": {
-     "partial": 6,
+     "partial": 5,
      "none": 2
     },
-    "answer_in_a_20_list": 7,
-    "answer_in_a_400_list": 8,
-    "top1_from_a_pdf": 3,
+    "answer_in_a_20_list": 6,
+    "answer_in_a_400_list": 7,
+    "top1_from_a_pdf": 2,
     "ids": [
      "e1q-005",
      "e1q-008",
@@ -3897,20 +3868,19 @@
      "e1q-016",
      "e1q-038",
      "e1q-043",
-     "e1q-044",
-     "e1q-045"
+     "e1q-044"
     ]
    },
    "rrf 0.5|ko": {
-    "missed": 4,
+    "missed": 3,
     "by_class": {
-     "none": 4
+     "none": 2,
+     "partial": 1
     },
-    "answer_in_a_20_list": 4,
-    "answer_in_a_400_list": 4,
-    "top1_from_a_pdf": 1,
+    "answer_in_a_20_list": 3,
+    "answer_in_a_400_list": 3,
+    "top1_from_a_pdf": 0,
     "ids": [
-     "e1q-074",
      "e1q-075",
      "e1q-089",
      "e1q-097"
@@ -4092,7 +4062,7 @@
     "similarity_summary": {
      "no_answer_median": 0.553,
      "no_answer_max": 0.644,
-     "answered_vector_hit_median": 0.649,
+     "answered_vector_hit_median": 0.654,
      "answered_vector_hit_min": 0.514,
      "no_answer_above_answered_min": 11
     }
@@ -4113,7 +4083,7 @@
     "bm25_20_sizes": [
      20,
      12,
-     8,
+     20,
      12,
      8,
      20,
@@ -4123,14 +4093,14 @@
      16,
      15,
      20,
-     20,
+     19,
      6,
      20
     ],
     "vector_top1_similarity": [
      0.601915717124939,
      0.5634080767631531,
-     0.6153331398963928,
+     0.6215617656707764,
      0.5194168090820312,
      0.5202320218086243,
      0.537254273891449,
@@ -4140,7 +4110,7 @@
      0.5608649253845215,
      0.5711159110069275,
      0.5926840305328369,
-     0.6450170278549194,
+     0.5644240975379944,
      0.49791550636291504,
      0.6069750785827637
     ],
@@ -4163,11 +4133,11 @@
      },
      {
       "item_id": "e1q-108",
-      "query": "해외 출장 숙박비 한도는 얼마인가요?",
+      "query": "출장 가기 전에 경비를 미리 받을 수 있나요?",
       "top1_0.2": "e1_own_ko_07",
       "top1_0.5": "e1_own_ko_07",
-      "bm25_20": 8,
-      "vector_top1_similarity": 0.6153331398963928
+      "bm25_20": 20,
+      "vector_top1_similarity": 0.6215617656707764
      },
      {
       "item_id": "e1q-109",
@@ -4243,11 +4213,11 @@
      },
      {
       "item_id": "e1q-118",
-      "query": "출장 갈 때 택시비도 정산되나요?",
+      "query": "출장 일정이 주말에 걸리면 휴일 근무로 인정되나요?",
       "top1_0.2": "e1_own_ko_07",
-      "top1_0.5": "e1_own_ko_07",
-      "bm25_20": 20,
-      "vector_top1_similarity": 0.6450170278549194
+      "top1_0.5": "e1_own_ko_08",
+      "bm25_20": 19,
+      "vector_top1_similarity": 0.5644240975379944
      },
      {
       "item_id": "e1q-119",
@@ -4267,8 +4237,8 @@
      }
     ],
     "similarity_summary": {
-     "no_answer_median": 0.571,
-     "no_answer_max": 0.645,
+     "no_answer_median": 0.564,
+     "no_answer_max": 0.622,
      "answered_vector_hit_median": 0.638,
      "answered_vector_hit_min": 0.494,
      "no_answer_above_answered_min": 15
