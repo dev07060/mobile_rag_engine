@@ -139,7 +139,8 @@ await MobileRag.initialize(
 );
 ```
 
-**For Korean documents, set the hybrid search weights to 0.5 / 0.5.** The default weights (vector
+**With KoEn-E5-Tiny, set the hybrid search weights to 0.5 / 0.5, for Korean and
+English documents.** The default weights (vector
 0.2, BM25 0.8) suit the English-only default model. With them, hybrid search
 (`ask`, `prepareAsk`, `searchHybrid*`, `RagSearchTool.fromMobileRag`) on Korean
 text keeps almost only keyword results: Korean keywords are matched as
@@ -173,6 +174,20 @@ numbers, including BGE-m3 (same picture), are in
 [the Korean validation](../perf/f2-fusion/validation_ko.md). Keep the defaults
 with the English-only MiniLM: on its Korean questions, raising the vector
 weight loses answers.
+
+English documents show the same pattern, smaller. English keyword candidates
+are also nearly always full, but English keyword search is strong, so the
+default loses fewer answers. On two English sets the models were not trained
+on (biomedical paper abstracts), same condition and setup:
+
+| Questions | Vector only | 0.2 / 0.8 (default) | 0.5 / 0.5 | 0.6 / 0.4 |
+|---|---|---|---|---|
+| NFCorpus test, 323 questions, 3,633 documents | 191 | 207 | 214 | 202 |
+| SciFact test, 300 claims, 5,183 abstracts | 221 | 219 | 224 | 225 |
+
+0.5 / 0.5 gained 16 and lost 4 against the default; 0.6 / 0.4 gained 25 and
+lost 24. Details, including MiniLM and BGE-m3, are in
+[the English validation](../perf/f2-fusion/validation_en.md).
 
 You do not need to add `query: ` or `passage: ` prefixes. With KoEn-E5-Tiny
 they change scores by 0.002 or less.

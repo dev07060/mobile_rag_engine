@@ -94,6 +94,9 @@ example/assets/corpus/miracl_ko/
 # F2 Korean validation bundles (scripts/f2/build_ko_validation_bundles.py):
 # KorQuAD (CC BY-ND) and Wikipedia text, not committed.
 example/assets/corpus/ko_validation/
+# F2 English validation bundles (scripts/f2/build_en_validation_bundles.py):
+# NFCorpus (academic use) and SciFact (CC BY-NC) text, not committed.
+example/assets/corpus/en_validation/
 example/assets/evalsets/*
 !example/assets/evalsets/README.md
 !example/assets/evalsets/f1/

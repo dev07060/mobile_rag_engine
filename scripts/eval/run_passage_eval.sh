@@ -13,6 +13,8 @@
 #                     (build first: scripts/miracl/build_miracl_ko_bundle.py)
 #                     koval_korquad = KorQuAD dev validation bundle (F2;
 #                     build first: scripts/f2/build_ko_validation_bundles.py)
+#                     enval_nfcorpus / enval_scifact = BEIR English validation
+#                     bundles (F2; build first: scripts/f2/build_en_validation_bundles.py)
 # --name              label used in file names (default: model directory name)
 # --out               result directory (default: build/eval_results/<time>_<name>_<bundle>)
 # --timeout-minutes N harness time limit (default 90)
@@ -41,7 +43,7 @@ while [[ $# -gt 0 ]]; do
     --dump-candidates) DUMP=true; shift;;
     --timeout-minutes) TIMEOUT="$2"; shift 2;;
     --init-weights) INIT_WEIGHTS="$2"; shift 2;;
-    -h|--help) sed -n '2,29p' "$0"; exit 0;;
+    -h|--help) sed -n '2,31p' "$0"; exit 0;;
     *) echo "unknown argument: $1" >&2; exit 2;;
   esac
 done
@@ -73,7 +75,13 @@ case "$BUNDLE" in
     GOLD=assets/evalsets/ko_validation/${BUNDLE}_gold.jsonl
     NO_ANSWER=""
     [[ -f "$ROOT/example/$MANIFEST" ]] || { echo "missing $MANIFEST; run scripts/f2/build_ko_validation_bundles.py" >&2; exit 2; };;
-  *) echo "unknown bundle: $BUNDLE (80, f1, miracl_ko_<size>, koval_<name>)" >&2; exit 2;;
+  enval_*)
+    MANIFEST=assets/evalsets/en_validation/${BUNDLE}_sources_manifest.json
+    EVALSET=assets/evalsets/en_validation/${BUNDLE}_evalset.jsonl
+    GOLD=assets/evalsets/en_validation/${BUNDLE}_gold.jsonl
+    NO_ANSWER=""
+    [[ -f "$ROOT/example/$MANIFEST" ]] || { echo "missing $MANIFEST; run scripts/f2/build_en_validation_bundles.py" >&2; exit 2; };;
+  *) echo "unknown bundle: $BUNDLE (80, f1, miracl_ko_<size>, koval_<name>, enval_<name>)" >&2; exit 2;;
 esac
 
 WORK="$ROOT/build/eval_app"
