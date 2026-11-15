@@ -128,6 +128,25 @@ void main() {
         isTrue,
       );
     });
+
+    test('sourceIds keeps the order of the unscoped search', () async {
+      final all = await engine.search(target, topK: 7);
+      final scoped = await engine.search(
+        target,
+        topK: 3,
+        sourceIds: [refundId],
+      );
+      expect(scoped.chunks.map((c) => c.chunkId), [
+        for (final c in all.chunks)
+          if (c.sourceId.toInt() == refundId) c.chunkId,
+      ]);
+      for (var i = 1; i < scoped.chunks.length; i++) {
+        expect(
+          scoped.chunks[i].similarity,
+          lessThanOrEqualTo(scoped.chunks[i - 1].similarity),
+        );
+      }
+    });
   });
 
   group('B11 adjacent chunks keep relevance order', () {

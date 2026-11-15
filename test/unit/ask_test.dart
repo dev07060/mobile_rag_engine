@@ -314,6 +314,28 @@ void main() {
       ).called(1);
     });
 
+    test(
+      'without a counter, the passages are the engine\'s as before',
+      () async {
+        final prepared = await rag.prepareAsk('q', tokenBudget: 10);
+        expect(chunkIds(prepared), [31, 32, 33]);
+        final json = await RagSearchTool.fromMobileRag(
+          rag,
+          tokenBudget: 10,
+        ).call({'query': 'q'});
+        expect((json['results'] as List).length, 3);
+        verify(
+          () => engine.searchHybridWithContext(
+            'q',
+            topK: 5,
+            tokenBudget: 10,
+            vectorWeight: null,
+            bm25Weight: null,
+          ),
+        ).called(2);
+      },
+    );
+
     test('a passage larger than the budget is left out, not cut', () async {
       final none = await rag.prepareAsk(
         'q',

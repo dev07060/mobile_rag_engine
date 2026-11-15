@@ -2,6 +2,7 @@
 // `maxTokens` with the app's token counter when one is given.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_rag_engine/services/prompt_compressor.dart';
+import 'package:mobile_rag_engine/src/rust/api/compression_utils.dart';
 import 'package:mobile_rag_engine/src/rust/api/source_rag.dart';
 import 'package:mobile_rag_engine/src/rust/frb_generated.dart';
 
@@ -30,12 +31,31 @@ void main() {
     if (!RustLib.instance.initialized) await RustLib.init();
   });
 
-  test('without a counter, maxTokens is 4 characters per token', () async {
-    final result = await PromptCompressor.compress(
-      chunks: _chunks,
-      maxTokens: 10,
-    );
-    expect(result.text.runes.length, lessThanOrEqualTo(40));
+  test('without a counter, the result is the same as before: maxTokens is '
+      '4 characters per token', () async {
+    final original = _chunks.map((c) => c.content).join('\n\n');
+    for (final maxTokens in [10, 20, 2000]) {
+      final result = await PromptCompressor.compress(
+        chunks: _chunks,
+        maxTokens: maxTokens,
+      );
+      final direct = await compressText(
+        text: original,
+        maxChars: maxTokens * 4,
+        options: const CompressionOptions(
+          removeStopwords: false,
+          removeDuplicates: true,
+          language: 'ko',
+          level: 1,
+        ),
+      );
+      expect(result.text, direct.text, reason: '$maxTokens');
+      expect(
+        result.estimatedTokensSaved,
+        (original.length / 4).ceil() - (direct.compressedChars / 4).ceil(),
+      );
+      expect(result.text.runes.length, lessThanOrEqualTo(maxTokens * 4));
+    }
   });
 
   test('with a counter, the text fits maxTokens by that count and ends at a '
