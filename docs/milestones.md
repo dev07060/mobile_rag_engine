@@ -785,7 +785,33 @@
 
 ### Q3. 텍스트 경계
 
-- **상태:** 착수 대기. Q2 뒤.
+- **담당:** 세션 "Q3 텍스트 경계", 브랜치 `fix/q3-text-boundaries`(worktree `.claude/worktrees/q3-text-boundaries-2f603e`, main `fe8ae5c`에서 땄다)
+- **상태:** PR 열림, 머지 대기. 착수는 2026-11-15 사용자 "새 세션에서 Q3 착수". 아래 "착수 때 확인한 것"으로 손대는 파일을 늘렸다(규칙 4).
+
+**착수 때 확인한 것 (2026-11-15, main `fe8ae5c`)**
+
+초안은 2026-11-06에 썼고 그 뒤 S1(#134)·W1(#137)·Q2(#145·#146)가 머지됐다. 항목마다 지금 main에서 실패하는 테스트를 먼저 썼다. 모두 재현돼서 범위에서 뺀 항목은 없다.
+
+| 항목 | main에서 | 근거 (수정 전 실패) |
+|---|---|---|
+| A2 | 재현 | `compression_utils.rs:134` `result[..=pos]`가 `。`(3바이트) 시작 위치에서 잘라 `byte index 19 is not a char boundary` panic. `3.14` → `3. 14`, `v1.2.3` → `v1. 2. 3`, `。` 뒤에 공백이 끼어든다. Rust 테스트 6개 |
+| B1 | 재현 | 머리글 3단 markdown 청크의 실제 임베딩 입력(`Header Path: …\n` + 본문)이 526토큰(한도 512). Rust 테스트 1개 |
+| B2 | 재현 | `rag_engine.dart` `_reembedAll`이 `chunk.content`를 임베딩한다. 가짜 임베딩(입력 텍스트 해시)으로 재임베딩 전에는 자기 입력과 유사도 1.0, 재임베딩 뒤 −0.039. native 테스트 1개 |
+| B8 | 재현 | NFD `환불`, 전각 `ＲＡＧ`, `３５００원`, 합자 `ﬁle`, 반각 `ｶﾀｶﾅ`가 BM25에서 안 맞는다. 같은 문서의 NFC·NFD가 서로 다른 source로 들어간다. Rust 테스트 3개 |
+| B9 | 재현 | `RAG는`·`API를`·`2024년`·`iPhone15에서`·`앱을`이 `RAG`·`2024`·`앱` 질의와 안 맞는다. Rust 테스트 2개 |
+| 헤더 오인식 | 재현 | `#여행`, `#include`, `#######`를 헤더로 읽어 header path가 `여행 #東京 #맛집 …`, `include <stdio.h>`가 된다. `~~~` 펜스 안의 `# 주석`이 헤더가 된다. ```` 펜스 안의 ``` 가 블록을 닫는다. plain text 청커의 `is_explicit_section_heading`도 `#여행` 줄에서 자른다. Rust 테스트 4개 |
+| `.MD` | 재현 | `addDocument(filePath: 'GUIDE.MD')`, `'guide.Markdown'`이 markdown 청킹을 안 쓴다(`source_rag_service.dart` `endsWith('.md')`). 파일 경로 ingest(`ingest_session.rs`)와 `detectChunkingStrategy`는 이미 대소문자를 무시했다. native 테스트 2개 |
+| offset 문서화 | 코드로 확인 | `SemanticChunk.startPos`/`endPos`(UTF-8 바이트)에 단위 설명이 없다 |
+
+**착수 때 정한 방식 (2026-11-15)**
+- **A2:** `.`·`?`·`!`는 뒤가 공백이거나 글 끝일 때만 문장 끝으로 본다. `。！？｡`는 항상 문장 끝이다. 문장 사이는 입력에 있던 공백을 그대로 쓴다(CJK 사이에는 공백을 넣지 않는다). 잘라내기는 같은 규칙으로 마지막 문장 끝을 찾는다.
+- **B1:** markdown 섹션의 토큰 예산에서 `Header Path: …\n` 줄의 토큰 수를 뺀다. 경계에서 토큰이 더해지지 않는 토크나이저가 있어, 계획한 청크마다 실제 입력을 다시 세고 넘으면 예산을 줄여 다시 나눈다. 머리글이 모델 입력의 절반을 넘으면 본문에 절반은 남긴다(그 경우 머리글 뒤쪽이 잘린다).
+- **B2:** `ChunkForReembedding`에 `embeddingText`(색인 때와 같은 `render_context_text`)를 더하고 `reembedAll`이 그것을 임베딩한다. FRB 바인딩을 다시 만들었다.
+- **B8 BM25:** 색인과 질의 모두 NFKC로 바꾼 뒤 토큰화한다. NFKC는 NFD 한글을 합치고 전각·반각·합자를 접는다. BM25는 활성화 때 DB 청크로 다시 만들어지므로(`rebuild_chunk_bm25_index_for_collection`) 기존 DB에 마이그레이션이 없다.
+- **B8 중복 검사 해시 (호환을 지키는 선택):** 저장하는 해시는 NFC 본문의 해시로 바꾼다. 조회는 NFC 해시, 원문 해시, NFD 해시 셋으로 한다. 그래서 0.23.0 이전에 원문(NFC든 NFD든) 해시로 저장된 행도 같은 문서를 다시 넣을 때 찾는다. 대부분의 문서(ASCII, 이미 NFC인 한국어)는 저장 해시가 이전과 같다. 전각·합자는 해시에서 접지 않는다(다른 문서로 둔다). 저장하는 `content`는 원문 그대로다(청크 offset이 원문 기준이다).
+- **B9:** 한글과 다른 글자가 섞인 낱말(`rag는`, `2024년`, `iphone15에서`)은 한글이 아닌 부분을 따로 토큰으로 더한다(영어는 지금처럼 stemming). 한 음절 + 조사(`앱을`, `앱에서`)는 그 한 음절을 더한다. 조사 목록은 `bm25_search.rs`의 `KOREAN_PARTICLES`. 두 음절 이상 명사는 지금처럼 bigram이 맡는다.
+- **헤더:** CommonMark ATX 규칙(1~6개 `#` 뒤 공백·탭·줄 끝, 들여쓰기 3칸까지). 펜스는 ``` 와 `~~~`, 같은 글자로 같거나 긴 줄이 닫는다. plain text 청커의 `#` 판정도 같은 함수를 쓴다.
+- **Upgrade E2E t1:** 0.22.3·0.23.0이 NFD 한국어 문서를 색인한 DB에서 PR 코드로 올라와 BM25로 `RAG`·`앱`·`환불`(NFC)·`2024`를 찾는지, 같은 문서를 NFD·NFC로 다시 넣으면 중복으로 잡는지 본다. 기준 버전에서 같은 질의를 했을 때의 결과도 함께 남긴다.
 
 **목표:** 바이트·문자·토큰 경계와 비 ASCII 텍스트에서 깨지는 곳을 고친다.
 
@@ -803,7 +829,7 @@
 - 위 항목마다 한·중·일 입력 회귀 테스트. 기존 DB의 BM25는 활성화 때 다시 빌드되므로 마이그레이션이 필요 없는지 확인한다.
 - 공통 완료 기준. PR 하나, CI 통과. Rust 변경이 있다.
 
-**손대는 파일:** `rust_builder/rust/src/api/{compression_utils,semantic_chunker,bm25_search,ingest_session,source_rag}.rs`, `lib/services/rag_engine.dart`(reembed 입력), `lib/services/source_rag_service.dart`(`.md` 판별), `test/**`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `docs/milestones.md`
+**손대는 파일:** `rust_builder/rust/src/api/{compression_utils,semantic_chunker,bm25_search,ingest_session,source_rag}.rs`, `lib/services/rag_engine.dart`(reembed 입력), `lib/services/source_rag_service.dart`(`.md` 판별), `test/**`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `docs/milestones.md`. 착수 때 더한 것: `rust_builder/rust/Cargo.toml`·`Cargo.lock`(`unicode-normalization`, `pdf-extract`가 이미 쓰는 0.1.25라 새 crate는 없다), FRB 생성 파일(`lib/src/rust/**`, `rust_builder/rust/src/frb_generated.rs`), `tool/upgrade_e2e/**`와 `.github/workflows/upgrade_e2e.yml`(머리 주석만, t1 시나리오)
 
 ### Q4. 출력 계약
 
