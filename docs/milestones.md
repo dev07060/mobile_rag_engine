@@ -831,6 +831,29 @@
 
 **손대는 파일:** `rust_builder/rust/src/api/{compression_utils,semantic_chunker,bm25_search,ingest_session,source_rag}.rs`, `lib/services/rag_engine.dart`(reembed 입력), `lib/services/source_rag_service.dart`(`.md` 판별), `test/**`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `docs/milestones.md`. 착수 때 더한 것: `rust_builder/rust/Cargo.toml`·`Cargo.lock`(`unicode-normalization`, `pdf-extract`가 이미 쓰는 0.1.25라 새 crate는 없다), FRB 생성 파일(`lib/src/rust/**`, `rust_builder/rust/src/frb_generated.rs`), `tool/upgrade_e2e/**`와 `.github/workflows/upgrade_e2e.yml`(머리 주석만, t1 시나리오)
 
+**실행 결과 (2026-11-15)**
+- **Rust (로컬 macOS 27.2.1, Apple M3 Pro, rustc 1.91.1, debug, `cargo test --lib -- --test-threads=1`):** 새 테스트 16개가 수정 전 코드(main `fe8ae5c` + 테스트만)에서 실패했다(위 표). 수정 뒤 전체 통과: 기본 feature 285개, `vector_faer,vector_quant_i8` 286개(무시 16).
+- **Dart:** `test/native/reembed_embedding_input_test.dart`(B2 1개, `.MD`·`.Markdown`·`.md` 3개)는 수정 전 코드에서 3개 실패(재임베딩 뒤 자기 입력과의 유사도 −0.039, `.MD`·`.Markdown`가 plain 청킹). 수정 뒤 `flutter test test/unit` 158개, `flutter test test/native` 34개 통과. `flutter analyze lib/ test/` 문제 없음. native 테스트는 Xcode 27.1 strip 문제로 `CARGO_PROFILE_RELEASE_STRIP=none` release dylib로 돌렸다(Q2와 같다).
+- **E1 전후 (B8·B9와 B1이 함께 들어간 결과):** `scripts/eval/run_passage_eval.sh --bundle e1 --dump-candidates`, `ask` 조건(상위 5개, 목록마다 후보 20개), 답 있는 질문 90개. 수정 전 `fe8ae5c`, 수정 뒤 `6a6ce96`(Rust는 `2620777`과 같다). 수정 전 값은 E1 보고서(`0b27510`)와 모든 칸이 같다.
+
+| 모델 | 무게 | 영어 (45) | 한국어 | 바뀐 질문 |
+|---|---|---|---|---|
+| MiniLM | 0.2/0.8 (기본) | 35 → 35 | 24 → 25 / 44 | +e1q-066, +e1q-100, −e1q-104 |
+| | 0.5/0.5 | 36 → 36 | 21 → 20 / 44 | +e1q-066, −e1q-065, −e1q-077 |
+| | BM25만 | 34 → 34 | 29 → 30 / 44 | +e1q-087 |
+| | 벡터만 | 38 → 38 | 2 → 2 / 44 | 없음 |
+| KoEn-E5-Tiny | 0.2/0.8 (기본) | 34 → 34 | 37 → 37 / 45 | 없음 |
+| | 0.5/0.5 | 38 → 38 | 42 → 43 / 45 | +e1q-078 |
+| | BM25만 | 34 → 34 | 30 → 31 / 45 | +e1q-087 |
+| | 벡터만 | 38 → 38 | 41 → 41 / 45 | 없음 |
+
+  - 영어는 두 모델 모두 질문 하나하나까지 같다. 한국어는 ±1~2개로, 답 있는 질문 45개에서 가를 수 없는 크기다. 얻은 질문은 새 토큰에서 나왔다(e1q-100 "군을" → "군", e1q-087 "앱을" → "앱"). 잃은 질문은 새 한 음절 토큰이 다른 청크의 BM25 순위를 올린 결과로 보지만 질문마다 확인하지 않았다. 기본 무게는 바꾸지 않았다(규칙 10).
+  - **MiniLM e1q-078은 수정 뒤 채점에서 빠졌다:** B1 수정으로 `gnome_ko_disk_check`의 마지막 절이 두 청크로 나뉘었고(5 → 6청크, 전체 2,330 → 2,331), 정답 문장이 그 경계에 걸렸다. 그래서 MiniLM 한국어는 전후 모두 44개로 셌다. 수정 전 그 청크의 실제 임베딩 입력은 MiniLM 토크나이저로 543토큰(31토큰 잘림), 수정 뒤 511 + 92토큰이다. E1 색인 전체에서 512를 넘는 markdown 청크는 MiniLM 6개(잘린 토큰 합 128) → 0개, KoEn 0개 → 0개다.
+  - E1 보고서(`docs/perf/e1-app-docs/README.md`)의 수치는 `0b27510` 기준으로 적힌 값이라 고치지 않았다.
+- **측정 조건 (규칙 9):** MiniLM `model.onnx|384|f32+vabq:none|sha256:e9246dc32f332cb687c5d1ea0c0c51d3`, KoEn-E5-Tiny `model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413`. profile 빌드, Rust 기능 `vector_faer,vector_quant_i8`, 실행마다 새 DB. Apple M3 Pro, macOS 27.2.1, Xcode 27.1 (27A9275), Flutter 3.35.5, Dart 3.9.2, rustc 1.91.1, Xcode 27 우회는 스크립트가 복사본에만 넣었다. 문서 56개, 질문 120개(답 있음 90), 청크 MiniLM 2,330 → 2,331, KoEn 2,319 → 2,319. 2026-11-15(KST). 네 실행을 차례로 돌렸고, 그동안 같은 Mac에서 `cargo test`가 함께 돌았다(검색 시간은 쓰지 않는다). 실행 기록: 수정 전 MiniLM 239초 05:25 UTC, KoEn 59초 05:26, 수정 뒤 MiniLM 235초 05:30, KoEn 57초 05:31. 실행 때 바뀐 추적 파일 없음.
+- **Upgrade E2E:** t1 시나리오를 더했다. 결과는 PR CI의 두 기준 버전 job에 있다.
+- **확인하지 않은 것:** 실기기(iPhone·Android)와 Windows 실행, BGE-m3 E1 전후, 80질의·F1 묶음 전후, 큰 문서에서 NFKC가 BM25 빌드 시간에 주는 영향.
+
 ### Q4. 출력 계약
 
 - **상태:** 착수 대기.
