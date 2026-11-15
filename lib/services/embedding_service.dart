@@ -29,6 +29,11 @@ class EmbeddingService {
   /// Debug mode flag — forwarded to the worker on each embed call.
   static bool debugMode = false;
 
+  /// Replies still awaited from the worker. Shutting the worker down fails
+  /// them: a worker that is killed or has stopped reading never answers, and
+  /// `embed()` used to wait forever, leaving its source in `processing`.
+  static final Map<ReceivePort, Completer<Object?>> _pendingReplies = {};
+
   // ── Public API (unchanged signatures) ─────────────────────────────────
 
   /// Initialize ONNX model on a background worker isolate.
@@ -55,19 +60,7 @@ class EmbeddingService {
       );
     }
 
-    // Tear down any previous worker.
-    await _shutdownWorker();
-
-    // Spawn a fresh worker isolate.
-    final bootstrapPort = ReceivePort();
-    _workerIsolate = await Isolate.spawn(
-      _workerEntryPoint,
-      bootstrapPort.sendPort,
-    );
-
-    // First message from the worker is its own SendPort.
-    _workerSendPort = await bootstrapPort.first as SendPort;
-    bootstrapPort.close();
+    await _startWorker(_workerEntryPoint);
 
     // Send the init command and wait for acknowledgement.
     final replyPort = ReceivePort();
@@ -103,15 +96,24 @@ class EmbeddingService {
     }
 
     final replyPort = ReceivePort();
-    sendPort.send({
-      'cmd': 'embed',
-      'text': text,
-      'debugMode': debugMode,
-      'replyPort': replyPort.sendPort,
+    final reply = Completer<Object?>();
+    _pendingReplies[replyPort] = reply;
+    replyPort.listen((message) {
+      if (!reply.isCompleted) reply.complete(message);
     });
-
-    final result = await replyPort.first;
-    replyPort.close();
+    final Object? result;
+    try {
+      sendPort.send({
+        'cmd': 'embed',
+        'text': text,
+        'debugMode': debugMode,
+        'replyPort': replyPort.sendPort,
+      });
+      result = await reply.future;
+    } finally {
+      _pendingReplies.remove(replyPort);
+      replyPort.close();
+    }
 
     if (result is Map && result['error'] != null) {
       throw Exception(result['error']);
@@ -163,7 +165,31 @@ class EmbeddingService {
     unawaited(disposeAsync());
   }
 
+  /// **(FOR TESTING ONLY)** Runs [entryPoint] as the worker instead of the
+  /// ONNX worker, without an `init` command. It receives the same messages
+  /// (`embed`, `dispose`) and must answer them the same way.
+  @visibleForTesting
+  static Future<void> startWorkerForTest(
+    void Function(SendPort mainSendPort) entryPoint,
+  ) =>
+      _startWorker(entryPoint);
+
   // ── Private helpers ───────────────────────────────────────────────────
+
+  static Future<void> _startWorker(
+    void Function(SendPort mainSendPort) entryPoint,
+  ) async {
+    // Tear down any previous worker.
+    await _shutdownWorker();
+
+    // Spawn a fresh worker isolate.
+    final bootstrapPort = ReceivePort();
+    _workerIsolate = await Isolate.spawn(entryPoint, bootstrapPort.sendPort);
+
+    // First message from the worker is its own SendPort.
+    _workerSendPort = await bootstrapPort.first as SendPort;
+    bootstrapPort.close();
+  }
 
   static Future<void> _shutdownWorker() async {
     final sendPort = _workerSendPort;
@@ -180,6 +206,20 @@ class EmbeddingService {
     _workerIsolate?.kill(priority: Isolate.immediate);
     _workerIsolate = null;
     _workerSendPort = null;
+
+    // Anything the worker had not answered by now never will be.
+    final unanswered = Map.of(_pendingReplies);
+    _pendingReplies.clear();
+    for (final MapEntry(key: port, value: reply) in unanswered.entries) {
+      if (!reply.isCompleted) {
+        reply.completeError(
+          StateError(
+            'EmbeddingService was disposed before the embedding finished.',
+          ),
+        );
+      }
+      port.close();
+    }
   }
 }
 

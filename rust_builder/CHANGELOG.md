@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+* **HNSW**: `rebuild_chunk_hnsw_index_for_collection` unmaps a previously loaded `.hnsw` file once the new graph is built. Searches read the mapped file first, so `search_chunks_in_collection` in collection B after an activation of collection A searched A's graph and returned nothing, and a search after re-embedding used the old vectors. `loaded_hnsw_node_count` now also counts an unsaved in-memory graph, so a parity check right after such a rebuild does not reject it.
+* **Embedding fingerprint**:
+  - `detect_embedding_fingerprint_gate` returns `Mismatch` when the stored fingerprint equals the current one but a reembed towards another fingerprint is pending and some chunks carry other fingerprints (a reembed that stopped part way, then the app went back to the old model). It returned `Ok`.
+  - `begin_embedding_reembed` accepts a target other than the pending one and replaces it. It refused with "cannot retarget", so after an interrupted reembed a third model could only clear embeddings.
+* **Sources**: `update_source_status` bumps the collection's data and index generations only when the effective status (`NULL` counts as `completed`) changes. The duplicate path of `prepare_source_ingestion` writes `completed` again for an indexed document, which forced a full BM25 and HNSW rebuild on the next search.
+
 ## 0.22.0
 * **Embedding truncation**: Text is cut at 512 tokens, the encoder's position limit, instead of at 256, 384 or 512 tokens chosen by character count. Text under 1,200 characters was cut at 256 tokens, so dense scripts such as Korean (about twice the tokens per character of English) lost the end of most chunks. In a desktop measurement on AutoRAGRetrieval (Korean) with a Korean e5 model, chunk-level nDCG@10 rose from 0.907 to 0.942 with semantic chunking and from 0.805 to 0.895 with markdown chunking.
 * **Chunking**:

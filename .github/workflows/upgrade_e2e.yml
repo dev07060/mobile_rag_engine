@@ -32,7 +32,7 @@ on:
 env:
   FLUTTER_VERSION: "3.38.7"
   FLUTTER_CHANNEL: "stable"
-  H1_KNOWN_FAILING: "c1"
+  H1_KNOWN_FAILING: ""
 
 jobs:
   upgrade:

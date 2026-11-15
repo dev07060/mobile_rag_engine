@@ -88,6 +88,18 @@ class MobileRag {
   static MobileRag? _instance;
   static RagEngine? _engine;
 
+  /// The [initialize] call that is still running, if any. A second call made
+  /// meanwhile waits for it instead of starting another engine (Q2 B5).
+  static Future<void>? _initializing;
+
+  /// **(FOR TESTING ONLY)** What [initialize] calls to create the engine.
+  @visibleForTesting
+  static Future<RagEngine> Function({
+    required RagConfig config,
+    void Function(String status)? onProgress,
+  })
+  engineInitializer = RagEngine.initialize;
+
   MobileRag._();
 
   /// Initialize the RAG engine. Call once in main().
@@ -169,6 +181,52 @@ class MobileRag {
       onProgress?.call('Already initialized');
       return;
     }
+    final running = _initializing;
+    if (running != null) {
+      // Same as calling after it finished: the first call's options win.
+      onProgress?.call('Already initializing');
+      return running;
+    }
+    final initializing = _initialize(
+      tokenizerAsset: tokenizerAsset,
+      modelAsset: modelAsset,
+      modelPack: modelPack,
+      tokenizerPath: tokenizerPath,
+      modelPath: modelPath,
+      databaseName: databaseName,
+      maxChunkChars: maxChunkChars,
+      overlapChars: overlapChars,
+      embeddingIntraOpNumThreads: embeddingIntraOpNumThreads,
+      threadLevel: threadLevel,
+      deferIndexWarmup: deferIndexWarmup,
+      defaultVectorWeight: defaultVectorWeight,
+      defaultBm25Weight: defaultBm25Weight,
+      onProgress: onProgress,
+    );
+    _initializing = initializing;
+    try {
+      await initializing;
+    } finally {
+      if (identical(_initializing, initializing)) _initializing = null;
+    }
+  }
+
+  static Future<void> _initialize({
+    required String? tokenizerAsset,
+    required String? modelAsset,
+    required RagModelPack? modelPack,
+    required String? tokenizerPath,
+    required String? modelPath,
+    required String? databaseName,
+    required int maxChunkChars,
+    required int overlapChars,
+    required int? embeddingIntraOpNumThreads,
+    required ThreadUseLevel? threadLevel,
+    required bool deferIndexWarmup,
+    required double defaultVectorWeight,
+    required double defaultBm25Weight,
+    required void Function(String status)? onProgress,
+  }) async {
     validateDefaultHybridWeights(
       vectorWeight: defaultVectorWeight,
       bm25Weight: defaultBm25Weight,
@@ -251,10 +309,7 @@ class MobileRag {
         defaultBm25Weight: defaultBm25Weight,
       );
     }
-    _engine = await RagEngine.initialize(
-      config: config,
-      onProgress: onProgress,
-    );
+    _engine = await engineInitializer(config: config, onProgress: onProgress);
     _instance = MobileRag._();
   }
 
@@ -692,6 +747,13 @@ class MobileRag {
   ///
   /// Call when completely done with the engine.
   static Future<void> dispose() async {
+    final initializing = _initializing;
+    if (initializing != null) {
+      // Let a running initialize finish, so its engine is the one disposed.
+      try {
+        await initializing;
+      } catch (_) {}
+    }
     await RagEngine.dispose();
     _engine = null;
     _instance = null;
