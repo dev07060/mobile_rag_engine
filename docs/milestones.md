@@ -786,7 +786,7 @@
 ### Q3. 텍스트 경계
 
 - **담당:** 세션 "Q3 텍스트 경계", 브랜치 `fix/q3-text-boundaries`(worktree `.claude/worktrees/q3-text-boundaries-2f603e`, main `fe8ae5c`에서 땄다)
-- **상태:** PR 열림, 머지 대기. 착수는 2026-11-15 사용자 "새 세션에서 Q3 착수". 아래 "착수 때 확인한 것"으로 손대는 파일을 늘렸다(규칙 4).
+- **상태:** 완료 (#147, 2026-11-15). 착수는 2026-11-15 사용자 "새 세션에서 Q3 착수". 아래 "착수 때 확인한 것"으로 손대는 파일을 늘렸다(규칙 4).
 
 **착수 때 확인한 것 (2026-11-15, main `fe8ae5c`)**
 
@@ -857,7 +857,24 @@
 
 ### Q4. 출력 계약
 
-- **상태:** 착수 대기.
+- **담당:** 세션 "Q4 출력 계약", 브랜치 `fix/q4-output-contract`(worktree `.claude/worktrees/q4-output-contract-392631`, main `bea788a`에서 땄다)
+- **상태:** 진행 중. 착수는 2026-11-15 사용자 "새 세션에서 Q4 착수". 아래 "착수 때 확인한 것"으로 범위를 늘렸다(규칙 4).
+
+**착수 때 확인한 것 (2026-11-15, main `bea788a`)**
+
+초안은 2026-11-06에 썼고 그 뒤 W1(#137)·F2(#143)·Q2(#145·#146)·Q3(#147)가 머지됐다. 항목마다 지금 main에서 실패하는 테스트를 먼저 썼다. 모두 재현돼서 범위에서 뺀 항목은 없다.
+
+| 항목 | main에서 | 근거 (수정 전 실패) |
+|---|---|---|
+| B10 | 재현 | `source_rag_service.dart` `search`가 `sourceIds`를 받으면 `searchHybrid(vectorWeight: 1.0, bm25Weight: 0.0)`을 써서 1위 `similarity`가 0.0164(RRF 1/61), 없으면 1.0(코사인). native 테스트 1개 |
+| B11 | 재현 | Rust `search_meta_hybrid_once`(`source_rag.rs`)와 Dart `_expandWithAdjacentChunks`가 이웃 청크를 더한 뒤 (source_id, chunk_index)로 정렬한다. 청크 하나 예산에서 1위 대신 앞쪽 이웃이 들어간다. `searchHybridWithContext`(`ask`·tool이 쓰는 경로)와 `search` 둘 다. native 테스트 4개 |
+| B12 | 재현 | `ask.dart` `citedPassages`가 `［１］`, `【1】`, `[1、2]`, `[3，1]`, `[1-3]`을 못 읽고 `` `items[2]` ``·코드 블록 안의 `list[3]`을 인용으로 읽는다. 단위 테스트 5개 |
+| B13 | 재현 (측정) | `countTokens`(엔진 tokenizer)로 같은 문장을 세면 MiniLM: 태국어 31자 1토큰, 이모지 10개 1토큰, 한국어 23자 38토큰 / KoEn-E5-Tiny: 일본어 21자 4토큰 / BGE-m3: 이모지 10개 11토큰. `ask`·tool의 `tokenBudget`은 이 단위다. `PromptCompressor.compress`는 `maxTokens * 4`글자. LLM tokenizer 수치는 오프라인에 tokenizer가 없어 재지 않았다 |
+| Q3 이월: CJK 문장 끝 | 재현 | `ContextBuilder._previousTrimBoundary`가 `。！？` 뒤 공백을 요구해 공백 없는 일본어·중국어에서 문장 끝을 못 찾는다. 단위 테스트 1개 |
+| Q3 이월: `maxChars` 단위 | 재현 | `buildWithCompression`이 `maxChars`를 Dart `String.length`(UTF-16)로 넘기고 Rust `compress_text`는 코드 포인트로 센다(이모지 10개 = 20 대 10). 단위 테스트 1개 |
+| 착수 때 찾음: 짧은 텍스트 | 재현 | 같은 함수의 `.clamp(32, maxChars - 1)`이 33자 미만 텍스트가 예산을 넘으면 `ArgumentError`를 던진다(위 두 항목의 테스트 3개가 이것으로 실패했다) |
+
+**포함에 더한 것 (착수 때, 규칙 4):** Q3가 넘긴 `ContextBuilder`의 공백 없는 CJK 문장 끝과 `maxChars` 단위 불일치, 같은 함수의 짧은 텍스트 `clamp` 오류. 문장 끝 규칙은 Q3의 `compress_text`와 같다(`.`·`?`·`!`·`…`는 뒤가 공백일 때만, `。！？｡`는 항상).
 
 **목표:** 사용자와 LLM이 읽는 점수·순서·인용·예산이 문서와 같게 동작하게 한다.
 
