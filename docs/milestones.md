@@ -900,7 +900,18 @@
 **결과 (커밋 `1b70427`, macOS 27.2.1 arm64, Flutter 3.35.5, rustc 1.91.1, 2026-11-16)**
 - B10: `search(sourceIds:)`의 1위 `similarity` 0.0164 → 1.0(코사인), 같은 청크는 범위 유무와 관계없이 같은 값, 순서 같음. B11: 청크 하나 예산에 1위가 들어간다. B12: 단위 테스트 5개 통과. B13: 인자 없이는 결과가 그대로이고, 주면 그 단위로 구절을 고른다. Q3 이월분 통과.
 - `flutter analyze lib/ test/ tool/` 문제 없음, `flutter test test/unit` 172개, `flutter test test/native` 44개(release dylib, `vector_faer,vector_quant_i8`), `cargo test --lib -- --test-threads=1` 기본 287개·`vector_faer,vector_quant_i8` 288개 통과(각 16 ignored).
-- 실제 엔진(MiniLM Model Pack): Upgrade E2E `contract` 시나리오 b5~b8, 결과는 PR CI의 두 기준 버전 job에 있다.
+- 실제 엔진(MiniLM Model Pack, fingerprint `model.onnx|384|f32+vabq:none`, 0.23.0 기준 job은 `…|sha256:e9246dc32f332cb687c5d1ea0c0c51d3`, head `9cae2df`, CI macOS): Upgrade E2E `contract` 시나리오 b5~b8이 두 기준 버전(0.22.3·0.23.0) job에서 모두 PASS. b5 범위 1위 `similarity` 0.3238(범위 없이 같은 청크 0.3238), b6 청크 4개 문서에서 tight 예산 352에 1위만 포함, b7 인용 `[1, 2]`, b8 counter(공백 뺀 코드 포인트) 281·267·294, 예산 547에 1위만.
+- B10 지연 시간(PR 검토 요청, 2026-11-16): main `bea788a`와 PR head `9cae2df`에서 같은 벤치(`RagEngine.search(sourceIds:)`, 가짜 임베딩 dim 384, 청크 약 600자, 출처 100개, topK 10, 워밍업 5회 뒤 30회, release dylib `vector_faer,vector_quant_i8`, macOS 27.2.1 arm64, Flutter 3.35.5). 쿼리 임베딩은 0.05~0.07 ms라 검색 구간이 거의 전부다. 중앙값(최소~최대), 각 커밋 두 번 돌린 것 중 두 번째:
+
+  | 청크 | 범위 | main | PR |
+  |---|---|---|---|
+  | 2,300 | 출처 2개(46청크) | 3.14 ms (2.99~3.77) | 2.16 ms (2.09~2.80) |
+  | 2,300 | 출처 90개(2,070청크) | 4.56 ms (4.41~5.07) | 4.11 ms (4.02~4.29) |
+  | 20,000 | 출처 2개(400청크) | 4.88 ms (4.69~5.65) | 2.40 ms (2.32~2.79) |
+  | 20,000 | 출처 90개(18,000청크) | 9.67 ms (8.70~10.34) | 20.48 ms (20.00~20.84) |
+  | 20,000 | 범위 없음(참고) | 2.62 ms | 2.72 ms |
+
+  네 경우 모두 돌려준 청크 id와 순서가 main과 같았다. 20,000청크·90%에서 2.1배 느린 원인은 새 함수가 범위 안 모든 청크의 본문·metadata를 읽기 때문으로 본다(코드로 본 추정, 따로 재지 않았다. 이전 경로는 벡터만 읽고 본문은 상위 결과만 읽었다). 구현 변경은 사용자 결정을 기다린다. 벤치 코드는 저장소에 넣지 않았다. 기기에서는 재지 않았다.
 - **확인하지 않은 것:** LLM tokenizer로 센 수치(오프라인에 없음, 하네스는 코드 포인트 counter로 대신했다), 실기기·Windows 실행, B11 순서 변경의 검색 품질 영향(찾는 청크는 같고 조립 순서만 바뀐다).
 
 ### Q5. 배포 검증 보강
