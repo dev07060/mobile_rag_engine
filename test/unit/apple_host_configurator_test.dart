@@ -169,6 +169,173 @@ void main() {
     expect(await file.readAsString(), podfile);
   });
 
+  group('Podfile variants', () {
+    test('raises a platform line that ends with a comment', () async {
+      const podfile =
+          "platform :ios, '13.0' # 한국어 주석, 日本語のコメント, 中文注释 🚀 v3.14\n"
+          "target 'Runner' do\n  $_staticFrameworks\nend\n";
+      final file = await write('ios/Podfile', podfile);
+
+      final changes = await configurator().configure();
+
+      expect(changes.map((c) => c.description), [
+        'raised the platform from 13.0 to 16.0',
+      ]);
+      expect(
+        await file.readAsString(),
+        podfile.replaceFirst("'13.0'", "'16.0'"),
+      );
+      expect(await configurator().configure(check: true), isEmpty);
+    });
+
+    test('repairs a Podfile an earlier setup patched next to a commented '
+        'platform line', () async {
+      // Earlier setups did not match the commented line, prepended a new
+      // line, and left the old one, which CocoaPods applies last.
+      const podfile =
+          "platform :ios, '16.0'\n"
+          "platform :ios, '13.0' # keep in sync with Xcode\n"
+          "target 'Runner' do\n  $_staticFrameworks\nend\n";
+      final file = await write('ios/Podfile', podfile);
+
+      expect((await configurator().configure(check: true)).map((c) => c.path), [
+        'ios/Podfile',
+      ]);
+      await configurator().configure();
+
+      expect(await file.readAsString(), isNot(contains('13.0')));
+      expect(await configurator().configure(check: true), isEmpty);
+    });
+
+    test('reads double quotes, tabs and a version without a minor', () async {
+      const podfile =
+          '\tplatform  :osx ,  "11"\n'
+          "target 'Runner' do\n\tuse_frameworks!\nend\n";
+      final file = await write('macos/Podfile', podfile);
+
+      await configurator().configure();
+
+      expect(
+        await file.readAsString(),
+        "\tplatform :osx, '14.0'\n"
+        "target 'Runner' do\n\t$_staticFrameworks\nend\n",
+      );
+    });
+
+    test('raises a platform line without a version', () async {
+      final file = await write(
+        'ios/Podfile',
+        "platform :ios\ntarget 'Runner' do\nend\n",
+      );
+
+      await configurator().configure();
+
+      expect(
+        await file.readAsString(),
+        "platform :ios, '16.0'\ntarget 'Runner' do\nend\n",
+      );
+    });
+
+    for (final line in [
+      'use_frameworks! linkage: :dynamic',
+      'use_frameworks!(linkage: :dynamic)',
+      'use_frameworks! :linkage => :dynamic # needed by a Swift pod',
+      'use_frameworks!(:linkage=>:dynamic)',
+      'use_frameworks! # 動的フレームワーク',
+    ]) {
+      test('switches `$line` to static linkage', () async {
+        final comment = line.contains('#')
+            ? ' ${line.substring(line.indexOf('#'))}'
+            : '';
+        final file = await write(
+          'ios/Podfile',
+          "platform :ios, '16.0'\ntarget 'Runner' do\n  $line\nend\n",
+        );
+
+        final changes = await configurator().configure();
+
+        expect(changes.map((c) => c.description), [
+          contains(':linkage => :static'),
+        ]);
+        expect(
+          await file.readAsString(),
+          "platform :ios, '16.0'\n"
+          "target 'Runner' do\n  $_staticFrameworks$comment\nend\n",
+        );
+        expect(await configurator().configure(check: true), isEmpty);
+      });
+    }
+
+    test('switches every use_frameworks! in the file', () async {
+      final file = await write(
+        'ios/Podfile',
+        "platform :ios, '16.0'\n"
+            "target 'Runner' do\n  use_frameworks!\nend\n"
+            "target 'Widget' do\n  use_frameworks! linkage: :dynamic\nend\n",
+      );
+
+      await configurator().configure();
+
+      final content = await file.readAsString();
+      expect(content, isNot(contains('dynamic')));
+      expect(_staticFrameworks.allMatches(content), hasLength(2));
+    });
+
+    test('leaves correct variants untouched', () async {
+      for (final podfile in [
+        "platform :ios, '17.0' # Swift concurrency\n"
+            "target 'Runner' do\n  use_frameworks! linkage: :static\nend\n",
+        'platform :ios, "16.0"\r\n'
+            "target 'Runner' do\r\n"
+            "  use_frameworks!(:linkage => :static) # ORT\r\nend\r\n",
+        "# platform :ios, '12.0'\nplatform :ios, '16.0'\n"
+            "target 'Runner' do\nend\n",
+        "platform :ios, '16.0'\n# use_frameworks!\n",
+      ]) {
+        final file = await write('ios/Podfile', podfile);
+        expect(await configurator().configure(), isEmpty, reason: podfile);
+        expect(await file.readAsString(), podfile);
+      }
+    });
+
+    for (final podfile in [
+      "platform :ios, ENV['IOS_DEPLOYMENT_TARGET']\n",
+      "platform :ios, '16.0'\nuse_frameworks! :linkage => linkage_mode\n",
+    ]) {
+      test('fails instead of guessing on `${podfile.trim()}`', () async {
+        final file = await write('ios/Podfile', podfile);
+
+        for (final check in [true, false]) {
+          await expectLater(
+            configurator().configure(check: check),
+            throwsA(
+              isA<Exception>().having(
+                (e) => e.toString(),
+                'message',
+                allOf(contains('ios/Podfile:'), contains('by hand')),
+              ),
+            ),
+          );
+        }
+        expect(await file.readAsString(), podfile);
+      });
+    }
+  });
+
+  test('raises a quoted deployment target in the Xcode project', () async {
+    final file = await write(
+      'ios/Runner.xcodeproj/project.pbxproj',
+      _pbxproj('IPHONEOS_DEPLOYMENT_TARGET', '"13.0"'),
+    );
+
+    await configurator().configure();
+
+    expect(
+      await file.readAsString(),
+      _pbxproj('IPHONEOS_DEPLOYMENT_TARGET', '16.0'),
+    );
+  });
+
   test('skips host platforms the app does not have', () async {
     expect(await configurator().configure(), isEmpty);
   });
