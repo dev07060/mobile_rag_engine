@@ -858,7 +858,7 @@
 ### Q4. 출력 계약
 
 - **담당:** 세션 "Q4 출력 계약", 브랜치 `fix/q4-output-contract`(worktree `.claude/worktrees/q4-output-contract-392631`, main `bea788a`에서 땄다)
-- **상태:** PR #148 열림(2026-11-16), 머지 대기. 착수는 2026-11-15 사용자 "새 세션에서 Q4 착수". 아래 "착수 때 확인한 것"으로 범위를 늘렸다(규칙 4).
+- **상태:** 완료 (#148, 2026-11-16). 착수는 2026-11-15 사용자 "새 세션에서 Q4 착수". 아래 "착수 때 확인한 것"으로 범위를 늘렸다(규칙 4).
 
 **착수 때 확인한 것 (2026-11-15, main `bea788a`)**
 
@@ -916,7 +916,8 @@
 
 ### Q5. 배포 검증 보강
 
-- **상태:** 착수 대기.
+- **담당:** 세션 "Q5 배포 검증 보강", 브랜치 `fix/q5-release-checks`(worktree `.claude/worktrees/q5-release-checks-88a4cb`, main `f5aefc4`에서 땄다)
+- **상태:** 진행 중. 착수는 2026-11-16 사용자 "새 세션에서 Q5 착수".
 
 **목표:** 발행 전에 배포 아카이브, release 빌드, 새 앱 설정을 실제로 확인한다(#129 규칙 5-2).
 
@@ -930,7 +931,7 @@
 
 **완료 기준:** 새 검사가 이전 버그(예: `.pubignore`로 빠진 파일)를 재현하는지 한 번 확인한다. 공통 완료 기준. PR 하나, CI 통과.
 
-**손대는 파일:** `lib/src/model_pack/apple_host_configurator.dart`, `bin/**`, `.github/workflows/{quickstart_e2e,ci}.yml`, `tool/quickstart_e2e/**`, `rust_builder/rust/Cargo.toml`, `test/unit/apple_host_configurator_test.dart`, `docs/milestones.md`
+**손대는 파일:** `lib/src/model_pack/apple_host_configurator.dart`, `bin/**`, `.github/workflows/{quickstart_e2e,ci}.yml`, `tool/quickstart_e2e/**`, `rust_builder/rust/Cargo.toml`, `test/unit/apple_host_configurator_test.dart`, `docs/milestones.md`. 착수 때 더한 것(규칙 4): `.pubignore`(`tool/quickstart_e2e/`를 배포 아카이브에서 뺀다, `tool/upgrade_e2e/`와 같다), `rust_builder/rust/Cargo.lock`(버전을 바꾸면 같이 바뀐다), `rust_builder/rust/src/api/migration_meta.rs`(버전이 다시 어긋나지 않게 하는 테스트), `CHANGELOG.md`·`rust_builder/CHANGELOG.md`(`## Unreleased`)
 
 ### I1. 실제 앱 연동 마찰 문서
 

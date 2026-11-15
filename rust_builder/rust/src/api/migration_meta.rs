@@ -48,6 +48,10 @@ pub const CURRENT_HNSW_FORMAT_VERSION: i64 = 1;
 pub const CURRENT_BM25_STATS_VERSION: i64 = 1;
 
 /// Engine build identifier persisted on every boot.
+///
+/// The crate version, kept equal to the `rag_engine_flutter` package version
+/// that ships this crate (checked by a test). It is a trace only: no
+/// migration, rebuild or lock decision reads it.
 pub const CURRENT_ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub const KEY_SQL_SCHEMA_VERSION: &str = "sql_schema_version";
@@ -1269,5 +1273,24 @@ mod tests {
             other => panic!("expected UnsupportedMigrationVersion, got {:?}", other),
         }
         drop(pool);
+    }
+
+    /// `last_engine_version` must name a release a user can look up, so the
+    /// crate version follows the rag_engine_flutter package that ships it.
+    #[test]
+    fn engine_version_matches_rag_engine_flutter_package() {
+        let pubspec = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../pubspec.yaml");
+        let content = std::fs::read_to_string(&pubspec)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", pubspec.display()));
+        let version = content
+            .lines()
+            .find_map(|line| line.strip_prefix("version:"))
+            .map(|v| v.trim().trim_matches(|c| c == '"' || c == '\''))
+            .expect("rust_builder/pubspec.yaml has no version");
+        assert_eq!(
+            CURRENT_ENGINE_VERSION, version,
+            "set `version` in rust_builder/rust/Cargo.toml (and Cargo.lock) to the \
+             rag_engine_flutter version in rust_builder/pubspec.yaml"
+        );
     }
 }
