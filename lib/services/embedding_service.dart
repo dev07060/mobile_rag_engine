@@ -34,6 +34,10 @@ class EmbeddingService {
   /// `embed()` used to wait forever, leaving its source in `processing`.
   static final Map<ReceivePort, Completer<Object?>> _pendingReplies = {};
 
+  /// Set by [disposeAsync] until the next worker starts, so an `embed()` that
+  /// arrives after dispose fails the same way as one dispose cut short.
+  static bool _disposed = false;
+
   // ── Public API (unchanged signatures) ─────────────────────────────────
 
   /// Initialize ONNX model on a background worker isolate.
@@ -92,6 +96,12 @@ class EmbeddingService {
   static Future<Float32List> embed(String text) async {
     final sendPort = _workerSendPort;
     if (sendPort == null) {
+      if (_disposed) {
+        throw StateError(
+          'EmbeddingService was disposed before the embedding '
+          'started.',
+        );
+      }
       throw Exception("EmbeddingService not initialized. Call init() first.");
     }
 
@@ -119,8 +129,9 @@ class EmbeddingService {
       throw Exception(result['error']);
     }
 
-    final embedding =
-        (result as TransferableTypedData).materialize().asFloat32List();
+    final embedding = (result as TransferableTypedData)
+        .materialize()
+        .asFloat32List();
     _dimensionState.validateAndRemember(embedding.length);
     return embedding;
   }
@@ -154,6 +165,7 @@ class EmbeddingService {
 
   /// Release resources deterministically.
   static Future<void> disposeAsync() async {
+    _disposed = true;
     await _shutdownWorker();
     _dimensionState.reset();
   }
@@ -171,8 +183,7 @@ class EmbeddingService {
   @visibleForTesting
   static Future<void> startWorkerForTest(
     void Function(SendPort mainSendPort) entryPoint,
-  ) =>
-      _startWorker(entryPoint);
+  ) => _startWorker(entryPoint);
 
   // ── Private helpers ───────────────────────────────────────────────────
 
@@ -181,6 +192,8 @@ class EmbeddingService {
   ) async {
     // Tear down any previous worker.
     await _shutdownWorker();
+
+    _disposed = false;
 
     // Spawn a fresh worker isolate.
     final bootstrapPort = ReceivePort();
@@ -321,10 +334,7 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
           );
           final shape = [1, seqLen];
 
-          final inputIdsTensor = await OrtValue.fromList(
-            inputIdsData,
-            shape,
-          );
+          final inputIdsTensor = await OrtValue.fromList(inputIdsData, shape);
           final attentionMaskTensor = await OrtValue.fromList(
             attentionMaskData,
             shape,
@@ -359,7 +369,8 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
                 message.contains('Invalid Feed Input Name')) {
               final sortedNames = requiredInputNames.toList()..sort();
               replyPort.send({
-                'error': 'ONNX input signature mismatch: $message\n'
+                'error':
+                    'ONNX input signature mismatch: $message\n'
                     'Model input names: ${sortedNames.join(', ')}\n'
                     'mobile_rag_engine sends: input_ids, attention_mask, '
                     'optional token_type_ids.',
@@ -378,7 +389,8 @@ Future<void> _workerEntryPoint(SendPort mainSendPort) async {
           // and transfer the Float32List across the isolate boundary without
           // copying via TransferableTypedData.
           try {
-            final outputTensor = outputs['sentence_embedding'] ??
+            final outputTensor =
+                outputs['sentence_embedding'] ??
                 outputs['sentence_embeddings'] ??
                 outputs.values.firstOrNull;
             if (outputTensor == null) {
