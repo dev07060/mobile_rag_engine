@@ -786,7 +786,7 @@
 ### Q3. 텍스트 경계
 
 - **담당:** 세션 "Q3 텍스트 경계", 브랜치 `fix/q3-text-boundaries`(worktree `.claude/worktrees/q3-text-boundaries-2f603e`, main `fe8ae5c`에서 땄다)
-- **상태:** PR 열림, 머지 대기. 착수는 2026-11-15 사용자 "새 세션에서 Q3 착수". 아래 "착수 때 확인한 것"으로 손대는 파일을 늘렸다(규칙 4).
+- **상태:** 완료 (#147, 2026-11-15). 착수는 2026-11-15 사용자 "새 세션에서 Q3 착수". 아래 "착수 때 확인한 것"으로 손대는 파일을 늘렸다(규칙 4).
 
 **착수 때 확인한 것 (2026-11-15, main `fe8ae5c`)**
 
@@ -857,7 +857,31 @@
 
 ### Q4. 출력 계약
 
-- **상태:** 착수 대기.
+- **담당:** 세션 "Q4 출력 계약", 브랜치 `fix/q4-output-contract`(worktree `.claude/worktrees/q4-output-contract-392631`, main `bea788a`에서 땄다)
+- **상태:** PR #148 열림(2026-11-16), 머지 대기. 착수는 2026-11-15 사용자 "새 세션에서 Q4 착수". 아래 "착수 때 확인한 것"으로 범위를 늘렸다(규칙 4).
+
+**착수 때 확인한 것 (2026-11-15, main `bea788a`)**
+
+초안은 2026-11-06에 썼고 그 뒤 W1(#137)·F2(#143)·Q2(#145·#146)·Q3(#147)가 머지됐다. 항목마다 지금 main에서 실패하는 테스트를 먼저 썼다. 모두 재현돼서 범위에서 뺀 항목은 없다.
+
+| 항목 | main에서 | 근거 (수정 전 실패) |
+|---|---|---|
+| B10 | 재현 | `source_rag_service.dart` `search`가 `sourceIds`를 받으면 `searchHybrid(vectorWeight: 1.0, bm25Weight: 0.0)`을 써서 1위 `similarity`가 0.0164(RRF 1/61), 없으면 1.0(코사인). native 테스트 1개 |
+| B11 | 재현 | Rust `search_meta_hybrid_once`(`source_rag.rs`)와 Dart `_expandWithAdjacentChunks`가 이웃 청크를 더한 뒤 (source_id, chunk_index)로 정렬한다. 청크 하나 예산에서 1위 대신 앞쪽 이웃이 들어간다. `searchHybridWithContext`(`ask`·tool이 쓰는 경로)와 `search` 둘 다. native 테스트 4개 |
+| B12 | 재현 | `ask.dart` `citedPassages`가 `［１］`, `【1】`, `[1、2]`, `[3，1]`, `[1-3]`을 못 읽고 `` `items[2]` ``·코드 블록 안의 `list[3]`을 인용으로 읽는다. 단위 테스트 5개 |
+| B13 | 재현 (측정) | `countTokens`(엔진 tokenizer)로 같은 문장을 세면 MiniLM: 태국어 31자 1토큰, 이모지 10개 1토큰, 한국어 23자 38토큰 / KoEn-E5-Tiny: 일본어 21자 4토큰 / BGE-m3: 이모지 10개 11토큰. `ask`·tool의 `tokenBudget`은 이 단위다. `PromptCompressor.compress`는 `maxTokens * 4`글자. LLM tokenizer 수치는 오프라인에 tokenizer가 없어 재지 않았다 |
+| Q3 이월: CJK 문장 끝 | 재현 | `ContextBuilder._previousTrimBoundary`가 `。！？` 뒤 공백을 요구해 공백 없는 일본어·중국어에서 문장 끝을 못 찾는다. 단위 테스트 1개 |
+| Q3 이월: `maxChars` 단위 | 재현 | `buildWithCompression`이 `maxChars`를 Dart `String.length`(UTF-16)로 넘기고 Rust `compress_text`는 코드 포인트로 센다(이모지 10개 = 20 대 10). 단위 테스트 1개 |
+| 착수 때 찾음: 짧은 텍스트 | 재현 | 같은 함수의 `.clamp(32, maxChars - 1)`이 33자 미만 텍스트가 예산을 넘으면 `ArgumentError`를 던진다(위 두 항목의 테스트 3개가 이것으로 실패했다) |
+
+**포함에 더한 것 (착수 때, 규칙 4):** Q3가 넘긴 `ContextBuilder`의 공백 없는 CJK 문장 끝과 `maxChars` 단위 불일치, 같은 함수의 짧은 텍스트 `clamp` 오류. 문장 끝 규칙은 Q3의 `compress_text`와 같다(`.`·`?`·`!`·`…`는 뒤가 공백일 때만, `。！？｡`는 항상).
+
+**착수 때 정한 방식 (2026-11-16 사용자 "추천 조합으로 진행", 이 세션에서 "B10 코사인 통일, B13 promptTokenCounter와 tokenCounter로 진행해")**
+
+| 항목 | 고른 방식 | 버린 방식 |
+|---|---|---|
+| B10 | `sourceIds`가 있어도 코사인. Rust에 출처 한정 벡터 검색 `search_chunks_in_sources`(출처의 청크를 모두 채점하는 exact scan)를 더하고 `search`가 그것을 쓴다. 공개 API 모양은 그대로, 순서도 같다. 바뀌는 사람은 `search(sourceIds:)`의 `similarity`를 RRF 크기(약 0.016)에 맞춰 쓰던 코드뿐이다 | RRF로 통일(기본 경로의 코사인 임계값이 모두 깨진다), 필드 분리(FRB struct 생성자가 바뀌어 fake를 만드는 코드가 깨지고 임계값 함정은 남는다), 문서화만 |
+| B13 | 선택 인자 `promptTokenCounter`(`int Function(String)`)를 `MobileRag`·`CollectionRag`의 `ask`/`prepareAsk`와 `RagSearchTool.fromMobileRag`/`fromCollection`에 더한다. 주면 엔진은 예산 없이(`1 << 30`) 조립하고, 구절 텍스트를 그 함수로 세어 관련도 순으로 들어가는 만큼 통째로 남긴다. `PromptCompressor.compress`에는 선택 `tokenCounter`(기본 char/4 유지). 안 주면 지금과 같다(테스트로 고정). 안 주는 호출자에게는 단위 차이가 남는다는 점을 `ask.md`·`llm_tools.md`에 적었다 | 기본 계산 교체(모든 호출자의 구절 수가 바뀌고 여러 LLM 근거가 없다, 규칙 10), 문서화만 |
 
 **목표:** 사용자와 LLM이 읽는 점수·순서·인용·예산이 문서와 같게 동작하게 한다.
 
@@ -867,11 +891,28 @@
 - B12: 인용 파싱이 `［１］`, `【1】`, `[1、2]`, `[1-3]`을 놓치고 코드 안의 `items[2]`를 잡는 문제. `「1」`·`『1』`은 2026-11-09 게임 연동에서 Foundation Models가 실제로 쓴 형식이라 W1에서 먼저 읽게 했다(짝이 맞는 괄호 안 숫자, 준 번호만).
 - B13: ask·tool 토큰 예산이 임베딩 tokenizer 단위라 UNK가 많은 언어에서 LLM 토큰과 크게 다른 문제. `PromptCompressor`의 char/4 근사. 해결 방식(예: `targetPromptTokenCounter` 연결)은 착수 때 정한다.
 
-**제외:** LLM SDK 의존성.
+**제외:** LLM SDK 의존성. I1이 넘긴 "답이 `[3]`처럼 인용 번호만 오는 경우 감지"는 Q4에서 다루지 않았다. `searchHybrid*`의 `similarity`(RRF, `llm_tools.md`에 문서화됨)는 B10 범위 밖이다.
 
 **완료 기준:** 실제 엔진 출력으로 점수 단위·순서·인용 확인(H1-b와 같은 방식). 공통 완료 기준. PR 하나, CI 통과.
 
-**손대는 파일:** `lib/services/{source_rag_service,ask,context_builder,prompt_compressor,llm_tool}.dart`, `rust_builder/rust/src/api/source_rag.rs`(assembly 순서), `docs/guides/{ask,llm_tools}.md`, `test/**`, `CHANGELOG.md`, `docs/milestones.md`
+**손대는 파일:** `lib/services/{source_rag_service,ask,context_builder,prompt_compressor,llm_tool}.dart`, `rust_builder/rust/src/api/source_rag.rs`(assembly 순서), `docs/guides/{ask,llm_tools}.md`, `test/**`, `CHANGELOG.md`, `docs/milestones.md`. 착수 때 더한 것: `tool/upgrade_e2e/{phase_b_test.dart,run.sh}`(contract 시나리오에 실제 엔진 확인 b5~b8 추가), `rust_builder/CHANGELOG.md`, B10의 새 Rust 함수로 다시 만든 FRB 생성 파일 `lib/src/rust/{api/source_rag.dart,frb_generated.dart}`·`rust_builder/rust/src/frb_generated.rs`, B13의 `lib/mobile_rag.dart`(`ask`/`prepareAsk` 인자)·`lib/src/internal/prompt_budget.dart`(새 파일), `lib/services/rag_engine.dart`(`search` doc 주석)
+
+**결과 (커밋 `1b70427`, macOS 27.2.1 arm64, Flutter 3.35.5, rustc 1.91.1, 2026-11-16)**
+- B10: `search(sourceIds:)`의 1위 `similarity` 0.0164 → 1.0(코사인), 같은 청크는 범위 유무와 관계없이 같은 값, 순서 같음. B11: 청크 하나 예산에 1위가 들어간다. B12: 단위 테스트 5개 통과. B13: 인자 없이는 결과가 그대로이고, 주면 그 단위로 구절을 고른다. Q3 이월분 통과.
+- `flutter analyze lib/ test/ tool/` 문제 없음, `flutter test test/unit` 172개, `flutter test test/native` 44개(release dylib, `vector_faer,vector_quant_i8`), `cargo test --lib -- --test-threads=1` 기본 287개·`vector_faer,vector_quant_i8` 288개 통과(각 16 ignored).
+- 실제 엔진(MiniLM Model Pack, fingerprint `model.onnx|384|f32+vabq:none`, 0.23.0 기준 job은 `…|sha256:e9246dc32f332cb687c5d1ea0c0c51d3`, head `9cae2df`, CI macOS): Upgrade E2E `contract` 시나리오 b5~b8이 두 기준 버전(0.22.3·0.23.0) job에서 모두 PASS. b5 범위 1위 `similarity` 0.3238(범위 없이 같은 청크 0.3238), b6 청크 4개 문서에서 tight 예산 352에 1위만 포함, b7 인용 `[1, 2]`, b8 counter(공백 뺀 코드 포인트) 281·267·294, 예산 547에 1위만.
+- B10 지연 시간(PR 검토 요청, 2026-11-16): main `bea788a`와 PR head `9cae2df`에서 같은 벤치(`RagEngine.search(sourceIds:)`, 가짜 임베딩 dim 384, 청크 약 600자, 출처 100개, topK 10, 워밍업 5회 뒤 30회, release dylib `vector_faer,vector_quant_i8`, macOS 27.2.1 arm64, Flutter 3.35.5). 쿼리 임베딩은 0.05~0.07 ms라 검색 구간이 거의 전부다. 중앙값(최소~최대), 각 커밋 두 번 돌린 것 중 두 번째:
+
+  | 청크 | 범위 | main | PR |
+  |---|---|---|---|
+  | 2,300 | 출처 2개(46청크) | 3.14 ms (2.99~3.77) | 2.16 ms (2.09~2.80) |
+  | 2,300 | 출처 90개(2,070청크) | 4.56 ms (4.41~5.07) | 4.11 ms (4.02~4.29) |
+  | 20,000 | 출처 2개(400청크) | 4.88 ms (4.69~5.65) | 2.40 ms (2.32~2.79) |
+  | 20,000 | 출처 90개(18,000청크) | 9.67 ms (8.70~10.34) | 20.48 ms (20.00~20.84) |
+  | 20,000 | 범위 없음(참고) | 2.62 ms | 2.72 ms |
+
+  네 경우 모두 돌려준 청크 id와 순서가 main과 같았다. 20,000청크·90%에서 2.1배 느린 원인은 새 함수가 범위 안 모든 청크의 본문·metadata를 읽기 때문으로 본다(코드로 본 추정, 따로 재지 않았다. 이전 경로는 벡터만 읽고 본문은 상위 결과만 읽었다). 2026-11-16 사용자 "3번 문서화만으로 진행": 구현은 그대로 두고 `RagEngine.search`·`MobileRag.search` doc 주석, CHANGELOG, PR 본문에 측정값과 조건을 적었다. 두 단계 스캔은 아래 후보로 남겼다. 벤치 코드는 저장소에 넣지 않았다. 기기에서는 재지 않았다.
+- **확인하지 않은 것:** LLM tokenizer로 센 수치(오프라인에 없음, 하네스는 코드 포인트 counter로 대신했다), 실기기·Windows 실행, B11 순서 변경의 검색 품질 영향(찾는 청크는 같고 조립 순서만 바뀐다).
 
 ### Q5. 배포 검증 보강
 
@@ -963,6 +1004,8 @@
   - 2026-11-15 사용자 결정: 바꾸지 않고 그대로 둔다.
 - **[낮음] 같은 무게로 두 번 검색해도 상위 5개가 다를 수 있다 (2026-11-14 E1에서 확인, 고치지 않음).** E1 KoEn `--init-weights 0.5,0.5`에서 무게 없는 `prepareAsk`와 0.5/0.5 명시가 검수 전 실행에서 90개 중 89개만 같았다(검수 뒤 실행은 90/90). 앱 확인에서도 무게마다 첫 호출이 2~3개 질문에서 달랐다. F2 보고서에 적힌 대로 엔진은 BM25 동점 순서를 `HashMap`에서 정하므로 호출마다 바뀔 수 있다(어느 질문인지는 하네스가 남기지 않아 확인하지 않았다). 앱 integration test는 다를 때 다시 불러 같은 결과가 한 번이라도 나오면 같다고 본다. 동점을 청크 id 순으로 정하면 사라질 것으로 보지만 확인하지 않았다(Rust 변경).
 - **[높음] F2 결합 방식: 기본 하이브리드가 다국어 모델의 벡터 결과를 버린다 (2026-11-14 F1에서 MIRACL 한국어로 확인).** → F2 범위 초안으로 옮겼다(2026-11-14 사용자 "그럼 고쳐야지").
+
+- **[낮음] `search(sourceIds:)`가 범위 안 모든 청크의 본문을 읽는다 (2026-11-16 Q4 B10 측정, 고치지 않음).** 20,000청크 중 18,000청크를 범위로 주면 9.67 → 20.48 ms(Mac, 가짜 임베딩). id·벡터만 읽어 채점하고 상위 `topK`만 본문을 읽는 두 단계 스캔이 후보다(원인은 추정, 바꾸면 같은 벤치로 다시 잰다).
 
 착수하려면 위 형식으로 옮겨 적고 합의를 받는다.
 

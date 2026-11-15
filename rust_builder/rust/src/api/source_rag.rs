@@ -2149,6 +2149,38 @@ fn fetch_adjacent_hit_meta(
     Ok(hits)
 }
 
+/// The search hits in rank order, then the chunks next to them that were not
+/// hits themselves: the neighbors of the best hit first, each hit's neighbors
+/// in chunk order. Context assembly fills the budget in this order, so with
+/// `RelevanceFirst` a neighbor never takes the place of a hit.
+/// `Chronological` still sorts by source and chunk index.
+fn expand_with_adjacent_hits<F>(
+    base_hits: &[SearchHitMeta],
+    adjacent_chunks: i32,
+    mut fetch: F,
+) -> Result<Vec<SearchHitMeta>, RagError>
+where
+    F: FnMut(&SearchHitMeta, i32, i32) -> Result<Vec<SearchHitMeta>, RagError>,
+{
+    let mut seen = base_hits
+        .iter()
+        .map(|hit| (hit.source_id, hit.chunk_index))
+        .collect::<HashSet<_>>();
+    let mut ordered = base_hits.to_vec();
+    for hit in base_hits {
+        let min_index = (hit.chunk_index - adjacent_chunks).max(0);
+        let max_index = hit.chunk_index + adjacent_chunks;
+        let mut neighbors = fetch(hit, min_index, max_index)?;
+        neighbors.sort_by_key(|adjacent| adjacent.chunk_index);
+        for adjacent in neighbors {
+            if seen.insert((adjacent.source_id, adjacent.chunk_index)) {
+                ordered.push(adjacent);
+            }
+        }
+    }
+    Ok(ordered)
+}
+
 fn search_meta_hybrid_once(
     collection_id: &str,
     query_text: &str,
@@ -2211,30 +2243,9 @@ fn search_meta_hybrid_once(
     }
 
     let ordered_hits = if options.adjacent_chunks > 0 && !base_hits.is_empty() {
-        let mut expanded = HashMap::<(i64, i32), SearchHitMeta>::new();
-        for hit in &base_hits {
-            expanded.insert((hit.source_id, hit.chunk_index), hit.clone());
-        }
-
-        for hit in &base_hits {
-            let min_index = (hit.chunk_index - options.adjacent_chunks).max(0);
-            let max_index = hit.chunk_index + options.adjacent_chunks;
-            for adjacent in
-                fetch_adjacent_hit_meta(&conn, collection_id, hit.source_id, min_index, max_index)?
-            {
-                expanded
-                    .entry((adjacent.source_id, adjacent.chunk_index))
-                    .or_insert(adjacent);
-            }
-        }
-
-        let mut hits = expanded.into_values().collect::<Vec<_>>();
-        hits.sort_by(|a, b| {
-            a.source_id
-                .cmp(&b.source_id)
-                .then_with(|| a.chunk_index.cmp(&b.chunk_index))
-        });
-        hits
+        expand_with_adjacent_hits(&base_hits, options.adjacent_chunks, |hit, min, max| {
+            fetch_adjacent_hit_meta(&conn, collection_id, hit.source_id, min, max)
+        })?
     } else {
         base_hits.clone()
     };
@@ -2941,33 +2952,74 @@ pub fn search_chunks_in_collection(
     Ok(results)
 }
 
+/// Search chunks by embedding similarity in the given sources of a collection.
+///
+/// `similarity` is the cosine similarity, the same unit as
+/// [`search_chunks_in_collection`]. Every chunk of the sources is scored
+/// (exact scan), so a small source set never loses recall to the global
+/// index. An empty `source_ids` searches the whole collection.
+pub fn search_chunks_in_sources(
+    collection_id: String,
+    query_embedding: Vec<f32>,
+    top_k: u32,
+    source_ids: Vec<i64>,
+) -> Result<Vec<ChunkSearchResult>, RagError> {
+    let collection_id = normalize_collection_id(collection_id);
+    if source_ids.is_empty() {
+        return search_chunks_in_collection(collection_id, query_embedding, top_k);
+    }
+    search_chunks_linear_in_collection_scoped(
+        &collection_id,
+        query_embedding,
+        top_k,
+        Some(&source_ids),
+    )
+}
+
 fn search_chunks_linear_in_collection(
     collection_id: &str,
     query_embedding: Vec<f32>,
     top_k: u32,
 ) -> Result<Vec<ChunkSearchResult>, RagError> {
+    search_chunks_linear_in_collection_scoped(collection_id, query_embedding, top_k, None)
+}
+
+fn search_chunks_linear_in_collection_scoped(
+    collection_id: &str,
+    query_embedding: Vec<f32>,
+    top_k: u32,
+    source_ids: Option<&[i64]>,
+) -> Result<Vec<ChunkSearchResult>, RagError> {
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    // Ids are integers, so they are safe to inline.
+    let source_filter = match source_ids {
+        Some(ids) if !ids.is_empty() => format!(
+            " AND c.source_id IN ({})",
+            ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",")
+        ),
+        _ => String::new(),
+    };
 
     let query_norm = l2_norm_f32(&query_embedding);
     #[cfg(feature = "vector_quant_i8")]
     let prepared_query = PreparedPersistedQuery::new(&query_embedding);
 
-    let mut stmt = match conn.prepare(
+    let mut stmt = match conn.prepare(&format!(
         "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, c.embedding_i8, s.metadata, c.mmap_id
          FROM chunks c
          JOIN sources s ON c.source_id = s.id
          WHERE c.collection_id = ?1
-           AND COALESCE(s.status, 'completed') = 'completed'",
-    ) {
+           AND COALESCE(s.status, 'completed') = 'completed'{source_filter}",
+    )) {
         Ok(stmt) => stmt,
         Err(_) => conn
-            .prepare(
+            .prepare(&format!(
                 "SELECT c.id, c.source_id, c.chunk_index, c.content, COALESCE(c.chunk_type, 'general'), c.embedding, NULL AS embedding_i8, s.metadata, c.mmap_id
                  FROM chunks c
                  JOIN sources s ON c.source_id = s.id
                  WHERE c.collection_id = ?1
-                   AND COALESCE(s.status, 'completed') = 'completed'",
-            )
+                   AND COALESCE(s.status, 'completed') = 'completed'{source_filter}",
+            ))
             .map_err(|e| RagError::DatabaseError(e.to_string()))?,
     };
 
@@ -3928,6 +3980,66 @@ mod tests {
         update_chunk_embedding(ids[0], axis(0)).unwrap();
         update_chunk_embedding(ids[1], axis(1)).unwrap();
         assert_eq!(top_hits(), (ids[1], ids[1]));
+
+        teardown_test_db(db_path);
+    }
+
+    #[test]
+    fn source_scoped_search_returns_cosine_like_the_collection_search() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_source_scoped_search_cosine.db");
+        let chunk = |index: i32, content: &str, embedding: Vec<f32>| ChunkData {
+            content: content.to_string(),
+            chunk_index: index,
+            start_pos: index * 20,
+            end_pos: index * 20 + 15,
+            chunk_type: "text".to_string(),
+            embedding,
+        };
+        let manual = add_source("설치 안내".to_string(), None, None).unwrap();
+        update_source_status(manual.source_id, "completed".to_string()).unwrap();
+        add_chunks(
+            manual.source_id,
+            vec![chunk(0, "東京は大きい。🚀 3.14", vec![1.0, 0.0, 0.0, 0.0])],
+        )
+        .unwrap();
+        let refund = add_source("환불".to_string(), None, None).unwrap();
+        update_source_status(refund.source_id, "completed".to_string()).unwrap();
+        add_chunks(
+            refund.source_id,
+            vec![
+                chunk(0, "환불은 14일 이내 ２.５", vec![0.6, 0.8, 0.0, 0.0]),
+                chunk(1, "退款需在14天内", vec![0.0, 0.0, 1.0, 0.0]),
+            ],
+        )
+        .unwrap();
+        let query = vec![1.0, 0.0, 0.0, 0.0];
+
+        let all = search_chunks_in_collection(DEFAULT_COLLECTION_ID.to_string(), query.clone(), 3)
+            .unwrap();
+        let scoped = search_chunks_in_sources(
+            DEFAULT_COLLECTION_ID.to_string(),
+            query.clone(),
+            3,
+            vec![refund.source_id],
+        )
+        .unwrap();
+
+        assert!((all[0].similarity - 1.0).abs() < 1e-2, "{}", all[0].similarity);
+        assert_eq!(scoped.len(), 2);
+        assert!(scoped.iter().all(|c| c.source_id == refund.source_id));
+        assert_eq!(scoped[0].content, "환불은 14일 이내 ２.５");
+        assert!((scoped[0].similarity - 0.6).abs() < 1e-2, "{}", scoped[0].similarity);
+        for hit in &scoped {
+            if let Some(same) = all.iter().find(|c| c.chunk_id == hit.chunk_id) {
+                assert!((hit.similarity - same.similarity).abs() < 1e-2);
+            }
+        }
+        // No sources means the whole collection.
+        let unscoped =
+            search_chunks_in_sources(DEFAULT_COLLECTION_ID.to_string(), query, 3, vec![]).unwrap();
+        assert_eq!(unscoped.len(), 3);
 
         teardown_test_db(db_path);
     }
@@ -5824,5 +5936,36 @@ mod tests {
 
         let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
         teardown_test_db(db_path);
+    }
+
+    // Q4 B11: adjacent chunks must not move a hit behind a chunk that was only
+    // added as context.
+    #[test]
+    fn test_adjacent_hits_follow_hits_in_rank_order() {
+        let hit = |source_id, chunk_index, similarity| {
+            build_search_hit_meta(
+                source_id * 100 + chunk_index as i64,
+                source_id,
+                chunk_index,
+                similarity,
+                "general",
+            )
+        };
+        // Best hit in source 2, second in source 1 (lower id).
+        let base = vec![hit(2, 1, 0.9), hit(1, 3, 0.5)];
+        let ordered = expand_with_adjacent_hits(&base, 1, |h, min, max| {
+            Ok((min..=max)
+                .rev()
+                .map(|index| hit(h.source_id, index, 0.0))
+                .collect())
+        })
+        .unwrap();
+        let keys = ordered
+            .iter()
+            .map(|h| (h.source_id, h.chunk_index))
+            .collect::<Vec<_>>();
+        assert_eq!(keys, vec![(2, 1), (1, 3), (2, 0), (2, 2), (1, 2), (1, 4)]);
+        assert_eq!(ordered[0].similarity, 0.9);
+        assert!(ordered[2..].iter().all(|h| h.similarity == 0.0));
     }
 }

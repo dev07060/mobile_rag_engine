@@ -336,4 +336,84 @@ void main() {
       },
     );
   });
+
+  // Q4 (carried over from Q3): trimming to a budget finds sentence ends in
+  // text without spaces, and the compression length is counted in Unicode
+  // code points, as Rust counts it.
+  group('ContextBuilder text boundaries', () {
+    // One token per code point that is not whitespace.
+    int perChar(String text) =>
+        text.runes.where((r) => String.fromCharCode(r).trim().isNotEmpty).length;
+
+    setUp(() {
+      ContextBuilder.debugTokenCounterOverride = perChar;
+    });
+
+    tearDown(() {
+      ContextBuilder.debugTokenCounterOverride = null;
+      ContextBuilder.debugCompressionRunnerOverride = null;
+    });
+
+    Future<String> trimmed(String text, int budget) async {
+      ContextBuilder.debugCompressionRunnerOverride =
+          (renderedText, maxChars, level, language) async => text;
+      final context = await ContextBuilder.buildWithCompression(
+        searchResults: [
+          _chunk(
+            chunkId: 1,
+            sourceId: 1,
+            chunkIndex: 0,
+            content: text,
+            similarity: 0.9,
+          ),
+        ],
+        tokenBudget: budget,
+        singleSourceMode: true,
+      );
+      return context.text;
+    }
+
+    test('cuts after 。！？ without a following space', () async {
+      const ja = '東京は大きい。北京是中国的首都！환불은가능합니다？끝';
+      expect(await trimmed(ja, 20), '東京は大きい。北京是中国的首都！');
+      expect(await trimmed(ja, 8), '東京は大きい。');
+    });
+
+    test('does not cut inside 3.14 or v1.2.3', () async {
+      const text = '버전 v1.2.3 가격 3.14달러입니다. 다음 문장';
+      expect(await trimmed(text, 21), '버전 v1.2.3 가격 3.14달러입니다.');
+    });
+
+    test('keeps emoji and NFD Hangul whole', () async {
+      // NFD "환불" then emoji, full-width and a Chinese sentence end.
+      const text = '환불 🚀🚀 ＲＡＧ。北京很大。上海';
+      final out = await trimmed(text, 17);
+      expect(out, '환불 🚀🚀 ＲＡＧ。北京很大。');
+    });
+
+    test('passes maxChars in code points', () async {
+      final seen = <int>[];
+      ContextBuilder.debugCompressionRunnerOverride =
+          (renderedText, maxChars, level, language) async {
+        seen.add(maxChars);
+        expect(maxChars, lessThanOrEqualTo(renderedText.runes.length));
+        return renderedText.runes.take(maxChars).map(String.fromCharCode).join();
+      };
+      const emoji = '🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀 환불 東京 3.14';
+      await ContextBuilder.buildWithCompression(
+        searchResults: [
+          _chunk(
+            chunkId: 1,
+            sourceId: 1,
+            chunkIndex: 0,
+            content: emoji,
+            similarity: 0.9,
+          ),
+        ],
+        tokenBudget: 1000,
+        singleSourceMode: true,
+      );
+      expect(seen.first, emoji.runes.length);
+    });
+  });
 }

@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accept_chunk`, `activate_collection_for_hybrid_search_inner`, `active_bm25_generation`, `active_hnsw_generation`, `active_hnsw_is_current`, `allowed_chunk_ids`, `assemble_context_internal`, `build_prompt_text`, `build_search_hit_meta`, `chunk_for_reembedding`, `chunk_ids_for_source`, `count_tokens`, `decode_structured_chunk_type`, `diversify_sources`, `elapsed_nanos_u64`, `eligible_hnsw_point_count`, `ensure_collection_row`, `ensure_fresh_with_conn`, `ensure_generation_unchanged_with_conn`, `extract_significant_query_terms`, `fetch_adjacent_hit_meta`, `fetch_stored_chunk_types`, `filter_to_most_relevant_source`, `get_collection_data_generation`, `get_collection_index_generation`, `hash_content`, `hnsw_saved_path_key`, `hnsw_streaming_rebuild_enabled_for_target_os`, `hnsw_streaming_rebuild_enabled`, `hydrate_chunk_previews`, `hydrate_chunk_search_results`, `hydrate_rows_for_assembly`, `is_active_bm25_collection`, `loaded_hnsw_has_db_parity`, `loaded_hnsw_is_current`, `mark_collection_bm25_clean`, `mark_collection_data_changed`, `mark_collection_dirty`, `mark_collection_hnsw_clean`, `mark_collection_hnsw_failed`, `new`, `normalize_collection_id`, `order_chronologically`, `partition_by_cache`, `persisted_hnsw_generation`, `populate_cache`, `read_collection_data_generation`, `read_collection_generation`, `rebuild_chunk_bm25_index_for_collection_inner`, `rebuild_chunk_hnsw_index_for_collection_inner`, `record_persisted_hnsw_generation`, `recover_interrupted_ingestions`, `remove_deleted_chunks_from_active_bm25`, `render_candidate_with_headers`, `render_candidate_without_headers`, `render_chunk`, `render_context_text`, `render_source_block`, `replace_persisted_quantized_embedding`, `resolve_system_instruction`, `resolved_chunk_ids`, `run_handle_assemble_test_hook`, `run_handle_hydration_test_hook`, `run_search_meta_test_hook`, `save_hnsw_with_generation`, `search_chunks_linear_in_collection`, `search_meta_hybrid_once`, `set_active_bm25_collection`, `set_active_hnsw_collection`, `source_hash_candidates`, `truncate_utf8_bytes`, `try_add_chunk`, `utf8_string_from_blob_prefix`, `validate_requested_chunk_ids`
+// These functions are ignored because they are not marked as `pub`: `accept_chunk`, `activate_collection_for_hybrid_search_inner`, `active_bm25_generation`, `active_hnsw_generation`, `active_hnsw_is_current`, `allowed_chunk_ids`, `assemble_context_internal`, `build_prompt_text`, `build_search_hit_meta`, `chunk_for_reembedding`, `chunk_ids_for_source`, `count_tokens`, `decode_structured_chunk_type`, `diversify_sources`, `elapsed_nanos_u64`, `eligible_hnsw_point_count`, `ensure_collection_row`, `ensure_fresh_with_conn`, `ensure_generation_unchanged_with_conn`, `expand_with_adjacent_hits`, `extract_significant_query_terms`, `fetch_adjacent_hit_meta`, `fetch_stored_chunk_types`, `filter_to_most_relevant_source`, `get_collection_data_generation`, `get_collection_index_generation`, `hash_content`, `hnsw_saved_path_key`, `hnsw_streaming_rebuild_enabled_for_target_os`, `hnsw_streaming_rebuild_enabled`, `hydrate_chunk_previews`, `hydrate_chunk_search_results`, `hydrate_rows_for_assembly`, `is_active_bm25_collection`, `loaded_hnsw_has_db_parity`, `loaded_hnsw_is_current`, `mark_collection_bm25_clean`, `mark_collection_data_changed`, `mark_collection_dirty`, `mark_collection_hnsw_clean`, `mark_collection_hnsw_failed`, `new`, `normalize_collection_id`, `order_chronologically`, `partition_by_cache`, `persisted_hnsw_generation`, `populate_cache`, `read_collection_data_generation`, `read_collection_generation`, `rebuild_chunk_bm25_index_for_collection_inner`, `rebuild_chunk_hnsw_index_for_collection_inner`, `record_persisted_hnsw_generation`, `recover_interrupted_ingestions`, `remove_deleted_chunks_from_active_bm25`, `render_candidate_with_headers`, `render_candidate_without_headers`, `render_chunk`, `render_context_text`, `render_source_block`, `replace_persisted_quantized_embedding`, `resolve_system_instruction`, `resolved_chunk_ids`, `run_handle_assemble_test_hook`, `run_handle_hydration_test_hook`, `run_search_meta_test_hook`, `save_hnsw_with_generation`, `search_chunks_linear_in_collection_scoped`, `search_chunks_linear_in_collection`, `search_meta_hybrid_once`, `set_active_bm25_collection`, `set_active_hnsw_collection`, `source_hash_candidates`, `truncate_utf8_bytes`, `try_add_chunk`, `utf8_string_from_blob_prefix`, `validate_requested_chunk_ids`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ActiveIndex`, `AssemblyBuildResult`, `HydratedChunkRow`, `RenderedSelectionState`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
@@ -200,6 +200,24 @@ Future<List<ChunkSearchResult>> searchChunksInCollection({
   collectionId: collectionId,
   queryEmbedding: queryEmbedding,
   topK: topK,
+);
+
+/// Search chunks by embedding similarity in the given sources of a collection.
+///
+/// `similarity` is the cosine similarity, the same unit as
+/// [`search_chunks_in_collection`]. Every chunk of the sources is scored
+/// (exact scan), so a small source set never loses recall to the global
+/// index. An empty `source_ids` searches the whole collection.
+Future<List<ChunkSearchResult>> searchChunksInSources({
+  required String collectionId,
+  required List<double> queryEmbedding,
+  required int topK,
+  required Int64List sourceIds,
+}) => RustLib.instance.api.crateApiSourceRagSearchChunksInSources(
+  collectionId: collectionId,
+  queryEmbedding: queryEmbedding,
+  topK: topK,
+  sourceIds: sourceIds,
 );
 
 Future<List<ChunkSearchResult>> benchmarkSearchChunksLinearInCollection({

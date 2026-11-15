@@ -883,6 +883,17 @@ class RagEngine {
   /// [strategy] - Context assembly strategy (default: relevanceFirst).
   /// [adjacentChunks] - Include N chunks before/after matches (default: 0).
   /// [singleSourceMode] - Only include chunks from most relevant source.
+  /// [sourceIds] - Only search these sources.
+  ///
+  /// `ChunkSearchResult.similarity` is the cosine similarity of the chunk to
+  /// the query, with or without [sourceIds]. Chunks added by
+  /// [adjacentChunks] have similarity 0.
+  ///
+  /// With [sourceIds], every chunk of those sources is compared, so scoping
+  /// to most of a large collection is slower than searching without
+  /// [sourceIds]: 20.5 ms against 2.7 ms for 18,000 of 20,000 chunks (9.7 ms
+  /// before this was cosine), median on an M-series Mac with fake
+  /// embeddings, not measured on a device. Scoping to a few sources is fast.
   Future<RagSearchResult> search(
     String query, {
     int topK = 10,

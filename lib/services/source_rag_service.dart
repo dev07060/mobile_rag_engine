@@ -1146,6 +1146,8 @@ class SourceRagService {
   /// matched chunk (default: 0). Setting this to 1 will include the chunk
   /// before and after each matched chunk, helping with long articles.
   /// [singleSourceMode] - If true, only include chunks from the most relevant source.
+  /// [sourceIds] - Only search these sources. `similarity` of the results is
+  /// the cosine similarity with or without [sourceIds].
   Future<RagSearchResult> search(
     String query, {
     int topK = 10,
@@ -1162,18 +1164,12 @@ class SourceRagService {
     late List<ChunkSearchResult> chunks;
     try {
       if (sourceIds != null && sourceIds.isNotEmpty) {
-        // Use hybrid search with filter for vector search capability is limited in filters
-        // For strictly vector search with filters, we'd need HNSW filtering which is more complex.
-        // For now, we'll use hybrid search with 1.0 vector weight if sourceIds are provided.
-        final hybridResults = await searchHybrid(
-          query,
+        // Exact scan of the given sources; `similarity` is cosine, as below.
+        chunks = await rust_rag.searchChunksInSources(
+          collectionId: collectionId,
+          queryEmbedding: queryEmbedding,
           topK: topK,
-          vectorWeight: 1.0,
-          bm25Weight: 0.0,
-          sourceIds: sourceIds,
-        );
-        chunks = await _hydrateCanonicalChunkResults(
-          hybridResults.map(_chunkSearchResultFromHybrid).toList(),
+          sourceIds: _toInt64List(sourceIds),
         );
       } else {
         chunks = await rust_rag.searchChunksInCollection(
@@ -1327,19 +1323,21 @@ class SourceRagService {
   }
 
   /// Expand search results with adjacent chunks from the same source.
+  ///
+  /// Returns the hits in rank order, then the chunks next to them that were
+  /// not hits: the neighbors of the best hit first, each hit's neighbors in
+  /// chunk order (the same order as the search handle lane in Rust). Context
+  /// assembly fills the budget in this order, so with
+  /// [ContextStrategy.relevanceFirst] a neighbor never takes the place of a
+  /// hit. [ContextStrategy.chronological] still sorts by source and index.
   Future<List<ChunkSearchResult>> _expandWithAdjacentChunks(
     List<ChunkSearchResult> chunks,
     int adjacentCount,
   ) async {
-    final expandedMap = <String, ChunkSearchResult>{};
+    String key(ChunkSearchResult c) => '${c.sourceId}:${c.chunkIndex}';
+    final seen = {for (final chunk in chunks) key(chunk)};
+    final result = List<ChunkSearchResult>.of(chunks);
 
-    // Add original chunks first (keyed by sourceId:chunkIndex)
-    for (final chunk in chunks) {
-      final key = '${chunk.sourceId}:${chunk.chunkIndex}';
-      expandedMap[key] = chunk;
-    }
-
-    // Fetch adjacent chunks for each matched chunk
     for (final chunk in chunks) {
       final minIndex = (chunk.chunkIndex - adjacentCount).clamp(0, 999999);
       final maxIndex = chunk.chunkIndex + adjacentCount;
@@ -1347,7 +1345,7 @@ class SourceRagService {
       List<ChunkSearchResult> adjacent = [];
       try {
         adjacent = await getAdjacentChunks(
-          sourceId: chunk.sourceId,
+          sourceId: chunk.sourceId.toInt(),
           minIndex: minIndex,
           maxIndex: maxIndex,
         );
@@ -1359,21 +1357,11 @@ class SourceRagService {
         continue;
       }
 
+      adjacent.sort((a, b) => a.chunkIndex.compareTo(b.chunkIndex));
       for (final adj in adjacent) {
-        final key = '${adj.sourceId}:${adj.chunkIndex}';
-        if (!expandedMap.containsKey(key)) {
-          expandedMap[key] = adj;
-        }
+        if (seen.add(key(adj))) result.add(adj);
       }
     }
-
-    // Sort by sourceId then chunkIndex for coherent reading order
-    final result = expandedMap.values.toList();
-    result.sort((a, b) {
-      final sourceCompare = a.sourceId.compareTo(b.sourceId);
-      if (sourceCompare != 0) return sourceCompare;
-      return a.chunkIndex.compareTo(b.chunkIndex);
-    });
 
     return result;
   }

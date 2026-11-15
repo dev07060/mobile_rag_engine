@@ -49,8 +49,8 @@ wrapped in `<document>` blocks) are not included, to keep tool results small.
 
 Hybrid search ranks by reciprocal rank fusion, so its raw similarity is tiny
 (about 0.016 at best) and says nothing on its own. `score` is therefore
-relative. With vector-only search, the absolute cosine similarity is still on
-`ChunkSearchResult.similarity`.
+relative. With vector-only search (`search`, with or without `sourceIds`), the
+absolute cosine similarity is still on `ChunkSearchResult.similarity`.
 
 A result from `SearchHydrationMode.contextOnly` has no passage list. It becomes
 one passage with only `id` and `text` (the assembled context).
@@ -86,7 +86,11 @@ When the model calls the tool, pass its arguments to `tool.callJson(String)`
 the output back as the tool result.
 
 - **Search:** hybrid (vector + keyword) search, with passages kept within
-  `tokenBudget` engine tokens (default 1500).
+  `tokenBudget` engine tokens (default 1500). Engine tokens can be several
+  times more or fewer than your LLM's tokens, and without
+  `promptTokenCounter` that difference remains; pass it to count the budget
+  with your LLM's tokenizer instead (see
+  [Token budget](ask.md#token-budget)).
 - **Citation ids:** keep counting across calls on one tool. If the first
   search returns passages 1–3, the next starts at 4, so ids never collide
   within a conversation. Create a new tool for each conversation.
@@ -101,8 +105,8 @@ the output back as the tool result.
   `{"error": "..."}` instead of throwing, so the model can fix its call. Engine
   errors still throw.
 
-The name, description, `defaultTopK`, `maxTopK` and `tokenBudget` can be set on
-the factory. The main `RagSearchTool(search: ...)` constructor takes any search
+The name, description, `defaultTopK`, `maxTopK`, `tokenBudget` and
+`promptTokenCounter` can be set on the factory. The main `RagSearchTool(search: ...)` constructor takes any search
 function, for example with your own filters.
 
 ## Provider formats
