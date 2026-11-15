@@ -851,6 +851,7 @@
   - **MiniLM e1q-078은 수정 뒤 채점에서 빠졌다:** B1 수정으로 `gnome_ko_disk_check`의 마지막 절이 두 청크로 나뉘었고(5 → 6청크, 전체 2,330 → 2,331), 정답 문장이 그 경계에 걸렸다. 그래서 MiniLM 한국어는 전후 모두 44개로 셌다. 수정 전 그 청크의 실제 임베딩 입력은 MiniLM 토크나이저로 543토큰(31토큰 잘림), 수정 뒤 511 + 92토큰이다. E1 색인 전체에서 512를 넘는 markdown 청크는 MiniLM 6개(잘린 토큰 합 128) → 0개, KoEn 0개 → 0개다.
   - E1 보고서(`docs/perf/e1-app-docs/README.md`)의 수치는 `0b27510` 기준으로 적힌 값이라 고치지 않았다.
 - **측정 조건 (규칙 9):** MiniLM `model.onnx|384|f32+vabq:none|sha256:e9246dc32f332cb687c5d1ea0c0c51d3`, KoEn-E5-Tiny `model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413`. profile 빌드, Rust 기능 `vector_faer,vector_quant_i8`, 실행마다 새 DB. Apple M3 Pro, macOS 27.2.1, Xcode 27.1 (27A9275), Flutter 3.35.5, Dart 3.9.2, rustc 1.91.1, Xcode 27 우회는 스크립트가 복사본에만 넣었다. 문서 56개, 질문 120개(답 있음 90), 청크 MiniLM 2,330 → 2,331, KoEn 2,319 → 2,319. 2026-11-15(KST). 네 실행을 차례로 돌렸고, 그동안 같은 Mac에서 `cargo test`가 함께 돌았다(검색 시간은 쓰지 않는다). 실행 기록: 수정 전 MiniLM 239초 05:25 UTC, KoEn 59초 05:26, 수정 뒤 MiniLM 235초 05:30, KoEn 57초 05:31. 실행 때 바뀐 추적 파일 없음.
+- **BM25 빌드 시간 (`bm25_build_benchmark`, release, 합성 문서 20,000개, 각 3회, 같은 Mac):** 한국어 330~332ms → 448~451ms(+36%), 영어 537~585ms → 605~875ms(흔들림이 크다). NFKC 빠른 검사와 낱말마다의 섞인 글자 검사 비용이다. 최적화하지 않았다.
 - **Upgrade E2E:** t1 시나리오를 더했다. 결과는 PR CI의 두 기준 버전 job에 있다.
 - **확인하지 않은 것:** 실기기(iPhone·Android)와 Windows 실행, BGE-m3 E1 전후, 80질의·F1 묶음 전후, 큰 문서에서 NFKC가 BM25 빌드 시간에 주는 영향.
 
