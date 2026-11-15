@@ -123,7 +123,10 @@ void main() {
         if (same.isEmpty) continue;
         expect(chunk.similarity, closeTo(same.single.similarity, 1e-3));
       }
-      expect(scoped.chunks.every((c) => c.sourceId.toInt() == refundId), isTrue);
+      expect(
+        scoped.chunks.every((c) => c.sourceId.toInt() == refundId),
+        isTrue,
+      );
     });
   });
 
@@ -190,10 +193,7 @@ void main() {
       );
 
       final included = result.context.includedChunks;
-      expect(
-        included.take(2).map((c) => c.chunkId),
-        hits.map((h) => h.docId),
-      );
+      expect(included.take(2).map((c) => c.chunkId), hits.map((h) => h.docId));
       expect(included.skip(2).every((c) => c.similarity == 0.0), isTrue);
     });
 

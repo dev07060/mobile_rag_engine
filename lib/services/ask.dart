@@ -154,7 +154,8 @@ const _ids = '$_range(?:\\s*[,，、]\\s*$_range)*';
 final _citation = RegExp(
   _brackets.entries
       .map(
-        (e) => '${RegExp.escape(e.key)}\\s*($_ids)\\s*${RegExp.escape(e.value)}',
+        (e) =>
+            '${RegExp.escape(e.key)}\\s*($_ids)\\s*${RegExp.escape(e.value)}',
       )
       .join('|'),
 );
@@ -183,14 +184,13 @@ List<RagPassage> citedPassages(String text, List<RagPassage> passages) {
 
   final prose = text.replaceAllMapped(_code, (m) => ' ' * m[0]!.length);
   for (final match in _citation.allMatches(prose)) {
-    final ids = match.groups([
-      for (var i = 1; i <= match.groupCount; i++) i,
-    ]).firstWhere((g) => g != null)!;
+    final ids = match
+        .groups([for (var i = 1; i <= match.groupCount; i++) i])
+        .firstWhere((g) => g != null)!;
     for (final part in ids.split(RegExp('[,，、]'))) {
-      final bounds = _asciiDigits(part)
-          .split(RegExp('[-–~～〜－]'))
-          .map((b) => int.tryParse(b.trim()))
-          .toList();
+      final bounds = _asciiDigits(
+        part,
+      ).split(RegExp('[-–~～〜－]')).map((b) => int.tryParse(b.trim())).toList();
       if (bounds.any((b) => b == null)) continue;
       if (bounds.length == 1) {
         cite('${bounds.single}');

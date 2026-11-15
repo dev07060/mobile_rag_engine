@@ -343,7 +343,7 @@ void main() {
   group('ContextBuilder text boundaries', () {
     // One token per code point that is not whitespace.
     int perChar(String text) =>
-        text.runes.where((r) => !String.fromCharCode(r).trim().isEmpty).length;
+        text.runes.where((r) => String.fromCharCode(r).trim().isNotEmpty).length;
 
     setUp(() {
       ContextBuilder.debugTokenCounterOverride = perChar;

@@ -55,9 +55,19 @@ Each `RagPassage` has `id`, `text`, `sourceId`, `sourceName`, `chunkId` and
 
 ## Citations
 
-`citations` reads `[1]`, `[1, 2]`, `[1][2]` and the CJK corner brackets `「1」`, `『1』` from the answer. Ids that were
-not in the prompt, such as a made-up `[9]`, are left out of `citations`, but
-stay in `text`.
+`citations` reads these forms from the answer:
+
+- `[1]`, `[1, 2]`, `[1][2]`
+- full-width `［１］`, lenticular `【1】` and the CJK corner brackets `「1」`,
+  `『1』`, which models answering in Korean, Japanese or Chinese often write
+- ids separated by `、` or `，` (`[1、2]`), and ranges (`[1-3]`, `[1–3]`,
+  `[1~3]`), which cite every given id in the range
+
+Only digits inside a matching pair of brackets count, so quoted words such as
+`「결전」` are not citations, and a reversed range (`[3-1]`) is ignored.
+Brackets inside inline code (`` `items[2]` ``) or a fenced code block are not
+citations. Ids that were not in the prompt, such as a made-up `[9]`, are left
+out of `citations`, but stay in `text`.
 
 ## Short documents next to a large one
 
