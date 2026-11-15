@@ -114,6 +114,35 @@ fn hash_content(content: &str) -> String {
     format!("{:x}", hasher.finalize())
 }
 
+/// Dedup hashes for a source, the one to store first.
+///
+/// The stored hash is of the NFC text, so the same document in NFC and NFD
+/// (macOS file names, some PDFs) is one source. Rows written before this hash
+/// of the raw text, so lookups also try the raw text and its NFD form: a row
+/// from an NFC or an NFD input is still found either way. Compatibility forms
+/// (full-width, ligatures) are not folded here; they stay different sources.
+fn source_hash_candidates(collection_id: &str, content: &str) -> Vec<String> {
+    use unicode_normalization::{is_nfc_quick, is_nfd_quick, IsNormalized, UnicodeNormalization};
+
+    let hash = |text: &str| hash_content(&format!("{}:{}", collection_id, text));
+    let raw = hash(content);
+    let mut candidates = Vec::with_capacity(3);
+    if is_nfc_quick(content.chars()) == IsNormalized::Yes {
+        candidates.push(raw);
+    } else {
+        candidates.push(hash(&content.nfc().collect::<String>()));
+        candidates.push(raw);
+    }
+    if is_nfd_quick(content.chars()) != IsNormalized::Yes {
+        let nfd = hash(&content.nfd().collect::<String>());
+        if !candidates.contains(&nfd) {
+            candidates.push(nfd);
+        }
+    }
+    candidates.dedup();
+    candidates
+}
+
 fn normalize_collection_id(collection_id: String) -> String {
     let trimmed = collection_id.trim();
     if trimmed.is_empty() {
@@ -935,14 +964,21 @@ pub fn add_source_in_collection(
     );
 
     // Preserve global UNIQUE(content_hash) compatibility while scoping dedupe by collection.
-    let scoped_hash = hash_content(&format!("{}:{}", collection_id, content));
+    let hashes = source_hash_candidates(&collection_id, &content);
+    let scoped_hash = hashes[0].clone();
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     ensure_collection_row(&conn, &collection_id)?;
 
     let existing: Option<i64> = conn
         .query_row(
-            "SELECT id FROM sources WHERE collection_id = ?1 AND content_hash = ?2",
-            params![collection_id, scoped_hash],
+            "SELECT id FROM sources WHERE collection_id = ?1 AND content_hash IN (?2, ?3, ?4)
+             ORDER BY id LIMIT 1",
+            params![
+                collection_id,
+                hashes[0],
+                hashes.get(1).unwrap_or(&hashes[0]),
+                hashes.get(2).unwrap_or(&hashes[0])
+            ],
             |row| row.get(0),
         )
         .ok();
@@ -1150,7 +1186,11 @@ pub fn list_sources_in_collection(collection_id: String) -> Result<Vec<SourceEnt
 pub struct ChunkData {
     pub content: String,
     pub chunk_index: i32,
+    /// Start of [content] in the source text. The engine's chunkers write
+    /// UTF-8 byte offsets (`SemanticChunk.start_pos`). The value is stored
+    /// as given and not read back by search.
     pub start_pos: i32,
+    /// End of [content] (exclusive), in the same unit as the start.
     pub end_pos: i32,
     pub chunk_type: String,
     pub embedding: Vec<f32>,
@@ -3208,7 +3248,23 @@ pub fn get_source_stats_in_collection(collection_id: String) -> Result<SourceSta
 #[derive(Debug, Clone)]
 pub struct ChunkForReembedding {
     pub chunk_id: i64,
+    /// The chunk text as stored and returned by search.
     pub content: String,
+    /// The text to embed: the same input ingestion embedded. For markdown
+    /// chunks it starts with a `Header Path: ...` line; otherwise it equals
+    /// [content].
+    pub embedding_text: String,
+}
+
+fn chunk_for_reembedding(row: &rusqlite::Row<'_>) -> rusqlite::Result<ChunkForReembedding> {
+    let content: String = row.get(1)?;
+    let chunk_type: Option<String> = row.get(2)?;
+    let embedding_text = render_context_text(&content, chunk_type.as_deref().unwrap_or(""));
+    Ok(ChunkForReembedding {
+        chunk_id: row.get(0)?,
+        content,
+        embedding_text,
+    })
 }
 
 /// Get all chunk IDs and contents for re-embedding.
@@ -3223,15 +3279,12 @@ pub fn get_all_chunk_ids_and_contents_in_collection(
     info!("[get_all_chunk_ids_and_contents] Starting");
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     let mut stmt = conn
-        .prepare("SELECT id, content FROM chunks WHERE collection_id = ?1 ORDER BY id")
+        .prepare(
+            "SELECT id, content, chunk_type FROM chunks WHERE collection_id = ?1 ORDER BY id",
+        )
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
     let chunks: Vec<ChunkForReembedding> = stmt
-        .query_map(params![collection_id], |row| {
-            Ok(ChunkForReembedding {
-                chunk_id: row.get(0)?,
-                content: row.get(1)?,
-            })
-        })
+        .query_map(params![collection_id], chunk_for_reembedding)
         .map_err(|e| RagError::DatabaseError(e.to_string()))?
         .filter_map(|r| r.ok())
         .collect();
@@ -3345,19 +3398,14 @@ pub fn list_chunks_needing_reembed(
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, content FROM chunks
+            "SELECT id, content, chunk_type FROM chunks
              WHERE COALESCE(embedding_fingerprint, '') <> ?1
              ORDER BY id
              LIMIT ?2",
         )
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
     let chunks: Vec<ChunkForReembedding> = stmt
-        .query_map(params![target_fingerprint, limit], |row| {
-            Ok(ChunkForReembedding {
-                chunk_id: row.get(0)?,
-                content: row.get(1)?,
-            })
-        })
+        .query_map(params![target_fingerprint, limit], chunk_for_reembedding)
         .map_err(|e| RagError::DatabaseError(e.to_string()))?
         .filter_map(|r| r.ok())
         .collect();
@@ -4576,6 +4624,79 @@ mod tests {
 
         close_db_pool();
         let _ = std::fs::remove_file(db_path);
+    }
+
+    /// "환불 정책: 東京 北京 ＲＡＧ 🚀 3.14" with the Hangul decomposed (NFD,
+    /// as macOS file names and some PDFs give it) or composed (NFC).
+    fn refund_doc(nfd: bool) -> String {
+        let hangul = if nfd {
+            "\u{1112}\u{116a}\u{11ab}\u{1107}\u{116e}\u{11af} \u{110c}\u{1165}\u{11bc}\u{110e}\u{1162}\u{11a8}"
+        } else {
+            "환불 정책"
+        };
+        format!("{hangul}: 東京 北京 ＲＡＧ 🚀 3.14")
+    }
+
+    // Q3 B8: the same document in NFC and NFD is one document.
+    #[test]
+    fn test_add_source_treats_nfc_and_nfd_forms_as_duplicates() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_add_source_nfc_nfd_duplicates.db");
+        assert_ne!(refund_doc(true), refund_doc(false));
+
+        let first = add_source_in_collection("docs".to_string(), refund_doc(false), None, None)
+            .unwrap();
+        let again = add_source_in_collection("docs".to_string(), refund_doc(true), None, None)
+            .unwrap();
+        assert!(!first.is_duplicate);
+        assert!(again.is_duplicate);
+        assert_eq!(again.source_id, first.source_id);
+
+        // Full-width and half-width text stay different documents.
+        let half_width = refund_doc(false).replace("ＲＡＧ", "RAG");
+        let other = add_source_in_collection("docs".to_string(), half_width, None, None).unwrap();
+        assert!(!other.is_duplicate);
+        teardown_test_db(db_path);
+    }
+
+    // Q3 B8: rows written before the hash was normalized hold the hash of the
+    // raw text. Adding the same document again must still find them.
+    #[test]
+    fn test_add_source_finds_rows_hashed_before_normalization() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_add_source_legacy_hash_rows.db");
+        let conn = get_connection().unwrap();
+        for (collection, raw) in [("nfd", refund_doc(true)), ("nfc", refund_doc(false))] {
+            ensure_collection_row(&conn, collection).unwrap();
+            // The 0.23.0 hash: sha256("{collection}:{raw text}").
+            conn.execute(
+                "INSERT INTO sources (content, content_hash, status, collection_id)
+                 VALUES (?1, ?2, 'completed', ?3)",
+                params![raw, hash_content(&format!("{collection}:{raw}")), collection],
+            )
+            .unwrap();
+        }
+        drop(conn);
+
+        for collection in ["nfd", "nfc"] {
+            for nfd in [true, false] {
+                let added =
+                    add_source_in_collection(collection.to_string(), refund_doc(nfd), None, None)
+                        .unwrap();
+                assert!(
+                    added.is_duplicate,
+                    "collection {collection}, nfd {nfd}: {}",
+                    added.message
+                );
+            }
+        }
+        let conn = get_connection().unwrap();
+        let rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM sources", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 2);
+        drop(conn);
+        teardown_test_db(db_path);
     }
 
     #[test]

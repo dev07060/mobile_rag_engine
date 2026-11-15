@@ -6121,11 +6121,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ChunkForReembedding dco_decode_chunk_for_reembedding(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return ChunkForReembedding(
       chunkId: dco_decode_i_64(arr[0]),
       content: dco_decode_String(arr[1]),
+      embeddingText: dco_decode_String(arr[2]),
     );
   }
 
@@ -7334,7 +7335,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_chunkId = sse_decode_i_64(deserializer);
     var var_content = sse_decode_String(deserializer);
-    return ChunkForReembedding(chunkId: var_chunkId, content: var_content);
+    var var_embeddingText = sse_decode_String(deserializer);
+    return ChunkForReembedding(
+      chunkId: var_chunkId,
+      content: var_content,
+      embeddingText: var_embeddingText,
+    );
   }
 
   @protected
@@ -8827,6 +8833,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self.chunkId, serializer);
     sse_encode_String(self.content, serializer);
+    sse_encode_String(self.embeddingText, serializer);
   }
 
   @protected

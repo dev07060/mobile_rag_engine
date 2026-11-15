@@ -52,6 +52,10 @@ unicode-segmentation = "1.12"
 # English stemming (Snowball / Porter2) for BM25 tokens
 rust-stemmers = "1.2"
 
+# NFKC for BM25 tokens and NFC for the source dedup hash. Already in the tree
+# through pdf-extract, so this adds no new crate.
+unicode-normalization = "0.1.25"
+
 # Document-to-Text (DTT) - PDF and DOCX text extraction
 pdf-extract = "0.7"
 # DOCX is read by the in-house `docx_reader` module on top of these two.

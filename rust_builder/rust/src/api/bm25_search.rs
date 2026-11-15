@@ -18,6 +18,7 @@
 
 use log::{debug, info};
 use once_cell::sync::Lazy;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 
@@ -328,17 +329,86 @@ fn stem_english(word: String) -> String {
     }
 }
 
+/// Korean particles that follow a noun. Used only to find the noun of a
+/// one-syllable noun + particle word ("앱을", "앱에서"): longer nouns already
+/// match through their bigrams.
+const KOREAN_PARTICLES: &[&str] = &[
+    "은", "는", "이", "가", "을", "를", "의", "에", "도", "와", "과", "로", "만", "께", "랑",
+    "에서", "에게", "으로", "까지", "부터", "처럼", "보다", "마다", "한테", "하고", "이나",
+    "이랑", "께서", "조차", "밖에",
+];
+
+/// Extra tokens for a word that mixes Hangul with other characters, and for
+/// a one-syllable noun with a particle attached.
+///
+/// Korean attaches particles to Latin words and numbers too ("rag는",
+/// "2024년", "iphone15에서"), so the non-Hangul part is added as its own token
+/// (stemmed like any English word). "앱을" adds "앱".
+fn push_korean_word_parts(word: &str, out: &mut Vec<String>) {
+    let mut runs: Vec<(bool, &str)> = Vec::new();
+    let mut run_start = 0;
+    let mut run_hangul = None;
+    for (index, ch) in word.char_indices() {
+        let hangul = is_hangul_syllable(ch);
+        match run_hangul {
+            Some(previous) if previous != hangul => {
+                runs.push((previous, &word[run_start..index]));
+                run_start = index;
+            }
+            _ => {}
+        }
+        run_hangul = Some(hangul);
+    }
+    let Some(last_hangul) = run_hangul else {
+        return;
+    };
+    runs.push((last_hangul, &word[run_start..]));
+    if !runs.iter().any(|(hangul, _)| *hangul) {
+        return;
+    }
+
+    let mixed = runs.len() > 1;
+    for (hangul, run) in runs {
+        if !hangul {
+            if mixed && keep_bm25_token(run) {
+                out.push(stem_english(run.to_string()));
+            }
+            continue;
+        }
+        let mut chars = run.chars();
+        if let Some(first) = chars.next() {
+            if KOREAN_PARTICLES.contains(&chars.as_str()) {
+                out.push(first.to_string());
+            }
+        }
+    }
+}
+
+/// NFKC form of `text`: composes NFD Hangul (macOS file names, some PDFs)
+/// and folds full-width letters, half-width katakana and ligatures
+/// ("ＲＡＧ" -> "RAG", "ﬁ" -> "fi").
+fn normalize_for_bm25(text: &str) -> Cow<'_, str> {
+    use unicode_normalization::{is_nfkc_quick, IsNormalized, UnicodeNormalization};
+    if is_nfkc_quick(text.chars()) == IsNormalized::Yes {
+        Cow::Borrowed(text)
+    } else {
+        Cow::Owned(text.nfkc().collect())
+    }
+}
+
 /// BM25 tokens for indexing and for queries. Both sides go through this
-/// function, so English words are stemmed the same way on each side.
+/// function, so normalization and English stemming are the same on each side.
 pub(crate) fn tokenize_for_bm25(text: &str) -> Vec<String> {
     use unicode_segmentation::UnicodeSegmentation;
 
     // Use Unicode word segmentation for better CJK support
     // Handles Korean, Chinese, Japanese, and multi-language text
+    let text = normalize_for_bm25(text);
     let mut tokens = Vec::new();
     for word in text.unicode_words().filter(|s| keep_bm25_token(s)) {
         let word = word.to_lowercase();
         push_hangul_bigrams(&word, &mut tokens);
+        push_korean_word_parts(&word, &mut tokens);
         tokens.push(stem_english(word));
     }
     tokens
@@ -668,6 +738,59 @@ mod tests {
         let all = index.search_scoped_tokens(&query_tokens, &[1, 2, 3], 10);
         assert_eq!(all.len(), 2);
         assert!(all.iter().any(|(doc_id, _)| *doc_id == 3));
+    }
+
+    /// Whether `query` finds `doc` in a two-document index (the second
+    /// document shares no term with either).
+    fn finds(doc: &str, query: &str) -> bool {
+        let mut index = InvertedIndex::new();
+        index.add_document(1, doc);
+        index.add_document(2, "unrelated filler 무관한 내용");
+        index.search(query, 10).iter().any(|(id, _)| *id == 1)
+    }
+
+    // Q3 B8: NFD Hangul (macOS file names, some PDFs), full-width letters and
+    // digits, and ligatures must match their usual forms on either side.
+    #[test]
+    fn unicode_forms_match_their_composed_and_half_width_forms() {
+        let nfd_refund = "\u{1112}\u{116a}\u{11ab}\u{1107}\u{116e}\u{11af}"; // 환불 (NFD)
+        assert!(finds(&format!("{nfd_refund} 정책 안내"), "환불"));
+        assert!(finds("환불 정책 안내", nfd_refund));
+        assert!(finds("ＲＡＧ ガイド 🚀", "RAG"));
+        assert!(finds("RAG guide", "ＲＡＧ"));
+        assert!(finds("가격 ３５００원", "3500원"));
+        assert!(finds("the ﬁle was saved", "file"));
+        assert!(finds("ｶﾀｶﾅ 表記", "カタカナ"));
+    }
+
+    // Q3 B9: Korean particles attached to Latin words or digits, and to a
+    // one-syllable noun.
+    #[test]
+    fn korean_particles_after_latin_digits_and_one_syllable_nouns() {
+        assert!(finds("RAG는 검색을 돕습니다", "RAG"));
+        assert!(finds("API를 호출합니다", "api"));
+        assert!(finds("2024년 출시 예정", "2024"));
+        assert!(finds("iPhone15에서 확인", "iPhone15"));
+        assert!(finds("앱을 설치하세요", "앱"));
+        assert!(finds("앱에서 설정을 엽니다", "앱이"));
+        assert!(finds("ＡＰＩ를 호출", "API"));
+        // Stemming still applies to the Latin part.
+        assert!(finds("Refunds는 14일 안에", "refund"));
+    }
+
+    #[test]
+    fn mixed_script_tokens_keep_whole_word_and_parts() {
+        let tokens = tokenize_for_bm25("RAG는 2024년 앱을 3.14");
+        for expected in ["rag는", "rag", "2024년", "2024", "앱을", "앱", "3.14"] {
+            assert!(
+                tokens.contains(&expected.to_string()),
+                "missing {expected:?} in {tokens:?}"
+            );
+        }
+        // Japanese and Chinese are unchanged.
+        let tokens = tokenize_for_bm25("東京は大きい 北京是首都");
+        assert!(tokens.contains(&"東".to_string()));
+        assert!(tokens.contains(&"北".to_string()));
     }
 
     #[test]

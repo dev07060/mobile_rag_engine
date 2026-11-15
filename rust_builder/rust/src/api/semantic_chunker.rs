@@ -166,7 +166,12 @@ pub fn classify_chunk(text: &str) -> ChunkType {
 pub struct SemanticChunk {
     pub index: i32,
     pub content: String,
+    /// Start of [content] in the input text, as a UTF-8 **byte** offset (not
+    /// a Dart `String` index, which counts UTF-16 code units). The two differ
+    /// for any non-ASCII text: "가" is 3 bytes and 1 code unit. To slice in
+    /// Dart, encode the text with `utf8.encode` and decode the byte range.
     pub start_pos: i32,
+    /// End of [content] (exclusive), as a UTF-8 byte offset, like the start.
     pub end_pos: i32,
     pub chunk_type: String,
 }
@@ -406,7 +411,8 @@ fn cached_token_count(
     Some(count)
 }
 
-/// Whether `range` fits the token budget the embedder will apply to it.
+/// Whether `range` fits `budget` tokens: [`TOKENIZER_TRUNCATION_MAX_LENGTH`]
+/// for plain text, less the header line for markdown chunks.
 ///
 /// If the tokenizer is not initialized (or tokenization fails) this returns
 /// `true`, so chunking falls back to the character budget alone. That is
@@ -418,9 +424,10 @@ fn fits_token_budget(
     text: &str,
     range: &Range<usize>,
     cache: &mut HashMap<(usize, usize), usize>,
+    budget: usize,
 ) -> bool {
     cached_token_count(text, range, cache)
-        .map(|count| count <= TOKENIZER_TRUNCATION_MAX_LENGTH)
+        .map(|count| count <= budget)
         .unwrap_or(true)
 }
 
@@ -436,6 +443,7 @@ fn largest_token_fitting_end(
     upper_char_count: usize,
     estimator: Option<&TokenEstimator>,
     cache: &mut HashMap<(usize, usize), usize>,
+    budget: usize,
 ) -> usize {
     if let Some(estimated) = estimate_token_fitting_end(
         text,
@@ -445,6 +453,7 @@ fn largest_token_fitting_end(
         upper_char_count,
         estimator,
         cache,
+        budget,
     ) {
         return estimated;
     }
@@ -456,7 +465,7 @@ fn largest_token_fitting_end(
     while low <= high {
         let mid = low + (high - low) / 2;
         let candidate_end = advance_by_chars(text, cursor, end, mid);
-        if fits_token_budget(text, &(check_start..candidate_end), cache) {
+        if fits_token_budget(text, &(check_start..candidate_end), cache, budget) {
             best = candidate_end;
             low = mid + 1;
         } else if mid == 1 {
@@ -518,10 +527,9 @@ impl TokenEstimator {
         Some(self.specials + inside)
     }
 
-    /// True when even the estimate (a lower bound) is over the token budget.
-    fn over_budget(&self, range: &Range<usize>) -> bool {
-        self.estimate(range)
-            .is_some_and(|count| count > TOKENIZER_TRUNCATION_MAX_LENGTH)
+    /// True when even the estimate (a lower bound) is over `budget`.
+    fn over_budget(&self, range: &Range<usize>, budget: usize) -> bool {
+        self.estimate(range).is_some_and(|count| count > budget)
     }
 }
 
@@ -532,11 +540,12 @@ fn fits_token_budget_estimated(
     range: &Range<usize>,
     estimator: Option<&TokenEstimator>,
     cache: &mut HashMap<(usize, usize), usize>,
+    budget: usize,
 ) -> bool {
-    if estimator.is_some_and(|e| e.over_budget(range)) {
+    if estimator.is_some_and(|e| e.over_budget(range, budget)) {
         return false;
     }
-    fits_token_budget(text, range, cache)
+    fits_token_budget(text, range, cache, budget)
 }
 
 /// Fast path for [`largest_token_fitting_end`]: picks the split from token
@@ -551,6 +560,7 @@ fn estimate_token_fitting_end(
     upper_char_count: usize,
     estimator: Option<&TokenEstimator>,
     cache: &mut HashMap<(usize, usize), usize>,
+    budget: usize,
 ) -> Option<usize> {
     const RETRY_MARGIN_TOKENS: usize = 4;
 
@@ -572,7 +582,7 @@ fn estimate_token_fitting_end(
         while low <= high {
             let mid = low + (high - low) / 2;
             let candidate = check_start..advance_by_chars(text, cursor, end, mid);
-            if estimator.estimate(&candidate)? + margin <= TOKENIZER_TRUNCATION_MAX_LENGTH {
+            if estimator.estimate(&candidate)? + margin <= budget {
                 best = candidate.end;
                 low = mid + 1;
             } else if mid == 1 {
@@ -584,7 +594,7 @@ fn estimate_token_fitting_end(
         if best <= cursor {
             return None;
         }
-        if fits_token_budget(text, &(check_start..best), cache) {
+        if fits_token_budget(text, &(check_start..best), cache, budget) {
             return Some(best);
         }
     }
@@ -698,6 +708,7 @@ fn enforce_token_budget(
     ranges: Vec<Range<usize>>,
     max_chars: usize,
     overlap_chars: usize,
+    budget: usize,
 ) -> Vec<Range<usize>> {
     let mut cache = HashMap::new();
     let mut planned = Vec::new();
@@ -723,13 +734,21 @@ fn enforce_token_budget(
                 &(overlap..range.end),
                 estimator,
                 &mut cache,
+                budget,
             ) {
                 (overlap, range.end)
-            } else if fits_token_budget_estimated(text, &remaining, estimator, &mut cache) {
+            } else if fits_token_budget_estimated(text, &remaining, estimator, &mut cache, budget)
+            {
                 // The new content fits alone: shrink only the overlap.
                 let prev_range = prev.as_ref().expect("overlap implies a previous chunk");
                 let shrunk = shrink_overlap_start(text, prev_range, overlap, cursor, |s| {
-                    fits_token_budget_estimated(text, &(s..range.end), estimator, &mut cache)
+                    fits_token_budget_estimated(
+                        text,
+                        &(s..range.end),
+                        estimator,
+                        &mut cache,
+                        budget,
+                    )
                 });
                 (shrunk, range.end)
             } else {
@@ -745,6 +764,7 @@ fn enforce_token_budget(
                     upper_char_count,
                     estimator,
                     &mut cache,
+                    budget,
                 );
                 if end <= cursor && start < cursor {
                     start = cursor;
@@ -756,6 +776,7 @@ fn enforce_token_budget(
                         upper_char_count,
                         estimator,
                         &mut cache,
+                        budget,
                     );
                 }
                 if end <= cursor {
@@ -820,7 +841,7 @@ fn plan_plain_text_ranges_char_budget(text: &str, max_chars: usize) -> Vec<Range
 }
 
 fn plan_plain_text_ranges(text: &str, max_chars: usize) -> Vec<Range<usize>> {
-    plan_plain_text_ranges_with_overlap(text, max_chars, 0)
+    plan_plain_text_ranges_with_overlap(text, max_chars, 0, TOKENIZER_TRUNCATION_MAX_LENGTH)
 }
 
 /// Final chunk ranges (overlap included) that each fit `max_chars` of new
@@ -829,12 +850,14 @@ fn plan_plain_text_ranges_with_overlap(
     text: &str,
     max_chars: usize,
     overlap_chars: usize,
+    budget: usize,
 ) -> Vec<Range<usize>> {
     enforce_token_budget(
         text,
         plan_plain_text_ranges_char_budget(text, max_chars),
         max_chars,
         overlap_chars,
+        budget,
     )
 }
 
@@ -951,7 +974,7 @@ fn is_explicit_section_heading(line: &str) -> bool {
         return false;
     }
 
-    if trimmed.starts_with('#')
+    if is_markdown_header(trimmed)
         || NUMBERED_SECTION_RE.is_match(trimmed)
         || KOREAN_SECTION_RE.is_match(trimmed)
         || KOREAN_ARTICLE_RE.is_match(trimmed)
@@ -1068,7 +1091,12 @@ pub fn semantic_chunk_with_overlap(
     let overlap = clamp_overlap_chars(max_chars, overlap_chars.max(0) as usize);
     let result = materialize_semantic_chunks(
         &text,
-        plan_plain_text_ranges_with_overlap(&text, max_chars, overlap),
+        plan_plain_text_ranges_with_overlap(
+            &text,
+            max_chars,
+            overlap,
+            TOKENIZER_TRUNCATION_MAX_LENGTH,
+        ),
     );
 
     if count_traffic {
@@ -1259,6 +1287,118 @@ mod tests {
                 tokens
             );
         }
+    }
+
+    /// The text the embedder sees for a markdown chunk: the same rendering
+    /// ingestion, reembed and the fingerprint sample use.
+    fn markdown_embedding_input(chunk: &StructuredChunk) -> String {
+        let path = chunk.header_path.trim();
+        let encoded = if path.is_empty() {
+            chunk.chunk_type.clone()
+        } else {
+            format!("{}|{}", chunk.chunk_type, path)
+        };
+        crate::api::source_rag::render_context_text(&chunk.content, &encoded)
+    }
+
+    fn init_test_tokenizer_with_specials() {
+        use tokenizers::processors::bert::BertProcessing;
+        let suffix = Uuid::new_v4().to_string();
+        let vocab_path =
+            std::env::temp_dir().join(format!("mobile_rag_engine_test_vocab_{suffix}.json"));
+        std::fs::write(
+            &vocab_path,
+            r#"{"[UNK]":0,"hello":1,"world":2,"[CLS]":3,"[SEP]":4}"#,
+        )
+        .expect("failed to write test vocab");
+        let model = WordLevel::builder()
+            .files(vocab_path.to_str().unwrap().to_string())
+            .unk_token("[UNK]".to_string())
+            .build()
+            .expect("failed to build test tokenizer");
+        let mut tokenizer = tokenizers::Tokenizer::new(model);
+        tokenizer.with_pre_tokenizer(Some(Whitespace));
+        tokenizer.with_post_processor(Some(BertProcessing::new(
+            ("[SEP]".to_string(), 4),
+            ("[CLS]".to_string(), 3),
+        )));
+        let tokenizer_path =
+            std::env::temp_dir().join(format!("mobile_rag_engine_test_tokenizer_{suffix}.json"));
+        tokenizer
+            .save(tokenizer_path.to_str().unwrap(), false)
+            .expect("failed to save test tokenizer");
+        init_tokenizer(tokenizer_path.to_str().unwrap().to_string())
+            .expect("failed to init tokenizer");
+    }
+
+    /// Words with Korean, Japanese, Chinese, NFD Hangul, full-width, emoji and
+    /// decimals (Q0 test text rule).
+    const MIXED_WORDS: [&str; 8] = [
+        "환불은",
+        "東京は",
+        "北京是",
+        "\u{1112}\u{1161}\u{11ab}\u{1100}\u{1173}\u{11af}",
+        "ＲＡＧ",
+        "🚀",
+        "3.14",
+        "가격",
+    ];
+
+    /// Mixed-script body whose token count is `target` or just under it.
+    fn mixed_body_with_tokens(target: usize) -> String {
+        let mut words: Vec<&str> = Vec::new();
+        let mut i = 0;
+        loop {
+            words.push(MIXED_WORDS[i % MIXED_WORDS.len()]);
+            if count_tokens_untruncated(&words.join(" ")).unwrap() > target {
+                words.pop();
+                return words.join(" ");
+            }
+            i += 1;
+        }
+    }
+
+    // Q3 B1: the budget must count the "Header Path: ..." line the embedder
+    // reads in front of every markdown chunk, not the chunk body alone.
+    #[test]
+    fn test_markdown_embedding_input_with_header_path_fits_token_budget() {
+        let _guard = TOKENIZER_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        init_test_tokenizer_with_specials();
+
+        // The body alone fits (510 of 512 tokens); the header line does not.
+        let body = mixed_body_with_tokens(510);
+        let text = format!(
+            "# 사용 설명서 ガイド\n\n## 설치 安装\n\n### Windows 11 ＰＣ 🚀\n\n{body}\n\n\
+## 다음 단계\n\n{body}\n"
+        );
+        let chunks = markdown_chunk(text.clone(), 4000);
+
+        let mut body_chunks = 0;
+        for chunk in &chunks {
+            assert_eq!(
+                &text[chunk.start_pos as usize..chunk.end_pos as usize],
+                chunk.content
+            );
+            let input = markdown_embedding_input(chunk);
+            let tokens = count_tokens_untruncated(&input).unwrap();
+            assert!(
+                tokens <= TOKENIZER_TRUNCATION_MAX_LENGTH,
+                "chunk {} embeds {} tokens: {:?}",
+                chunk.index,
+                tokens,
+                &input[..input.find('\n').unwrap_or(input.len())]
+            );
+            if chunk.content.contains("ＲＡＧ") {
+                body_chunks += 1;
+            }
+        }
+        // Nothing is dropped or repeated: the chunks cover the whole text.
+        let non_ws = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+        let covered: String = chunks.iter().map(|c| non_ws(&c.content)).collect();
+        assert_eq!(covered, non_ws(&text));
+        assert!(body_chunks >= 2, "got {body_chunks} body chunks");
     }
 
     #[test]
@@ -1698,7 +1838,10 @@ pub struct StructuredChunk {
     pub content: String,
     pub header_path: String, // e.g., "# Installation > ## Windows"
     pub chunk_type: String,  // "text", "code", "table", "header"
+    /// Start of [content] in the input text, as a UTF-8 **byte** offset (not
+    /// a Dart `String` index). See `SemanticChunk.start_pos`.
     pub start_pos: i32,
+    /// End of [content] (exclusive), as a UTF-8 byte offset.
     pub end_pos: i32,
     pub batch_id: Option<String>,
     pub batch_index: Option<i32>,
@@ -1774,25 +1917,32 @@ pub fn markdown_chunk(text: String, max_chars: i32) -> Vec<StructuredChunk> {
         };
 
         // Char-sized ranges can still exceed the token budget (dense scripts,
-        // code), so they go through the same token check as plain text.
+        // code), so they go through the same token check as plain text. The
+        // embedder reads each chunk after a "Header Path: ..." line, so that
+        // line's tokens come out of the budget.
         let section_char_count = content.chars().count();
-        let sub_ranges = if section_char_count <= max_chars_usize {
-            enforce_token_budget(
-                &text,
-                vec![section.content_range.clone()],
-                max_chars_usize,
-                0,
-            )
-        } else if section.is_table || section.is_code_block {
-            enforce_token_budget(
-                &text,
-                split_by_line_ranges(&text, &section.content_range, max_chars_usize),
-                max_chars_usize,
-                0,
-            )
-        } else {
-            plan_plain_text_subranges(&text, &section.content_range, max_chars_usize)
+        let plan = |budget: usize| {
+            if section_char_count <= max_chars_usize {
+                enforce_token_budget(
+                    &text,
+                    vec![section.content_range.clone()],
+                    max_chars_usize,
+                    0,
+                    budget,
+                )
+            } else if section.is_table || section.is_code_block {
+                enforce_token_budget(
+                    &text,
+                    split_by_line_ranges(&text, &section.content_range, max_chars_usize),
+                    max_chars_usize,
+                    0,
+                    budget,
+                )
+            } else {
+                plan_plain_text_subranges(&text, &section.content_range, max_chars_usize, budget)
+            }
         };
+        let sub_ranges = plan_with_header_line(&text, &header_path, plan);
 
         let batch_id: Option<String> = if section.is_code_block && sub_ranges.len() > 1 {
             Some(uuid::Uuid::new_v4().to_string())
@@ -1829,6 +1979,57 @@ pub fn markdown_chunk(text: String, max_chars: i32) -> Vec<StructuredChunk> {
         LEGACY_CHUNKER_CHUNKS_OUT.record(chunks.iter().map(|c| c.content.len() as u64).sum());
     }
     chunks
+}
+
+/// The line ingestion puts in front of a markdown chunk before embedding it.
+/// Mirrors `render_context_text` in `source_rag.rs` (the header path is
+/// trimmed when the chunk type is encoded).
+fn header_line(header_path: &str) -> Option<String> {
+    let path = header_path.trim();
+    (!path.is_empty()).then(|| format!("Header Path: {path}\n"))
+}
+
+/// Plans a markdown section with `plan(budget)` so that every chunk fits the
+/// model limit together with its header line.
+///
+/// The header line's own token count comes off the budget first. Tokens at
+/// the join are not always additive (a subword tokenizer may merge across
+/// it), so each chunk is then checked as the embedder will see it and the
+/// section is planned again with a smaller budget if one is over. Without a
+/// tokenizer only the char budget applies, as for plain text.
+fn plan_with_header_line(
+    text: &str,
+    header_path: &str,
+    plan: impl Fn(usize) -> Vec<Range<usize>>,
+) -> Vec<Range<usize>> {
+    let max = TOKENIZER_TRUNCATION_MAX_LENGTH;
+    let Some(line) = header_line(header_path) else {
+        return plan(max);
+    };
+    let (Ok(with_line), Ok(empty)) = (count_tokens_untruncated(&line), count_tokens_untruncated(""))
+    else {
+        return plan(max);
+    };
+    // A header path longer than half the model input is cut by the embedder
+    // anyway; keep at least half of the input for the chunk itself.
+    let floor = max / 2;
+    let mut budget = max.saturating_sub(with_line.saturating_sub(empty)).max(floor);
+    loop {
+        let ranges = plan(budget);
+        let excess = ranges
+            .iter()
+            .filter_map(|range| {
+                let input = format!("{line}{}", &text[range.clone()]);
+                count_tokens_untruncated(&input).ok()
+            })
+            .map(|count| count.saturating_sub(max))
+            .max()
+            .unwrap_or(0);
+        if excess == 0 || budget == floor {
+            return ranges;
+        }
+        budget = budget.saturating_sub(excess).max(floor);
+    }
 }
 
 // =============================================================================
@@ -1914,28 +2115,58 @@ fn markdown_line_ranges(text: &str) -> Vec<MarkdownLine> {
     lines
 }
 
+/// `line` without up to three leading spaces, or `None` when it is indented
+/// further (CommonMark reads that as an indented code block).
+fn strip_markdown_indent(line: &str) -> Option<&str> {
+    let rest = line.trim_start_matches(' ');
+    (line.len() - rest.len() <= 3).then_some(rest)
+}
+
+/// CommonMark ATX heading: 1 to 6 `#` followed by a space, a tab or the end
+/// of the line. A hashtag (`#여행`), `#include` or seven `#` is not a heading.
 fn is_markdown_header(line: &str) -> bool {
-    line.starts_with('#')
+    let Some(rest) = strip_markdown_indent(line) else {
+        return false;
+    };
+    let hashes = rest.bytes().take_while(|b| *b == b'#').count();
+    (1..=6).contains(&hashes) && matches!(rest.as_bytes().get(hashes), None | Some(b' ' | b'\t'))
 }
 
 fn parse_markdown_header(line: &str) -> (i32, String) {
+    let line = line.trim_start();
     let level = line.chars().take_while(|c| *c == '#').count() as i32;
     let header_text = line.trim_start_matches('#').trim().to_string();
     (level, header_text)
+}
+
+/// Opening code fence: three or more backticks or tildes. Returns the fence
+/// char, its length and the info string (language).
+fn parse_code_fence_open(line: &str) -> Option<(char, usize, &str)> {
+    let rest = line.trim_start();
+    let fence = rest.chars().next().filter(|c| *c == '`' || *c == '~')?;
+    let len = rest.chars().take_while(|c| *c == fence).count();
+    if len < 3 {
+        return None;
+    }
+    let info = rest[len..].trim();
+    // A backtick fence's info string cannot contain backticks (CommonMark).
+    if fence == '`' && info.contains('`') {
+        return None;
+    }
+    Some((fence, len, info))
+}
+
+/// A fence closes on the same char, at least as long, with nothing after it.
+fn closes_code_fence(line: &str, fence: char, open_len: usize) -> bool {
+    let rest = line.trim();
+    let len = rest.chars().take_while(|c| *c == fence).count();
+    len >= open_len && len * fence.len_utf8() == rest.len()
 }
 
 fn is_table_line(line: &str) -> bool {
     line.starts_with('|') && line.ends_with('|')
 }
 
-fn parse_code_block_language(line: &str) -> Option<String> {
-    let trimmed = line.trim().trim_start_matches('`').trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
-}
 
 fn flush_text_section(
     text: &str,
@@ -1964,8 +2195,10 @@ fn plan_plain_text_subranges(
     text: &str,
     range: &Range<usize>,
     max_chars: usize,
+    budget: usize,
 ) -> Vec<Range<usize>> {
-    let local_ranges = plan_plain_text_ranges(&text[range.clone()], max_chars);
+    let local_ranges =
+        plan_plain_text_ranges_with_overlap(&text[range.clone()], max_chars, 0, budget);
     if local_ranges.is_empty() {
         return vec![range.clone()];
     }
@@ -2039,7 +2272,7 @@ fn split_by_headers(text: &str) -> Vec<Section> {
         let line_text = &text[line.start..line.content_end];
         let trimmed = line_text.trim();
 
-        if trimmed.starts_with("```") {
+        if let Some((fence, fence_len, info)) = parse_code_fence_open(line_text) {
             flush_text_section(
                 text,
                 &mut sections,
@@ -2049,7 +2282,7 @@ fn split_by_headers(text: &str) -> Vec<Section> {
             );
 
             let block_start = line.start;
-            let language = parse_code_block_language(line_text);
+            let language = (!info.is_empty()).then(|| info.to_string());
             let mut block_end = line.end;
             index += 1;
 
@@ -2058,7 +2291,7 @@ fn split_by_headers(text: &str) -> Vec<Section> {
                 let candidate_text = &text[candidate.start..candidate.content_end];
                 block_end = candidate.end;
                 index += 1;
-                if candidate_text.trim().starts_with("```") {
+                if closes_code_fence(candidate_text, fence, fence_len) {
                     break;
                 }
             }
@@ -2325,5 +2558,73 @@ mod markdown_tests {
             assert_eq!(chunk.batch_total.unwrap(), total);
             assert_eq!(chunk.batch_index.unwrap(), i as i32);
         }
+    }
+
+    fn header_paths(text: &str) -> Vec<String> {
+        markdown_chunk(text.to_string(), 2000)
+            .into_iter()
+            .map(|c| c.header_path)
+            .collect()
+    }
+
+    // Q3: a hashtag or a C preprocessor line is not a heading. ATX headings
+    // need 1-6 `#` followed by a space, a tab or the end of the line.
+    #[test]
+    fn test_markdown_hashtags_and_directives_are_not_headers() {
+        let text = "# 여행 기록\n\n#여행 #東京 #맛집 사진을 올렸다 🚀\n\n#include <stdio.h>\n\n\
+####### 일곱 개는 제목이 아니다 3.14\n\n본문 끝.";
+        let paths = header_paths(text);
+        assert!(!paths.is_empty());
+        for path in &paths {
+            assert_eq!(path, "여행 기록", "paths: {paths:?}");
+        }
+        assert!(is_markdown_header("## 설치"));
+        assert!(is_markdown_header("#\t탭 제목"));
+        assert!(is_markdown_header("#"));
+        assert!(is_markdown_header("   ### 들여쓴 제목"));
+        assert!(!is_markdown_header("    # 코드 블록 들여쓰기"));
+        assert!(!is_markdown_header("#여행"));
+        assert!(!is_markdown_header("#include <stdio.h>"));
+        assert!(!is_markdown_header("####### seven"));
+    }
+
+    // Q3: `~~~` fences are code blocks too, and a `#` line inside one is code.
+    #[test]
+    fn test_markdown_tilde_fence_is_a_code_block() {
+        let text = "# 설정\n\n~~~bash\n# 설치 명령 (comment)\npip install rag==3.14\n~~~\n\n본문 東京 🚀.";
+        let chunks = markdown_chunk(text.to_string(), 2000);
+        let code = chunks
+            .iter()
+            .find(|c| c.chunk_type.starts_with("code"))
+            .expect("tilde fence is a code block");
+        assert_eq!(code.chunk_type, "code:bash");
+        assert!(code.content.contains("# 설치 명령"));
+        for chunk in &chunks {
+            assert_eq!(chunk.header_path, "설정", "{chunks:?}");
+            assert_structured_chunk_matches_source(text, chunk);
+        }
+    }
+
+    // A fence closes only on the same character, at least as long.
+    #[test]
+    fn test_markdown_fence_closes_on_matching_marker() {
+        let text = "````md\n```\n# 안쪽 제목 아님\n```\n````\n\n# 바깥 제목\n\n본문.";
+        let chunks = markdown_chunk(text.to_string(), 2000);
+        let code: Vec<_> = chunks
+            .iter()
+            .filter(|c| c.chunk_type.starts_with("code"))
+            .collect();
+        assert_eq!(code.len(), 1, "{chunks:?}");
+        assert!(code[0].content.ends_with("````"));
+        assert!(chunks.iter().all(|c| !c.header_path.contains("안쪽")));
+        assert!(chunks.iter().any(|c| c.header_path == "바깥 제목"));
+    }
+
+    // Plain-text chunking uses the same heading rule: a hashtag line inside
+    // a running paragraph does not start a new chunk.
+    #[test]
+    fn test_plain_text_hashtag_line_is_not_a_section_heading() {
+        assert!(!is_explicit_section_heading("#여행 #東京 사진"));
+        assert!(is_explicit_section_heading("# 여행 기록"));
     }
 }
