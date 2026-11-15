@@ -876,12 +876,12 @@
 
 **포함에 더한 것 (착수 때, 규칙 4):** Q3가 넘긴 `ContextBuilder`의 공백 없는 CJK 문장 끝과 `maxChars` 단위 불일치, 같은 함수의 짧은 텍스트 `clamp` 오류. 문장 끝 규칙은 Q3의 `compress_text`와 같다(`.`·`?`·`!`·`…`는 뒤가 공백일 때만, `。！？｡`는 항상).
 
-**착수 때 정한 방식 (2026-11-16 사용자 "B10 코사인 통일, B13 promptTokenCounter와 tokenCounter로 진행해")**
+**착수 때 정한 방식 (2026-11-16 사용자 "추천 조합으로 진행", 이 세션에서 "B10 코사인 통일, B13 promptTokenCounter와 tokenCounter로 진행해")**
 
 | 항목 | 고른 방식 | 버린 방식 |
 |---|---|---|
 | B10 | `sourceIds`가 있어도 코사인. Rust에 출처 한정 벡터 검색 `search_chunks_in_sources`(출처의 청크를 모두 채점하는 exact scan)를 더하고 `search`가 그것을 쓴다. 공개 API 모양은 그대로, 순서도 같다. 바뀌는 사람은 `search(sourceIds:)`의 `similarity`를 RRF 크기(약 0.016)에 맞춰 쓰던 코드뿐이다 | RRF로 통일(기본 경로의 코사인 임계값이 모두 깨진다), 필드 분리(FRB struct 생성자가 바뀌어 fake를 만드는 코드가 깨지고 임계값 함정은 남는다), 문서화만 |
-| B13 | 선택 인자 `promptTokenCounter`(`int Function(String)`)를 `MobileRag`·`CollectionRag`의 `ask`/`prepareAsk`와 `RagSearchTool.fromMobileRag`/`fromCollection`에 더한다. 주면 엔진은 예산 없이(`1 << 30`) 조립하고, 구절 텍스트를 그 함수로 세어 관련도 순으로 들어가는 만큼 통째로 남긴다. `PromptCompressor.compress`에는 선택 `tokenCounter`. 안 주면 지금과 같다 | 기본 계산 교체(모든 호출자의 구절 수가 바뀌고 여러 LLM 근거가 없다, 규칙 10), 문서화만 |
+| B13 | 선택 인자 `promptTokenCounter`(`int Function(String)`)를 `MobileRag`·`CollectionRag`의 `ask`/`prepareAsk`와 `RagSearchTool.fromMobileRag`/`fromCollection`에 더한다. 주면 엔진은 예산 없이(`1 << 30`) 조립하고, 구절 텍스트를 그 함수로 세어 관련도 순으로 들어가는 만큼 통째로 남긴다. `PromptCompressor.compress`에는 선택 `tokenCounter`(기본 char/4 유지). 안 주면 지금과 같다(테스트로 고정). 안 주는 호출자에게는 단위 차이가 남는다는 점을 `ask.md`·`llm_tools.md`에 적었다 | 기본 계산 교체(모든 호출자의 구절 수가 바뀌고 여러 LLM 근거가 없다, 규칙 10), 문서화만 |
 
 **목표:** 사용자와 LLM이 읽는 점수·순서·인용·예산이 문서와 같게 동작하게 한다.
 

@@ -69,8 +69,11 @@ Thai and emoji. Counted with the embedding tokenizer through `countTokens`:
 | 10 emoji | 1 | 2 | 11 |
 | 49 English characters | 10 | 11 | 11 |
 
-So 1500 engine tokens can be far more or far fewer tokens for your LLM. To
-budget in your LLM's tokens, pass its token count as `promptTokenCounter`:
+So 1500 engine tokens can be far more or far fewer tokens for your LLM.
+Without `promptTokenCounter` this stays so: the default budget is still
+counted in engine tokens, and a prompt can be much larger or smaller than
+`tokenBudget` suggests. To budget in your LLM's tokens, pass its token count
+as `promptTokenCounter`:
 
 ```dart
 final answer = await MobileRag.instance.ask(

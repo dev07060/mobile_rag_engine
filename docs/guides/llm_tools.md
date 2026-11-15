@@ -87,8 +87,9 @@ the output back as the tool result.
 
 - **Search:** hybrid (vector + keyword) search, with passages kept within
   `tokenBudget` engine tokens (default 1500). Engine tokens can be several
-  times more or fewer than your LLM's tokens; pass `promptTokenCounter` to
-  count the budget with your LLM's tokenizer instead (see
+  times more or fewer than your LLM's tokens, and without
+  `promptTokenCounter` that difference remains; pass it to count the budget
+  with your LLM's tokenizer instead (see
   [Token budget](ask.md#token-budget)).
 - **Citation ids:** keep counting across calls on one tool. If the first
   search returns passages 1–3, the next starts at 4, so ids never collide
