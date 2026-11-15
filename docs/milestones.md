@@ -736,7 +736,7 @@
 ### Q2. 상태 수명주기
 
 - **담당:** 세션 "Q2 상태 수명주기", 브랜치 `fix/q2-state-lifecycle`(worktree `.claude/worktrees/q2-state-lifecycle-599d05`, main `49057dc`에서 땄다)
-- **상태:** 진행 중 (2026-11-15 사용자 "새 세션에서 Q2 착수"). 아래 "착수 때 확인한 것"으로 범위를 고쳤다(규칙 4).
+- **상태:** PR 열림 (2026-11-15). 착수는 2026-11-15 사용자 "새 세션에서 Q2 착수". 아래 "착수 때 확인한 것"으로 범위를 고쳤다(규칙 4).
 
 **착수 때 확인한 것 (2026-11-15, main `49057dc`)**
 
@@ -775,6 +775,13 @@
 - 공통 완료 기준. PR 하나, CI 통과. Rust를 고치므로 `rag_engine_flutter` 배포가 필요하다(배포는 규칙 5).
 
 **손대는 파일:** `rust_builder/rust/src/api/{source_rag,migration_meta,ingest_session,hnsw_index}.rs`, `lib/services/{rag_engine,source_rag_service,embedding_service}.dart`, `lib/mobile_rag.dart`, `.github/workflows/upgrade_e2e.yml`, `tool/upgrade_e2e/**`, `.github/pull_request_template.md`(기준 버전), `test/**`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `docs/milestones.md`, 이 마일스톤 W1·F2·E1 절의 낡은 상태 줄
+
+**실행 결과 (2026-11-15)**
+- **Rust (로컬 macOS, rustc 1.91.1, debug, `cargo test --lib -- --test-threads=1`):** 새 테스트 5개(A4 2, B3 2, B4 1)가 수정 전 코드에서 실패했다. A4는 컬렉션 B 검색이 빈 결과, 재임베딩 뒤 1위가 다른 청크였다. B3는 같은 모델로 돌아가면 `Ok`, 세 번째 모델은 "cannot retarget". B4는 같은 문서를 세 번 다시 넣자 generation이 4에서 7로 올랐다. 수정 뒤 전체 통과: 기본 feature 267개, `vector_faer,vector_quant_i8` 268개(무시 16).
+- **Dart:** `test/unit/embedding_service_dispose_test.dart`, `mobile_rag_initialize_concurrency_test.dart`, `test/native/rag_engine_lifecycle_test.dart`. 수정 전 코드에 테스트 진입점만 붙여 돌리면 8개가 실패했다(dispose 뒤 `embed()`와 ingest가 20초 안에 끝나지 않음, 두 번째 `initialize`가 엔진을 하나 더 만듦, dispose 뒤 타이머가 돌아 `DB pool is None`, `clearAllData` 중 다른 컬렉션 ingest가 `Query returned no rows`·`DB pool is None`). 수정 뒤 unit 157개, native 29개 통과.
+- **Upgrade E2E (수정 전, 하네스만 넣은 커밋 `302a22d`, GitHub macOS runner, Flutter 3.38.7, MiniLM `sha256:e9246dc3…`·KoEn-E5-Tiny `sha256:fd688b15…`, 실행 43655831745):** 0.22.3 기준에서 c1이 실패했다(`notes_search=0`, 같은 프로세스의 docs 검색은 3건). r1은 통과했다(잠금 → `clearAndRestart` 뒤 청크 0 → 다시 넣은 청크 8, 검색 성공). A3가 이미 고쳐졌다는 확인과 같다.
+- **확인하지 않은 것:** 실기기(iPhone·Android)와 Windows 실행, 큰 문서에서 A4 수정 뒤 재빌드 시간.
+- **로컬 빌드 참고:** Xcode 27.1(ld-27037.1)에서 release dylib을 기본 strip으로 만들면 `dlopen`이 "mis-aligned LINKEDIT string pool"로 실패했다. `CARGO_PROFILE_RELEASE_STRIP=none`으로 빌드해 native 테스트를 돌렸다. 후보 목록의 C1과 같은 계열로 보이지만 확인하지 않았다.
 
 ### Q3. 텍스트 경계
 
