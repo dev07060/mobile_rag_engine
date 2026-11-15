@@ -138,24 +138,70 @@ String defaultAskPrompt(String question, List<RagPassage> passages) {
   return buffer.toString();
 }
 
-const _citationIds = r'(\d+(?:\s*,\s*\d+)*)';
+/// Opening and closing brackets read as citations: `[1]`, full-width
+/// `［1］`, lenticular `【1】`, and the CJK corner brackets `「1」` and `『1』`
+/// that models answering in Korean, Japanese or Chinese often use. Corner
+/// brackets also quote words (`「결전」`), so only digits count, and only ids
+/// that were given to the model.
+const _brackets = {'[': ']', '［': '］', '【': '】', '「': '」', '『': '』'};
 
-/// `[1]`, plus the CJK corner brackets `「1」` and `『1』` that models answering
-/// in Korean, Japanese or Chinese often use for citations. Those brackets also
-/// quote words (`「결전」`), so only digits count, and only ids that were given
-/// to the model.
-final _citation = RegExp('\\[$_citationIds\\]|「$_citationIds」|『$_citationIds』');
+/// One id or a range (`1-3`, `1–3`, `1~3`); ids are separated by `,`, `，`
+/// or `、`. Digits may be full-width (`１`).
+const _id = r'[0-9０-９]+';
+const _range = '$_id(?:\\s*[-–~～〜－]\\s*$_id)?';
+const _ids = '$_range(?:\\s*[,，、]\\s*$_range)*';
 
-/// Passages of [passages] cited in [text] as `[1]`, `[1, 2]`, `[1][2]` or
-/// `「1」`, in order of first citation and without repeats.
+final _citation = RegExp(
+  _brackets.entries
+      .map(
+        (e) => '${RegExp.escape(e.key)}\\s*($_ids)\\s*${RegExp.escape(e.value)}',
+      )
+      .join('|'),
+);
+
+/// Inline code (`` `items[2]` ``) and fenced code blocks (``` or `~~~`).
+final _code = RegExp(
+  r'^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[`~]*[ \t]*$|(?![\s\S]))|(`+)[^`\n]*?\2',
+  multiLine: true,
+);
+
+String _asciiDigits(String s) => String.fromCharCodes(
+  s.codeUnits.map((u) => u >= 0xFF10 && u <= 0xFF19 ? u - 0xFF10 + 0x30 : u),
+);
+
+/// Passages of [passages] cited in [text] as `[1]`, `[1, 2]`, `[1][2]`,
+/// `[1-3]`, `［１］`, `【1】`, `[1、2]` or `「1」`, in order of first citation
+/// and without repeats. Brackets inside inline code or fenced code blocks
+/// are not citations.
 List<RagPassage> citedPassages(String text, List<RagPassage> passages) {
   final byId = {for (final p in passages) p.id: p};
   final cited = <String, RagPassage>{};
-  for (final match in _citation.allMatches(text)) {
-    final ids = match.group(1) ?? match.group(2) ?? match.group(3)!;
-    for (final id in ids.split(',')) {
-      final passage = byId[id.trim()];
-      if (passage != null) cited.putIfAbsent(passage.id, () => passage);
+  void cite(String id) {
+    final passage = byId[id];
+    if (passage != null) cited.putIfAbsent(passage.id, () => passage);
+  }
+
+  final prose = text.replaceAllMapped(_code, (m) => ' ' * m[0]!.length);
+  for (final match in _citation.allMatches(prose)) {
+    final ids = match.groups([
+      for (var i = 1; i <= match.groupCount; i++) i,
+    ]).firstWhere((g) => g != null)!;
+    for (final part in ids.split(RegExp('[,，、]'))) {
+      final bounds = _asciiDigits(part)
+          .split(RegExp('[-–~～〜－]'))
+          .map((b) => int.tryParse(b.trim()))
+          .toList();
+      if (bounds.any((b) => b == null)) continue;
+      if (bounds.length == 1) {
+        cite('${bounds.single}');
+        continue;
+      }
+      final (from, to) = (bounds.first!, bounds.last!);
+      // Only ids that were given count, so a wide range stays cheap.
+      for (final p in passages) {
+        final n = int.tryParse(p.id);
+        if (n != null && n >= from && n <= to) cite(p.id);
+      }
     }
   }
   return cited.values.toList();

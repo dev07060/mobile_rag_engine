@@ -2149,6 +2149,38 @@ fn fetch_adjacent_hit_meta(
     Ok(hits)
 }
 
+/// The search hits in rank order, then the chunks next to them that were not
+/// hits themselves: the neighbors of the best hit first, each hit's neighbors
+/// in chunk order. Context assembly fills the budget in this order, so with
+/// `RelevanceFirst` a neighbor never takes the place of a hit.
+/// `Chronological` still sorts by source and chunk index.
+fn expand_with_adjacent_hits<F>(
+    base_hits: &[SearchHitMeta],
+    adjacent_chunks: i32,
+    mut fetch: F,
+) -> Result<Vec<SearchHitMeta>, RagError>
+where
+    F: FnMut(&SearchHitMeta, i32, i32) -> Result<Vec<SearchHitMeta>, RagError>,
+{
+    let mut seen = base_hits
+        .iter()
+        .map(|hit| (hit.source_id, hit.chunk_index))
+        .collect::<HashSet<_>>();
+    let mut ordered = base_hits.to_vec();
+    for hit in base_hits {
+        let min_index = (hit.chunk_index - adjacent_chunks).max(0);
+        let max_index = hit.chunk_index + adjacent_chunks;
+        let mut neighbors = fetch(hit, min_index, max_index)?;
+        neighbors.sort_by_key(|adjacent| adjacent.chunk_index);
+        for adjacent in neighbors {
+            if seen.insert((adjacent.source_id, adjacent.chunk_index)) {
+                ordered.push(adjacent);
+            }
+        }
+    }
+    Ok(ordered)
+}
+
 fn search_meta_hybrid_once(
     collection_id: &str,
     query_text: &str,
@@ -2211,30 +2243,9 @@ fn search_meta_hybrid_once(
     }
 
     let ordered_hits = if options.adjacent_chunks > 0 && !base_hits.is_empty() {
-        let mut expanded = HashMap::<(i64, i32), SearchHitMeta>::new();
-        for hit in &base_hits {
-            expanded.insert((hit.source_id, hit.chunk_index), hit.clone());
-        }
-
-        for hit in &base_hits {
-            let min_index = (hit.chunk_index - options.adjacent_chunks).max(0);
-            let max_index = hit.chunk_index + options.adjacent_chunks;
-            for adjacent in
-                fetch_adjacent_hit_meta(&conn, collection_id, hit.source_id, min_index, max_index)?
-            {
-                expanded
-                    .entry((adjacent.source_id, adjacent.chunk_index))
-                    .or_insert(adjacent);
-            }
-        }
-
-        let mut hits = expanded.into_values().collect::<Vec<_>>();
-        hits.sort_by(|a, b| {
-            a.source_id
-                .cmp(&b.source_id)
-                .then_with(|| a.chunk_index.cmp(&b.chunk_index))
-        });
-        hits
+        expand_with_adjacent_hits(&base_hits, options.adjacent_chunks, |hit, min, max| {
+            fetch_adjacent_hit_meta(&conn, collection_id, hit.source_id, min, max)
+        })?
     } else {
         base_hits.clone()
     };
@@ -5824,5 +5835,36 @@ mod tests {
 
         let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
         teardown_test_db(db_path);
+    }
+
+    // Q4 B11: adjacent chunks must not move a hit behind a chunk that was only
+    // added as context.
+    #[test]
+    fn test_adjacent_hits_follow_hits_in_rank_order() {
+        let hit = |source_id, chunk_index, similarity| {
+            build_search_hit_meta(
+                source_id * 100 + chunk_index as i64,
+                source_id,
+                chunk_index,
+                similarity,
+                "general",
+            )
+        };
+        // Best hit in source 2, second in source 1 (lower id).
+        let base = vec![hit(2, 1, 0.9), hit(1, 3, 0.5)];
+        let ordered = expand_with_adjacent_hits(&base, 1, |h, min, max| {
+            Ok((min..=max)
+                .rev()
+                .map(|index| hit(h.source_id, index, 0.0))
+                .collect())
+        })
+        .unwrap();
+        let keys = ordered
+            .iter()
+            .map(|h| (h.source_id, h.chunk_index))
+            .collect::<Vec<_>>();
+        assert_eq!(keys, vec![(2, 1), (1, 3), (2, 0), (2, 2), (1, 2), (1, 4)]);
+        assert_eq!(ordered[0].similarity, 0.9);
+        assert!(ordered[2..].iter().all(|h| h.similarity == 0.0));
     }
 }

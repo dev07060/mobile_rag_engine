@@ -200,6 +200,44 @@ void main() {
     test('ignores brackets that are not citations', () {
       expect(ids('No citations [a] [1a] [ ] [-1] here'), isEmpty);
     });
+
+    // Q4 B12: citation forms models answering in Korean, Japanese or Chinese
+    // produce, and code that is not a citation.
+    test('reads full-width brackets and digits', () {
+      expect(ids('返金は可能です［１］。価格は３.５ドル［２］。'), ['1', '2']);
+      expect(ids('환불 가능［3］ and [２]'), ['3', '2']);
+      expect(ids('「２」と『３』'), ['2', '3']);
+    });
+
+    test('reads lenticular brackets', () {
+      expect(ids('北京是中国的首都【1】，人口很多【3】。'), ['1', '3']);
+      expect(ids('【1，2】'), ['1', '2']);
+    });
+
+    test('reads ideographic and full-width commas', () {
+      expect(ids('東京は大きい[1、2]。'), ['1', '2']);
+      expect(ids('[3，1]'), ['3', '1']);
+      expect(ids('【2、3】'), ['2', '3']);
+    });
+
+    test('reads ranges', () {
+      expect(ids('환불은 14일 이내 🚀 [1-3]'), ['1', '2', '3']);
+      expect(ids('[2–3] and [1~2]'), ['2', '3', '1']);
+      expect(ids('［１－２］'), ['1', '2']);
+      // Only ids that were given; reversed ranges are not citations.
+      expect(ids('[2-9]'), ['2', '3']);
+      expect(ids('[3-1] [2024-11]'), isEmpty);
+    });
+
+    test('does not read code as citations', () {
+      expect(ids('Use `items[2]` here [1].'), ['1']);
+      expect(ids('```dart\nfinal x = items[2] + list[3];\n```\nSee [1].'), [
+        '1',
+      ]);
+      expect(ids('~~~\nrow[2]\n~~~\n'), isEmpty);
+      // Text after a code span is still read.
+      expect(ids('`a[1]` 그리고 「3」 3.14 [2]'), ['3', '2']);
+    });
   });
 
   group('MobileRag.prepareAsk / ask search weights', () {

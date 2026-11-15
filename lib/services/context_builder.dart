@@ -619,7 +619,8 @@ Answer:''';
       return '';
     }
 
-    var maxChars = renderedText.length;
+    // Rust counts `maxChars` in Unicode code points, not UTF-16 units.
+    var maxChars = renderedText.runes.length;
     String compressedText = renderedText;
     final options = compression.CompressionOptions(
       removeStopwords: false, // Disabled - damages context
@@ -656,9 +657,13 @@ Answer:''';
         return compressedText;
       }
 
+      final upper = maxChars - 1;
+      if (upper < 1) {
+        break;
+      }
       final nextMaxChars = ((maxChars * tokenBudget) / tokenCount)
           .floor()
-          .clamp(32, maxChars - 1);
+          .clamp(upper < 32 ? upper : 32, upper);
       if (nextMaxChars >= maxChars) {
         break;
       }
@@ -682,6 +687,14 @@ Answer:''';
     return current;
   }
 
+  /// A sentence ends after `.`, `!`, `?` or `…` followed by whitespace (so
+  /// `3.14` and `v1.2.3` are not cut), and always after `。！？｡`, which CJK
+  /// text writes without a following space. Closing quotes and brackets
+  /// stay with the sentence. This is the rule `compress_text` uses.
+  static final _sentenceEnd = RegExp(
+    '(?:[.!?…]["\'\\)\\]\u2019\u201d」』）]*(?=\\s)|[。！？｡]["\'\\)\\]\u2019\u201d」』）]*)',
+  );
+
   static int _previousTrimBoundary(String text) {
     final newlineBoundary = text.lastIndexOf('\n');
     if (newlineBoundary > 0) {
@@ -689,12 +702,10 @@ Answer:''';
     }
 
     RegExpMatch? sentenceBoundary;
-    for (final match in RegExp(
-      "[.!?。！？…](?:[\"')\\]\\u2019\\u201d]+)?\\s+",
-    ).allMatches(text)) {
-      sentenceBoundary = match;
+    for (final match in _sentenceEnd.allMatches(text)) {
+      if (match.end < text.length) sentenceBoundary = match;
     }
-    if (sentenceBoundary != null && sentenceBoundary.end < text.length) {
+    if (sentenceBoundary != null) {
       return sentenceBoundary.end;
     }
 
