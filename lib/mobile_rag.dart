@@ -28,6 +28,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:mobile_rag_engine/src/internal/defaults.dart';
+import 'package:mobile_rag_engine/src/internal/prompt_budget.dart';
 import 'package:mobile_rag_engine/src/internal/validation.dart';
 import 'package:mobile_rag_engine/services/rag_config.dart';
 import 'package:mobile_rag_engine/services/rag_engine.dart';
@@ -529,6 +530,9 @@ class MobileRag {
       _engine!.getSourceDocument(sourceId);
 
   /// Search for relevant chunks and assemble context for LLM.
+  ///
+  /// `ChunkSearchResult.similarity` is the cosine similarity of the chunk to
+  /// the query, with or without [sourceIds].
   Future<RagSearchResult> search(
     String query, {
     int topK = 10,
@@ -684,18 +688,24 @@ class MobileRag {
   /// complete answer to [RagAskPrompt.answer].
   ///
   /// Searches like [searchHybridWithContext] for [topK] passages within
-  /// [tokenBudget] engine tokens, with the same [vectorWeight] / [bm25Weight]
-  /// as [searchHybrid]. Citation ids start at 1 for every question.
+  /// [tokenBudget] tokens, with the same [vectorWeight] / [bm25Weight] as
+  /// [searchHybrid]. Citation ids start at 1 for every question.
   /// The prompt is empty when nothing was found.
+  ///
+  /// Without [promptTokenCounter], [tokenBudget] counts tokens of the
+  /// embedding model's tokenizer, not the LLM's. Pass your LLM's token count
+  /// as [promptTokenCounter] to count passage texts in its tokens instead;
+  /// the most relevant passages that fit are kept whole.
   Future<RagAskPrompt> prepareAsk(
     String question, {
     int topK = 5,
     int tokenBudget = 1500,
     double? vectorWeight,
     double? bm25Weight,
+    PromptTokenCounter? promptTokenCounter,
     RagPromptBuilder buildPrompt = defaultAskPrompt,
   }) => prepareAskWith(
-    _askTool(topK, tokenBudget, vectorWeight, bm25Weight),
+    _askTool(topK, tokenBudget, vectorWeight, bm25Weight, promptTokenCounter),
     question,
     buildPrompt: buildPrompt,
   );
@@ -712,9 +722,10 @@ class MobileRag {
     int tokenBudget = 1500,
     double? vectorWeight,
     double? bm25Weight,
+    PromptTokenCounter? promptTokenCounter,
     RagPromptBuilder buildPrompt = defaultAskPrompt,
   }) => askWith(
-    _askTool(topK, tokenBudget, vectorWeight, bm25Weight),
+    _askTool(topK, tokenBudget, vectorWeight, bm25Weight, promptTokenCounter),
     question,
     generate: generate,
     buildPrompt: buildPrompt,
@@ -725,13 +736,18 @@ class MobileRag {
     int tokenBudget,
     double? vectorWeight,
     double? bm25Weight,
+    PromptTokenCounter? promptTokenCounter,
   ) => RagSearchTool(
-    search: (query, k) => _engine!.searchHybridWithContext(
-      query,
-      topK: k,
-      tokenBudget: tokenBudget,
-      vectorWeight: vectorWeight,
-      bm25Weight: bm25Weight,
+    search: (query, k) => searchWithinPromptBudget(
+      tokenBudget,
+      promptTokenCounter,
+      (budget) => _engine!.searchHybridWithContext(
+        query,
+        topK: k,
+        tokenBudget: budget,
+        vectorWeight: vectorWeight,
+        bm25Weight: bm25Weight,
+      ),
     ),
     listSources: listSources,
     defaultTopK: topK,
@@ -979,18 +995,24 @@ class CollectionRag {
   /// complete answer to [RagAskPrompt.answer].
   ///
   /// Searches like [searchHybridWithContext] for [topK] passages within
-  /// [tokenBudget] engine tokens, with the same [vectorWeight] / [bm25Weight]
-  /// as [searchHybrid]. Citation ids start at 1 for every question.
+  /// [tokenBudget] tokens, with the same [vectorWeight] / [bm25Weight] as
+  /// [searchHybrid]. Citation ids start at 1 for every question.
   /// The prompt is empty when nothing was found.
+  ///
+  /// Without [promptTokenCounter], [tokenBudget] counts tokens of the
+  /// embedding model's tokenizer, not the LLM's. Pass your LLM's token count
+  /// as [promptTokenCounter] to count passage texts in its tokens instead;
+  /// the most relevant passages that fit are kept whole.
   Future<RagAskPrompt> prepareAsk(
     String question, {
     int topK = 5,
     int tokenBudget = 1500,
     double? vectorWeight,
     double? bm25Weight,
+    PromptTokenCounter? promptTokenCounter,
     RagPromptBuilder buildPrompt = defaultAskPrompt,
   }) => prepareAskWith(
-    _askTool(topK, tokenBudget, vectorWeight, bm25Weight),
+    _askTool(topK, tokenBudget, vectorWeight, bm25Weight, promptTokenCounter),
     question,
     buildPrompt: buildPrompt,
   );
@@ -1007,9 +1029,10 @@ class CollectionRag {
     int tokenBudget = 1500,
     double? vectorWeight,
     double? bm25Weight,
+    PromptTokenCounter? promptTokenCounter,
     RagPromptBuilder buildPrompt = defaultAskPrompt,
   }) => askWith(
-    _askTool(topK, tokenBudget, vectorWeight, bm25Weight),
+    _askTool(topK, tokenBudget, vectorWeight, bm25Weight, promptTokenCounter),
     question,
     generate: generate,
     buildPrompt: buildPrompt,
@@ -1020,14 +1043,19 @@ class CollectionRag {
     int tokenBudget,
     double? vectorWeight,
     double? bm25Weight,
+    PromptTokenCounter? promptTokenCounter,
   ) => RagSearchTool(
-    search: (query, k) => _engine.searchHybridWithContext(
-      query,
-      topK: k,
-      tokenBudget: tokenBudget,
-      vectorWeight: vectorWeight,
-      bm25Weight: bm25Weight,
-      collectionId: _collectionId,
+    search: (query, k) => searchWithinPromptBudget(
+      tokenBudget,
+      promptTokenCounter,
+      (budget) => _engine.searchHybridWithContext(
+        query,
+        topK: k,
+        tokenBudget: budget,
+        vectorWeight: vectorWeight,
+        bm25Weight: bm25Weight,
+        collectionId: _collectionId,
+      ),
     ),
     listSources: listSources,
     defaultTopK: topK,

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+import 'package:mobile_rag_engine/src/internal/prompt_budget.dart';
 import 'package:mocktail/mocktail.dart';
 
 class _MockRagEngine extends Mock implements RagEngine {}
@@ -237,6 +238,128 @@ void main() {
       expect(ids('~~~\nrow[2]\n~~~\n'), isEmpty);
       // Text after a code span is still read.
       expect(ids('`a[1]` 그리고 「3」 3.14 [2]'), ['3', '2']);
+    });
+  });
+
+  // Q4 B13: tokenBudget in the LLM's tokens when the app gives a counter.
+  group('promptTokenCounter', () {
+    late _MockRagEngine engine;
+    late MobileRag rag;
+    // 29, 22 and 16 code points.
+    final ko = _chunk(31, 7, '환불은 구매일로부터 14일 이내에 가능하다 🚀 ２.５');
+    final ja = _chunk(32, 7, '返金は14日以内です。東京は大きい。3.14');
+    final zh = _chunk(33, 9, '\u1112\u116a\u11ab\u1107\u116e\u11af 退款需在14天内。');
+    int codePoints(String text) => text.runes.length;
+
+    setUp(() {
+      engine = _MockRagEngine();
+      rag = MobileRag.useEngineForTest(engine);
+      when(
+        () => engine.searchHybridWithContext(
+          any(),
+          topK: any(named: 'topK'),
+          tokenBudget: any(named: 'tokenBudget'),
+          vectorWeight: any(named: 'vectorWeight'),
+          bm25Weight: any(named: 'bm25Weight'),
+          collectionId: any(named: 'collectionId'),
+        ),
+      ).thenAnswer((_) async => _result([ko, ja, zh]));
+      when(
+        () => engine.listSources(collectionId: any(named: 'collectionId')),
+      ).thenAnswer((_) async => [_source(7, 'refund.md')]);
+    });
+    tearDown(() => MobileRag.setMockInstance(null));
+
+    List<int> chunkIds(RagAskPrompt p) => [
+      for (final x in p.passages) x.chunkId!,
+    ];
+
+    test(
+      'keeps the most relevant passages that fit, counted by the counter',
+      () async {
+        expect(codePoints(ko.content), 29);
+        expect(codePoints(ja.content), 22);
+        final one = await rag.prepareAsk(
+          'q',
+          tokenBudget: 50,
+          promptTokenCounter: codePoints,
+        );
+        final two = await rag.prepareAsk(
+          'q',
+          tokenBudget: 51,
+          promptTokenCounter: codePoints,
+        );
+        expect(chunkIds(one), [31]);
+        expect(chunkIds(two), [31, 32]);
+        expect(one.prompt, contains(ko.content));
+        expect(one.prompt, isNot(contains(ja.content)));
+      },
+    );
+
+    test('lets the engine keep every hit whole', () async {
+      await rag.ask(
+        'q',
+        generate: (_) async => '［１］',
+        tokenBudget: 100,
+        promptTokenCounter: codePoints,
+      );
+      verify(
+        () => engine.searchHybridWithContext(
+          'q',
+          topK: 5,
+          tokenBudget: uncappedEngineTokenBudget,
+          vectorWeight: null,
+          bm25Weight: null,
+        ),
+      ).called(1);
+    });
+
+    test('a passage larger than the budget is left out, not cut', () async {
+      final none = await rag.prepareAsk(
+        'q',
+        tokenBudget: 28,
+        promptTokenCounter: codePoints,
+      );
+      expect(none.hasPassages, isFalse);
+      expect(none.prompt, isEmpty);
+    });
+
+    test('works on collections and on the tool', () async {
+      final scoped = await rag
+          .inCollection('manuals')
+          .prepareAsk('q', tokenBudget: 51, promptTokenCounter: codePoints);
+      expect(chunkIds(scoped), [31, 32]);
+      verify(
+        () => engine.searchHybridWithContext(
+          'q',
+          topK: 5,
+          tokenBudget: uncappedEngineTokenBudget,
+          vectorWeight: null,
+          bm25Weight: null,
+          collectionId: 'manuals',
+        ),
+      ).called(1);
+
+      final tool = RagSearchTool.fromMobileRag(
+        rag,
+        tokenBudget: 67,
+        promptTokenCounter: codePoints,
+      );
+      final json = await tool.call({'query': 'q'});
+      expect(
+        [for (final r in json['results'] as List) (r as Map)['chunk_id']],
+        [31, 32, 33],
+      );
+      final tight = RagSearchTool.fromMobileRag(
+        rag,
+        tokenBudget: 30,
+        promptTokenCounter: codePoints,
+      );
+      final tightJson = await tight.call({'query': 'q'});
+      expect(
+        [for (final r in tightJson['results'] as List) (r as Map)['chunk_id']],
+        [31],
+      );
     });
   });
 

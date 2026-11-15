@@ -66,13 +66,19 @@ class PromptCompressor {
   ///
   /// [chunks] - Search result chunks to compress.
   /// [level] - Compression aggressiveness.
-  /// [maxTokens] - Target maximum tokens (uses char/4 estimate).
+  /// [maxTokens] - Target maximum tokens. Without [tokenCounter] this is an
+  ///   estimate of 4 characters per token, which can be several times off
+  ///   for Korean, Japanese, Chinese, Thai or emoji.
   /// [language] - Language for stopword filtering ("ko" or "en").
+  /// [tokenCounter] - Counts tokens as your LLM does. When given, the text is
+  ///   cut at sentence boundaries until it has at most [maxTokens] tokens by
+  ///   this count, and [CompressedContext.estimatedTokensSaved] uses it too.
   static Future<CompressedContext> compress({
     required List<ChunkSearchResult> chunks,
     CompressionLevel level = CompressionLevel.balanced,
     int maxTokens = 2000,
     String language = 'ko',
+    int Function(String text)? tokenCounter,
   }) async {
     if (chunks.isEmpty) {
       return const CompressedContext(
@@ -92,9 +98,6 @@ class PromptCompressor {
     // Convert level to int for Rust
     final levelInt = level.index;
 
-    // Calculate max chars from token budget (~4 chars per token)
-    final maxChars = maxTokens * 4;
-
     // Create compression options
     final options = rust.CompressionOptions(
       removeStopwords: false, // Disabled - damages context
@@ -103,17 +106,27 @@ class PromptCompressor {
       level: levelInt,
     );
 
-    // Call Rust compression
-    final result = await rust.compressText(
-      text: originalText,
-      maxChars: maxChars,
-      options: options,
-    );
-
-    // Calculate token savings (rough estimate)
-    final originalTokens = (originalChars / 4).ceil();
-    final compressedTokens = (result.compressedChars / 4).ceil();
-    final tokensSaved = originalTokens - compressedTokens;
+    final rust.CompressedText result;
+    final int tokensSaved;
+    if (tokenCounter == null) {
+      // Calculate max chars from token budget (~4 chars per token)
+      result = await rust.compressText(
+        text: originalText,
+        maxChars: maxTokens * 4,
+        options: options,
+      );
+      // Calculate token savings (rough estimate)
+      tokensSaved =
+          (originalChars / 4).ceil() - (result.compressedChars / 4).ceil();
+    } else {
+      result = await _compressToTokens(
+        originalText,
+        maxTokens,
+        tokenCounter,
+        options,
+      );
+      tokensSaved = tokenCounter(originalText) - tokenCounter(result.text);
+    }
 
     return CompressedContext(
       text: result.text,
@@ -123,6 +136,39 @@ class PromptCompressor {
       estimatedTokensSaved: tokensSaved,
       includedChunks: chunks,
     );
+  }
+
+  /// Compresses [text] without a length limit, then shortens the limit (in
+  /// characters, which `compressText` cuts at a sentence end) until [count]
+  /// gives at most [maxTokens].
+  static Future<rust.CompressedText> _compressToTokens(
+    String text,
+    int maxTokens,
+    int Function(String text) count,
+    rust.CompressionOptions options,
+  ) async {
+    var result = await rust.compressText(
+      text: text,
+      maxChars: 0,
+      options: options,
+    );
+    var maxChars = result.text.runes.length;
+    for (var i = 0; i < 16; i++) {
+      final tokens = count(result.text);
+      if (tokens <= maxTokens || maxChars <= 1) break;
+      maxChars = ((maxChars * maxTokens) / tokens).floor().clamp(
+        1,
+        maxChars - 1,
+      );
+      result = await rust.compressText(
+        text: text,
+        maxChars: maxChars,
+        options: options,
+      );
+      // The cut may land before the limit; continue from the actual length.
+      maxChars = result.text.runes.length.clamp(1, maxChars);
+    }
+    return result;
   }
 
   /// Quick compress a single text string.

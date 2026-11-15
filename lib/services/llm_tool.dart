@@ -4,10 +4,15 @@ library;
 import 'dart:convert';
 
 import '../mobile_rag.dart';
+import '../src/internal/prompt_budget.dart';
 
 /// Runs one search for [RagSearchTool]: the model's [query] and [topK].
 typedef RagToolSearch =
     Future<RagSearchResult> Function(String query, int topK);
+
+/// Counts the tokens of [text] as the LLM the prompt goes to counts them, for
+/// example with its SDK's tokenizer.
+typedef PromptTokenCounter = int Function(String text);
 
 /// A search tool an LLM can call, described in a provider-neutral shape.
 ///
@@ -46,7 +51,13 @@ class RagSearchTool {
   }
 
   /// Searches [rag] with hybrid (vector + keyword) search, keeping the
-  /// returned passages within [tokenBudget] engine tokens.
+  /// returned passages within [tokenBudget] tokens.
+  ///
+  /// Without [promptTokenCounter], [tokenBudget] counts tokens of the
+  /// embedding model's tokenizer, which can differ several times from the
+  /// LLM's count, especially for Korean, Japanese, Chinese, Thai and emoji.
+  /// With it, [tokenBudget] counts passage texts with [promptTokenCounter],
+  /// keeping the most relevant passages that fit; passages are not cut.
   ///
   /// [MobileRag] methods go through the current engine, so the tool keeps
   /// working after [MobileRag.dispose] and a new [MobileRag.initialize].
@@ -57,11 +68,13 @@ class RagSearchTool {
     int defaultTopK = 5,
     int maxTopK = 10,
     int tokenBudget = 1500,
+    PromptTokenCounter? promptTokenCounter,
   }) => RagSearchTool(
-    search: (query, topK) => rag.searchHybridWithContext(
-      query,
-      topK: topK,
-      tokenBudget: tokenBudget,
+    search: (query, topK) => searchWithinPromptBudget(
+      tokenBudget,
+      promptTokenCounter,
+      (budget) =>
+          rag.searchHybridWithContext(query, topK: topK, tokenBudget: budget),
     ),
     listSources: rag.listSources,
     name: name,
@@ -82,10 +95,15 @@ class RagSearchTool {
     int defaultTopK = 5,
     int maxTopK = 10,
     int tokenBudget = 1500,
+    PromptTokenCounter? promptTokenCounter,
   }) => RagSearchTool(
-    search: (query, topK) => MobileRag.instance
-        .inCollection(collectionId)
-        .searchHybridWithContext(query, topK: topK, tokenBudget: tokenBudget),
+    search: (query, topK) => searchWithinPromptBudget(
+      tokenBudget,
+      promptTokenCounter,
+      (budget) => MobileRag.instance
+          .inCollection(collectionId)
+          .searchHybridWithContext(query, topK: topK, tokenBudget: budget),
+    ),
     listSources: () =>
         MobileRag.instance.inCollection(collectionId).listSources(),
     name: name,
