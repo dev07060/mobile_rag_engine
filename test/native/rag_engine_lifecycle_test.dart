@@ -72,6 +72,28 @@ void main() {
     expect((await engine.getStats()).chunkCount.toInt(), again.chunkCount);
   });
 
+  // Same as above, but dispose runs before the ingest has sent anything to
+  // the worker, as it does on a slow CI runner.
+  test('dispose before an ingest reaches the worker ends it with a '
+      'StateError', () async {
+    await EmbeddingService.startWorkerForTest(silentWorker);
+    var engine = await _engine(dbPath);
+    final ingest = engine.addDocument(_mixedText, name: 'refund.txt');
+    final failed = expectLater(
+      ingest.timeout(const Duration(seconds: 20)),
+      throwsA(isA<StateError>()),
+    );
+    await RagEngine.dispose().timeout(const Duration(seconds: 20));
+    await failed;
+
+    await EmbeddingService.startWorkerForTest(answeringWorker);
+    engine = await _engine(dbPath);
+    final again = await engine
+        .addDocument(_mixedText, name: 'refund.txt')
+        .timeout(const Duration(seconds: 20));
+    expect(again.chunkCount, greaterThan(0), reason: again.message);
+  });
+
   // B6: the 500 ms auto-rebuild timer belongs to the instance and the static
   // dispose could not cancel it. It fired on a closed database and threw an
   // unhandled error (the test zone reports it).

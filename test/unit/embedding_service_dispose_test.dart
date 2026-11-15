@@ -25,6 +25,23 @@ void main() {
     await outcome;
   });
 
+  // An ingest that reaches embed() just after dispose finished, which is
+  // the common order on a slow CI runner.
+  test('embed() after dispose fails with a StateError', () async {
+    await EmbeddingService.startWorkerForTest(answeringWorker);
+    await EmbeddingService.disposeAsync();
+    await expectLater(
+      EmbeddingService.embed('東京 3.14 😀'),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('disposed'),
+        ),
+      ),
+    );
+  });
+
   test(
     'embed() fails when a new worker replaces the one it waits for',
     () async {
