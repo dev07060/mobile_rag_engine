@@ -319,11 +319,21 @@ pub fn detect_embedding_fingerprint_gate(
     if stored.is_empty() {
         return Ok(EmbeddingFingerprintGate::RequiresInitialBaseline);
     }
-    if stored == current_fingerprint {
-        return Ok(EmbeddingFingerprintGate::Ok);
-    }
-
-    let remaining = count_chunks_with_non_matching_fingerprint(&conn, &current_fingerprint)?;
+    let remaining = if stored == current_fingerprint {
+        // The baseline matches, but a reembed towards another model may have
+        // stopped part way (Q2 B3): its chunks carry that model's vectors.
+        // Only then is the matching baseline not enough.
+        if pending.is_empty() {
+            return Ok(EmbeddingFingerprintGate::Ok);
+        }
+        let remaining = count_chunks_with_non_matching_fingerprint(&conn, &current_fingerprint)?;
+        if remaining == 0 {
+            return Ok(EmbeddingFingerprintGate::Ok);
+        }
+        remaining
+    } else {
+        count_chunks_with_non_matching_fingerprint(&conn, &current_fingerprint)?
+    };
     let resume_in_progress = !pending.is_empty() && pending == current_fingerprint;
     Ok(EmbeddingFingerprintGate::Mismatch {
         stored,
@@ -516,7 +526,9 @@ fn stored_embedding_f32(embedding: &[u8], packed: Option<Vec<u8>>, mmap_id: Opti
 /// Writes `embedding_fingerprint_pending = target_fingerprint` (sticky across
 /// reboots, so the flow is resumable) and returns the number of chunks that
 /// still need re-embedding. Idempotent — calling it again with the same
-/// target is safe.
+/// target is safe. A pending reembed towards another target is replaced:
+/// chunks are counted per fingerprint, so the new run re-embeds everything
+/// not yet tagged with `target_fingerprint`.
 pub fn begin_embedding_reembed(target_fingerprint: String) -> Result<i64, RagError> {
     if target_fingerprint.is_empty() {
         return Err(RagError::InvalidInput(
@@ -526,10 +538,15 @@ pub fn begin_embedding_reembed(target_fingerprint: String) -> Result<i64, RagErr
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
     let pending = read_axis_string_or_empty(&conn, KEY_EMBEDDING_FINGERPRINT_PENDING)?;
     if !pending.is_empty() && pending != target_fingerprint {
-        return Err(RagError::InvalidInput(format!(
-            "reembed already pending towards '{pending}'; cannot retarget to \
-             '{target_fingerprint}'"
-        )));
+        // A reembed towards another model stopped part way and the app now
+        // loads a different one (Q2 B3). Every chunk not tagged with the new
+        // target is re-embedded, including the ones the old run finished, and
+        // finalize still requires all of them, so retargeting is safe. Refusing
+        // it left `clearAndRestart()` as the only way out.
+        info!(
+            "[migration_meta] reembed retargeted: pending '{}' -> '{}'",
+            pending, target_fingerprint
+        );
     }
     upsert_axis(
         &conn,
@@ -1006,6 +1023,95 @@ mod tests {
         finalize_embedding_reembed("new".to_string()).unwrap();
         let axes = read_migration_axes().unwrap();
         assert_eq!(axes.embedding_fingerprint, "new");
+        assert_eq!(axes.embedding_fingerprint_pending, EMPTY_FINGERPRINT);
+        drop(pool);
+    }
+
+    // Q2 B3: a reembed A -> B stopped half way, then the app went back to A.
+    // The stored fingerprint equals the loaded model again, but half of the
+    // vectors were written by B. That must lock, not pass as Ok.
+    #[test]
+    fn gate_locks_when_an_interrupted_reembed_left_other_model_vectors() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("model-a".to_string()).unwrap();
+        insert_chunk("환불은 14일 이내", Some("model-a"));
+        let half = insert_chunk("東京は大きい。3.14 😀", Some("model-a"));
+        begin_embedding_reembed("model-b".to_string()).unwrap();
+        {
+            let conn = get_connection().unwrap();
+            conn.execute(
+                "UPDATE chunks SET embedding_fingerprint = 'model-b' WHERE id = ?1",
+                params![half],
+            )
+            .unwrap();
+        }
+
+        match detect_embedding_fingerprint_gate("model-a".to_string()).unwrap() {
+            EmbeddingFingerprintGate::Mismatch {
+                stored,
+                current,
+                remaining_chunks,
+                resume_in_progress,
+            } => {
+                assert_eq!(stored, "model-a");
+                assert_eq!(current, "model-a");
+                assert_eq!(remaining_chunks, 1);
+                assert!(!resume_in_progress);
+            }
+            other => panic!("expected Mismatch, got {:?}", other),
+        }
+
+        // Going back to A finishes by re-embedding B's half with A.
+        assert_eq!(begin_embedding_reembed("model-a".to_string()).unwrap(), 1);
+        {
+            let conn = get_connection().unwrap();
+            conn.execute(
+                "UPDATE chunks SET embedding_fingerprint = 'model-a' WHERE id = ?1",
+                params![half],
+            )
+            .unwrap();
+        }
+        finalize_embedding_reembed("model-a".to_string()).unwrap();
+        assert!(matches!(
+            detect_embedding_fingerprint_gate("model-a".to_string()).unwrap(),
+            EmbeddingFingerprintGate::Ok
+        ));
+        drop(pool);
+    }
+
+    // Q2 B3: after an interrupted A -> B, loading a third model C must be able
+    // to re-embed towards C instead of failing with "cannot retarget".
+    #[test]
+    fn reembed_can_retarget_after_an_interrupted_reembed() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("model-a".to_string()).unwrap();
+        insert_chunk("北京是中国的首都。", Some("model-a"));
+        let half = insert_chunk("ＲＡＧ 가이드", Some("model-a"));
+        begin_embedding_reembed("model-b".to_string()).unwrap();
+        {
+            let conn = get_connection().unwrap();
+            conn.execute(
+                "UPDATE chunks SET embedding_fingerprint = 'model-b' WHERE id = ?1",
+                params![half],
+            )
+            .unwrap();
+        }
+
+        assert_eq!(begin_embedding_reembed("model-c".to_string()).unwrap(), 2);
+        let axes = read_migration_axes().unwrap();
+        assert_eq!(axes.embedding_fingerprint_pending, "model-c");
+        {
+            let conn = get_connection().unwrap();
+            conn.execute("UPDATE chunks SET embedding_fingerprint = 'model-c'", [])
+                .unwrap();
+        }
+        finalize_embedding_reembed("model-c".to_string()).unwrap();
+        let axes = read_migration_axes().unwrap();
+        assert_eq!(axes.embedding_fingerprint, "model-c");
         assert_eq!(axes.embedding_fingerprint_pending, EMPTY_FINGERPRINT);
         drop(pool);
     }

@@ -65,6 +65,7 @@ import '../src/rust/api/source_rag.dart'
 import '../src/internal/asset_file_sync.dart';
 import '../src/internal/embedding_fingerprint.dart';
 import '../src/internal/storage_directory.dart';
+import '../src/internal/defaults.dart';
 import '../src/internal/validation.dart';
 import '../model_pack.dart';
 
@@ -94,6 +95,11 @@ class RagEngine {
     await initRustLibForPlatform();
     _isRustInitialized = true;
   }
+
+  /// Engines that [dispose] has not released yet. `dispose` is static, so it
+  /// needs them to cancel their pending index rebuilds and wait for their
+  /// running work before the database closes.
+  static final Set<RagEngine> _liveEngines = {};
 
   final SourceRagService _ragService;
   final Map<String, SourceRagService> _collectionServices;
@@ -245,14 +251,78 @@ class RagEngine {
   /// Only runs if no operations are currently active.
   void _scheduleIndexRebuild() {
     if (_activeOperations > 0) return; // Don't schedule if busy
+    if (_disposed || _resetInProgress != null) return;
 
     _indexDebounceTimer?.cancel();
     _indexDebounceTimer = Timer(_debounceDuration, () {
-      if (_activeOperations > 0) return; // double-check
-      debugPrint('[RagEngine] Auto-rebuilding index (Debounce)...');
-      rebuildIndex();
       _indexDebounceTimer = null;
+      if (_activeOperations > 0) return; // double-check
+      if (_disposed || _resetInProgress != null) return;
+      debugPrint('[RagEngine] Auto-rebuilding index (Debounce)...');
+      // Nobody awaits this rebuild, so report a failure instead of leaving
+      // an unhandled error.
+      unawaited(
+        rebuildIndex().catchError((Object error) {
+          debugPrint('[RagEngine] Auto-rebuild failed: $error');
+        }),
+      );
     });
+  }
+
+  void _cancelPendingIndexRebuild() {
+    _indexDebounceTimer?.cancel();
+    _indexDebounceTimer = null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Work in flight (dispose and clearAllData wait for it)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Set by [dispose]. Later calls that write or rebuild throw.
+  bool _disposed = false;
+
+  /// Completes when a running [clearAllData] has recreated the database.
+  /// Writes and rebuilds that start meanwhile wait for it.
+  Completer<void>? _resetInProgress;
+
+  /// Writes and rebuilds that have started and not finished, in every
+  /// collection. Each future completes normally, whatever the outcome.
+  final Set<Future<void>> _operationsInFlight = {};
+
+  /// Runs a write or rebuild so that [clearAllData] and [dispose] can wait for
+  /// it. Before Q2 B7 they waited only for the default collection's warmup,
+  /// and an ingest in another collection kept writing into the recreated
+  /// database (or into a closed pool).
+  Future<T> _runOperation<T>(Future<T> Function() body) async {
+    if (_disposed) {
+      throw StateError('RagEngine was disposed. Initialize a new engine.');
+    }
+    final reset = _resetInProgress;
+    if (reset != null) await reset.future;
+    final operation = body();
+    final settled = operation.then<void>((_) {}, onError: (Object _) {});
+    _operationsInFlight.add(settled);
+    unawaited(settled.whenComplete(() => _operationsInFlight.remove(settled)));
+    return operation;
+  }
+
+  static Future<void> _ignoringErrors(Future<void> future) =>
+      future.then<void>((_) {}, onError: (Object _) {});
+
+  /// Waits until no write, rebuild, collection init or warmup is running.
+  Future<void> _waitForBackgroundWork() async {
+    while (true) {
+      final pending = <Future<void>>[
+        ..._operationsInFlight,
+        for (final init in _collectionInitInFlight.values) _ignoringErrors(init),
+        for (final service in _collectionServices.values)
+          _ignoringErrors(service.warmupFuture),
+      ];
+      await Future.wait(pending);
+      if (_operationsInFlight.isEmpty && _collectionInitInFlight.isEmpty) {
+        return;
+      }
+    }
   }
 
   /// Flushes any pending index rebuilds properly BEFORE a search.
@@ -468,7 +538,7 @@ class RagEngine {
       }
 
       onProgress?.call('Ready!');
-      return RagEngine._(
+      final engine = RagEngine._(
         ragService: ragService,
         dbPath: dbPath,
         vocabSize: vocabSize,
@@ -478,12 +548,52 @@ class RagEngine {
         defaultVectorWeight: config.defaultVectorWeight,
         defaultBm25Weight: config.defaultBm25Weight,
       );
+      _liveEngines.add(engine);
+      return engine;
     } catch (_) {
       if (embeddingWorkerInitialized) {
         await EmbeddingService.disposeAsync();
       }
       rethrow;
     }
+  }
+
+  /// **(FOR TESTING ONLY)** An engine on [dbPath] without the tokenizer and
+  /// ONNX steps of [initialize]. Load the native library first and start an
+  /// embedding worker with `EmbeddingService.startWorkerForTest`; it must
+  /// return [embeddingDimension]-long vectors. [embeddingFingerprint] stands
+  /// in for the model's fingerprint.
+  @visibleForTesting
+  static Future<RagEngine> initializeForTest({
+    required String dbPath,
+    required int embeddingDimension,
+    String embeddingFingerprint = 'test-model.onnx|test|f32+vabq:none',
+  }) async {
+    await vabq_config.configureVabqProfile(
+      profile: null,
+      embeddingDimension: embeddingDimension,
+    );
+    await initDbPool(dbPath: dbPath, maxSize: 4);
+    final ragService = SourceRagService(dbPath: dbPath);
+    RagEmbeddingFingerprintLock? lock;
+    await ragService.initForEngine(
+      deferIndexWarmup: false,
+      afterDatabaseInitialized: () async {
+        lock = await _resolveFingerprintGate(embeddingFingerprint);
+      },
+    );
+    final engine = RagEngine._(
+      ragService: ragService,
+      dbPath: dbPath,
+      vocabSize: 0,
+      currentEmbeddingFingerprint: embeddingFingerprint,
+      initialLock: lock,
+      deferIndexWarmup: false,
+      defaultVectorWeight: kDefaultVectorWeight,
+      defaultBm25Weight: kDefaultBm25Weight,
+    );
+    _liveEngines.add(engine);
+    return engine;
   }
 
   /// One-shot probe text used solely to read the model's output dimension.
@@ -669,28 +779,30 @@ class RagEngine {
     String? collectionId,
   }) async {
     _ensureEmbeddingFingerprintUnlocked();
-    final normalized = _normalizeCollectionId(collectionId);
-    final service = await _serviceForCollection(normalized);
+    return _runOperation(() async {
+      final normalized = _normalizeCollectionId(collectionId);
+      final service = await _serviceForCollection(normalized);
 
-    if (normalized == SourceRagService.defaultCollectionId) {
-      _startOperation(); // Start tracking
-    }
-    try {
-      final result = await service.addSourceWithChunking(
-        content,
-        metadata: metadata,
-        name: name,
-        filePath: filePath,
-        strategy: strategy,
-        chunkDelay: chunkDelay,
-        onProgress: onProgress,
-      );
-      return result;
-    } finally {
       if (normalized == SourceRagService.defaultCollectionId) {
-        _endOperation(); // End tracking -> Schedule debounce
+        _startOperation(); // Start tracking
       }
-    }
+      try {
+        final result = await service.addSourceWithChunking(
+          content,
+          metadata: metadata,
+          name: name,
+          filePath: filePath,
+          strategy: strategy,
+          chunkDelay: chunkDelay,
+          onProgress: onProgress,
+        );
+        return result;
+      } finally {
+        if (normalized == SourceRagService.defaultCollectionId) {
+          _endOperation(); // End tracking -> Schedule debounce
+        }
+      }
+    });
   }
 
   /// Add a UTF-8 document payload while reducing input-side Dart String materialization.
@@ -704,26 +816,28 @@ class RagEngine {
     String? collectionId,
   }) async {
     _ensureEmbeddingFingerprintUnlocked();
-    final normalized = _normalizeCollectionId(collectionId);
-    final service = await _serviceForCollection(normalized);
+    return _runOperation(() async {
+      final normalized = _normalizeCollectionId(collectionId);
+      final service = await _serviceForCollection(normalized);
 
-    if (normalized == SourceRagService.defaultCollectionId) {
-      _startOperation();
-    }
-    try {
-      return await service.addSourceUtf8WithChunking(
-        bytes,
-        metadata: metadata,
-        name: name,
-        strategy: strategy,
-        chunkDelay: chunkDelay,
-        onProgress: onProgress,
-      );
-    } finally {
       if (normalized == SourceRagService.defaultCollectionId) {
-        _endOperation();
+        _startOperation();
       }
-    }
+      try {
+        return await service.addSourceUtf8WithChunking(
+          bytes,
+          metadata: metadata,
+          name: name,
+          strategy: strategy,
+          chunkDelay: chunkDelay,
+          onProgress: onProgress,
+        );
+      } finally {
+        if (normalized == SourceRagService.defaultCollectionId) {
+          _endOperation();
+        }
+      }
+    });
   }
 
   /// Add a document from a file path using a Rust-side ingest fast path.
@@ -737,26 +851,28 @@ class RagEngine {
     String? collectionId,
   }) async {
     _ensureEmbeddingFingerprintUnlocked();
-    final normalized = _normalizeCollectionId(collectionId);
-    final service = await _serviceForCollection(normalized);
+    return _runOperation(() async {
+      final normalized = _normalizeCollectionId(collectionId);
+      final service = await _serviceForCollection(normalized);
 
-    if (normalized == SourceRagService.defaultCollectionId) {
-      _startOperation();
-    }
-    try {
-      return await service.addSourceFromFileWithChunking(
-        filePath,
-        metadata: metadata,
-        name: name,
-        strategy: strategy,
-        chunkDelay: chunkDelay,
-        onProgress: onProgress,
-      );
-    } finally {
       if (normalized == SourceRagService.defaultCollectionId) {
-        _endOperation();
+        _startOperation();
       }
-    }
+      try {
+        return await service.addSourceFromFileWithChunking(
+          filePath,
+          metadata: metadata,
+          name: name,
+          strategy: strategy,
+          chunkDelay: chunkDelay,
+          onProgress: onProgress,
+        );
+      } finally {
+        if (normalized == SourceRagService.defaultCollectionId) {
+          _endOperation();
+        }
+      }
+    });
   }
 
   /// Search for relevant chunks and assemble context for LLM.
@@ -961,16 +1077,18 @@ class RagEngine {
   /// [force] - If true, rebuilds even if no changes were detected (default: false).
   Future<void> rebuildIndex({bool force = false, String? collectionId}) async {
     _ensureEmbeddingFingerprintUnlocked();
-    final normalized = _normalizeCollectionId(collectionId);
-    final service = await _serviceForCollection(normalized);
+    return _runOperation(() async {
+      final normalized = _normalizeCollectionId(collectionId);
+      final service = await _serviceForCollection(normalized);
 
-    if (normalized == SourceRagService.defaultCollectionId) {
-      _indexDebounceTimer
-          ?.cancel(); // Cancel any pending auto-rebuild since we are doing it now
-      _indexDebounceTimer = null;
-    }
+      if (normalized == SourceRagService.defaultCollectionId) {
+        _indexDebounceTimer
+            ?.cancel(); // Cancel any pending auto-rebuild since we are doing it now
+        _indexDebounceTimer = null;
+      }
 
-    return service.rebuildIndex(force: force); // Service handles dirty check
+      return service.rebuildIndex(force: force); // Service handles dirty check
+    });
   }
 
   /// Try to load a cached HNSW index from disk.
@@ -994,20 +1112,21 @@ class RagEngine {
   }
 
   /// Remove a source and all its chunks from the database.
-  Future<void> removeSource(int sourceId, {String? collectionId}) async {
-    final normalized = _normalizeCollectionId(collectionId);
-    final service = await _serviceForCollection(normalized);
-    if (normalized == SourceRagService.defaultCollectionId) {
-      _startOperation();
-    }
-    try {
-      await service.removeSource(sourceId);
-    } finally {
-      if (normalized == SourceRagService.defaultCollectionId) {
-        _endOperation();
-      }
-    }
-  }
+  Future<void> removeSource(int sourceId, {String? collectionId}) =>
+      _runOperation(() async {
+        final normalized = _normalizeCollectionId(collectionId);
+        final service = await _serviceForCollection(normalized);
+        if (normalized == SourceRagService.defaultCollectionId) {
+          _startOperation();
+        }
+        try {
+          await service.removeSource(sourceId);
+        } finally {
+          if (normalized == SourceRagService.defaultCollectionId) {
+            _endOperation();
+          }
+        }
+      });
 
   /// Get a list of all stored sources.
   Future<List<SourceEntry>> listSources({String? collectionId}) async {
@@ -1082,6 +1201,13 @@ class RagEngine {
     if (batchSize <= 0) {
       throw ArgumentError.value(batchSize, 'batchSize', 'must be positive');
     }
+    return _runOperation(() => _reembedAll(onProgress, batchSize));
+  }
+
+  Future<void> _reembedAll(
+    void Function(RagReembedProgress progress)? onProgress,
+    int batchSize,
+  ) async {
     final target = currentEmbeddingFingerprint;
     final initialRemaining = await migration_meta.beginEmbeddingReembed(
       targetFingerprint: target,
@@ -1175,10 +1301,10 @@ class RagEngine {
   Future<void> regenerateAllEmbeddings({
     void Function(int done, int total)? onProgress,
     String? collectionId,
-  }) async {
+  }) => _runOperation(() async {
     final service = await _serviceForCollection(collectionId);
     return service.regenerateAllEmbeddings(onProgress: onProgress);
-  }
+  });
 
   /// Clear all data (database and index files) and reset the engine.
   ///
@@ -1187,17 +1313,33 @@ class RagEngine {
   /// 2. Deletes the SQLite database file and its sidecars
   /// 3. Deletes the vector store and the HNSW indexes of every collection
   /// 4. Re-initializes the database and service
+  ///
+  /// It first waits for running work in every collection (ingests, removals,
+  /// rebuilds, warmups). Writes and rebuilds called while it runs start after
+  /// the new database is ready.
   Future<void> clearAllData() async {
-    debugPrint('[RagEngine] clearAllData: Starting...');
-    // A deferred warmup may still be reading from SQLite. Let it leave the
-    // shared database before closing the pool and deleting its files.
-    try {
-      await _ragService.warmupFuture;
-    } catch (error) {
-      debugPrint(
-        '[RagEngine] clearAllData: Previous warmup failed; continuing reset: $error',
-      );
+    if (_disposed) {
+      throw StateError('RagEngine was disposed. Initialize a new engine.');
     }
+    final running = _resetInProgress;
+    if (running != null) return running.future;
+    final reset = Completer<void>();
+    _resetInProgress = reset;
+    try {
+      await _clearAllData();
+    } finally {
+      _resetInProgress = null;
+      reset.complete();
+    }
+  }
+
+  Future<void> _clearAllData() async {
+    debugPrint('[RagEngine] clearAllData: Starting...');
+    // Ingests, rebuilds and warmups in any collection may still be using
+    // SQLite. Let them leave the shared database before closing the pool and
+    // deleting its files, or they write into the recreated one (Q2 B7).
+    _cancelPendingIndexRebuild();
+    await _waitForBackgroundWork();
 
     // 1. Close DB pool
     debugPrint('[RagEngine] clearAllData: Closing DB pool...');
@@ -1262,8 +1404,22 @@ class RagEngine {
   /// Dispose of resources.
   ///
   /// Call this when done using the engine to release resources.
+  ///
+  /// Pending automatic index rebuilds are cancelled. Embedding requests that
+  /// have not been answered fail with a [StateError], so an ingest that was
+  /// running ends and marks its source failed instead of waiting forever;
+  /// the database closes after that work has finished.
   static Future<void> dispose() async {
+    final engines = List.of(_liveEngines);
+    _liveEngines.clear();
+    for (final engine in engines) {
+      engine._disposed = true;
+      engine._cancelPendingIndexRebuild();
+    }
     await EmbeddingService.disposeAsync();
+    for (final engine in engines) {
+      await engine._waitForBackgroundWork();
+    }
     await closeDbPool();
   }
 }

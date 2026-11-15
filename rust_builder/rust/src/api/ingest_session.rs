@@ -821,6 +821,57 @@ mod tests {
         teardown_test_db(db_path);
     }
 
+    fn default_collection_generations() -> (i64, i64) {
+        crate::api::db_pool::get_connection()
+            .unwrap()
+            .query_row(
+                "SELECT data_generation, index_generation FROM collection_index_state
+                 WHERE collection_id = '__default__'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap()
+    }
+
+    // Q2 B4: apps that add their bundled documents on every launch hit the
+    // duplicate path each time. Writing the same 'completed' status again
+    // bumped both generations, so the next search rebuilt BM25 and HNSW.
+    #[test]
+    fn test_duplicate_skip_does_not_bump_index_generations() {
+        let _guard = test_guard();
+        let db_path = setup_test_db("test_ingest_dup_skip_generation.db");
+        let content =
+            "환불은 14일 이내에 가능합니다. 東京は大きい。北京 ＲＡＧ 😀 3.14".to_string();
+        let prepare = |content: String| {
+            prepare_source_ingestion(
+                "__default__".to_string(),
+                content,
+                None,
+                Some("bundled.txt".to_string()),
+                IngestStrategy::Recursive,
+                120,
+                0,
+            )
+            .unwrap()
+        };
+        let first = prepare(content.clone());
+        {
+            let session_opaque = first.session.unwrap();
+            let mut session = session_opaque.blocking_write();
+            drain_session_with_fake_embeddings(&mut session);
+            session.finalize().unwrap();
+        }
+        let before = default_collection_generations();
+
+        for _ in 0..3 {
+            let again = prepare(content.clone());
+            assert_eq!(again.state, PreparedSourceState::DuplicateSkip);
+        }
+        assert_eq!(default_collection_generations(), before);
+
+        teardown_test_db(db_path);
+    }
+
     // S1 B-1: clearAndRestart() deletes every chunk and keeps the source rows
     // as 'completed'. Adding the same content again must ingest it.
     #[test]

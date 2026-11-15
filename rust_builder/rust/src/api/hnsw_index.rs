@@ -235,14 +235,19 @@ pub fn is_hnsw_index_loaded() -> bool {
     builder_guard.is_some()
 }
 
-/// Number of nodes in the currently loaded persisted HNSW index. Callers use
-/// this to reject a cache whose header does not cover every eligible DB row.
+/// Number of nodes in the index that searches use: the memory-mapped file
+/// when one is loaded, otherwise the in-memory builder (a rebuild that was
+/// not saved). Callers use this to reject a cache whose node count does not
+/// cover every eligible DB row.
 pub fn loaded_hnsw_node_count() -> Option<usize> {
-    HNSW_INDEX
+    if let Some(searcher) = HNSW_INDEX.read().unwrap().as_ref() {
+        return Some(searcher.get_num_nodes() as usize);
+    }
+    HNSW_BUILDER
         .read()
         .unwrap()
         .as_ref()
-        .map(|searcher| searcher.get_num_nodes() as usize)
+        .map(|builder| builder.nodes.len())
 }
 
 /// True when an in-memory builder with at least one node exists, i.e. when
@@ -253,6 +258,14 @@ pub(crate) fn hnsw_builder_has_nodes() -> bool {
         .unwrap()
         .as_ref()
         .is_some_and(|builder| !builder.nodes.is_empty())
+}
+
+/// Drop the memory-mapped index but keep the in-memory builder. Used after a
+/// rebuild: `search_hnsw_slice` reads the mapped index first, so a mapping of
+/// another collection (or of vectors from before a re-embed) would otherwise
+/// keep answering searches that the new builder should serve.
+pub(crate) fn unload_mapped_hnsw_index() {
+    HNSW_INDEX.write().unwrap().take();
 }
 
 pub fn clear_hnsw_index() {

@@ -24,6 +24,7 @@ use crate::api::db_pool::get_connection;
 use crate::api::error::RagError;
 use crate::api::hnsw_index::{
     build_hnsw_index, build_hnsw_index_streaming, clear_hnsw_index, hnsw_builder_has_nodes,
+    unload_mapped_hnsw_index,
     is_hnsw_index_loaded, load_hnsw_index, loaded_hnsw_node_count, save_hnsw_index, search_hnsw,
 };
 use crate::api::hybrid_search::{search_hybrid_meta_inner, RrfConfig, SearchFilter};
@@ -979,21 +980,29 @@ pub fn add_source_in_collection(
 /// Update processing status of a source (e.g., 'pending', 'processing', 'completed', 'failed').
 pub fn update_source_status(source_id: i64, status: String) -> Result<(), RagError> {
     let conn = get_connection().map_err(|e| RagError::DatabaseError(e.to_string()))?;
-    let collection_id: Option<String> = conn
+    let row: Option<(Option<String>, Option<String>)> = conn
         .query_row(
-            "SELECT collection_id FROM sources WHERE id = ?1",
+            "SELECT collection_id, status FROM sources WHERE id = ?1",
             params![source_id],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
+    let (collection_id, previous) = row.unwrap_or((None, None));
     let updated = conn
         .execute(
             "UPDATE sources SET status = ?1 WHERE id = ?2",
             params![status, source_id],
         )
         .map_err(|e| RagError::DatabaseError(e.to_string()))?;
-    if updated > 0 {
+    // Search eligibility reads `COALESCE(status, 'completed')`. Writing the
+    // same effective status again (the duplicate path does this on every
+    // re-add) changes nothing an index holds, so it must not bump the
+    // generations and force a full BM25/HNSW rebuild on the next search
+    // (Q2 B4).
+    let eligibility_changed =
+        previous.as_deref().unwrap_or("completed") != status.as_str();
+    if updated > 0 && eligibility_changed {
         if let Some(collection_id) = collection_id {
             mark_collection_data_changed(&conn, &collection_id)?;
         }
@@ -1434,6 +1443,10 @@ fn rebuild_chunk_hnsw_index_for_collection_inner(collection_id: String) -> Resul
         build_hnsw_index(points).map_err(|e| RagError::InternalError(e.to_string()))?;
         inserted
     };
+    // The new graph is in the builder. A mapped file loaded earlier belongs to
+    // another collection or to vectors from before a re-embed, and searches
+    // read the mapping first, so drop it (Q2 A4).
+    unload_mapped_hnsw_index();
 
     if inserted != point_count_hint {
         let error = format!(
@@ -5592,6 +5605,101 @@ mod tests {
         activate_collection_for_hybrid_search(collection.to_string(), base_path.clone()).unwrap();
         assert_eq!(bm25_hit_ids("platypusgem").len(), 1);
         assert_eq!(loaded_hnsw_node_count(), Some(1));
+
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        teardown_test_db(db_path);
+    }
+
+    // Q2 A4: hybrid activation leaves collection A's `.hnsw` file mapped in
+    // HNSW_INDEX. A plain vector search in collection B then rebuilt B into
+    // the in-memory builder but kept searching A's mapped graph first, so the
+    // collection filter dropped every hit and the search came back empty.
+    #[test]
+    fn vector_search_in_another_collection_does_not_use_the_mapped_graph() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_q2_a4_collection_switch.db");
+        let base_path = db_path
+            .with_extension("q2-a4")
+            .to_string_lossy()
+            .into_owned();
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+
+        add_completed_source(
+            "q2-a",
+            "문서 A",
+            vec![
+                stale_chunk(0, "환불은 14일 이내에 가능합니다.", stale_axis(0)),
+                stale_chunk(1, "東京は大きい。", stale_axis(1)),
+            ],
+        );
+        let source_b = add_completed_source(
+            "q2-b",
+            "文档 B",
+            vec![stale_chunk(
+                0,
+                "\u{1112}\u{1161}\u{11ab}\u{1100}\u{116e}\u{11a8} ＲＡＧ 🚀 3.14",
+                stale_axis(5),
+            )],
+        );
+
+        activate_collection_for_hybrid_search("q2-a".to_string(), base_path.clone()).unwrap();
+        assert!(loaded_hnsw_node_count().is_some(), "A's graph must be mapped");
+
+        let hits =
+            search_chunks_in_collection("q2-b".to_string(), stale_axis(5), 5).unwrap();
+        assert_eq!(
+            hits.iter().map(|hit| hit.source_id).collect::<Vec<_>>(),
+            vec![source_b],
+            "collection B search must use B's vectors"
+        );
+        assert!(hits[0].similarity > 0.99, "similarity={}", hits[0].similarity);
+
+        // And back to A, which now has to drop B's in-memory graph.
+        let back = search_chunks_in_collection("q2-a".to_string(), stale_axis(1), 1).unwrap();
+        assert_eq!(back[0].content, "東京は大きい。");
+
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+        teardown_test_db(db_path);
+    }
+
+    // Q2 A4, second half: re-embedding rotates the vectors behind the same
+    // chunk ids. The mapped graph from before must not answer a later search.
+    #[test]
+    fn vector_search_after_reembed_does_not_use_the_mapped_graph() {
+        let _guard = test_guard();
+        crate::api::vector_quant::configure_active_vabq_profile(None, 0).unwrap();
+        let db_path = setup_test_db("test_q2_a4_reembed.db");
+        let base_path = db_path
+            .with_extension("q2-a4-reembed")
+            .to_string_lossy()
+            .into_owned();
+        let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
+
+        let source = add_completed_source(
+            "q2-reembed",
+            "문서",
+            vec![
+                stale_chunk(0, "北京是中国的首都。", stale_axis(0)),
+                stale_chunk(1, "가격은 ３,５００원입니다 😀", stale_axis(1)),
+            ],
+        );
+        let ids = chunk_ids_of(source);
+        activate_collection_for_hybrid_search("q2-reembed".to_string(), base_path.clone())
+            .unwrap();
+        assert!(loaded_hnsw_node_count().is_some());
+
+        update_chunk_reembedded(ids[0], stale_axis(7), "model-b".to_string()).unwrap();
+        update_chunk_reembedded(ids[1], stale_axis(8), "model-b".to_string()).unwrap();
+
+        let hits =
+            search_chunks_in_collection("q2-reembed".to_string(), stale_axis(7), 1).unwrap();
+        assert_eq!(hits[0].chunk_id, ids[0]);
+        assert!(
+            hits[0].similarity > 0.99,
+            "searched the pre-reembed graph: similarity={}",
+            hits[0].similarity
+        );
 
         let _ = std::fs::remove_file(format!("{base_path}.hnsw"));
         teardown_test_db(db_path);

@@ -27,6 +27,8 @@ void main() {
       's3' => await _legacyAssetSwapped(),
       's4' => await _modelPackSwapped(),
       'contract' => await _toolContract(),
+      'r1' => await _clearAndRestartThenReAdd(),
+      'c1' => await _searchAfterCollectionSwitch(),
       _ => fail('Unknown phase B scenario "$scenario"'),
     };
     expect(passed, isTrue, reason: 'see the H1_CHECK lines above');
@@ -39,7 +41,7 @@ Future<Map<String, Object?>> _phaseA(String id) async =>
 
 Future<bool> _dataContainerKept() async {
   final missing = [
-    for (final id in ['s1', 's2', 's3', 's4'])
+    for (final id in ['s1', 's2', 's3', 's4', 'r1', 'c1'])
       if (!await (await phaseAMarker(id)).exists()) id,
   ];
   return report(
@@ -68,15 +70,17 @@ Future<bool> _sameModel() async {
   final found =
       result?.chunks.any((c) => c.content.contains('Hot reload')) ?? false;
   await MobileRag.dispose();
+  // 0.22.x stored no model identity, so the upgrade appends it; 0.23.0
+  // already stored it, so it stays as it is.
+  final fingerprintKept = baseStoresModelIdentity
+      ? fingerprint == before['fingerprint']
+      : fingerprint.startsWith('${before['fingerprint']}|');
   return report(
     's1',
-    lock == null &&
-        fingerprint.startsWith('${before['fingerprint']}|') &&
-        chunks == before['chunks'] &&
-        found,
+    lock == null && fingerprintKept && chunks == before['chunks'] && found,
     'lock=${lock != null} stored_before=${before['fingerprint']} '
-    'stored_after=$fingerprint chunks ${before['chunks']}->$chunks '
-    'search_found=$found',
+        'stored_after=$fingerprint chunks ${before['chunks']}->$chunks '
+        'search_found=$found',
   );
 }
 
@@ -144,6 +148,84 @@ Future<bool> _expectLock(
         : 'NOT locked: MiniLM vectors are now searched with KoEn. '
               'stored_before=${before['fingerprint']} '
               'stored_after=$fingerprint',
+  );
+}
+
+/// Q2 r1: the documented way out of a model swap. The KoEn pack locks a
+/// MiniLM database; `clearAndRestart()` drops the embeddings and keeps the
+/// sources, and adding the same documents again must index them. Before S1
+/// (#134) the re-add returned "Source ingestion already in progress" with no
+/// chunks.
+Future<bool> _clearAndRestartThenReAdd() async {
+  final before = await _phaseA('r1');
+  await MobileRag.initialize(
+    modelPack: const RagModelPack.asset(koEnPack),
+    databaseName: databaseName('r1'),
+  );
+  final rag = MobileRag.instance;
+  final locked = rag.embeddingFingerprintLock != null;
+  if (locked) {
+    await rag.clearAndRestart(
+      confirm: ClearAndRestartConfirmation
+          .iUnderstandThisDeletesAllOnDeviceEmbeddings,
+    );
+  }
+  final cleared = (await rag.getStats()).chunkCount.toInt();
+  final added = <String, int>{};
+  for (final MapEntry(key: name, value: text) in corpus.entries) {
+    added[name] = (await rag.addDocument(text, name: name)).chunkCount;
+  }
+  final stats = await rag.getStats();
+  final result = await rag.search('What does hot reload do?', topK: 3);
+  final found = result.chunks.any((c) => c.content.contains('Hot reload'));
+  await MobileRag.dispose();
+  final empty = [
+    for (final MapEntry(key: name, value: count) in added.entries)
+      if (count == 0) name,
+  ];
+  return report(
+    'r1',
+    locked &&
+        cleared == 0 &&
+        empty.isEmpty &&
+        stats.sourceCount.toInt() == corpus.length &&
+        found,
+    'locked=$locked chunks before=${before['chunks']} after_clear=$cleared '
+        'readded=${added.values.fold(0, (a, b) => a + b)} '
+        'sources=${stats.sourceCount} no_chunks=$empty search_found=$found',
+  );
+}
+
+/// Q2 c1 (A4): hybrid search in one collection maps that collection's HNSW
+/// file. A plain `search()` in another collection then has to search its
+/// own vectors. Before Q2 it searched the mapped graph of the first one, and
+/// the collection filter dropped every hit.
+Future<bool> _searchAfterCollectionSwitch() async {
+  final before = await _phaseA('c1');
+  await MobileRag.initialize(
+    modelPack: const RagModelPack.asset(miniLmPack),
+    databaseName: databaseName('c1'),
+  );
+  final rag = MobileRag.instance;
+  final docs = rag.inCollection(docsCollection);
+  final notes = rag.inCollection(notesCollection);
+  final notesChunks = (await notes.getStats()).chunkCount.toInt();
+  final hybrid = await docs.searchHybrid('What does hot reload do?', topK: 3);
+  final result = await notes.search(
+    'How does a tokenizer split text into subword units?',
+    topK: 3,
+  );
+  final back = await docs.search('What does hot reload do?', topK: 3);
+  await MobileRag.dispose();
+  final found = result.chunks.any((c) => c.content.contains('subword units'));
+  final foundBack = back.chunks.any((c) => c.content.contains('Hot reload'));
+  return report(
+    'c1',
+    hybrid.isNotEmpty && found && foundBack,
+    'chunks before=${before['chunks']} notes=$notesChunks '
+        'docs_hybrid=${hybrid.length} notes_search=${result.chunks.length} '
+        'notes_found=$found docs_search_after=${back.chunks.length} '
+        'docs_found=$foundBack',
   );
 }
 
@@ -232,7 +314,7 @@ Future<bool> _toolContract() async {
     'b4',
     tokens <= limit,
     'output tokens=$tokens limit=$limit '
-    '(budget $contractTokenBudget, ${results.length} results)',
+        '(budget $contractTokenBudget, ${results.length} results)',
   );
   return passed;
 }

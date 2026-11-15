@@ -1,16 +1,22 @@
 name: Upgrade E2E
 
 # Milestone H1 (docs/milestones.md). Earlier checks only saw fresh installs and
-# fake values, so this starts from what the last release leaves on disk: a
-# fresh `flutter create` macOS app indexes documents with mobile_rag_engine
-# 0.22.3 from pub.dev, then the same app (same data container) switches to the
-# PR head and runs again with a model swapped in four ways. It also checks real
-# RagSearchTool output from the PR head. See tool/upgrade_e2e/run.sh.
+# fake values, so this starts from what a release leaves on disk: a fresh
+# `flutter create` macOS app indexes documents with a mobile_rag_engine release
+# from pub.dev, then the same app (same data container) switches to the PR head
+# and runs again with a model swapped in four ways, a clearAndRestart() and
+# re-add (r1), and a search after switching collections (c1). It also checks
+# real RagSearchTool output from the PR head. See tool/upgrade_e2e/run.sh.
+#
+# Two base releases (Q2): 0.23.0 is the last published release (rule 8-1), and
+# 0.22.3 stays because 0.22.x databases store the fingerprint without the
+# model file hash, so only that base exercises the fingerprint extension on
+# upgrade (#118, s1-s4) for apps that skipped 0.23.0.
 #
 # Checks in H1_KNOWN_FAILING reproduce known bugs and do not fail the job; they
 # are reported as "reproduced" in the job summary. Any other failure fails the
 # job, and so does a known-failing check that passes, so the fix that makes it
-# pass also removes it from the list (M6: s2 s3 s4, M7: b1 b2 b3 b4).
+# pass also removes it from the list (M6: s2 s3 s4, M7: b1 b2 b3 b4, Q2: c1).
 
 on:
   workflow_dispatch:
@@ -26,14 +32,17 @@ on:
 env:
   FLUTTER_VERSION: "3.38.7"
   FLUTTER_CHANNEL: "stable"
-  H1_BASE_VERSION: "0.22.3"
   H1_KNOWN_FAILING: ""
 
 jobs:
   upgrade:
-    name: Upgrade from 0.22.3 (macOS)
+    name: Upgrade from ${{ matrix.base }} (macOS)
     runs-on: macos-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        base: ["0.22.3", "0.23.0"]
     steps:
       - uses: actions/checkout@v4
 
@@ -53,12 +62,13 @@ jobs:
           H1_GIT_URL: https://github.com/${{ github.repository }}.git
           H1_GIT_REF: ${{ github.event.pull_request.head.sha || github.sha }}
           H1_SUMMARY: ${{ github.step_summary }}
+          H1_BASE_VERSION: ${{ matrix.base }}
         run: tool/upgrade_e2e/run.sh "$RUNNER_TEMP/h1"
 
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: upgrade-e2e-logs
+          name: upgrade-e2e-logs-${{ matrix.base }}
           path: ${{ runner.temp }}/h1/logs
           if-no-files-found: ignore
