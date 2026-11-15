@@ -1146,6 +1146,8 @@ class SourceRagService {
   /// matched chunk (default: 0). Setting this to 1 will include the chunk
   /// before and after each matched chunk, helping with long articles.
   /// [singleSourceMode] - If true, only include chunks from the most relevant source.
+  /// [sourceIds] - Only search these sources. `similarity` of the results is
+  /// the cosine similarity with or without [sourceIds].
   Future<RagSearchResult> search(
     String query, {
     int topK = 10,
@@ -1162,18 +1164,12 @@ class SourceRagService {
     late List<ChunkSearchResult> chunks;
     try {
       if (sourceIds != null && sourceIds.isNotEmpty) {
-        // Use hybrid search with filter for vector search capability is limited in filters
-        // For strictly vector search with filters, we'd need HNSW filtering which is more complex.
-        // For now, we'll use hybrid search with 1.0 vector weight if sourceIds are provided.
-        final hybridResults = await searchHybrid(
-          query,
+        // Exact scan of the given sources; `similarity` is cosine, as below.
+        chunks = await rust_rag.searchChunksInSources(
+          collectionId: collectionId,
+          queryEmbedding: queryEmbedding,
           topK: topK,
-          vectorWeight: 1.0,
-          bm25Weight: 0.0,
-          sourceIds: sourceIds,
-        );
-        chunks = await _hydrateCanonicalChunkResults(
-          hybridResults.map(_chunkSearchResultFromHybrid).toList(),
+          sourceIds: _toInt64List(sourceIds),
         );
       } else {
         chunks = await rust_rag.searchChunksInCollection(

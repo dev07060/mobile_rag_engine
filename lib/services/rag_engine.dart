@@ -883,6 +883,11 @@ class RagEngine {
   /// [strategy] - Context assembly strategy (default: relevanceFirst).
   /// [adjacentChunks] - Include N chunks before/after matches (default: 0).
   /// [singleSourceMode] - Only include chunks from most relevant source.
+  /// [sourceIds] - Only search these sources.
+  ///
+  /// `ChunkSearchResult.similarity` is the cosine similarity of the chunk to
+  /// the query, with or without [sourceIds]. Chunks added by
+  /// [adjacentChunks] have similarity 0.
   Future<RagSearchResult> search(
     String query, {
     int topK = 10,
