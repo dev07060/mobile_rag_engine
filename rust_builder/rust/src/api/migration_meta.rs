@@ -321,12 +321,14 @@ pub fn detect_embedding_fingerprint_gate(
     }
     let remaining = if stored == current_fingerprint {
         // The baseline matches, but a reembed towards another model may have
-        // stopped part way (Q2 B3): its chunks carry that model's vectors.
-        // Only then is the matching baseline not enough.
+        // stopped part way (Q2 B3): the chunks it converted carry that model's
+        // vectors. Only then is the matching baseline not enough. Ingest
+        // inserts chunks untagged, and untagged chunks follow the baseline,
+        // so they are not counted here.
         if pending.is_empty() {
             return Ok(EmbeddingFingerprintGate::Ok);
         }
-        let remaining = count_chunks_with_non_matching_fingerprint(&conn, &current_fingerprint)?;
+        let remaining = count_tagged_chunks_with_other_fingerprint(&conn, &current_fingerprint)?;
         if remaining == 0 {
             return Ok(EmbeddingFingerprintGate::Ok);
         }
@@ -350,6 +352,21 @@ fn count_chunks_with_non_matching_fingerprint(
     conn.query_row(
         "SELECT COUNT(*) FROM chunks
          WHERE COALESCE(embedding_fingerprint, '') <> ?1",
+        params![target],
+        |row| row.get(0),
+    )
+    .map_err(|e| RagError::DatabaseError(e.to_string()))
+}
+
+/// Count chunks tagged with a fingerprint other than `target`. Untagged chunks
+/// are not counted: they follow the stored baseline.
+fn count_tagged_chunks_with_other_fingerprint(
+    conn: &Connection,
+    target: &str,
+) -> Result<i64, RagError> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM chunks
+         WHERE COALESCE(embedding_fingerprint, '') NOT IN ('', ?1)",
         params![target],
         |row| row.get(0),
     )
@@ -1078,6 +1095,58 @@ mod tests {
             detect_embedding_fingerprint_gate("model-a".to_string()).unwrap(),
             EmbeddingFingerprintGate::Ok
         ));
+        drop(pool);
+    }
+
+    // Q2 B3: ingest (source_rag::add_chunks) inserts chunks without a
+    // fingerprint tag, so after the baseline is written new chunks stay NULL.
+    // A reembed A -> B that stopped before converting any chunk left only A
+    // vectors behind: going back to A must not lock.
+    #[test]
+    fn gate_stays_ok_when_an_interrupted_reembed_converted_nothing() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("model-a".to_string()).unwrap();
+        insert_chunk("환불은 14일 이내", None);
+        insert_chunk("東京は大きい。3.14 😀", None);
+        insert_chunk("北京是中国的首都。ＲＡＧ", Some("model-a"));
+        begin_embedding_reembed("model-b".to_string()).unwrap();
+
+        assert!(matches!(
+            detect_embedding_fingerprint_gate("model-a".to_string()).unwrap(),
+            EmbeddingFingerprintGate::Ok
+        ));
+        drop(pool);
+    }
+
+    // Same, with ingested (untagged) chunks and one chunk already converted to
+    // B: only that chunk is mixed in, so only it counts as remaining.
+    #[test]
+    fn gate_counts_only_converted_chunks_when_ingested_chunks_are_untagged() {
+        let pool = fresh_pool();
+        initialize_migration_meta(false).unwrap();
+        provision_chunks_table();
+        write_embedding_fingerprint("model-a".to_string()).unwrap();
+        insert_chunk("환불은 14일 이내", None);
+        insert_chunk("ＲＡＧ 가이드 3.14", None);
+        let half = insert_chunk("東京は大きい。😀", None);
+        begin_embedding_reembed("model-b".to_string()).unwrap();
+        {
+            let conn = get_connection().unwrap();
+            conn.execute(
+                "UPDATE chunks SET embedding_fingerprint = 'model-b' WHERE id = ?1",
+                params![half],
+            )
+            .unwrap();
+        }
+
+        match detect_embedding_fingerprint_gate("model-a".to_string()).unwrap() {
+            EmbeddingFingerprintGate::Mismatch {
+                remaining_chunks, ..
+            } => assert_eq!(remaining_chunks, 1),
+            other => panic!("expected Mismatch, got {:?}", other),
+        }
         drop(pool);
     }
 
