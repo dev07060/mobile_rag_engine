@@ -388,13 +388,43 @@ final q4LongText = [
 const q4RefundQuestion = '구매 후 며칠 안에 환불을 받을 수 있나요?';
 
 /// Q4 output contract on the real engine (Model Pack, ONNX, tokenizer).
+/// b5: `search` gives cosine similarity with and without `sourceIds` (B10).
 /// b6: adjacent chunks do not move the best hit out of a tight budget
 /// (B11). b7: citations in full-width, lenticular, ideographic-comma and
-/// range forms are read from an answer, and code is not (B12).
+/// range forms are read from an answer, and code is not (B12). b8:
+/// `promptTokenCounter` budgets passages in the counter's tokens (B13).
 Future<bool> _q4OutputContract(MobileRag rag) async {
   final added = await rag.addDocument(q4LongText, name: q4LongName);
   await rag.rebuildIndex();
   var passed = true;
+
+  // b5: the same chunk has the same similarity with and without sourceIds,
+  // and it is a cosine value, not a fused rank score (at most 1/61).
+  final scoped = await rag.search(
+    q4RefundQuestion,
+    topK: 3,
+    sourceIds: [added.sourceId],
+  );
+  final all = await rag.search(q4RefundQuestion, topK: 20);
+  final allById = {for (final c in all.chunks) c.chunkId: c.similarity};
+  final pairs = [
+    for (final c in scoped.chunks)
+      if (allById[c.chunkId] case final unscoped?) (c.similarity, unscoped),
+  ];
+  print(
+    'H1_Q4 b5 scoped=${[for (final c in scoped.chunks) '${c.chunkId}:${c.similarity.toStringAsFixed(4)}']} '
+    'unscoped=${[for (final c in all.chunks.take(5)) '${c.chunkId}:${c.similarity.toStringAsFixed(4)}']}',
+  );
+  passed &= report(
+    'b5',
+    scoped.chunks.isNotEmpty &&
+        scoped.chunks.every((c) => c.sourceId.toInt() == added.sourceId) &&
+        scoped.chunks.first.similarity > 2 / 61 &&
+        pairs.isNotEmpty &&
+        pairs.every((p) => (p.$1 - p.$2).abs() < 0.02),
+    'scoped top=${scoped.chunks.isEmpty ? '-' : scoped.chunks.first.similarity} '
+        'pairs (scoped, unscoped)=$pairs',
+  );
 
   // b6: budget = the engine's own token count for the best hit alone.
   final alone = await rag.searchHybridWithContext(
@@ -461,6 +491,41 @@ Future<bool> _q4OutputContract(MobileRag rag) async {
     answer.passages.length >= 3 && cited.toString() == ['1', '2'].toString(),
     'passages=${answer.passages.length} cited=$cited (want [1, 2]; '
         '`items[3]` is code)',
+  );
+
+  // b8: with a counter (code points but spaces, standing in for an LLM
+  // tokenizer), the budget counts passage texts in its units.
+  int counter(String text) =>
+      text.runes.where((r) => r != 0x20 && r != 0x0A).length;
+  final full = await rag.prepareAsk(
+    q4RefundQuestion,
+    topK: 3,
+    tokenBudget: 1000000,
+    promptTokenCounter: counter,
+  );
+  final counts = [for (final p in full.passages) counter(p.text)];
+  final engineTokens = [
+    for (final p in full.passages) countTokens(text: p.text),
+  ];
+  final budget = counts.length < 2 ? 0 : counts[0] + counts[1] - 1;
+  final fitted = await rag.prepareAsk(
+    q4RefundQuestion,
+    topK: 3,
+    tokenBudget: budget,
+    promptTokenCounter: counter,
+  );
+  print(
+    'H1_Q4 b8 counter=$counts engine_tokens=$engineTokens budget=$budget '
+    'fitted=${[for (final p in fitted.passages) p.chunkId]}',
+  );
+  passed &= report(
+    'b8',
+    full.passages.length >= 2 &&
+        fitted.passages.length == 1 &&
+        fitted.passages.single.chunkId == full.passages.first.chunkId,
+    'counts=$counts budget=$budget '
+        'fitted=${[for (final p in fitted.passages) p.chunkId]} '
+        'want [${full.passages.isEmpty ? '-' : full.passages.first.chunkId}]',
   );
   return passed;
 }

@@ -40,7 +40,7 @@ koen_tokenizer_sha=a6dd38d692ac1caa6d5dbc195d92f1f978b5c74ec60e02ed15fdf04404742
 
 phase_a_scenarios="s1 s2 s3 s4 r1 c1 t1"
 phase_b_scenarios="p0 s1 s2 s3 s4 contract r1 c1 t1"
-expected_checks="p0 s1 s2 s3 s4 b1 b2 b3 b4 b6 b7 r1 c1 t1"
+expected_checks="p0 s1 s2 s3 s4 b1 b2 b3 b4 b5 b6 b7 b8 r1 c1 t1"
 
 rm -rf "$app" "$logs"
 mkdir -p "$logs"
