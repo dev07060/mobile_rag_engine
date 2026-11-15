@@ -246,9 +246,7 @@ Future<bool> _textIndexedByRelease() async {
   final found = <String, bool>{};
   for (final query in ['RAG', '앱', '환불', '2024']) {
     final hits = await rag.searchHybrid(query, topK: 5);
-    found[query] = hits.any(
-      (h) => h.bm25Rank > 0 && h.content.contains('東京'),
-    );
+    found[query] = hits.any((h) => h.bm25Rank > 0 && h.content.contains('東京'));
   }
   final nfd = await rag.addDocument(
     toNfdHangul(t1KoreanText),
@@ -309,6 +307,7 @@ Future<bool> _toolContract() async {
     }),
   );
   final tokens = countTokens(text: first);
+  final q4 = await _q4OutputContract(rag);
   await MobileRag.dispose();
   print('H1_TOOL_OUTPUT first=$first');
   print('H1_TOOL_OUTPUT second=$second');
@@ -359,6 +358,109 @@ Future<bool> _toolContract() async {
     tokens <= limit,
     'output tokens=$tokens limit=$limit '
         '(budget $contractTokenBudget, ${results.length} results)',
+  );
+  return passed && q4;
+}
+
+/// Q4: a document long enough for several chunks, in Korean, Japanese and
+/// Chinese with NFD Hangul, full-width text, emoji and decimals. Each
+/// paragraph is about one subject, so a question finds one chunk in the
+/// middle and its neighbors are different chunks.
+const q4LongName = 'q4_manual.txt';
+final q4LongText = [
+  '설치 안내. 앱을 처음 실행하면 모델 파일을 기기에 복사합니다. 복사는 한 번만 '
+          '하며 약 23MB를 씁니다. 東京のユーザーも同じ手順でインストールします。'
+          '安装需要大约三十秒。 버전 3.14 이상에서 이 순서를 따릅니다. 🚀 ' *
+      3,
+  // NFD "환불" (decomposed Hangul, as some PDFs and macOS file names give it).
+  '\u1112\u116a\u11ab\u1107\u116e\u11af 정책. 구매 후 14일 이내에는 전액을 '
+          '돌려받을 수 있고, 30일까지는 ２.５달러 수수료를 뺀 금액을 돌려받습니다. '
+          '返金は購入から14日以内なら全額です。退款在十四天内全额退还。 ' *
+      3,
+  '배터리 절약. 백그라운드 색인은 충전 중에만 돌고, 화면이 꺼져 있으면 스레드를 '
+          '하나만 씁니다. バッテリーが少ないときは索引を止めます。电量低于百分之二十时暂停。 ' *
+      3,
+  '문제 해결. 검색 결과가 비어 있으면 rebuildIndex를 한 번 호출하세요. ＲＡＧ '
+          '로그는 설정 화면에서 내보낼 수 있습니다. ログは設定から書き出せます。日志可以导出。 ' *
+      3,
+].join('\n\n');
+
+const q4RefundQuestion = '구매 후 며칠 안에 환불을 받을 수 있나요?';
+
+/// Q4 output contract on the real engine (Model Pack, ONNX, tokenizer).
+/// b6: adjacent chunks do not move the best hit out of a tight budget
+/// (B11). b7: citations in full-width, lenticular, ideographic-comma and
+/// range forms are read from an answer, and code is not (B12).
+Future<bool> _q4OutputContract(MobileRag rag) async {
+  final added = await rag.addDocument(q4LongText, name: q4LongName);
+  await rag.rebuildIndex();
+  var passed = true;
+
+  // b6: budget = the engine's own token count for the best hit alone.
+  final alone = await rag.searchHybridWithContext(
+    q4RefundQuestion,
+    topK: 1,
+    tokenBudget: 4000,
+  );
+  final best = alone.context.includedChunks.single;
+  final tight = await rag.searchHybridWithContext(
+    q4RefundQuestion,
+    topK: 1,
+    tokenBudget: alone.context.estimatedTokens,
+    adjacentChunks: 1,
+  );
+  final wide = await rag.searchHybridWithContext(
+    q4RefundQuestion,
+    topK: 3,
+    tokenBudget: 8000,
+    adjacentChunks: 1,
+  );
+  final hits = await rag.searchHybrid(q4RefundQuestion, topK: 3);
+  final wideIds = [for (final c in wide.context.includedChunks) c.chunkId];
+  final hitIds = [for (final h in hits) h.docId];
+  print(
+    'H1_Q4 b6 chunks=${added.chunkCount} best=${best.chunkId} '
+    'idx=${best.chunkIndex} tight=${[for (final c in tight.context.includedChunks) '${c.chunkId}@${c.chunkIndex}']} '
+    'wide=${[for (final c in wide.context.includedChunks) '${c.chunkId}@${c.chunkIndex}:${c.similarity.toStringAsFixed(4)}']} '
+    'hits=$hitIds',
+  );
+  passed &= report(
+    'b6',
+    added.chunkCount >= 3 &&
+        tight.context.includedChunks
+                .map((c) => c.chunkId)
+                .toList()
+                .toString() ==
+            [best.chunkId].toString() &&
+        wideIds.length > hitIds.length &&
+        wideIds.take(hitIds.length).toList().toString() == hitIds.toString(),
+    'chunks=${added.chunkCount} tight budget ${alone.context.estimatedTokens}: '
+        'included=${[for (final c in tight.context.includedChunks) c.chunkId]} '
+        'best=${best.chunkId}; wide=$wideIds hits first=$hitIds',
+  );
+
+  // b7: a canned answer over the real passages of `ask`.
+  late String prompt;
+  final answer = await rag.ask(
+    q4RefundQuestion,
+    topK: 3,
+    tokenBudget: 8000,
+    generate: (p) async {
+      prompt = p;
+      return '14일 이내 전액 환불［１］. 30일까지는 수수료 ２.５달러【2】. '
+          '두 조건 모두 [1、2], 정리하면 [1-2]. 코드 예: `items[3]` 🚀';
+    },
+  );
+  final cited = [for (final p in answer.citations) p.id];
+  print(
+    'H1_Q4 b7 passages=${answer.passages.length} cited=$cited '
+    'prompt_tokens=${countTokens(text: prompt)}',
+  );
+  passed &= report(
+    'b7',
+    answer.passages.length >= 3 && cited.toString() == ['1', '2'].toString(),
+    'passages=${answer.passages.length} cited=$cited (want [1, 2]; '
+        '`items[3]` is code)',
   );
   return passed;
 }
