@@ -858,7 +858,7 @@
 ### Q4. 출력 계약
 
 - **담당:** 세션 "Q4 출력 계약", 브랜치 `fix/q4-output-contract`(worktree `.claude/worktrees/q4-output-contract-392631`, main `bea788a`에서 땄다)
-- **상태:** 진행 중. 착수는 2026-11-15 사용자 "새 세션에서 Q4 착수". 아래 "착수 때 확인한 것"으로 범위를 늘렸다(규칙 4).
+- **상태:** PR #148 열림(2026-11-16), 머지 대기. 착수는 2026-11-15 사용자 "새 세션에서 Q4 착수". 아래 "착수 때 확인한 것"으로 범위를 늘렸다(규칙 4).
 
 **착수 때 확인한 것 (2026-11-15, main `bea788a`)**
 
@@ -896,6 +896,12 @@
 **완료 기준:** 실제 엔진 출력으로 점수 단위·순서·인용 확인(H1-b와 같은 방식). 공통 완료 기준. PR 하나, CI 통과.
 
 **손대는 파일:** `lib/services/{source_rag_service,ask,context_builder,prompt_compressor,llm_tool}.dart`, `rust_builder/rust/src/api/source_rag.rs`(assembly 순서), `docs/guides/{ask,llm_tools}.md`, `test/**`, `CHANGELOG.md`, `docs/milestones.md`. 착수 때 더한 것: `tool/upgrade_e2e/{phase_b_test.dart,run.sh}`(contract 시나리오에 실제 엔진 확인 b5~b8 추가), `rust_builder/CHANGELOG.md`, B10의 새 Rust 함수로 다시 만든 FRB 생성 파일 `lib/src/rust/{api/source_rag.dart,frb_generated.dart}`·`rust_builder/rust/src/frb_generated.rs`, B13의 `lib/mobile_rag.dart`(`ask`/`prepareAsk` 인자)·`lib/src/internal/prompt_budget.dart`(새 파일), `lib/services/rag_engine.dart`(`search` doc 주석)
+
+**결과 (커밋 `1b70427`, macOS 27.2.1 arm64, Flutter 3.35.5, rustc 1.91.1, 2026-11-16)**
+- B10: `search(sourceIds:)`의 1위 `similarity` 0.0164 → 1.0(코사인), 같은 청크는 범위 유무와 관계없이 같은 값, 순서 같음. B11: 청크 하나 예산에 1위가 들어간다. B12: 단위 테스트 5개 통과. B13: 인자 없이는 결과가 그대로이고, 주면 그 단위로 구절을 고른다. Q3 이월분 통과.
+- `flutter analyze lib/ test/ tool/` 문제 없음, `flutter test test/unit` 172개, `flutter test test/native` 44개(release dylib, `vector_faer,vector_quant_i8`), `cargo test --lib -- --test-threads=1` 기본 287개·`vector_faer,vector_quant_i8` 288개 통과(각 16 ignored).
+- 실제 엔진(MiniLM Model Pack): Upgrade E2E `contract` 시나리오 b5~b8, 결과는 PR CI의 두 기준 버전 job에 있다.
+- **확인하지 않은 것:** LLM tokenizer로 센 수치(오프라인에 없음, 하네스는 코드 포인트 counter로 대신했다), 실기기·Windows 실행, B11 순서 변경의 검색 품질 영향(찾는 청크는 같고 조립 순서만 바뀐다).
 
 ### Q5. 배포 검증 보강
 
