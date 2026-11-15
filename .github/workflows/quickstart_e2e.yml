@@ -11,22 +11,32 @@ name: Quick Start E2E
 #
 # A second stage builds the app the way it ships. Android runs the release APK
 # (R8 shrinking on) and macOS runs an archived app (symbols stripped). iOS
-# release builds cannot run on a simulator, so its archive is checked for the
-# symbols Dart looks up at runtime and for the privacy manifest App Store review
-# requires. The Android APK's native libraries must be 16 KB page aligned, as
-# Google Play requires. Windows runs its release build.
+# release builds cannot run on a simulator, so its archive is checked for every
+# symbol Dart looks up at runtime (read from the installed flutter_rust_bridge
+# and mobile_rag_engine) and for the privacy manifest App Store review
+# requires. Android also builds the arm64 release APK and the app bundle a
+# store upload uses; their native libraries must be present for each ABI and
+# 16 KB page aligned, as Google Play requires. Windows runs its release build.
 #
-# Pull requests install the package and its native companion from the PR head
-# through git dependencies; a manual run can also check a version published on
-# pub.dev.
+# Pull requests install the package and its native companion from the
+# archives `flutter pub publish` would upload (tool/quickstart_e2e/pack.sh), so
+# a file that .pubignore leaves out fails here as it would for a pub.dev user.
+# A manual run can instead check a version published on pub.dev, or the git
+# tree (which ignores .pubignore).
+#
+# Cargokit links precompiled binaries only for a crate hash that
+# precompile_binaries.yml has uploaded, which happens after a Rust change
+# reaches main. When the binaries for this crate hash are missing, the job
+# installs Rust and builds the crate from source instead, and says so in the
+# summary; otherwise the job runs with Rust removed, as a new user would.
 
 on:
   workflow_dispatch:
     inputs:
       source:
-        description: "Install from pub.dev (version below) or from this ref through git"
+        description: "Install from pub.dev (version below), from this ref's publish archives, or from this ref through git"
         type: choice
-        options: [pub, git]
+        options: [pub, archive, git]
         default: pub
       version:
         description: "mobile_rag_engine version to install from pub.dev"
@@ -36,16 +46,24 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/quickstart_e2e.yml"
+      - "tool/quickstart_e2e/**"
       - "bin/setup.dart"
       - "lib/src/model_pack/**"
+      - "pubspec.yaml"
+      - ".pubignore"
+      - "rust_builder/pubspec.yaml"
+      - "rust_builder/.pubignore"
       - "rust_builder/android/**"
       - "rust_builder/ios/**"
       - "rust_builder/macos/**"
+      - "rust_builder/windows/**"
+      - "rust_builder/cargokit/**"
+      - "rust_builder/rust/**"
 
 env:
   FLUTTER_VERSION: "3.38.7"
   FLUTTER_CHANNEL: "stable"
-  SOURCE: ${{ github.event_name == 'pull_request' && 'git' || inputs.source }}
+  SOURCE: ${{ github.event_name == 'pull_request' && 'archive' || inputs.source }}
   PACKAGE_VERSION: ${{ inputs.version || '0.23.0' }}
   GIT_URL: https://github.com/${{ github.repository }}.git
   GIT_REF: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -55,7 +73,8 @@ jobs:
   quickstart:
     name: ${{ matrix.platform }}
     runs-on: ${{ matrix.platform == 'android' && 'ubuntu-latest' || matrix.platform == 'windows' && 'windows-latest' || 'macos-latest' }}
-    timeout-minutes: 60
+    # A source build of the Rust crate (see the header) adds up to ~25 minutes.
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -64,7 +83,48 @@ jobs:
       matrix:
         platform: [android, ios, macos, windows]
     steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+
+      - name: "0. Pack the publish archives"
+        if: env.SOURCE == 'archive'
+        id: pack
+        run: |
+          trap 'echo "pack $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
+          bash repo/tool/quickstart_e2e/pack.sh repo packages | tee pack.log
+
+      - name: Find precompiled binaries
+        id: rust
+        run: |
+          case "${{ matrix.platform }}" in
+            android) targets="x86_64-linux-android aarch64-linux-android armv7-linux-androideabi" ;;
+            ios) targets="aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios" ;;
+            macos) targets="aarch64-apple-darwin x86_64-apple-darwin" ;;
+            windows) targets="x86_64-pc-windows-msvc" ;;
+          esac
+          echo "targets=${targets// /,}" >> "$GITHUB_OUTPUT"
+          case "$SOURCE" in
+            archive) crate=packages/rag_engine_flutter/rust ;;
+            git) crate=repo/rust_builder/rust ;;
+            *) echo "mode=precompiled" >> "$GITHUB_OUTPUT"; exit 0 ;;
+          esac
+          if bash repo/tool/quickstart_e2e/precompiled_available.sh "$crate" $targets | tee rust.log; then
+            echo "mode=precompiled" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=source" >> "$GITHUB_OUTPUT"
+            echo "::notice::No precompiled binaries for this crate hash yet; building the Rust crate from source."
+          fi
+          echo "hash=$(sed -n 's/^crate hash: //p' rust.log)" >> "$GITHUB_OUTPUT"
+
       - name: Hide Rust toolchain
+        if: steps.rust.outputs.mode == 'precompiled'
         run: |
           # macOS runners also ship rustup through Homebrew, outside ~/.cargo.
           if command -v brew >/dev/null 2>&1; then
@@ -77,11 +137,11 @@ jobs:
             exit 1
           fi
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - name: Setup Rust (no precompiled binaries for this crate hash)
+        if: steps.rust.outputs.mode == 'source'
+        uses: dtolnay/rust-toolchain@stable
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: ${{ env.FLUTTER_CHANNEL }}
+          targets: ${{ steps.rust.outputs.targets }}
 
       - name: Setup Java (Android only)
         if: matrix.platform == 'android'
@@ -104,7 +164,12 @@ jobs:
           trap 'echo "create $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
           flutter create --platforms=${{ matrix.platform }} --project-name quickstart_app app
           cd app
-          if [ "$SOURCE" = git ]; then
+          if [ "$SOURCE" = archive ]; then
+            flutter pub add 'mobile_rag_engine:{"path":"../packages/mobile_rag_engine"}'
+            # The root pins rag_engine_flutter from pub.dev; use the archive of
+            # the copy that would be published with it.
+            flutter pub add 'override:rag_engine_flutter:{"path":"../packages/rag_engine_flutter"}'
+          elif [ "$SOURCE" = git ]; then
             flutter pub add "mobile_rag_engine:{\"git\":{\"url\":\"$GIT_URL\",\"ref\":\"$GIT_REF\"}}"
             # The root pins rag_engine_flutter from pub.dev; use the PR's copy
             # so changes to its podspecs and Gradle files are tested too.
@@ -223,23 +288,11 @@ jobs:
 
           # Android release check, run inside the emulator step.
           cat > release_android.sh <<'EOF'
-          set -e
+          set -eo pipefail
           start=$(date +%s)
           trap 'echo "release $(( $(date +%s) - start ))" >> "$RUNNER_TEMP/timings"' EXIT
           flutter build apk --release --target-platform android-x64 > release.log 2>&1 || { tail -n 80 release.log; exit 1; }
-          # Google Play requires 16 KB page alignment of 64-bit native
-          # libraries for Android 15+ targets.
-          readelf=$(ls "$ANDROID_SDK_ROOT"/ndk/*/toolchains/llvm/prebuilt/*/bin/llvm-readelf | tail -n 1)
-          rm -rf apk_libs && unzip -q build/app/outputs/flutter-apk/app-release.apk 'lib/*' -d apk_libs
-          for so in apk_libs/lib/arm64-v8a/*.so apk_libs/lib/x86_64/*.so; do
-            [ -f "$so" ] || continue
-            align=$("$readelf" -lW "$so" | awk '$1 == "LOAD" { print $NF }' | sort -u | head -n 1)
-            echo "page alignment: ${so#apk_libs/} $align" | tee -a release.log
-            if [ $((align)) -lt 16384 ]; then
-              echo "::error::${so#apk_libs/} is not 16 KB aligned ($align)"
-              exit 1
-            fi
-          done
+          bash ../repo/tool/quickstart_e2e/check_android_libs.sh build/app/outputs/flutter-apk/app-release.apk x86_64 2>&1 | tee -a release.log
           adb install -r build/app/outputs/flutter-apk/app-release.apk
           adb logcat -c
           adb shell am start -n com.example.quickstart_app/.MainActivity
@@ -287,6 +340,20 @@ jobs:
           script: |
             cd app && start=$(date +%s); flutter test integration_test -d emulator-5554 -r expanded > run.log 2>&1; status=$?; echo "run $(( $(date +%s) - start ))" >> "$RUNNER_TEMP/timings"; tail -n 200 run.log; exit $status
             cd app && bash release_android.sh
+
+      # Phones run arm64 and a store upload is an app bundle, and neither runs
+      # on the x86_64 emulator above, so they are built and their native
+      # libraries checked here.
+      - name: "6. Release build (Android arm64 APK and app bundle)"
+        if: matrix.platform == 'android'
+        id: release_android
+        working-directory: app
+        run: |
+          trap 'echo "release_arm64_aab $SECONDS" >> "$RUNNER_TEMP/timings"' EXIT
+          flutter build apk --release --target-platform android-arm64 > release_arm64.log 2>&1 || { tail -n 80 release_arm64.log; exit 1; }
+          bash ../repo/tool/quickstart_e2e/check_android_libs.sh build/app/outputs/flutter-apk/app-release.apk arm64-v8a 2>&1 | tee -a release.log
+          flutter build appbundle --release > release_aab.log 2>&1 || { tail -n 80 release_aab.log; exit 1; }
+          bash ../repo/tool/quickstart_e2e/check_android_libs.sh build/app/outputs/bundle/release/app-release.aab armeabi-v7a arm64-v8a x86_64 2>&1 | tee -a release.log
 
       # `flutter test` on an iOS simulator starts the app paused and waits for
       # the tool's debug connection, which CI runners often lose ("The log
@@ -356,17 +423,8 @@ jobs:
             echo "::error::The iOS archive has no rag_engine_flutter privacy manifest" | tee -a release.log
             exit 1
           fi
-          exports=$(xcrun dyld_info -exports "$app/Runner")
-          for symbol in frb_get_rust_content_hash frb_pde_ffi_dispatcher_primary frb_pde_ffi_dispatcher_sync; do
-            # A here-string, not a pipe: with pipefail, grep -q exiting early
-            # breaks the pipe and reads as "not found".
-            if grep -q "_${symbol}\$" <<< "$exports"; then
-              echo "exported: $symbol" | tee -a release.log
-            else
-              echo "::error::The iOS archive does not export $symbol" | tee -a release.log
-              exit 1
-            fi
-          done
+          python3 -I ../repo/tool/quickstart_e2e/frb_symbols.py .dart_tool/package_config.json > frb_symbols.txt
+          bash ../repo/tool/quickstart_e2e/check_exports.sh "$app/Runner" frb_symbols.txt 2>&1 | tee -a release.log
 
       - name: "6. Release build (macOS archive)"
         if: matrix.platform == 'macos'
@@ -424,7 +482,7 @@ jobs:
         if: always()
         run: |
           stage="none"
-          for s in create:${{ steps.create.outcome }} setup:${{ steps.setup.outcome }} assets:${{ steps.assets.outcome }} run:${{ steps.run_android.outcome }}${{ steps.run_ios.outcome }}${{ steps.run_desktop.outcome }} release:${{ steps.release_ios.outcome }}${{ steps.release_macos.outcome }}${{ steps.release_windows.outcome }}; do
+          for s in pack:${{ steps.pack.outcome }} create:${{ steps.create.outcome }} setup:${{ steps.setup.outcome }} assets:${{ steps.assets.outcome }} run:${{ steps.run_android.outcome }}${{ steps.run_ios.outcome }}${{ steps.run_desktop.outcome }} release:${{ steps.release_android.outcome }}${{ steps.release_ios.outcome }}${{ steps.release_macos.outcome }}${{ steps.release_windows.outcome }}; do
             case "${s#*:}" in
               *failure*) stage="${s%%:*}"; break ;;
             esac
@@ -439,10 +497,18 @@ jobs:
           {
             echo "### ${{ matrix.platform }}"
             echo ""
-            if [ "$SOURCE" = git ]; then
-              echo "- Package: \`mobile_rag_engine\` from git \`${GIT_REF}\`, no Rust"
+            if [ "${{ steps.rust.outputs.mode }}" = source ]; then
+              rust="Rust crate built from source (no precompiled binaries for crate hash \`${{ steps.rust.outputs.hash }}\` yet)"
             else
-              echo "- Package: \`mobile_rag_engine ${PACKAGE_VERSION}\` from pub.dev, no Rust"
+              rust="no Rust"
+            fi
+            if [ "$SOURCE" = archive ]; then
+              echo "- Package: \`mobile_rag_engine\` and \`rag_engine_flutter\` publish archives of \`${GIT_REF}\`, ${rust}"
+              grep -h "pub publish --dry-run\|archive has" pack.log 2>/dev/null | sed 's/^/  - /' || true
+            elif [ "$SOURCE" = git ]; then
+              echo "- Package: \`mobile_rag_engine\` from git \`${GIT_REF}\`, ${rust}"
+            else
+              echo "- Package: \`mobile_rag_engine ${PACKAGE_VERSION}\` from pub.dev, ${rust}"
             fi
             echo "- Result: **${verdict}**"
             if [ -f "$RUNNER_TEMP/timings" ]; then
@@ -460,7 +526,7 @@ jobs:
             fi
             if [ -f app/release.log ]; then
               echo "- Release build:"
-              grep -hE "QUICKSTART_RESULT|exported:|does not export|page alignment|privacy manifest" app/release.log | sed 's/^/  - /' || true
+              grep -hE "QUICKSTART_RESULT|exported:|does not export|page alignment|zip alignment|has no .*\.so|privacy manifest" app/release.log | sed 's/^/  - /' || true
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -472,7 +538,12 @@ jobs:
           path: |
             app/run.log
             app/release.log
+            app/release_arm64.log
+            app/release_aab.log
             app/simulator.log
+            app/frb_symbols.txt
+            pack.log
+            packages/*.dry-run.txt
             app/pubspec.yaml
             app/ios/Podfile
             app/macos/Podfile

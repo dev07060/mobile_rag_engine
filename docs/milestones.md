@@ -858,7 +858,7 @@
 ### Q4. 출력 계약
 
 - **담당:** 세션 "Q4 출력 계약", 브랜치 `fix/q4-output-contract`(worktree `.claude/worktrees/q4-output-contract-392631`, main `bea788a`에서 땄다)
-- **상태:** PR #148 열림(2026-11-16), 머지 대기. 착수는 2026-11-15 사용자 "새 세션에서 Q4 착수". 아래 "착수 때 확인한 것"으로 범위를 늘렸다(규칙 4).
+- **상태:** 완료 (#148, 2026-11-16). 착수는 2026-11-15 사용자 "새 세션에서 Q4 착수". 아래 "착수 때 확인한 것"으로 범위를 늘렸다(규칙 4).
 
 **착수 때 확인한 것 (2026-11-15, main `bea788a`)**
 
@@ -916,7 +916,25 @@
 
 ### Q5. 배포 검증 보강
 
-- **상태:** 착수 대기.
+- **담당:** 세션 "Q5 배포 검증 보강", 브랜치 `fix/q5-release-checks`(worktree `.claude/worktrees/q5-release-checks-88a4cb`, main `f5aefc4`에서 땄다)
+- **상태:** PR #149 열림(2026-11-16), 머지 대기. 착수는 2026-11-16 사용자 "새 세션에서 Q5 착수".
+
+**착수 때 확인한 것 (2026-11-16, main `f5aefc4`)**
+
+항목마다 지금 main에서 재현했다. 모두 재현돼서 범위에서 뺀 항목은 없다.
+
+| 항목 | main에서 | 근거 |
+|---|---|---|
+| B14 | 재현 | 새 단위 테스트 21개 중 12개 실패. `platform :ios, '13.0' # 주석`에 줄을 하나 더 넣고 13.0 줄을 남기며 다음 `--check`는 통과한다. 이미 올바른 `platform :ios, '17.0' # 주석`에도 줄을 더한다. `use_frameworks! linkage: :dynamic`, 줄 끝 주석이 붙은 `use_frameworks!`, 두 번째 target의 `use_frameworks!`, 버전 없는 `platform :ios`, `ENV` 값, `project.pbxproj`의 따옴표 붙은 값을 그대로 둔다 |
+| B15 | 재현 | `.pubignore`에 `lib/src/model_pack/model_pack_resolver.dart`를 넣으면 `pub publish --dry-run`은 경고 2개(원래 있던 버전 고정)만 내고, 저장소 트리를 설치하는 지금 PR 방식(git 의존성)은 빌드를 통과한다. 배포 아카이브를 설치하면 `mobile_rag.dart:37` 컴파일 오류. iOS 아카이브 검사는 Dart가 찾는 심볼 19개 중 3개만 본다 |
+| B16 | 재현 | Android release 검사는 x86_64 APK뿐이라 arm64 분기가 비어 있고, arm64와 AAB는 빌드하지 않는다 |
+| 엔진 버전 | 재현 | `Cargo.toml` `0.8.0` → `migration_meta.rs` `CURRENT_ENGINE_VERSION`. 부팅마다 `last_engine_version`에 덮어쓰고(`migration_meta.rs:211`, `:242`) 로그와 `MobileRag.migrationState`로만 읽힌다. 마이그레이션·재빌드·잠금 판정(`assert_no_unknown_future_axes`, fingerprint gate, `rag_engine.dart` `_extendFingerprintWithoutModelIdentity`)은 이 값을 읽지 않는다. 기록용이라 바꿔도 기존 DB 동작이 같다 |
+
+**착수 때 정한 방식 (2026-11-16)**
+- B14: Podfile을 줄 단위로 읽어 Ruby 코드와 줄 끝 주석을 나눈다. 최소 버전보다 낮은 `platform` 줄은 모두 그 자리에서 올리고(주석 유지), `use_frameworks!`는 모두 `:linkage => :static`으로 바꾼다. 읽을 수 없는 값(예: `ENV`)이 있으면 어떤 파일도 쓰기 전에 `AppleHostConfigurationException`(파일:줄과 손으로 바꿀 내용)을 던져 `setup`과 `--check`가 실패한다.
+- B15: PR에서는 Quick Start가 `flutter pub publish --to-archive`로 만든 두 패키지의 아카이브를 path 의존성으로 설치한다(`tool/quickstart_e2e/pack.sh`, `--dry-run`의 오류도 실패로 본다). 수동 실행은 `pub`·`archive`·`git` 중 고른다. iOS는 설치된 `flutter_rust_bridge`와 `mobile_rag_engine`에서 읽은 심볼 전체를 검사한다. crate hash의 precompiled binary가 아직 없으면(Rust를 바꾼 PR) Rust를 설치해 소스 빌드하고 summary에 적는다. 그 전에는 이런 PR에서 job이 아예 돌지 않았다.
+- B16: arm64 release APK와 AAB를 빌드하고, ABI마다 `librag_engine_flutter.so`가 있는지, 64비트 라이브러리의 LOAD 정렬이 16 KB 이상인지, APK zip 정렬(`zipalign -P 16`)을 검사한다(`tool/quickstart_e2e/check_android_libs.sh`).
+- 엔진 버전: `rag_engine_flutter` 패키지 버전(지금 0.22.0)에 맞춘다. 이 crate를 담아 배포되는 것이 그 패키지라 사용자가 찾아볼 수 있는 값이다. 둘이 같은지 Rust 테스트로 확인한다.
 
 **목표:** 발행 전에 배포 아카이브, release 빌드, 새 앱 설정을 실제로 확인한다(#129 규칙 5-2).
 
@@ -930,7 +948,16 @@
 
 **완료 기준:** 새 검사가 이전 버그(예: `.pubignore`로 빠진 파일)를 재현하는지 한 번 확인한다. 공통 완료 기준. PR 하나, CI 통과.
 
-**손대는 파일:** `lib/src/model_pack/apple_host_configurator.dart`, `bin/**`, `.github/workflows/{quickstart_e2e,ci}.yml`, `tool/quickstart_e2e/**`, `rust_builder/rust/Cargo.toml`, `test/unit/apple_host_configurator_test.dart`, `docs/milestones.md`
+**손대는 파일:** `lib/src/model_pack/apple_host_configurator.dart`, `bin/**`, `.github/workflows/{quickstart_e2e,ci}.yml`, `tool/quickstart_e2e/**`, `rust_builder/rust/Cargo.toml`, `test/unit/apple_host_configurator_test.dart`, `docs/milestones.md`. 착수 때 더한 것(규칙 4): `.pubignore`(`tool/quickstart_e2e/`를 배포 아카이브에서 뺀다, `tool/upgrade_e2e/`와 같다), `rust_builder/rust/Cargo.lock`(버전을 바꾸면 같이 바뀐다), `rust_builder/rust/src/api/migration_meta.rs`(버전이 다시 어긋나지 않게 하는 테스트), `CHANGELOG.md`·`rust_builder/CHANGELOG.md`(`## Unreleased`)
+
+**결과 (head `da65bfb`, CI 러너 기본 이미지, Flutter 3.38.7, 2026-11-16)**
+- B14: `flutter test test/unit` 186개 통과(새 테스트 14개). `flutter analyze lib/ test/ tool/ bin/` 문제 없음(로컬 macOS 27.2 arm64, Flutter 3.35.5).
+- B15 결함 재현: PR에 넣지 않은 브랜치에서 `.pubignore`로 `model_pack_resolver.dart`를 뺀 상태로 Quick Start(Android)를 수동 실행했다. archive 모드는 5단계에서 `Error when reading '…/model_pack_resolver.dart'`로 실패했고([run 43766132594](https://github.com/dev07060/mobile_rag_engine/actions/runs/43766132594)), 지금까지의 PR 방식인 git 모드는 같은 결함으로 통과했다([run 43766135014](https://github.com/dev07060/mobile_rag_engine/actions/runs/43766135014)).
+- B15 정상 실행([run 43766098406](https://github.com/dev07060/mobile_rag_engine/actions/runs/43766098406)): 네 플랫폼 통과. 아카이브 파일 수 `mobile_rag_engine` 330개, `rag_engine_flutter` 103개. iOS 아카이브가 심볼 19개를 모두 export한다. 이 PR은 crate hash `040f5f3e…`의 precompiled binary가 없어 네 job 모두 Rust 소스 빌드로 돌았다.
+- B16: arm64 APK와 AAB의 64비트 라이브러리 6개씩(`librag_engine_flutter.so` 16384, `libonnxruntime.so` 16384, `libflutter.so`·`libapp.so` 65536 등) 모두 16 KB 이상, APK zip 정렬 통과. 결함 주입(로컬): arm64가 없는 APK와 LOAD 정렬을 4096으로 바꾼 `librag_engine_flutter.so`를 검사가 실패시켰다(기존 검사는 앞의 경우를 건너뛴다).
+- 엔진 버전: Upgrade E2E 두 기준 버전 job 통과. 0.22.3이 만든 같은 DB에서 A 단계 로그는 `engine='0.8.0'`, PR 엔진의 B 단계는 `engine='0.22.0' (bootstrapped=false)`이고 다른 축과 fingerprint는 그대로다. Windows native job에서 Rust 전체 스위트 289개(`vector_faer,vector_quant_i8` 288개, 각 16 ignored)와 새 버전 테스트 통과. 로컬에는 Rust가 없어 `cargo test`를 로컬에서 돌리지 않았다.
+- CI 시간(Quick Start, 경로 조건에서만 돈다): 이번 실행(소스 빌드) job당 Windows 14분, Android 15분, macOS 18분, iOS 27분. 0.23.0 PR(#127, precompiled) 때는 5·12·5·13분. precompiled일 때의 증가분(아카이브 1분 + Android arm64·AAB 빌드)은 재지 않았다.
+- **확인하지 않은 것:** precompiled 모드에서 새 단계의 소요 시간, 실기기 실행(M5), iOS Release 바이너리 실행(시뮬레이터에서 못 돌려 심볼 검사로 대신했다), 로컬 `cargo test`.
 
 ### I1. 실제 앱 연동 마찰 문서
 

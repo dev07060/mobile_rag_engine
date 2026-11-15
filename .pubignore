@@ -95,3 +95,6 @@ flutter_*.log
 
 # CI-only upgrade harness (run from the repo by upgrade_e2e.yml)
 tool/upgrade_e2e/
+
+# CI-only Quick Start helpers (run from the repo by quickstart_e2e.yml)
+tool/quickstart_e2e/
