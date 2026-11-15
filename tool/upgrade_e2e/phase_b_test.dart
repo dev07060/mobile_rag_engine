@@ -29,6 +29,7 @@ void main() {
       'contract' => await _toolContract(),
       'r1' => await _clearAndRestartThenReAdd(),
       'c1' => await _searchAfterCollectionSwitch(),
+      't1' => await _textIndexedByRelease(),
       _ => fail('Unknown phase B scenario "$scenario"'),
     };
     expect(passed, isTrue, reason: 'see the H1_CHECK lines above');
@@ -41,7 +42,7 @@ Future<Map<String, Object?>> _phaseA(String id) async =>
 
 Future<bool> _dataContainerKept() async {
   final missing = [
-    for (final id in ['s1', 's2', 's3', 's4', 'r1', 'c1'])
+    for (final id in ['s1', 's2', 's3', 's4', 'r1', 'c1', 't1'])
       if (!await (await phaseAMarker(id)).exists()) id,
   ];
   return report(
@@ -226,6 +227,49 @@ Future<bool> _searchAfterCollectionSwitch() async {
         'docs_hybrid=${hybrid.length} notes_search=${result.chunks.length} '
         'notes_found=$found docs_search_after=${back.chunks.length} '
         'docs_found=$foundBack',
+  );
+}
+
+/// Q3 t1 (B8, B9): the release indexed a decomposed (NFD) Korean document.
+/// The BM25 index is rebuilt from the stored chunks when the engine starts,
+/// so keyword search uses the new tokenizer with no migration: "RAG" finds
+/// "RAG는", "앱" finds "앱을", and NFC "환불" finds the NFD text. Adding the
+/// document again, in NFD or NFC, is a duplicate of the release's row, whose
+/// dedup hash was taken from the raw NFD text.
+Future<bool> _textIndexedByRelease() async {
+  final before = await _phaseA('t1');
+  await MobileRag.initialize(
+    modelPack: const RagModelPack.asset(miniLmPack),
+    databaseName: databaseName('t1'),
+  );
+  final rag = MobileRag.instance;
+  final found = <String, bool>{};
+  for (final query in ['RAG', '앱', '환불', '2024']) {
+    final hits = await rag.searchHybrid(query, topK: 5);
+    found[query] = hits.any(
+      (h) => h.bm25Rank > 0 && h.content.contains('東京'),
+    );
+  }
+  final nfd = await rag.addDocument(
+    toNfdHangul(t1KoreanText),
+    name: t1KoreanName,
+  );
+  final nfc = await rag.addDocument(t1KoreanText, name: t1KoreanName);
+  final sources = (await rag.getStats()).sourceCount.toInt();
+  await MobileRag.dispose();
+  final release = {
+    for (final query in found.keys) query: before['bm25_$query'],
+  };
+  return report(
+    't1',
+    !found.containsValue(false) &&
+        nfd.isDuplicate &&
+        nfc.isDuplicate &&
+        sources == before['sources'],
+    'bm25_found=$found (release before upgrade: $release) '
+        're-add nfd_duplicate=${nfd.isDuplicate} '
+        'nfc_duplicate=${nfc.isDuplicate} '
+        'sources ${before['sources']}->$sources',
   );
 }
 

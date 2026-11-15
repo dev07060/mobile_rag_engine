@@ -17,7 +17,7 @@ void main() {
     final database = databaseName(scenario);
     final RagEngine engine;
     switch (scenario) {
-      case 's1' || 's4' || 'r1' || 'c1':
+      case 's1' || 's4' || 'r1' || 'c1' || 't1':
         await MobileRag.initialize(
           modelPack: const RagModelPack.asset(miniLmPack),
           databaseName: database,
@@ -48,7 +48,23 @@ void main() {
         fail('Unknown phase A scenario "$scenario"');
     }
 
-    if (scenario == 'c1') {
+    Map<String, Object?> probe = const {};
+    if (scenario == 't1') {
+      // Q3: the release indexes a decomposed (NFD) Korean document with its
+      // BM25 tokenizer. Record what keyword search finds before the upgrade.
+      await engine.addDocument(toNfdHangul(t1KoreanText), name: t1KoreanName);
+      await engine.addDocument(corpus['rag.txt']!, name: 'rag.txt');
+      await engine.rebuildIndex();
+      for (final query in ['RAG', '앱', '환불', '2024']) {
+        final hits = await engine.searchHybrid(query, topK: 5);
+        probe = {
+          ...probe,
+          'bm25_$query': hits.any(
+            (h) => h.bm25Rank > 0 && h.content.contains('東京'),
+          ),
+        };
+      }
+    } else if (scenario == 'c1') {
       // Two collections, each with its own persisted HNSW file.
       for (final MapEntry(key: name, value: text) in corpus.entries) {
         await engine.addDocument(
@@ -76,10 +92,19 @@ void main() {
                 collectionId: notesCollection,
               )).chunkCount.toInt()
         : (await engine.getStats()).chunkCount.toInt();
+    final sources = (await engine.getStats()).sourceCount.toInt();
     await (await phaseAMarker(scenario)).writeAsString(
-      jsonEncode({'fingerprint': fingerprint, 'chunks': chunks}),
+      jsonEncode({
+        'fingerprint': fingerprint,
+        'chunks': chunks,
+        'sources': sources,
+        ...probe,
+      }),
     );
-    print('H1_PHASE_A $scenario fingerprint=$fingerprint chunks=$chunks');
+    print(
+      'H1_PHASE_A $scenario fingerprint=$fingerprint chunks=$chunks '
+      'sources=$sources${probe.isEmpty ? '' : ' probe=$probe'}',
+    );
 
     if (scenario == 's2') {
       await RagEngine.dispose();

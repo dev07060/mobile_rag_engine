@@ -1223,7 +1223,9 @@ class RagEngine {
       );
       if (batch.isEmpty) break;
       for (final chunk in batch) {
-        final embedding = await EmbeddingService.embed(chunk.content);
+        // The same text ingestion embedded: markdown chunks carry their
+        // "Header Path: ..." line.
+        final embedding = await EmbeddingService.embed(chunk.embeddingText);
         await rust_rag.updateChunkReembedded(
           chunkId: chunk.chunkId,
           embedding: embedding,

@@ -5,7 +5,8 @@ name: Upgrade E2E
 # `flutter create` macOS app indexes documents with a mobile_rag_engine release
 # from pub.dev, then the same app (same data container) switches to the PR head
 # and runs again with a model swapped in four ways, a clearAndRestart() and
-# re-add (r1), and a search after switching collections (c1). It also checks
+# re-add (r1), a search after switching collections (c1), and keyword search
+# and duplicate checks on Korean text the release indexed (t1). It also checks
 # real RagSearchTool output from the PR head. See tool/upgrade_e2e/run.sh.
 #
 # Two base releases (Q2): 0.23.0 is the last published release (rule 8-1), and

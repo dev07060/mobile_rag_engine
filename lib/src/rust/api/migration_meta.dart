@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'migration_meta.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `assert_no_unknown_future_axes`, `bootstrap_axes`, `count_chunks_with_non_matching_fingerprint`, `create_migration_meta_table`, `detect_existing_install`, `initialize_migration_meta`, `insert_axis_if_absent`, `read_axes_with`, `read_axis_int`, `read_axis_string_or_empty`, `read_axis_string`, `stored_embedding_f32`, `upsert_axis`
+// These functions are ignored because they are not marked as `pub`: `assert_no_unknown_future_axes`, `bootstrap_axes`, `count_chunks_with_non_matching_fingerprint`, `count_tagged_chunks_with_other_fingerprint`, `create_migration_meta_table`, `detect_existing_install`, `initialize_migration_meta`, `insert_axis_if_absent`, `read_axes_with`, `read_axis_int`, `read_axis_string_or_empty`, `read_axis_string`, `stored_embedding_f32`, `upsert_axis`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
 
 /// Read the current 4-axis state from `migration_meta`.
@@ -85,7 +85,9 @@ Future<List<EmbeddingSample>> sampleEmbeddingsForFingerprint({
 /// Writes `embedding_fingerprint_pending = target_fingerprint` (sticky across
 /// reboots, so the flow is resumable) and returns the number of chunks that
 /// still need re-embedding. Idempotent — calling it again with the same
-/// target is safe.
+/// target is safe. A pending reembed towards another target is replaced:
+/// chunks are counted per fingerprint, so the new run re-embeds everything
+/// not yet tagged with `target_fingerprint`.
 Future<PlatformInt64> beginEmbeddingReembed({
   required String targetFingerprint,
 }) => RustLib.instance.api.crateApiMigrationMetaBeginEmbeddingReembed(

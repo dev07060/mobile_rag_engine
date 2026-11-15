@@ -2179,6 +2179,7 @@ dependencies = [
  "text-splitter",
  "thiserror 1.0.69",
  "tokenizers",
+ "unicode-normalization",
  "unicode-segmentation",
  "uuid",
  "zip",

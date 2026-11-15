@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `advance_by_chars`, `build_semantic_chunk`, `cached_token_count`, `char_count_in_range`, `clamp_overlap_chars`, `ends_with_sentence_boundary`, `enforce_token_budget`, `estimate_token_fitting_end`, `estimate`, `fits_range`, `fits_token_budget_estimated`, `fits_token_budget`, `flush_text_section`, `is_article_title`, `is_bullet_line`, `is_explicit_section_heading`, `is_markdown_header`, `is_section_break`, `is_sentence_boundary_char`, `is_table_line`, `largest_fitting_prefix_end`, `largest_token_fitting_end`, `line_content_end`, `markdown_line_ranges`, `materialize_semantic_chunks`, `new`, `new`, `next_non_whitespace`, `over_budget`, `overlap_boundary_starts`, `overlap_prefix_start`, `overlap_start`, `parse_code_block_language`, `parse_markdown_header`, `plan_plain_text_ranges_char_budget`, `plan_plain_text_ranges_with_overlap`, `plan_plain_text_ranges`, `plan_plain_text_subranges`, `shrink_overlap_start`, `split_by_headers`, `split_by_line_ranges`, `split_hard_range`, `split_line_ranges`, `split_paragraph_ranges`, `split_semantic_range`, `subslice_range`, `token_count_cache_key`, `trim_range`
+// These functions are ignored because they are not marked as `pub`: `advance_by_chars`, `build_semantic_chunk`, `cached_token_count`, `char_count_in_range`, `clamp_overlap_chars`, `closes_code_fence`, `ends_with_sentence_boundary`, `enforce_token_budget`, `estimate_token_fitting_end`, `estimate`, `fits_range`, `fits_token_budget_estimated`, `fits_token_budget`, `flush_text_section`, `header_line`, `is_article_title`, `is_bullet_line`, `is_explicit_section_heading`, `is_markdown_header`, `is_section_break`, `is_sentence_boundary_char`, `is_table_line`, `largest_fitting_prefix_end`, `largest_token_fitting_end`, `line_content_end`, `markdown_line_ranges`, `materialize_semantic_chunks`, `new`, `new`, `next_non_whitespace`, `over_budget`, `overlap_boundary_starts`, `overlap_prefix_start`, `overlap_start`, `parse_code_fence_open`, `parse_markdown_header`, `plan_plain_text_ranges_char_budget`, `plan_plain_text_ranges_with_overlap`, `plan_plain_text_ranges`, `plan_plain_text_subranges`, `plan_with_header_line`, `shrink_overlap_start`, `split_by_headers`, `split_by_line_ranges`, `split_hard_range`, `split_line_ranges`, `split_paragraph_ranges`, `split_semantic_range`, `strip_markdown_indent`, `subslice_range`, `token_count_cache_key`, `trim_range`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ChunkingStrategy`, `MarkdownLine`, `PlainTextPlanner`, `Section`, `TokenEstimator`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
@@ -68,7 +68,14 @@ enum ChunkType {
 class SemanticChunk {
   final int index;
   final String content;
+
+  /// Start of [content] in the input text, as a UTF-8 **byte** offset (not
+  /// a Dart `String` index, which counts UTF-16 code units). The two differ
+  /// for any non-ASCII text: "가" is 3 bytes and 1 code unit. To slice in
+  /// Dart, encode the text with `utf8.encode` and decode the byte range.
   final int startPos;
+
+  /// End of [content] (exclusive), as a UTF-8 byte offset, like the start.
   final int endPos;
   final String chunkType;
 
@@ -106,7 +113,12 @@ class StructuredChunk {
   final String content;
   final String headerPath;
   final String chunkType;
+
+  /// Start of [content] in the input text, as a UTF-8 **byte** offset (not
+  /// a Dart `String` index). See `SemanticChunk.start_pos`.
   final int startPos;
+
+  /// End of [content] (exclusive), as a UTF-8 byte offset.
   final int endPos;
   final String? batchId;
   final int? batchIndex;

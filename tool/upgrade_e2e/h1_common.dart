@@ -60,6 +60,33 @@ bool report(String id, bool pass, String detail) {
   return pass;
 }
 
+/// Q3 t1: a Korean document with particles after Latin words, digits and a
+/// one-syllable noun, full-width letters, Japanese, Chinese, an emoji and a
+/// decimal. Phase A adds it decomposed ([toNfdHangul]), as macOS file names
+/// and some PDFs give Hangul.
+const t1KoreanText =
+    '환불 정책: RAG는 2024년부터 앱을 통해 환불을 신청하는 방법을 안내합니다. '
+    '東京 北京 ＲＡＧ 🚀 버전 3.14.';
+const t1KoreanName = 't1_ko.txt';
+
+/// [text] with every precomposed Hangul syllable decomposed into its jamo
+/// (Unicode NFD for Hangul). Dart has no normalizer, so this is the
+/// arithmetic decomposition from the Unicode standard (section 3.12).
+String toNfdHangul(String text) {
+  final out = StringBuffer();
+  for (final rune in text.runes) {
+    final s = rune - 0xAC00;
+    if (s < 0 || s >= 11172) {
+      out.writeCharCode(rune);
+      continue;
+    }
+    out.writeCharCode(0x1100 + s ~/ 588);
+    out.writeCharCode(0x1161 + (s % 588) ~/ 28);
+    if (s % 28 != 0) out.writeCharCode(0x11A7 + s % 28);
+  }
+  return out.toString();
+}
+
 /// Short English passages, each longer than a fifth of the contract tool's
 /// token budget, so five retrieved chunks overflow it.
 const corpus = <String, String>{

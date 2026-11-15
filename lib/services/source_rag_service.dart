@@ -653,11 +653,7 @@ class SourceRagService {
     Duration? chunkDelay,
     void Function(int done, int total)? onProgress,
   }) async {
-    final effectiveStrategy = strategy ??
-        (filePath != null &&
-                (filePath.endsWith('.md') || filePath.endsWith('.markdown'))
-            ? ChunkingStrategy.markdown
-            : ChunkingStrategy.recursive);
+    final effectiveStrategy = strategy ?? detectChunkingStrategy(filePath);
 
     // Hand the document body to Rust exactly once. `prepareSourceIngestion`
     // performs the source-row INSERT, claim, duplicate decision, chunker run,

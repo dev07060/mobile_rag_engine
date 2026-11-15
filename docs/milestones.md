@@ -785,7 +785,33 @@
 
 ### Q3. 텍스트 경계
 
-- **상태:** 착수 대기. Q2 뒤.
+- **담당:** 세션 "Q3 텍스트 경계", 브랜치 `fix/q3-text-boundaries`(worktree `.claude/worktrees/q3-text-boundaries-2f603e`, main `fe8ae5c`에서 땄다)
+- **상태:** PR 열림, 머지 대기. 착수는 2026-11-15 사용자 "새 세션에서 Q3 착수". 아래 "착수 때 확인한 것"으로 손대는 파일을 늘렸다(규칙 4).
+
+**착수 때 확인한 것 (2026-11-15, main `fe8ae5c`)**
+
+초안은 2026-11-06에 썼고 그 뒤 S1(#134)·W1(#137)·Q2(#145·#146)가 머지됐다. 항목마다 지금 main에서 실패하는 테스트를 먼저 썼다. 모두 재현돼서 범위에서 뺀 항목은 없다.
+
+| 항목 | main에서 | 근거 (수정 전 실패) |
+|---|---|---|
+| A2 | 재현 | `compression_utils.rs:134` `result[..=pos]`가 `。`(3바이트) 시작 위치에서 잘라 `byte index 19 is not a char boundary` panic. `3.14` → `3. 14`, `v1.2.3` → `v1. 2. 3`, `。` 뒤에 공백이 끼어든다. Rust 테스트 6개 |
+| B1 | 재현 | 머리글 3단 markdown 청크의 실제 임베딩 입력(`Header Path: …\n` + 본문)이 526토큰(한도 512). Rust 테스트 1개 |
+| B2 | 재현 | `rag_engine.dart` `_reembedAll`이 `chunk.content`를 임베딩한다. 가짜 임베딩(입력 텍스트 해시)으로 재임베딩 전에는 자기 입력과 유사도 1.0, 재임베딩 뒤 −0.039. native 테스트 1개 |
+| B8 | 재현 | NFD `환불`, 전각 `ＲＡＧ`, `３５００원`, 합자 `ﬁle`, 반각 `ｶﾀｶﾅ`가 BM25에서 안 맞는다. 같은 문서의 NFC·NFD가 서로 다른 source로 들어간다. Rust 테스트 3개 |
+| B9 | 재현 | `RAG는`·`API를`·`2024년`·`iPhone15에서`·`앱을`이 `RAG`·`2024`·`앱` 질의와 안 맞는다. Rust 테스트 2개 |
+| 헤더 오인식 | 재현 | `#여행`, `#include`, `#######`를 헤더로 읽어 header path가 `여행 #東京 #맛집 …`, `include <stdio.h>`가 된다. `~~~` 펜스 안의 `# 주석`이 헤더가 된다. ```` 펜스 안의 ``` 가 블록을 닫는다. plain text 청커의 `is_explicit_section_heading`도 `#여행` 줄에서 자른다. Rust 테스트 4개 |
+| `.MD` | 재현 | `addDocument(filePath: 'GUIDE.MD')`, `'guide.Markdown'`이 markdown 청킹을 안 쓴다(`source_rag_service.dart` `endsWith('.md')`). 파일 경로 ingest(`ingest_session.rs`)와 `detectChunkingStrategy`는 이미 대소문자를 무시했다. native 테스트 2개 |
+| offset 문서화 | 코드로 확인 | `SemanticChunk.startPos`/`endPos`(UTF-8 바이트)에 단위 설명이 없다 |
+
+**착수 때 정한 방식 (2026-11-15)**
+- **A2:** `.`·`?`·`!`는 뒤가 공백이거나 글 끝일 때만 문장 끝으로 본다. `。！？｡`는 항상 문장 끝이다. 문장 사이는 입력에 있던 공백을 그대로 쓴다(CJK 사이에는 공백을 넣지 않는다). 잘라내기는 같은 규칙으로 마지막 문장 끝을 찾는다.
+- **B1:** markdown 섹션의 토큰 예산에서 `Header Path: …\n` 줄의 토큰 수를 뺀다. 경계에서 토큰이 더해지지 않는 토크나이저가 있어, 계획한 청크마다 실제 입력을 다시 세고 넘으면 예산을 줄여 다시 나눈다. 머리글이 모델 입력의 절반을 넘으면 본문에 절반은 남긴다(그 경우 머리글 뒤쪽이 잘린다).
+- **B2:** `ChunkForReembedding`에 `embeddingText`(색인 때와 같은 `render_context_text`)를 더하고 `reembedAll`이 그것을 임베딩한다. FRB 바인딩을 다시 만들었다.
+- **B8 BM25:** 색인과 질의 모두 NFKC로 바꾼 뒤 토큰화한다. NFKC는 NFD 한글을 합치고 전각·반각·합자를 접는다. BM25는 활성화 때 DB 청크로 다시 만들어지므로(`rebuild_chunk_bm25_index_for_collection`) 기존 DB에 마이그레이션이 없다.
+- **B8 중복 검사 해시 (호환을 지키는 선택):** 저장하는 해시는 NFC 본문의 해시로 바꾼다. 조회는 NFC 해시, 원문 해시, NFD 해시 셋으로 한다. 그래서 0.23.0 이전에 원문(NFC든 NFD든) 해시로 저장된 행도 같은 문서를 다시 넣을 때 찾는다. 대부분의 문서(ASCII, 이미 NFC인 한국어)는 저장 해시가 이전과 같다. 전각·합자는 해시에서 접지 않는다(다른 문서로 둔다). 저장하는 `content`는 원문 그대로다(청크 offset이 원문 기준이다).
+- **B9:** 한글과 다른 글자가 섞인 낱말(`rag는`, `2024년`, `iphone15에서`)은 한글이 아닌 부분을 따로 토큰으로 더한다(영어는 지금처럼 stemming). 한 음절 + 조사(`앱을`, `앱에서`)는 그 한 음절을 더한다. 조사 목록은 `bm25_search.rs`의 `KOREAN_PARTICLES`. 두 음절 이상 명사는 지금처럼 bigram이 맡는다.
+- **헤더:** CommonMark ATX 규칙(1~6개 `#` 뒤 공백·탭·줄 끝, 들여쓰기 3칸까지). 펜스는 ``` 와 `~~~`, 같은 글자로 같거나 긴 줄이 닫는다. plain text 청커의 `#` 판정도 같은 함수를 쓴다.
+- **Upgrade E2E t1:** 0.22.3·0.23.0이 NFD 한국어 문서를 색인한 DB에서 PR 코드로 올라와 BM25로 `RAG`·`앱`·`환불`(NFC)·`2024`를 찾는지, 같은 문서를 NFD·NFC로 다시 넣으면 중복으로 잡는지 본다. 기준 버전에서 같은 질의를 했을 때의 결과도 함께 남긴다.
 
 **목표:** 바이트·문자·토큰 경계와 비 ASCII 텍스트에서 깨지는 곳을 고친다.
 
@@ -803,7 +829,31 @@
 - 위 항목마다 한·중·일 입력 회귀 테스트. 기존 DB의 BM25는 활성화 때 다시 빌드되므로 마이그레이션이 필요 없는지 확인한다.
 - 공통 완료 기준. PR 하나, CI 통과. Rust 변경이 있다.
 
-**손대는 파일:** `rust_builder/rust/src/api/{compression_utils,semantic_chunker,bm25_search,ingest_session,source_rag}.rs`, `lib/services/rag_engine.dart`(reembed 입력), `lib/services/source_rag_service.dart`(`.md` 판별), `test/**`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `docs/milestones.md`
+**손대는 파일:** `rust_builder/rust/src/api/{compression_utils,semantic_chunker,bm25_search,ingest_session,source_rag}.rs`, `lib/services/rag_engine.dart`(reembed 입력), `lib/services/source_rag_service.dart`(`.md` 판별), `test/**`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `docs/milestones.md`. 착수 때 더한 것: `rust_builder/rust/Cargo.toml`·`Cargo.lock`(`unicode-normalization`, `pdf-extract`가 이미 쓰는 0.1.25라 새 crate는 없다), FRB 생성 파일(`lib/src/rust/**`, `rust_builder/rust/src/frb_generated.rs`), `tool/upgrade_e2e/**`와 `.github/workflows/upgrade_e2e.yml`(머리 주석만, t1 시나리오)
+
+**실행 결과 (2026-11-15)**
+- **Rust (로컬 macOS 27.2.1, Apple M3 Pro, rustc 1.91.1, debug, `cargo test --lib -- --test-threads=1`):** 새 테스트 16개가 수정 전 코드(main `fe8ae5c` + 테스트만)에서 실패했다(위 표). 수정 뒤 전체 통과: 기본 feature 285개, `vector_faer,vector_quant_i8` 286개(무시 16).
+- **Dart:** `test/native/reembed_embedding_input_test.dart`(B2 1개, `.MD`·`.Markdown`·`.md` 3개)는 수정 전 코드에서 3개 실패(재임베딩 뒤 자기 입력과의 유사도 −0.039, `.MD`·`.Markdown`가 plain 청킹). 수정 뒤 `flutter test test/unit` 158개, `flutter test test/native` 34개 통과. `flutter analyze lib/ test/` 문제 없음. native 테스트는 Xcode 27.1 strip 문제로 `CARGO_PROFILE_RELEASE_STRIP=none` release dylib로 돌렸다(Q2와 같다).
+- **E1 전후 (B8·B9와 B1이 함께 들어간 결과):** `scripts/eval/run_passage_eval.sh --bundle e1 --dump-candidates`, `ask` 조건(상위 5개, 목록마다 후보 20개), 답 있는 질문 90개. 수정 전 `fe8ae5c`, 수정 뒤 `6a6ce96`(Rust는 `2620777`과 같다). 수정 전 값은 E1 보고서(`0b27510`)와 모든 칸이 같다.
+
+| 모델 | 무게 | 영어 (45) | 한국어 | 바뀐 질문 |
+|---|---|---|---|---|
+| MiniLM | 0.2/0.8 (기본) | 35 → 35 | 24 → 25 / 44 | +e1q-066, +e1q-100, −e1q-104 |
+| | 0.5/0.5 | 36 → 36 | 21 → 20 / 44 | +e1q-066, −e1q-065, −e1q-077 |
+| | BM25만 | 34 → 34 | 29 → 30 / 44 | +e1q-087 |
+| | 벡터만 | 38 → 38 | 2 → 2 / 44 | 없음 |
+| KoEn-E5-Tiny | 0.2/0.8 (기본) | 34 → 34 | 37 → 37 / 45 | 없음 |
+| | 0.5/0.5 | 38 → 38 | 42 → 43 / 45 | +e1q-078 |
+| | BM25만 | 34 → 34 | 30 → 31 / 45 | +e1q-087 |
+| | 벡터만 | 38 → 38 | 41 → 41 / 45 | 없음 |
+
+  - 영어는 두 모델 모두 질문 하나하나까지 같다. 한국어는 ±1~2개로, 답 있는 질문 45개에서 가를 수 없는 크기다. 얻은 질문은 새 토큰에서 나왔다(e1q-100 "군을" → "군", e1q-087 "앱을" → "앱"). 잃은 질문은 새 한 음절 토큰이 다른 청크의 BM25 순위를 올린 결과로 보지만 질문마다 확인하지 않았다. 기본 무게는 바꾸지 않았다(규칙 10).
+  - **MiniLM e1q-078은 수정 뒤 채점에서 빠졌다:** B1 수정으로 `gnome_ko_disk_check`의 마지막 절이 두 청크로 나뉘었고(5 → 6청크, 전체 2,330 → 2,331), 정답 문장이 그 경계에 걸렸다. 그래서 MiniLM 한국어는 전후 모두 44개로 셌다. 수정 전 그 청크의 실제 임베딩 입력은 MiniLM 토크나이저로 543토큰(31토큰 잘림), 수정 뒤 511 + 92토큰이다. E1 색인 전체에서 512를 넘는 markdown 청크는 MiniLM 6개(잘린 토큰 합 128) → 0개, KoEn 0개 → 0개다.
+  - E1 보고서(`docs/perf/e1-app-docs/README.md`)의 수치는 `0b27510` 기준으로 적힌 값이라 고치지 않았다.
+- **측정 조건 (규칙 9):** MiniLM `model.onnx|384|f32+vabq:none|sha256:e9246dc32f332cb687c5d1ea0c0c51d3`, KoEn-E5-Tiny `model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413`. profile 빌드, Rust 기능 `vector_faer,vector_quant_i8`, 실행마다 새 DB. Apple M3 Pro, macOS 27.2.1, Xcode 27.1 (27A9275), Flutter 3.35.5, Dart 3.9.2, rustc 1.91.1, Xcode 27 우회는 스크립트가 복사본에만 넣었다. 문서 56개, 질문 120개(답 있음 90), 청크 MiniLM 2,330 → 2,331, KoEn 2,319 → 2,319. 2026-11-15(KST). 네 실행을 차례로 돌렸고, 그동안 같은 Mac에서 `cargo test`가 함께 돌았다(검색 시간은 쓰지 않는다). 실행 기록: 수정 전 MiniLM 239초 05:25 UTC, KoEn 59초 05:26, 수정 뒤 MiniLM 235초 05:30, KoEn 57초 05:31. 실행 때 바뀐 추적 파일 없음.
+- **BM25 빌드 시간 (`bm25_build_benchmark`, release, 합성 문서 20,000개, 각 3회, 같은 Mac):** 한국어 330~332ms → 448~451ms(+36%), 영어 537~585ms → 605~875ms(흔들림이 크다). NFKC 빠른 검사와 낱말마다의 섞인 글자 검사 비용이다. 최적화하지 않았다.
+- **Upgrade E2E:** t1 시나리오를 더했다. 결과는 PR CI의 두 기준 버전 job에 있다.
+- **확인하지 않은 것:** 실기기(iPhone·Android)와 Windows 실행, BGE-m3 E1 전후, 80질의·F1 묶음 전후, 큰 문서에서 NFKC가 BM25 빌드 시간에 주는 영향.
 
 ### Q4. 출력 계약
 

@@ -5903,9 +5903,11 @@ impl SseDecode for crate::api::source_rag::ChunkForReembedding {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_chunkId = <i64>::sse_decode(deserializer);
         let mut var_content = <String>::sse_decode(deserializer);
+        let mut var_embeddingText = <String>::sse_decode(deserializer);
         return crate::api::source_rag::ChunkForReembedding {
             chunk_id: var_chunkId,
             content: var_content,
+            embedding_text: var_embeddingText,
         };
     }
 }
@@ -7531,6 +7533,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::source_rag::ChunkForReembeddi
         [
             self.chunk_id.into_into_dart().into_dart(),
             self.content.into_into_dart().into_dart(),
+            self.embedding_text.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -8556,6 +8559,7 @@ impl SseEncode for crate::api::source_rag::ChunkForReembedding {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.chunk_id, serializer);
         <String>::sse_encode(self.content, serializer);
+        <String>::sse_encode(self.embedding_text, serializer);
     }
 }
 

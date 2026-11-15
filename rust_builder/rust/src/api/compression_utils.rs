@@ -17,6 +17,7 @@
 //! Lightweight text compression for prompt optimization.
 
 use std::collections::HashSet;
+use std::ops::Range;
 
 #[derive(Debug, Clone)]
 pub struct CompressionOptions {
@@ -48,32 +49,56 @@ pub struct CompressedText {
     pub chars_saved_truncation: i32,
 }
 
-/// Split text into sentences.
-pub fn split_sentences(text: String) -> Vec<String> {
-    if text.is_empty() {
-        return vec![];
+/// Full-width sentence terminators end a sentence wherever they appear.
+fn is_cjk_terminator(ch: char) -> bool {
+    matches!(ch, '。' | '！' | '？' | '｡')
+}
+
+/// Whether the char `ch` at byte `index` of `text` ends a sentence.
+///
+/// `.`, `?` and `!` end a sentence only before whitespace or the end of the
+/// text, so decimals and versions ("3.14", "v1.2.3") stay whole.
+fn ends_sentence(text: &str, index: usize, ch: char) -> bool {
+    if is_cjk_terminator(ch) {
+        return true;
     }
+    matches!(ch, '.' | '?' | '!')
+        && text[index + ch.len_utf8()..]
+            .chars()
+            .next()
+            .map_or(true, char::is_whitespace)
+}
 
-    let mut sentences = Vec::new();
-    let mut current = String::new();
-
-    for ch in text.chars() {
-        current.push(ch);
-        if ch == '.' || ch == '?' || ch == '!' || ch == '。' {
-            let trimmed = current.trim().to_string();
-            if !trimmed.is_empty() && trimmed.len() > 1 {
-                sentences.push(trimmed);
-            }
-            current = String::new();
+/// Byte ranges of the sentences in `text`, each trimmed of whitespace.
+fn sentence_ranges(text: &str) -> Vec<Range<usize>> {
+    fn push_trimmed(text: &str, range: Range<usize>, out: &mut Vec<Range<usize>>) {
+        let slice = &text[range.clone()];
+        let start = range.start + (slice.len() - slice.trim_start().len());
+        let end = range.start + slice.trim_end().len();
+        if start < end {
+            out.push(start..end);
         }
     }
 
-    let trimmed = current.trim().to_string();
-    if !trimmed.is_empty() {
-        sentences.push(trimmed);
+    let mut ranges = Vec::new();
+    let mut start = 0;
+    for (index, ch) in text.char_indices() {
+        if ends_sentence(text, index, ch) {
+            let end = index + ch.len_utf8();
+            push_trimmed(text, start..end, &mut ranges);
+            start = end;
+        }
     }
+    push_trimmed(text, start..text.len(), &mut ranges);
+    ranges
+}
 
-    sentences
+/// Split text into sentences.
+pub fn split_sentences(text: String) -> Vec<String> {
+    sentence_ranges(&text)
+        .into_iter()
+        .map(|range| text[range].to_string())
+        .collect()
 }
 
 /// Calculate hash for sentence deduplication (FNV-1a).
@@ -107,37 +132,49 @@ pub fn compress_text(text: String, max_chars: i32, options: CompressionOptions) 
         };
     }
 
-    let sentences = split_sentences(text);
-    let original_sentence_count = sentences.len();
+    let ranges = sentence_ranges(&text);
+    let original_sentence_count = ranges.len();
 
-    let mut unique_sentences = Vec::new();
+    // Keep each sentence once, and join kept sentences with the whitespace
+    // that followed them in the input ("" between CJK sentences).
+    let mut result = String::new();
+    let mut kept_count = 0usize;
     let mut seen_hashes = HashSet::new();
-
-    if options.remove_duplicates {
-        for sentence in sentences {
-            let hash = sentence_hash(sentence.clone());
-            if !seen_hashes.contains(&hash) {
-                seen_hashes.insert(hash);
-                unique_sentences.push(sentence);
-            }
+    let mut separator = "";
+    for (i, range) in ranges.iter().enumerate() {
+        let sentence = &text[range.clone()];
+        if options.remove_duplicates && !seen_hashes.insert(sentence_hash(sentence.to_string())) {
+            continue;
         }
-    } else {
-        unique_sentences = sentences;
+        if kept_count > 0 {
+            result.push_str(separator);
+        }
+        result.push_str(sentence);
+        kept_count += 1;
+        separator = ranges
+            .get(i + 1)
+            .map_or("", |next| &text[range.end..next.start]);
     }
-
-    let mut result = unique_sentences.join(" ");
     let chars_before_truncation = result.chars().count() as i32;
 
     if max_chars > 0 && result.chars().count() > max_chars as usize {
-        result = result.chars().take(max_chars as usize).collect();
-        if let Some(pos) = result.rfind(|c| c == '.' || c == '?' || c == '!' || c == '。') {
-            result = result[..=pos].to_string();
-        }
+        let cut = result
+            .char_indices()
+            .nth(max_chars as usize)
+            .map_or(result.len(), |(index, _)| index);
+        // End on the last sentence boundary inside the cut, judged against
+        // the untruncated text (a "." right before the cut may be "3.14").
+        let sentence_end = result[..cut]
+            .char_indices()
+            .filter(|&(index, ch)| ends_sentence(&result, index, ch))
+            .last()
+            .map(|(index, ch)| index + ch.len_utf8());
+        result.truncate(sentence_end.unwrap_or(cut));
     }
 
     let chars_saved_truncation = chars_before_truncation - result.chars().count() as i32;
     let compressed_chars = result.chars().count() as i32;
-    let sentences_removed = (original_sentence_count - unique_sentences.len()) as i32;
+    let sentences_removed = (original_sentence_count - kept_count) as i32;
 
     CompressedText {
         text: result,
@@ -200,5 +237,66 @@ mod tests {
         };
         let result = compress_text(text, 0, options);
         assert_eq!(result.sentences_removed, 1);
+    }
+
+    // Q3 A2: Korean, Japanese, Chinese, NFD Hangul, full-width, emoji and
+    // decimals (Q0 test text rule).
+    const MIXED: &str = "환불은 14일 이내에 가능합니다. 東京は大きい。大阪も大きい。\
+北京是中国的首都！\u{1112}\u{1161}\u{11ab}\u{1100}\u{1173}\u{11af} ＲＡＧ 🚀 버전 3.14, v1.2.3 가격 ３.５달러.";
+
+    fn no_dedupe() -> CompressionOptions {
+        CompressionOptions {
+            remove_duplicates: false,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_compress_truncation_after_cjk_full_stop_does_not_panic() {
+        let text = "東京は大きい。大阪も大きい。京都は古い".to_string();
+        let result = compress_text(text, 12, no_dedupe());
+        assert_eq!(result.text, "東京は大きい。");
+    }
+
+    #[test]
+    fn test_compress_truncation_on_every_char_count_of_mixed_text() {
+        let total = MIXED.chars().count() as i32;
+        for max_chars in 1..=total {
+            let result = compress_text(MIXED.to_string(), max_chars, CompressionOptions::default());
+            assert!(result.text.chars().count() <= max_chars as usize);
+            assert!(MIXED.starts_with(&result.text), "{max_chars}: {:?}", result.text);
+        }
+    }
+
+    #[test]
+    fn test_compress_keeps_decimals_versions_and_spacing() {
+        let result = compress_text(MIXED.to_string(), 0, CompressionOptions::default());
+        assert_eq!(result.text, MIXED);
+        assert_eq!(result.sentences_removed, 0);
+    }
+
+    #[test]
+    fn test_split_sentences_does_not_split_decimals_or_versions() {
+        let sentences = split_sentences("Pi is 3.14 today. Use v1.2.3 now! 東京。大阪".to_string());
+        assert_eq!(
+            sentences,
+            vec!["Pi is 3.14 today.", "Use v1.2.3 now!", "東京。", "大阪"]
+        );
+    }
+
+    #[test]
+    fn test_compress_removes_cjk_duplicate_without_adding_spaces() {
+        let text = "東京は大きい。大阪も大きい。東京は大きい。京都は古い。".to_string();
+        let result = compress_text(text, 0, CompressionOptions::default());
+        assert_eq!(result.text, "東京は大きい。大阪も大きい。京都は古い。");
+        assert_eq!(result.sentences_removed, 1);
+    }
+
+    #[test]
+    fn test_compress_truncation_keeps_decimal_intact() {
+        // The cut must land after "3.14 today." and not inside "3.14".
+        let text = "Pi is 3.14 today. The rest is long enough to be cut".to_string();
+        let result = compress_text(text, 30, no_dedupe());
+        assert_eq!(result.text, "Pi is 3.14 today.");
     }
 }
