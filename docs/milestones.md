@@ -876,6 +876,13 @@
 
 **포함에 더한 것 (착수 때, 규칙 4):** Q3가 넘긴 `ContextBuilder`의 공백 없는 CJK 문장 끝과 `maxChars` 단위 불일치, 같은 함수의 짧은 텍스트 `clamp` 오류. 문장 끝 규칙은 Q3의 `compress_text`와 같다(`.`·`?`·`!`·`…`는 뒤가 공백일 때만, `。！？｡`는 항상).
 
+**착수 때 정한 방식 (2026-11-16 사용자 "B10 코사인 통일, B13 promptTokenCounter와 tokenCounter로 진행해")**
+
+| 항목 | 고른 방식 | 버린 방식 |
+|---|---|---|
+| B10 | `sourceIds`가 있어도 코사인. Rust에 출처 한정 벡터 검색 `search_chunks_in_sources`(출처의 청크를 모두 채점하는 exact scan)를 더하고 `search`가 그것을 쓴다. 공개 API 모양은 그대로, 순서도 같다. 바뀌는 사람은 `search(sourceIds:)`의 `similarity`를 RRF 크기(약 0.016)에 맞춰 쓰던 코드뿐이다 | RRF로 통일(기본 경로의 코사인 임계값이 모두 깨진다), 필드 분리(FRB struct 생성자가 바뀌어 fake를 만드는 코드가 깨지고 임계값 함정은 남는다), 문서화만 |
+| B13 | 선택 인자 `promptTokenCounter`(`int Function(String)`)를 `MobileRag`·`CollectionRag`의 `ask`/`prepareAsk`와 `RagSearchTool.fromMobileRag`/`fromCollection`에 더한다. 주면 엔진은 예산 없이(`1 << 30`) 조립하고, 구절 텍스트를 그 함수로 세어 관련도 순으로 들어가는 만큼 통째로 남긴다. `PromptCompressor.compress`에는 선택 `tokenCounter`. 안 주면 지금과 같다 | 기본 계산 교체(모든 호출자의 구절 수가 바뀌고 여러 LLM 근거가 없다, 규칙 10), 문서화만 |
+
 **목표:** 사용자와 LLM이 읽는 점수·순서·인용·예산이 문서와 같게 동작하게 한다.
 
 **포함**
@@ -884,11 +891,11 @@
 - B12: 인용 파싱이 `［１］`, `【1】`, `[1、2]`, `[1-3]`을 놓치고 코드 안의 `items[2]`를 잡는 문제. `「1」`·`『1』`은 2026-11-09 게임 연동에서 Foundation Models가 실제로 쓴 형식이라 W1에서 먼저 읽게 했다(짝이 맞는 괄호 안 숫자, 준 번호만).
 - B13: ask·tool 토큰 예산이 임베딩 tokenizer 단위라 UNK가 많은 언어에서 LLM 토큰과 크게 다른 문제. `PromptCompressor`의 char/4 근사. 해결 방식(예: `targetPromptTokenCounter` 연결)은 착수 때 정한다.
 
-**제외:** LLM SDK 의존성.
+**제외:** LLM SDK 의존성. I1이 넘긴 "답이 `[3]`처럼 인용 번호만 오는 경우 감지"는 Q4에서 다루지 않았다. `searchHybrid*`의 `similarity`(RRF, `llm_tools.md`에 문서화됨)는 B10 범위 밖이다.
 
 **완료 기준:** 실제 엔진 출력으로 점수 단위·순서·인용 확인(H1-b와 같은 방식). 공통 완료 기준. PR 하나, CI 통과.
 
-**손대는 파일:** `lib/services/{source_rag_service,ask,context_builder,prompt_compressor,llm_tool}.dart`, `rust_builder/rust/src/api/source_rag.rs`(assembly 순서), `docs/guides/{ask,llm_tools}.md`, `test/**`, `CHANGELOG.md`, `docs/milestones.md`. 착수 때 더한 것: `tool/upgrade_e2e/{phase_b_test.dart,run.sh}`(contract 시나리오에 실제 엔진 확인 b6·b7 추가), `rust_builder/CHANGELOG.md`
+**손대는 파일:** `lib/services/{source_rag_service,ask,context_builder,prompt_compressor,llm_tool}.dart`, `rust_builder/rust/src/api/source_rag.rs`(assembly 순서), `docs/guides/{ask,llm_tools}.md`, `test/**`, `CHANGELOG.md`, `docs/milestones.md`. 착수 때 더한 것: `tool/upgrade_e2e/{phase_b_test.dart,run.sh}`(contract 시나리오에 실제 엔진 확인 b5~b8 추가), `rust_builder/CHANGELOG.md`, B10의 새 Rust 함수로 다시 만든 FRB 생성 파일 `lib/src/rust/{api/source_rag.dart,frb_generated.dart}`·`rust_builder/rust/src/frb_generated.rs`, B13의 `lib/mobile_rag.dart`(`ask`/`prepareAsk` 인자)·`lib/src/internal/prompt_budget.dart`(새 파일), `lib/services/rag_engine.dart`(`search` doc 주석)
 
 ### Q5. 배포 검증 보강
 

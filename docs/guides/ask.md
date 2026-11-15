@@ -39,7 +39,8 @@ Each `RagPassage` has `id`, `text`, `sourceId`, `sourceName`, `chunkId` and
 ## Search and prompt
 
 - **Search:** hybrid (vector + keyword) search for `topK` passages (default 5),
-  kept within `tokenBudget` engine tokens (default 1500), the same as
+  kept within `tokenBudget` engine tokens (default 1500, see
+  [Token budget](#token-budget)), the same as
   `RagSearchTool.fromMobileRag`. `vectorWeight` and `bm25Weight` change the
   fusion weights for one call, as in `searchHybrid`. Without them the call uses
   `defaultVectorWeight` / `defaultBm25Weight` from `MobileRag.initialize`
@@ -52,6 +53,44 @@ Each `RagPassage` has `id`, `text`, `sourceId`, `sourceName`, `chunkId` and
   text; then the question. Five short passages came to about 440 tokens.
 - **Your own prompt:** pass `buildPrompt: (question, passages) => ...`. Ask
   the model to cite passage ids in brackets so `citations` can find them.
+
+## Token budget
+
+`tokenBudget` counts tokens of the embedding model's tokenizer, not your
+LLM's. The two can differ several times, most for Korean, Japanese, Chinese,
+Thai and emoji. Counted with the embedding tokenizer through `countTokens`:
+
+| Text | MiniLM (default) | KoEn-E5-Tiny | BGE-m3 |
+|---|---|---|---|
+| 23 Korean characters | 38 | 10 | 10 |
+| 21 Japanese characters | 20 | 4 | 14 |
+| 20 Chinese characters | 19 | 6 | 15 |
+| 31 Thai characters | 1 | 2 | 7 |
+| 10 emoji | 1 | 2 | 11 |
+| 49 English characters | 10 | 11 | 11 |
+
+So 1500 engine tokens can be far more or far fewer tokens for your LLM. To
+budget in your LLM's tokens, pass its token count as `promptTokenCounter`:
+
+```dart
+final answer = await MobileRag.instance.ask(
+  question,
+  generate: myLlm.generate,
+  tokenBudget: 1500,
+  promptTokenCounter: (text) => myTokenizer.encode(text).length,
+);
+```
+
+With `promptTokenCounter`, `tokenBudget` counts the passage texts with that
+function. The most relevant passages that fit are kept whole, in relevance
+order; a passage that does not fit is left out, not cut. The counter is called
+once per passage and must be synchronous; if your SDK only counts tokens
+asynchronously, count before calling or use an estimate. The budget covers the
+passages, not the instructions and question the prompt adds around them.
+`prepareAsk`, `CollectionRag.ask` / `prepareAsk` and
+`RagSearchTool.fromMobileRag` / `fromCollection` take the same parameter.
+`PromptCompressor.compress` takes `tokenCounter` for `maxTokens`, which is
+otherwise estimated at 4 characters per token.
 
 ## Citations
 
