@@ -37,6 +37,19 @@ re-measured here). Both sets are biomedical paper abstracts; MiniLM's SciFact
 number may be inflated, because its training data includes citation pairs
 from the same paper collection.
 
+Larger Korean sets, same condition:
+
+| Model | MIRACL Korean dev, 213 questions (5,000 / 15,000 passages) | KorQuAD 1.0 dev, 500 questions | AutoRAG Korean, 114 questions |
+|:------|:---:|:---:|:---:|
+| MiniLM Model Pack (default) | not run (English-only model) | not run | not run |
+| KoEn-E5-Tiny | 167 / 165 | 483 | 112 |
+| BGE-m3 | 173 / 166 | 482 | 111 |
+
+Measured 2026-11-14 with the engine code of commits `28308ab` (MIRACL) and
+`04d950d` (KorQuAD, AutoRAG), before the Korean keyword changes of 0.24.0.
+MIRACL's training split was used to train both models, so their vector search
+may look better there than on your documents.
+
 All three use the same steps after installing: declare `assets/mobile_rag/` in
 `pubspec.yaml` and initialize with
 `modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json')`.
