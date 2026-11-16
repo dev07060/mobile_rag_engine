@@ -315,8 +315,24 @@ build on an Apple M3 Pro Mac, 2026-11-16:
 | KoEn-E5-Tiny | 29 | 31 | 16 |
 | BGE-m3 Model Pack | 29 | 32 | 16 |
 
-Questions with the answer in the top 10, same 80 queries as above. To install
-any of the three models, see
+Questions with the answer in the top 10, same 80 queries as above.
+
+Larger English sets (3,633 and 5,183 documents):
+
+| Model | NFCorpus, 323 questions | SciFact, 300 claims |
+|:------|:---:|:---:|
+| MiniLM Model Pack (default) | 207 | 226 |
+| KoEn-E5-Tiny | 207 | 219 |
+| BGE-m3 | 205 | 224 |
+
+Questions with the answer in the 5 `ask` passages, default hybrid search,
+profile build on an Apple M3 Pro Mac, 2026-11-14, engine commit `3f9df80`
+(before 0.24.0, whose BM25 normalization and passage order changes were not
+re-measured here). Both sets are biomedical paper abstracts; MiniLM's SciFact
+number may be inflated, because its training data includes citation pairs
+from the same paper collection.
+
+To install any of the three models, see
 [Model Setup](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#which-model).
 
 Numbers vary by device and corpus. To measure on your own hardware, see

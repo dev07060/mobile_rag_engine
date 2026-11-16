@@ -21,6 +21,22 @@ hybrid search, top 10, profile build on an Apple M3 Pro Mac): MiniLM
 2026-11-16 with `mobile_rag_engine` 0.24.0 code; BGE-m3 was initialized from the
 manifest in [BGE-m3](#bge-m3-model-pack).
 
+On two larger English sets (NFCorpus, 3,633 documents; SciFact, 5,183
+abstracts):
+
+| Model | NFCorpus, 323 questions | SciFact, 300 claims |
+|:------|:---:|:---:|
+| MiniLM Model Pack (default) | 207 | 226 |
+| KoEn-E5-Tiny | 207 | 219 |
+| BGE-m3 | 205 | 224 |
+
+Questions with the answer in the 5 `ask` passages, default hybrid search,
+profile build on an Apple M3 Pro Mac, 2026-11-14, engine commit `3f9df80`
+(before 0.24.0, whose BM25 normalization and passage order changes were not
+re-measured here). Both sets are biomedical paper abstracts; MiniLM's SciFact
+number may be inflated, because its training data includes citation pairs
+from the same paper collection.
+
 All three use the same steps after installing: declare `assets/mobile_rag/` in
 `pubspec.yaml` and initialize with
 `modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json')`.
