@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Keyword (BM25) tokens changed (English stemming, Unicode normalization, Korean particles), so hybrid result order can change. Nothing stored changes.
   - `vectorWeight` / `bm25Weight` are now `double?`. Calls compile unchanged; classes that implement or override `MobileRag`, `CollectionRag` or `RagEngine` must change these parameter types. Generated mocks need no change.
   - On iOS and macOS, if `pod install` reports that the specs repository is too out-of-date, run `pod update onnxruntime-objc onnxruntime-c` in `ios/` and `macos/` once.
-* **Supported languages**: Korean and English. Other languages depend on the embedding model your app supplies and are not tested or supported. Prompt compression (`PromptCompressor`, `ContextBuilder.buildWithCompression`) is not an officially supported feature and may change or be removed.
+* Prompt compression (`PromptCompressor`, `ContextBuilder.buildWithCompression`) is not an officially supported feature and may change or be removed.
 
 ### Search
 * **Short documents next to a large one are found by vector search again.** A short document stored together with a large one (for example one sentence next to a 1,800-chunk PDF) could be missing from `search` and `searchHybrid`. Building the index for collections of uniformly random vectors over 1,000 entries is slower (5,000 vectors: 1.5 s → 5.5 s on an M-series Mac).

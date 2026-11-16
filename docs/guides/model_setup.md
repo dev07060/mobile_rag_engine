@@ -4,7 +4,6 @@ This guide covers the recommended fixed Model Pack plus advanced custom ONNX
 assets for `mobile_rag_engine`. The Model Pack is installed during development,
 bundled with the app, and never downloaded at runtime.
 
-> **Supported languages:** Korean and English are the supported languages; they are the languages the engine is tested with. Other languages depend on the embedding model your app supplies and are not tested or supported.
 
 ## Recommended: stable MiniLM Model Pack
 
@@ -363,7 +362,7 @@ instead: it downloads the pinned revision and checks the hashes itself, and
 |:------|:----------:|:-----------:|:----------:|:----------|:---------|
 | [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (INT8) | **384** | ~23 MB | 256 | English | English-only apps, lightweight & fast |
 | [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX) (INT8) | **384** | ~37 MB | 512 | Korean, English | Korean apps ([recipe](#korean-documents-koen-e5-tiny)) |
-| [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~542 MB | 8,194 | Measured here: Korean, English | Korean and English apps that can ship a 542 MB model |
+| [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~542 MB | 8,194 | See the model card | Apps that can ship a 542 MB model |
 
 > **Dimension Matters**: The embedding dimension affects your vector index. Once you choose a model, all documents must use the same dimension. Switching models requires re-embedding all documents.
 
@@ -397,7 +396,7 @@ curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L
 curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer.json"
 ```
 
-### BGE-m3 (measured on Korean and English)
+### BGE-m3
 
 ```bash
 mkdir -p assets && cd assets

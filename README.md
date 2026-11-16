@@ -284,7 +284,6 @@ collection.
 
 **Support boundaries:**
 
-- **Languages**: Korean and English are the supported languages; they are the languages the engine is tested with. Other languages depend on the embedding model your app supplies and are not tested or supported.
 - **PDF**: text-layer PDFs are verified on a small sample set (see the table below). Large or table-heavy PDFs are still being validated. Scanned or image-only PDFs need an OCR layer before indexing, and AES-encrypted PDFs are rejected.
 - **DOCX**: body text, tables, text boxes, headers, footers and footnotes are extracted as plain text. Table cells are separated by ` | `; other layout such as columns and styling is not kept.
 - **Other formats** (HTML, RTF, PPTX, XLSX, images): not supported. Extract the text in your app and pass it to `addDocument`.
