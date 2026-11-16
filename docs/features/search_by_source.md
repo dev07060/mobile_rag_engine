@@ -117,9 +117,9 @@ Future<void> _search() async {
 | :--- | :--- |
 | **Chat with Document** | Allows users to upload a PDF and ask questions *only* about that PDF, ignoring other documents in the database. |
 | **Context Switching** | If your app supports multiple projects or workspaces, use source IDs to isolate search to the active workspace without needing separate databases. |
-| **Performance** | Searching a subset of the index is generally faster, as the engine skips irrelevant chunks immediately. |
+| **Performance** | Scoping to a few sources is fast. Scoping to most of a large collection is slower than a search without `sourceIds`, because every chunk of those sources is compared. |
 | **Precision** | Prevents "hallucinations" or irrelevant answers from unrelated documents (e.g., searching for "setup" in a router manual won't return results from a microwave manual). |
-| **Exact Recall** | When searching a single document, the engine can switch to an exhaustive scan, guaranteeing 100% recall even for obscure queries that might be missed by an approximate global search. |
+| **Exact comparison** | With `sourceIds`, the engine compares every chunk of those sources instead of using the approximate index. |
 
 ## Notes
 

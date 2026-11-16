@@ -18,8 +18,8 @@ final rag = MobileRag.instance; // after MobileRag.initialize, see Installation
 await rag.addDocument('Refunds are accepted within 14 days of purchase.');
 await rag.addDocumentFromFile('/path/to/manual.pdf');
 
-// 2. Search. The result is context that is ready to send to an LLM.
-final result = await rag.search(
+// 2. Search (vector + keyword). The result is context ready for an LLM.
+final result = await rag.searchHybridWithContext(
   'How long is the refund period?',
   tokenBudget: 2000,
 );
@@ -42,11 +42,11 @@ enterprise apps where user data must stay on the device.
   the user's device. Retrieval needs no server and costs nothing per query.
 - **Hybrid search with measured quality.** HNSW vector search and BM25 keyword
   search are fused into one ranking. On an 80-query English/Korean benchmark,
-  the right passage is in the top 10 for 93.75% of queries with the default
-  MiniLM Model Pack and 96.25% with KoEn-E5-Tiny (see
+  the right passage is in the top 10 for 92.5% of queries with the default
+  MiniLM Model Pack and 95% with KoEn-E5-Tiny (see
   [Supported and verified scope](#supported-and-verified-scope)).
-- **Works with any LLM.** There is no LLM inside. `search` returns context
-  within a token budget, and `ask` takes your own generation function, so a
+- **Works with any LLM.** There is no LLM inside. `searchHybridWithContext` returns
+  context within a token budget, and `ask` takes your own generation function, so a
   cloud SDK, an on-device model or a local server all fit. See the
   [Ask guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/ask.md).
 
@@ -294,18 +294,17 @@ collection.
 |:-----|:---------------|:--------------------|
 | **Local Flutter RAG retrieval** | Supported | Dart facade over a native core for ingest, chunking, embedding, SQLite storage, HNSW vector search, BM25 keyword search, RRF fusion, and context assembly |
 | **Offline / on-device operation** | Supported | Models and user documents stay local after you bundle the ONNX model and tokenizer assets |
-| **Hybrid source retrieval** | Verified on benchmark fixtures | 80-source balanced profile run: `source_recall@10 = 1.000` for shipped `default_hybrid` |
-| **Passage/context retrieval** | Verified on benchmark fixtures | 80-query passage run, default hybrid search: **MiniLM Model Pack** (default) `passage_recall@10 = 0.9375`, `answerable_context@10 = 0.9125`; **KoEn-E5-Tiny** `passage_recall@10 = 0.9625`, `answerable_context@10 = 0.975`. MiniLM is English-only: its vector search alone found 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#korean-documents-koen-e5-tiny). Semantic passage misses remain the main improvement area. See the note below the table for conditions |
+| **Hybrid source retrieval** | Verified on benchmark fixtures | 80-source balanced profile run: `source_recall@10 = 1.000` for shipped `default_hybrid` (model not recorded) |
+| **Passage/context retrieval** | Verified on benchmark fixtures | 80-query passage run, default hybrid search: **MiniLM Model Pack** (default) `passage_recall@10 = 0.925`, `answerable_context@10 = 0.900`; **KoEn-E5-Tiny** `passage_recall@10 = 0.950`, `answerable_context@10 = 0.9625`. MiniLM is English-only: its vector search alone found 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#korean-documents-koen-e5-tiny). See the note below the table for conditions |
 | **Text-layer PDF-to-RAG** | Verified on sample scope | `sample_eng.pdf` and `sample_kor.pdf` profile run: 8/8 PDF-derived queries reached source, passage, and answerable context at top-10 |
 | **Scanned/image-only PDFs** | Detected, not OCR-processed | OCR-required PDFs are surfaced as extraction errors so your app can route to an OCR layer; OCR is not bundled in this package |
 | **Large, table-heavy, OCR-heavy PDFs** | Still being validated | Do not treat the PDF smoke result as broad PDF robustness or mobile latency/memory proof |
 
-Passage numbers: 80 queries (32 English, 32 Korean, 16 multilingual), a
-fresh database per model, profile build on an Apple Silicon Mac, measured
-2026-11-12. They include a vector-index fix released in `mobile_rag_engine` 0.24.0
-(`rag_engine_flutter` 0.23.0). Full conditions and per-language
-results are in the
-[passage benchmark report](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/perf/passage-benchmark-2026-11/README.md).
+Passage numbers: 80 queries (32 English, 32 Korean, 16 mixed), a fresh
+database per model, top 10 of 100 results, profile build on an Apple M3 Pro
+Mac, `mobile_rag_engine` 0.24.0 code, measured 2026-11-16. `search` is
+vector-only; `searchHybridWithContext`, `searchHybrid` and `ask` use the hybrid
+ranking these numbers describe.
 
 Numbers vary by device and corpus. To measure on your own hardware, see
 [`benchmark_service`](https://github.com/dev07060/mobile_rag_engine/blob/main/lib/services/benchmark_service.dart).
@@ -350,7 +349,7 @@ release linker settings, 16 KB Android page alignment and an iOS privacy
 manifest. If a build fails, see
 [Troubleshooting](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md).
 
-Upgrading from 0.20.x or earlier? See
+Upgrading from an earlier version? See the upgrade notes in
 [CHANGELOG.md](https://github.com/dev07060/mobile_rag_engine/blob/main/CHANGELOG.md).
 
 ---
@@ -363,7 +362,7 @@ Upgrading from 0.20.x or earlier? See
 *   [Ask](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/ask.md) - Answer a question with your own LLM and get the cited passages.
 *   [LLM Tools](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/llm_tools.md) - Search results as JSON and as a tool for any LLM.
 *   [Flutter Local RAG Engine Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/local-rag-engine.md) - Build local/on-device RAG in Flutter with Dart APIs.
-*   [Release Build](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/release_build.md) - Bundle size optimization for production.
+*   [Release Build](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/release_build.md) - Bundle size and shipping without the bundled model.
 *   [Troubleshooting](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md) - Common fixes.
 *   [FAQ](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/faq.md) - Frequently asked questions.
 

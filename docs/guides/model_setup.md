@@ -4,7 +4,6 @@ This guide covers the recommended fixed Model Pack plus advanced custom ONNX
 assets for `mobile_rag_engine`. The Model Pack is installed during development,
 bundled with the app, and never downloaded at runtime.
 
-
 ## Recommended: stable MiniLM Model Pack
 
 From your Flutter project, run:
@@ -177,7 +176,7 @@ AutoRAG, which these models were not trained on, 0.6 / 0.4 lost answers that
 keyword search had found (KorQuAD: 12 lost, 6 gained), mostly to other
 paragraphs of the same article; 0.5 / 0.5 lost 3 and gained 4. The method and
 all numbers, including BGE-m3, are in
-[the F2-0 report](../perf/f2-fusion/f2_0_report.md) and
+[the fusion measurement](../perf/f2-fusion/f2_0_report.md) and
 [the Korean validation](../perf/f2-fusion/validation_ko.md). With the
 English-only MiniLM, raising the vector weight lost Korean answers in every
 test.
@@ -196,9 +195,7 @@ lost 24. Details, including MiniLM and BGE-m3, are in
 
 App-style documents: 56 documents (GNOME Help pages, short app FAQs, release
 notes and office policies, two large PDFs) in English and Korean, 90 questions
-with an answer, same condition and setup. The questions were drafted in-session
-for this test; review verdicts were drafted in-session and confirmed by the
-maintainer. Answers in the top 5 at each vector weight
+with an answer, same condition and setup. Answers in the top 5 at each vector weight
 (BM25 weight = 1 − vector weight; 0.0 is BM25 only, 1.0 is vector only):
 
 | KoEn-E5-Tiny | 0.0 | 0.2 (default) | 0.4 | 0.5 | 0.6 | 0.8 | 1.0 |
@@ -214,11 +211,10 @@ language, a difference of one or two is noise. Pick the weights for your own
 model, languages and documents, ideally by measuring on your own questions.
 The full grid for MiniLM, KoEn-E5-Tiny and BGE-m3 (MiniLM's English stays at
 34–38 at every weight; BGE-m3's English keeps rising up to vector only) is in
-[the E1 report](../perf/e1-app-docs/README.md). The example app's "App docs"
+[the app-document measurement](../perf/e1-app-docs/README.md). The example app's "App docs"
 screen lets you try the weights on the same questions.
 
-You do not need to add `query: ` or `passage: ` prefixes. With KoEn-E5-Tiny
-they change scores by 0.002 or less.
+You do not need to add `query: ` or `passage: ` prefixes.
 
 ### 4. Switching an existing database from MiniLM
 
@@ -281,7 +277,7 @@ about 2.5 times as many tokens, which cancels out its smaller size. English
 queries are about 1.7 times slower with KoEn-E5-Tiny, and ingestion about
 1.3 times slower. The first launch includes installing the Model Pack. These
 are one device's numbers; conditions and the full results are in
-[the M5 report](../perf/multilingual-embedding/README.md#6-iphone-실기기-측정-m5-2026-11-16).
+[the iPhone measurement](../perf/multilingual-embedding/README.md#6-iphone-실기기-측정-m5-2026-11-16).
 On a desktop CPU (one thread), embedding a chunk took about twice as long
 with KoEn-E5-Tiny (55 ms vs 28 ms).
 
@@ -358,11 +354,11 @@ instead: it downloads the pinned revision and checks the hashes itself, and
 
 ## Model Comparison
 
-| Model | Dimensions | Size (ONNX) | Max Tokens | Languages | Best For |
+| Model | Dimensions | Size (ONNX) | Model max tokens | Languages | Best For |
 |:------|:----------:|:-----------:|:----------:|:----------|:---------|
 | [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (INT8) | **384** | ~23 MB | 256 | English | English-only apps, lightweight & fast |
 | [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX) (INT8) | **384** | ~37 MB | 512 | Korean, English | Korean apps ([recipe](#korean-documents-koen-e5-tiny)) |
-| [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~542 MB | 8,194 | See the model card | Apps that can ship a 542 MB model |
+| [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~542 MB | 8,192 | See the model card | Apps that can ship a 542 MB model |
 
 > **Dimension Matters**: The embedding dimension affects your vector index. Once you choose a model, all documents must use the same dimension. Switching models requires re-embedding all documents.
 
@@ -371,14 +367,11 @@ instead: it downloads the pinned revision and checks the hashes itself, and
 - MiniLM: `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/onnx/model_qint8_arm64.onnx`
 - BGE-m3: `https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx`
 
-These are the regression-tested artifacts for each patch release.
+The engine cuts every input at 512 tokens, whatever the model's own limit.
 
-Compatibility improvements introduced in the `0.14.x` hardening patches remain available in current releases:
-- models requiring `token_type_ids` are now supported without re-export
-- the engine reads ONNX `inputNames` and injects zero `token_type_ids` only when required
-
-Additional models outside this list are supported on a best-effort basis.
-Validated examples during this compatibility patch: `all-MiniLM-L6-v2/onnx`, `intfloat/e5-small-v2`.
+Models that need `token_type_ids` work without re-export: the engine reads the
+ONNX input names and passes zero `token_type_ids` only when the model requires
+them. Models outside this list are best-effort.
 
 ---
 
@@ -505,20 +498,11 @@ Runtime setup notes:
 
 ## Troubleshooting
 
-### "Failed to load ONNX model"
-
-- Ensure model file exists at the specified path
-- Check file is not corrupted (re-download if needed)
-- Verify model is ONNX format (not PyTorch .bin or .safetensors)
-
-### "Tokenizer initialization failed"
-
-- Ensure `tokenizer.json` file exists
-- File must be HuggingFace tokenizers format (not SentencePiece)
+Model loading and tokenizer errors are covered in [Troubleshooting](troubleshooting.md#initialization-errors).
 
 ### iOS Simulator Limitations
 
-ONNX Runtime works on iOS Simulator but without hardware acceleration. Expect ~3-5x slower inference compared to physical devices.
+Performance in the simulator differs from a device; measure on a physical device.
 
 ### Android Emulator
 

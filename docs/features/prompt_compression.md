@@ -1,14 +1,8 @@
-# Prompt Compression (REFRAG)
+# Prompt Compression
 
 > **Not an officially supported feature.** `PromptCompressor` and `ContextBuilder.buildWithCompression` may change or be removed in a later release.
 
-Mobile RAG Engine includes a built-in **Prompt Compressor** inspired by REFRAG principles. This feature reduces the token count of your retrieved context, allowing you to fit more information into the LLM's context window or save on API costs.
-
-## Why use Prompt Compression?
-
-1.  **Cost Savings**: Reduces input tokens sent to paid APIs (OpenAI, Gemini).
-2.  **Larger Context**: Fits more search results into the same context window.
-3.  **Noise Reduction**: Removes redundant information that might confuse the model.
+`ContextBuilder.buildWithCompression` removes exact duplicate sentences from the assembled context and cuts it to the token budget.
 
 ## Quick Start
 
@@ -31,15 +25,9 @@ print('Compressed: ${context.text.length} chars');
 
 ## Compression Levels
 
-You can adjust the aggressiveness of the compression:
+`compressionLevel` currently has no effect: every level removes exact duplicate sentences and cuts the text to the budget.
 
-| Level | Value | Description | Use Case |
-|-------|-------|-------------|----------|
-| **Minimal** | `0` | Removes exact duplicate sentences. | Safe for all use cases. |
-| **Balanced** | `1` | Removes duplicates and near-duplicates. | **Recommended default.** Good balance of size vs coherence. |
-| **Aggressive** | `2` | Aggressive deduplication and pruning. | When you strictly need to minimize tokens at all costs. |
-
-## Advanced: Semantic Sentence Selection (Phase 2)
+## Semantic Sentence Selection
 
 For advanced use cases, you can use the **Semantic Sentence Selector**. This breaks chunks down into sentences and keeps only the ones most relevant to the query, discarding irrelevant fluff surrounding the key information.
 
@@ -61,6 +49,5 @@ final compressed = await PromptCompressor.compressWithSimilarity(
 
 The compressor runs locally on-device using Rust for high performance.
 
-1.  **Deduplication**: Identifies and removes repeated sentences/phrases across different documents.
-2.  **Stopword Filtering** (Optional): Can remove excessive "filler" words (e.g., "the", "a", "is") if configured, though disabled by default to preserve natural language flow for modern LLMs.
-3.  **Relevance Filtering** (Phase 2): Uses embedding similarity to score individual sentences within a chunk, keeping only the most salient points.
+1.  **Deduplication**: Removes repeated sentences across documents.
+2.  **Relevance Filtering** (`compressWithSimilarity`): Uses embedding similarity to score individual sentences within a chunk, keeping only the most salient points.

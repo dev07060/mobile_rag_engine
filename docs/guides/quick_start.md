@@ -7,21 +7,21 @@ Get started with `mobile_rag_engine` in 5 minutes.
 ## Prerequisites
 
 - Flutter 3.35.3+ (Dart 3.9.2)
-- iOS 16.0+ / Android API 24+ (Android 7.0) / macOS 14.0+ / Windows 10+ x64 (0.22.0+).
+- iOS 16.0+ / Android API 24+ (Android 7.0) / macOS 14.0+ / Windows 10+ x64.
   Linux and Windows on ARM64 are not supported.
-- No Rust toolchain: 0.21.0+ downloads a signed, pre-compiled native core
+- No Rust toolchain: the build downloads a signed, pre-compiled native core
   during the first `flutter build` of each platform, so the build machine needs
   access to `github.com`. If `rustup` is installed, the core is built from
   source instead.
 
-> This guide covers 0.21.0 and later. On 0.20.x, follow the
+> This guide covers 0.24.0. On 0.20.x, follow the
 > [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md#installation)
 > instead; the `setup` command and `RagModelPack` below do not exist there.
 
 CocoaPods hosts need iOS 16.0 / macOS 14.0 deployment targets and static
-framework linkage. From 0.22.1, the `setup` command in Step 2 applies these to
-the generated app and prints each change, so you can skip this section. On
-0.22.0, or if you ran `setup --skip-host-config`, set them in the Podfile and
+framework linkage. The `setup` command in Step 2 applies these to the
+generated app and prints each change, so you can skip this section. If you ran
+`setup --skip-host-config`, set them in the Podfile and
 keep the rest of the generated Podfile unchanged:
 
 ```ruby
@@ -84,15 +84,15 @@ The setup command installs the immutable MiniLM model, tokenizer, and
 `model-pack.json` under `assets/mobile_rag/`. The check command verifies their
 lengths and SHA-256 hashes before the app initializes them.
 
-From 0.22.1, setup also updates `ios/` and `macos/` when they exist: it raises
+`setup` also updates `ios/` and `macos/` when they exist: it raises
 the Podfile `platform` and the Runner deployment target to iOS 16.0 / macOS
 14.0 when they are lower, and switches `use_frameworks!` to
 `:linkage => :static`. `--check` fails while any of these are still pending.
 Pass `--skip-host-config` to manage the host projects yourself.
 
-> Need Korean documents or another custom ONNX model? The
-> two-asset initializer remains an advanced path; see the
-> [Model Setup Guide](model_setup.md).
+> Need Korean documents? Follow
+> [Korean documents: KoEn-E5-Tiny](model_setup.md#korean-documents-koen-e5-tiny).
+> For another custom ONNX model, see the [Model Setup Guide](model_setup.md).
 
 Register assets in `pubspec.yaml`:
 
@@ -125,7 +125,9 @@ Future<void> initializeRAG() async {
 
 | Parameter | Default | Description |
 |:----------|:--------|:------------|
-| `modelPack` | (recommended) | Model Pack manifest asset; use instead of `tokenizerAsset` / `modelAsset` |
+| `modelPack` | `null` | Model Pack manifest asset (recommended); use instead of `tokenizerAsset` / `modelAsset` |
+| `tokenizerPath` | `null` | Tokenizer file your app placed on disk, used with `modelPath`; see the [Release Build guide](release_build.md) |
+| `modelPath` | `null` | ONNX model file your app placed on disk, used with `tokenizerPath` |
 | `tokenizerAsset` | `null` | Advanced/legacy tokenizer asset; required with `modelAsset` when no Model Pack is supplied |
 | `modelAsset` | `null` | Advanced/legacy ONNX asset; required with `tokenizerAsset` when no Model Pack is supplied |
 | `databaseName` | `'rag.sqlite'` | SQLite database file name |
@@ -134,6 +136,8 @@ Future<void> initializeRAG() async {
 | `threadLevel` | `null` | CPU usage level: `low` (~20%), `medium` (~40%), `high` (~80%) |
 | `embeddingIntraOpNumThreads` | `null` | Precise thread count (⚠️ mutually exclusive with `threadLevel`) |
 | `deferIndexWarmup` | `false` | If `true`, initialization returns before BM25/HNSW warmup completes |
+| `defaultVectorWeight` | `0.2` | Vector weight for hybrid searches that do not pass one |
+| `defaultBm25Weight` | `0.8` | BM25 weight for hybrid searches that do not pass one |
 | `onProgress` | `null` | Callback for initialization status |
 
 Vector storage is always Q8_0, for both the Model Pack and the custom
@@ -144,7 +148,7 @@ two-asset path.
 > - `overlapChars < 0` is normalized to `0` at runtime.
 > - `vectorWeight` / `bm25Weight` are clamped to `0.0 ~ 1.0` (if both become `0`, defaults `0.2 / 0.8` are restored).
 > - A search that does not pass `vectorWeight` / `bm25Weight` uses `defaultVectorWeight` / `defaultBm25Weight` from `MobileRag.initialize` (default `0.2 / 0.8`). Those must be within `0.0 ~ 1.0` and not both `0`; otherwise `initialize` throws an `ArgumentError`.
-> - Keyword (BM25) matching reduces English words to their stem with the standard Snowball English stemmer, in the documents and in the question: "refund" matches "Refunds", "policy" matches "policies", "run" matches "running". This applies to every search that uses BM25, including keyword-only (`vectorWeight: 0`). It is English-only: words with non-ASCII letters (such as Korean or accented Latin) and mixed tokens such as `iphone15` are matched as before. Like any stemmer it joins some unrelated words ("university" and "universe" share the stem "univers").
+> - Keyword (BM25) matching stems English words ("refund" matches "Refunds").
 > - A short document next to a much larger one can still fall outside the top results; see [Short documents next to a large one](ask.md#short-documents-next-to-a-large-one).
 > - If both `threadLevel` and `embeddingIntraOpNumThreads` are set, debug builds assert; release builds use `threadLevel` precedence with warning logs.
 > - `maxChunkChars` is a soft planning target. A tokenizer-based hard guard is applied before embedding/runtime truncation.
@@ -218,7 +222,6 @@ for (final chunk in result.chunks) {
 
 Notes:
 - `tokenBudget` is measured against `context.text`, not the full prompt wrapper added by `formatPrompt()`.
-- In compressed paths, `includedChunks` represents source provenance for the compressed context, not a 1:1 segment map of the final compressed text.
 
 ---
 
@@ -352,23 +355,11 @@ for (var r in results.chunks) {
 
 ---
 
----
-
 ## Step 9: Advanced Features
 
 ### 1. Optimize Startup (Cached Index)
-HNSW cache load/rebuild is handled automatically during initialization.  
-In most apps, you only need to gate first search when using `deferIndexWarmup: true`.  
-See [Index Management](../features/index_management.md) for persistence details.
-
-```dart
-await MobileRag.initialize(...);
-
-// If initialized with deferIndexWarmup: true, wait before first search
-if (!MobileRag.instance.isIndexReady) {
-  await MobileRag.instance.warmupFuture;
-}
-```
+The vector index is loaded or rebuilt during initialization. See
+[Index Management](../features/index_management.md) for persistence details.
 
 ### 2. Search for LLM Context
 If you are building a chat app, use `searchHybridWithContext` to get a formatted prompt context directly.
@@ -393,7 +384,7 @@ print('Sources: ${stats.sourceCount}, Chunks: ${stats.chunkCount}');
 
 ---
 
-## Step 10: Multi-Collection (v1)
+## Step 10: Multi-Collection
 
 Use collection scopes when you want independent indexing/rebuild units by category
 (for example `business` vs `travel`) without rebuilding the entire corpus.

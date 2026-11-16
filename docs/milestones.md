@@ -1156,6 +1156,7 @@
   - Quick Start E2E를 발행 archive로(`SOURCE=archive`, Q5) Android·iOS·macOS·Windows에서.
   - `precompile_binaries.yml`을 발행할 트리에서 돌려 그 crate hash의 바이너리가 올라간 것을 확인한다. Rust를 숨긴 설치가 이 바이너리에 달려 있다.
   - 실제 기기: M5(iPhone 17, profile, 패키지 코드 `a0e1636`)의 측정과 0.23.0 → main 덮어 설치 결과를 쓴다. R2-1에서 패키지 코드를 고치면 그 뒤 커밋에서 기기 확인을 다시 한다.
+- **사용자 문서 검수 (2026-11-16 사용자 "다른 문서도 싹 다검수해", 문서만):** README, `docs/guides/`, `docs/features/`, `docs/local-rag-engine.md`, `docs/test/`, `DEVELOPMENT.md`를 코드와 CHANGELOG 0.24.0에 대조해, 없는 API·0.24.0 이전 동작·조건 없는 수치·내부 경위·깨진 링크를 고쳤다. README와 `local-rag-engine.md`의 80개 질의 수치는 0.24.0 코드로 다시 쟀다(MiniLM 0.925 / 0.900, KoEn-E5-Tiny 0.950 / 0.9625, 2026-11-16, `docs/perf/f1-eval-baseline/README.md`). CHANGELOG 0.24.0은 앱에 필요한 내용만 남기고 줄였다(2026-11-16 사용자 "분량조절하고 쓸데없는 내용 다 지워").
 - **R2-3 결과 (2026-11-16, 발행 전, PR #155):**
   - CI 8개 job, Quick Start E2E(archive, git), Upgrade E2E는 모두 첫 의존성 해석에서 멈춘다: 루트가 고정한 `rag_engine_flutter` 0.23.0이 pub.dev에 아직 없다(`rag_engine_flutter 0.23.0 which doesn't match any versions`). archive 모드도 `pub publish --dry-run`이 루트를 풀어야 하고, git 모드와 Upgrade E2E 하네스도 override보다 패키지를 먼저 추가한다. 고정값은 낮추지 않는다. `rag_engine_flutter` 발행 뒤 `pubspec.lock` 커밋으로 다시 돌린다(R1 #127과 같은 순서).
   - `precompile_binaries.yml`의 플랫폼 job 셋이 같은 순간에 release를 만들다 apple job이 "Published releases must have a valid tag"로 실패했다(run 43856333202). `cargokit/build_tool`의 release 생성이 실패하면 다른 job이 만든 release를 다시 조회하게 고쳤다. crate hash 계산 대상(`src/**/*.rs`, `Cargo.toml`, `Cargo.lock`, `build.rs`, `cargokit.yaml`)이 아니라 hash는 바뀌지 않는다.

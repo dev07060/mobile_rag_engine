@@ -6,9 +6,9 @@ Common questions about `mobile_rag_engine`.
 
 ## General
 
-### Q: Does it support Korean?
+### Q: How do I search Korean documents?
 
-**Yes, with a Korean model.** The default Model Pack (`all-MiniLM-L6-v2`) is
+Use a Korean model. The default Model Pack (`all-MiniLM-L6-v2`) is
 English-only and scores close to random on Korean text. For Korean documents
 use **KoEn-E5-Tiny**: it covers Korean and English, has 384 dimensions like
 MiniLM, and its model and tokenizer take about 39 MB.
@@ -17,8 +17,6 @@ The `setup` command installs only the MiniLM pack, so follow
 [Korean documents: KoEn-E5-Tiny](model_setup.md#korean-documents-koen-e5-tiny):
 download the two files, write the Model Pack manifest, and initialize with it.
 
-KoEn-E5-Tiny covers only Korean and English. For other languages, see the
-[model comparison](model_setup.md#model-comparison).
 
 ### Q: Does it work offline?
 
@@ -26,7 +24,7 @@ KoEn-E5-Tiny covers only Korean and English. For other languages, see the
 
 ### Q: Can I test on iOS Simulator?
 
-Yes, but it's **3-5x slower than real devices**. Always run performance tests on physical hardware.
+Yes. Performance differs from real devices, so run performance tests on physical hardware.
 
 ---
 
@@ -38,7 +36,7 @@ Yes, but it's **3-5x slower than real devices**. Always run performance tests on
 |:---------|:------------------|
 | English-only apps (default) | **MiniLM** (384 dim, ~23MB) |
 | Korean, or Korean and English | **KoEn-E5-Tiny** (384 dim, ~37MB); see the [recipe](model_setup.md#korean-documents-koen-e5-tiny) |
-| Other languages, or many languages mixed | **BGE-m3** (1024 dim, ~542MB) |
+| Larger model, if you can ship 542 MB (languages: see the model card) | **BGE-m3** (1024 dim, ~542MB) |
 | Quick prototyping | **MiniLM** |
 
 ### Q: BGE-m3 is too large (542MB) for my app
@@ -64,7 +62,7 @@ Not supported yet:
 - Models requiring extra mandatory inputs such as `position_ids`
 
 Validated ONNX artifacts:
-- `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx`
+- `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/onnx/model_qint8_arm64.onnx`
 - `https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx`
 
 Models outside the validated list are best-effort.
@@ -107,7 +105,7 @@ if (rag.isEmbeddingFingerprintLocked) {
 }
 ```
 
-`regenerateAllEmbeddings()` and `rebuildIndex()` do not remove the lock. See
+`MobileRag.instance.engine.regenerateAllEmbeddings()` and `rebuildIndex()` do not remove the lock. See
 [Data Migration & Re-embedding](../features/index_management.md#3-data-migration--re-embedding)
 for `clearAndRestart()` and the details.
 
@@ -127,7 +125,6 @@ for `clearAndRestart()` and the details.
 
 2. **Keep embedding off the UI thread**: `MobileRag.initialize(...)` configures the embedding worker isolate for normal app flows.
 
-3. **Use INT8 quantized models** - 2-4x faster
 
 ### Q: Search is slow
 
@@ -148,19 +145,12 @@ in the Ask guide for the three things that help.
 
 - **Prefer file-path ingest for large local files**: Use `addDocumentFromFile(path)` for text-layer PDFs, DOCX, Markdown, and text files when you have a stable path. Scanned/image-only PDFs need OCR before indexing.
 - **Use UTF-8 ingest when bytes are already loaded**: Use `addDocumentUtf8(bytes)` for text/Markdown bytes instead of converting them to a Dart `String` first.
-- **Limit document count**: 10K+ may cause degradation.
 - **Use INT8 models**: Smaller models reduce memory pressure.
 - **Rebuild index periodically**: Call `MobileRag.instance.rebuildIndex()` when you need deterministic index freshness.
 
 ### Q: Which dispose API should I use?
 
-For deterministic cleanup in advanced flows, prefer:
-
-```dart
-await EmbeddingService.disposeAsync();
-```
-
-`EmbeddingService.dispose()` remains for backward compatibility, but it is fire-and-forget.
+Use `await MobileRag.dispose();`. It waits for the embedding worker and closes the database. Call `EmbeddingService.disposeAsync()` only if your app uses `EmbeddingService` directly.
 
 ### Q: What happens if I pass invalid config/search values?
 
@@ -270,7 +260,7 @@ every platform.
 
 **2. Keep the model files out of the web build.** Flutter bundles the assets
 listed in `pubspec.yaml` into every platform's build, so `assets/mobile_rag/`
-(about 23 MB for MiniLM, 41 MB for KoEn-E5-Tiny) also ends up in
+(about 23 MB for MiniLM, 39 MB for KoEn-E5-Tiny) also ends up in
 `build/web/assets/assets/mobile_rag/`. Either:
 
 - Remove it after the web build. The stub never loads these files:
@@ -351,4 +341,4 @@ Restoring `rag.sqlite` without `rag.vec` fails in `MobileRag.initialize` with
 
 ### Q: What's the maximum document count?
 
-Tested with **10,000+ documents**. Actual limits depend on device memory.
+There is no fixed limit; it depends on device memory and chunk count.

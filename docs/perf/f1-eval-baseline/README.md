@@ -52,6 +52,8 @@ scripts/eval/run_passage_eval.sh --model-pack stable-minilm-l6-v2-arm64-en --bun
 
 새로 클론한 저장소에서 위 명령으로 MiniLM 값이 같게 나오는지 확인한 기록은 아래 "새 클론 확인"에 있다.
 
+2026-11-16 R2 배포 준비 트리(패키지 코드는 `mobile_rag_engine` 0.24.0, 브랜치 `feats/r2-release-prep`)에서 같은 Mac·조건으로 다시 돌렸다. MiniLM(청크 4679) 0.925 / 0.900 / 0.7437, KoEn-E5-Tiny(청크 4492) 0.950 / 0.9625 / 0.8099. `passage_recall@10`과 `answerable_context@10`은 위 표와 같다. BGE-m3는 다시 돌리지 않았다.
+
 ## 새 클론 확인 (2026-11-13)
 
 - 브랜치 `feats/f1-eval-baseline`의 `32ced9f`를 새 디렉터리에 `git clone`하고, Rust 빌드 캐시 없이 다음 한 명령을 돌렸다.

@@ -64,14 +64,14 @@ final result = await MobileRag.instance.searchHybridWithContext(
 - **Use Case**: recovering lost context.
 - **Example**: If a chunk says "It returns true.", fetching adjacent chunks reveals *what* function returns true.
 ```dart
-// Fetch context: [Prev Chunk] + [Match] + [Next Chunk]
+// Hits first in rank order, then their neighbors (ContextStrategy.chronological for document order)
 await MobileRag.instance.search(query, adjacentChunks: 1);
 ```
 
 ### `vectorWeight` vs `bm25Weight`
-- **Default**: `0.2`, `0.8`
+- **Default**: `0.2`, `0.8`, or the `defaultVectorWeight` / `defaultBm25Weight` passed to `MobileRag.initialize`
 - **Description**: Controls the balance between Semantic Search (Vector) and Keyword Search (BM25).
-- **Formula**: `Final Score = (VectorRank * vectorWeight) + (BM25Rank * bm25Weight)` (Rank fusion)
+- **Formula**: `score = vectorWeight / (60 + vectorRank) + bm25Weight / (60 + bm25Rank)` (reciprocal rank fusion)
 - **Validation**:
     - Values outside `0.0 ~ 1.0` are clamped at runtime.
     - If both become `0`, defaults (`0.2`, `0.8`) are restored.

@@ -4,7 +4,7 @@
 shape any LLM client can use: a JSON result with citation ids, and a search
 tool definition the model can call. You keep your own LLM SDK or HTTP client.
 
-> Requires `mobile_rag_engine` 0.23.0 or later.
+> Requires `mobile_rag_engine` 0.24.0 or later.
 
 ## Results as JSON
 

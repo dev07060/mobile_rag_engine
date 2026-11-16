@@ -4,7 +4,7 @@ This guide explains how to write unit tests for applications that use `mobile_ra
 
 ## The Challenge: Native Dependencies
 
-`mobile_rag_engine` relies on Rust binaries and the ONNX Runtime for its core functionality. In a standard Dart unit test environment (`flutter test`), these native libraries are often unavailable or cannot be initialized, leading to `RustLibraryException` or `MissingPluginException`.
+`mobile_rag_engine` relies on Rust binaries and the ONNX Runtime for its core functionality. In a standard Dart unit test environment (`flutter test`), these native libraries are often unavailable or cannot be initialized, leading to native library load errors or `MissingPluginException`.
 
 To solve this, the package provides a **Mock Injection Mechanism** that allows you to test your app's logic without loading the native engine.
 
@@ -67,7 +67,7 @@ void main() {
 
 ## Testing Scenarios
 
-> **Type note:** ID-bearing fields such as `chunkId`, `sourceId`, and the counters on `SourceStats` are typed as `PlatformInt64` in the generated FFI. On the supported platforms (iOS / Android / macOS / Windows) this is an `int` alias, so the `int` literals in the snippets below compile as-is. If you ever target the web, switch to `BigInt`-backed literals.
+> **Type note:** ID-bearing fields such as `chunkId`, `sourceId`, and the counters on `SourceStats` are typed as `PlatformInt64` in the generated FFI. On the supported platforms (iOS / Android / macOS / Windows) this is an `int` alias, so the `int` literals in the snippets below compile as-is.
 
 ### Scenario 1: Mocking Search Results
 

@@ -37,6 +37,9 @@ Cargokit uses them **only when `rustup` is not installed**; with `rustup` on
   to `^0.24.0`.
 
 **Errors from `cargo` / `rustup` (Rust installed, source build):**
+- With Xcode 27, macOS profile and release builds from source fail with
+  `can't find crate for dyn_stack_macros` (or `paste`). Build without `rustup`
+  on `PATH` to use the precompiled binaries.
 1. Make sure Rust stable is current: `rustup default stable`. Cargokit adds the
    Rust targets it needs through `rustup`.
 2. iOS/macOS: make sure Xcode and its command line tools are installed.
@@ -69,7 +72,7 @@ flutter run
 **Symptom:** The app builds for iOS or Android, but `flutter build web` stops
 with errors in the package's own files, such as:
 ```
-…/mobile_rag_engine-0.23.0/lib/services/rag_engine.dart:152:14:
+…/mobile_rag_engine-<version>/lib/services/rag_engine.dart:152:14:
 Error: The argument type 'int' can't be assigned to the parameter type 'BigInt'.
 Error: Compilation failed.
 ```
@@ -295,10 +298,9 @@ try {
    );
    ```
 
-2. **Limit file size** (50MB recommended):
+2. **Limit file size** (the parser accepts up to 50 MB per file):
    ```dart
-   final bytes = await file.readAsBytes();
-   if (bytes.length > 50 * 1024 * 1024) {
+   if (await file.length() > 50 * 1024 * 1024) {
      throw Exception('File too large');
    }
    ```
@@ -317,14 +319,10 @@ try {
 
 ### iOS Simulator: Slow Performance
 
-**Cause:** Simulator cannot use Neural Engine
+**Cause:** The simulator runs on the Mac's CPU and does not reflect device performance.
 
-**Solution:** Run performance tests on **physical devices**
-
-| Environment | Expected Performance |
-|:------------|:--------------------|
-| iPhone 14 (A15) | ~30ms/embedding |
-| iOS Simulator | ~150ms/embedding |
+**Solution:** Run performance tests on **physical devices**. Device numbers are in
+[Model Setup](model_setup.md#cost).
 
 ---
 
@@ -373,27 +371,6 @@ The example app ships this manifest. It was checked with Flutter 3.35.5 and
 Xcode 27.1 on an iPhone 17 (iOS 27.0.1), with the template `AppDelegate.swift`
 unchanged. If your `Info.plist` already has `UIApplicationSceneManifest` (for
 example your own scene delegate), this is not the cause.
-
----
-
-### Android: NNAPI Errors
-
-**Symptom:**
-```
-W/onnxruntime: NNAPI execution provider failed
-```
-
-**Solution:** This is just a warning. It automatically falls back to CPU. Safe to ignore.
-
-For persistent issues on specific devices, reduce thread count:
-```dart
-// Limit ONNX threads to reduce CPU/heat
-await MobileRag.initialize(
-  tokenizerAsset: 'assets/tokenizer.json',
-  modelAsset: 'assets/model.onnx',
-  embeddingIntraOpNumThreads: 1, // Minimal CPU usage
-);
-```
 
 ---
 

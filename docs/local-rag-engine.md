@@ -24,9 +24,7 @@ with a local model, remote model, or custom OCR pipeline.
 
 ```dart
 await MobileRag.initialize(
-  tokenizerAsset: 'assets/tokenizer.json',
-  modelAsset: 'assets/model.onnx',
-  deferIndexWarmup: true,
+  modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json'),
 );
 
 await MobileRag.instance.addDocumentFromFile(
@@ -34,7 +32,7 @@ await MobileRag.instance.addDocumentFromFile(
   name: 'manual.pdf',
 );
 
-final result = await MobileRag.instance.search(
+final result = await MobileRag.instance.searchHybridWithContext(
   'What does the manual say about setup?',
   tokenBudget: 2000,
 );
@@ -68,37 +66,22 @@ database.
 |:-----|:-------|:------|
 | Local document retrieval in Flutter | Supported | Use `MobileRag.initialize`, `addDocument`, `addDocumentFromFile`, and `search`. |
 | Offline semantic search | Supported | Retrieval runs locally after model/tokenizer assets are bundled. |
-| Hybrid search | Supported and benchmarked | HNSW vector search, BM25 keyword search, and RRF fusion are available through the default hybrid path. |
-| Passage/context retrieval quality | Verified on benchmark fixtures | The 80-query passage benchmark with the default hybrid profile measured `passage_recall@10 = 0.9375` and `answerable_context@10 = 0.9125` with the default MiniLM Model Pack, and `0.9625` / `0.975` with KoEn-E5-Tiny. BGE-m3 (569 MB, for reference) measured `0.975` / `0.9875`. MiniLM is English-only: its vector search alone found 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](guides/model_setup.md#korean-documents-koen-e5-tiny). Conditions are below the table. |
+| Hybrid search | Supported and benchmarked | HNSW vector search, BM25 keyword search, and RRF fusion are used by `searchHybridWithContext`, `searchHybrid` and `ask`; `search` is vector-only. |
+| Passage/context retrieval quality | Verified on benchmark fixtures | The 80-query passage benchmark with the default hybrid profile measured `passage_recall@10 = 0.925` and `answerable_context@10 = 0.900` with the default MiniLM Model Pack, and `0.950` / `0.9625` with KoEn-E5-Tiny. BGE-m3 (569 MB, for reference) measured `0.9625` / `0.9625` (2026-11-13). MiniLM is English-only: its vector search alone found 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](guides/model_setup.md#korean-documents-koen-e5-tiny). Conditions are below the table. |
 | Text-layer PDF-to-RAG | Verified on sample scope | The PDF-to-RAG smoke run covered `sample_eng.pdf` and `sample_kor.pdf`; all 8 PDF-derived queries reached source, passage, and answerable context at top-10. |
 | Scanned/image-only PDFs | Detected, OCR not bundled | Extraction errors are classified as OCR-required so your UI can route to an OCR workflow. |
 | Large/table-heavy/OCR-heavy PDFs | Still being validated | Do not generalize the two-sample PDF smoke result to every PDF layout or mobile memory/latency condition. |
 | LLM generation | App responsibility | This package returns context; your app chooses the LLM. |
 
-Passage numbers: 80 queries (32 English, 32 Korean, 16 multilingual), a fresh
-database per model, profile build on an Apple Silicon Mac, measured 2026-11-12.
-They include a vector-index fix that reaches pub.dev users with the next
-`rag_engine_flutter` release. The earlier `0.925` / `0.938` in this guide was
-measured with BGE-m3 in June 2026, not with the default model. Full conditions
-and per-language results are in the
-[passage benchmark report](perf/passage-benchmark-2026-11/README.md).
+Passage numbers: 80 queries (32 English, 32 Korean, 16 mixed), a fresh
+database per model, top 10 of 100 results, profile build on an Apple M3 Pro
+Mac, `mobile_rag_engine` 0.24.0 code, measured 2026-11-16 (BGE-m3 2026-11-13).
 
 ## PDF-to-RAG Boundary
 
-The current PDF claim should be worded narrowly:
-
-> In a profile-mode macOS run, `sample_eng.pdf` and `sample_kor.pdf` were parsed
-> through the real PDF parser and `addDocumentFromFile()`. The shipped default
-> hybrid profile retrieved the expected source, answer-bearing passage, and
-> assembled context for 8/8 PDF-derived queries at top-10.
-
-The current PDF claim should not be expanded to:
-
-> All PDF document processing quality is validated.
-
-Scanned/image-only PDFs require OCR before indexing. Table-heavy PDFs, very
-large reports, layout-noisy documents, and mobile latency/memory behavior should
-be validated separately.
+PDF support is verified on two sample PDFs (`sample_eng.pdf`, `sample_kor.pdf`).
+Scanned or image-only PDFs need OCR before indexing. Table-heavy PDFs, very
+large reports and layout-noisy documents are not verified.
 
 ## When To Use It
 
@@ -120,6 +103,3 @@ indexing, managed OCR at scale, or large shared vector databases.
 - [Search Strategies](features/search_strategies.md)
 - [Search by Source](features/search_by_source.md)
 - [Troubleshooting](guides/troubleshooting.md)
-- [Passage Benchmark Report (2026-11, per model)](perf/passage-benchmark-2026-11/README.md)
-- [P5-4 Expanded Passage Relevance Report](perf/ondevice-query-profiler/PR-P5-4-expanded-passage-relevance.html)
-- [P5-5 PDF-to-RAG Passage Relevance Report](perf/ondevice-query-profiler/PR-P5-5-pdf-to-rag-passage-relevance.html)

@@ -14,13 +14,13 @@ The project uses `flutter_rust_bridge` to connect Dart and Rust.
 ### Standard Build
 When you modify Dart code only:
 ```bash
-flutter run -d macos
+cd example && flutter run -d macos
 ```
 
 ### Modifying Rust Code
 When you modify Rust code (`rust_builder/rust/src/**`), you generally just run:
 ```bash
-flutter run -d macos
+cd example && flutter run -d macos
 ```
 The build system is configured to detect Rust changes and rebuild the library automatically.
 
@@ -77,7 +77,7 @@ Store the private key as the repository secret
 
 Before publishing `rag_engine_flutter`, run **Actions > Precompile Binaries >
 Run workflow** on the exact commit being published. The `No-Rust Build` jobs
-must pass: they build the example app for Android, iOS and macOS with Rust
+must pass: they build the example app for Android, iOS, macOS and Windows with Rust
 removed, so they can only succeed with the uploaded binaries. The workflow also
 runs on pushes to `main` that change the crate.
 
@@ -94,7 +94,7 @@ Every performance or retrieval-quality number (benchmarks, recall and passage ev
 - **Environment:** device, OS, and Xcode, Flutter and rustc versions
 - **Data:** dataset, chunk count, date, and whether other work was running on the machine
 
-A number without its model is not comparable. The README once showed `passage_recall@10 = 0.925` without a model name; it had been measured with BGE-m3, not the default MiniLM Model Pack. See [`docs/perf/passage-benchmark-2026-11/README.md`](docs/perf/passage-benchmark-2026-11/README.md) for the expected "conditions" table. When quoting an older number that has no model recorded, say so.
+A number without its model is not comparable. See [`docs/perf/passage-benchmark-2026-11/README.md`](docs/perf/passage-benchmark-2026-11/README.md) for the expected "conditions" table. When quoting an older number that has no model recorded, say so.
 
 ## Troubleshooting
 
@@ -105,7 +105,7 @@ A number without its model is not comparable. The README once showed `passage_re
 Use the provided helper script to strictly clean all native artifacts:
 ```bash
 ./scripts/clean_native_build.sh
-flutter run -d macos
+cd example && flutter run -d macos
 ```
 
 **Solution 2: Manual Clean**
@@ -113,7 +113,7 @@ flutter run -d macos
 cd example/macos
 rm -rf Pods Podfile.lock Flutter/ephemeral
 pod install
-cd ../..
+cd ..
 flutter run -d macos
 ```
 
@@ -123,6 +123,6 @@ flutter run -d macos
 
 ### Build Script Issues
 If the Rust library isn't rebuilding even after cleaning:
-1. Check `macos/rag_engine_flutter.podspec` or `ios/rag_engine_flutter.podspec`.
+1. Check `rust_builder/macos/rag_engine_flutter.podspec` or `rust_builder/ios/rag_engine_flutter.podspec`.
 2. Ensure the `script_phase` for "Build Rust library" is not commented out.
 3. We have intentionally disabled input/output file checks in the podspec to force the build script to run every time to improve reliability.

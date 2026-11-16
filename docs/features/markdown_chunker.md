@@ -33,7 +33,7 @@ When the engine builds embedding text or final context, it renders:
 
 This keeps stored chunk content clean while still giving the LLM the section context it needs.
 
-### 3. Smart Code Block Linking (v0.9.1+)
+### 3. Smart Code Block Linking
 When a code block is too massive to fit into a single chunk (e.g., a 2000-line config file), it must be split. Standard splitters leave these orphan chunks disconnected.
 
 Our chunker adds **Linking Metadata** to split code blocks:
@@ -43,7 +43,7 @@ Our chunker adds **Linking Metadata** to split code blocks:
 
 **Use Case:** This allows your UI or RAG pipeline to detect that a retrieved chunk is part of a larger code block and fetch the adjacent chunks to reconstruct the full code for the user or the LLM.
 
-### 4. Smart Table Splitting (v0.9.1+)
+### 4. Smart Table Splitting
 Large tables are still split on row boundaries so the engine never cuts through the middle of a row.
 
 To preserve raw source offsets, the engine keeps each stored table chunk as a direct slice of the original markdown. That means the first chunk contains the table header row from the source, while later chunks continue with subsequent rows instead of receiving a synthetic repeated header row.
@@ -63,7 +63,7 @@ If you need extra table context for later chunks, treat it as a retrieval/render
 ## Usage
 
 ### Automatic (Recommended)
-When you add a Markdown file through `MobileRag`, the chunker is automatically applied if the file path extension is `.md` or `.markdown`.
+When you add a Markdown file through `MobileRag`, the chunker is automatically applied if the file path extension is `.md` or `.markdown` (case-insensitive). Only CommonMark headings (1 to 6 `#` followed by a space) start a section, so hashtags such as `#travel` are plain text.
 
 ```dart
 await MobileRag.instance.addDocumentFromFile(
@@ -91,7 +91,7 @@ final chunks = await TextChunker.markdown(
 
 for (final chunk in chunks) {
   print('Type: ${chunk.chunkType}'); // text, code, table
-  print('Path: ${chunk.headerPath}'); // # My Guide > ...
+  print('Path: ${chunk.headerPath}'); // My Guide > ...
   print('Content: ${chunk.content}');
   
   // Access linked code block metadata
