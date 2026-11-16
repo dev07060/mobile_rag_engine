@@ -34,7 +34,7 @@
 
 - main: `a0e1636` (#150 머지, 2026-11-16). **새 배포는 보류**(규칙 5). 마지막 배포는 여전히 `mobile_rag_engine` 0.23.0과 `rag_engine_flutter` 0.22.0이다.
 - 0.23.0 배포 뒤 main에 머지된 것: Q1 (#132), D1 (#133), S1 (#134), B1 (#135), D2 (#136), W1 (#137), F1 (#138), F2 (#139, #140, #143), E1 (#144), Q2 (#145, #146), Q3 (#147), Q4 (#148), Q5 (#149), I1 (#150). 내부 점검 묶음 Q1~Q5가 모두 끝났다. 코드 변경은 `CHANGELOG.md`의 `## Unreleased`(Rust 코어 변경은 `rust_builder/CHANGELOG.md`에도)에 있고, 다음 `rag_engine_flutter` 배포가 있어야 pub 사용자에게 닿는다.
-- M5는 범위를 다시 적어 합의했고 착수 대기다.
+- M5 진행 중(2026-11-16 착수).
 - **다음 순서 (2026-11-16 합의):** M5(iPhone 실측, 범위 합의, 착수 대기) → 사용자가 요청할 때 배포. 착수는 사용자가 번호로 지시할 때 한다(규칙 7).
 
 2026-11-13 기준으로 적었던 내용:
@@ -118,7 +118,8 @@
 
 ### M5. iPhone 실기기 측정 (KoEn, MiniLM)
 
-- **상태:** 범위 합의(2026-11-16). 사용자 "M5 범위 초안 고쳐줘"로 다시 적었고, "2번만 넣고 PR 올려줘"로 아래 "정한 것"을 확정했다. 착수 대기(규칙 7). 사용자의 iPhone 연결이 필요하다.
+- **담당:** 세션 "M5 iPhone 실기기 측정", 브랜치 `feats/m5-device-measure`, worktree `.claude/worktrees/m5-device-measure-c54381`, 기준 커밋 `9244bfc`(main `a0e1636` + #151, #151은 착수 때 아직 열려 있었다)
+- **상태:** 진행 중(2026-11-16 사용자 "새 세션에서 M5 착수"). 범위는 2026-11-16 합의(사용자 "M5 범위 초안 고쳐줘", "2번만 넣고 PR 올려줘"로 아래 "정한 것" 확정). 사용자의 iPhone 연결이 필요하다.
 - **순서:** I1(#150) 다음. 그 뒤는 사용자가 요청할 때 배포다.
 
 **목표:** 기본 모델(MiniLM)과 한국어 레시피 모델(KoEn-E5-Tiny int8)의 지연·색인 시간·메모리를 iPhone에서 잰다. 지금 문서의 수치는 데스크톱(Apple M3 Pro, Python)과 시뮬레이터 값이고, `model_setup.md` 비용 절은 "These numbers have not been measured on a phone yet."로 끝난다. 이 측정은 main(0.23.0 뒤 변경 포함)을 실기기에서 처음 돌리는 실행이기도 하다. Q2~Q5와 I1은 모두 "확인하지 않은 것"에 실기기를 적었다.
@@ -164,6 +165,13 @@
 | `search(sourceIds:)` 기기 지연(Q4 B10) | 넣지 않는다 | 후보 "두 단계 스캔"은 Mac 수치(20,000청크 중 18,000청크 범위 9.67 → 20.48 ms, 가짜 임베딩)만으로 남는다 |
 | 0.23.0이 남긴 DB에서의 업그레이드를 기기에서 확인 | 넣는다(위 "포함") | |
 | 레거시 자산 경로(`modelAsset`/`tokenizerAsset`)의 시작 시간 | 넣지 않는다 | 후보 "레거시 자산 확인 비용 절감"은 시뮬레이터 수치(약 250 ms)만으로 남는다 |
+
+**착수 때 정한 것 (2026-11-16, 규칙 4)**
+- **업그레이드 확인 모델은 MiniLM이다.** 0.23.0의 `setup`이 설치하는 기본 Model Pack이라, 업그레이드하는 앱 대부분이 가진 상태다. 절차는 `tool/upgrade_e2e/ios_device/`(phase A는 pub 0.23.0, phase B는 같은 앱에 main을 path로 넣어 덮어 설치)다.
+- **데이터:** fixture(합성 영어 문서, 컬렉션 둘 × 500개, 질의 5개)는 그대로 cold·warm·전환 구간에 쓴다. fixture는 영어 합성문이라 언어별 값이 나오지 않으므로, 언어별 warm 값(질의 임베딩, embed·search·hydrate 구간)은 E1 질문 120개(영어 60, 한국어 60)를 E1 컬렉션(top 5, `ask` 조건)에서 잰다. 색인 시간은 E1 문서 56개(PDF 두 개 포함)로 잰다.
+- **측정 파일:** 새 파일 `example/integration_test/m5_device_measure_test.dart`. 기존 프로파일러는 Model Pack으로 초기화하게 고치고, fixture 구간 측정을 `example/lib/profiling/fixture_cells.dart`로 옮겨 두 테스트가 함께 쓴다.
+- **두 번째 실행:** `flutter drive`는 끝날 때 앱을 지우므로 `--keep-app-running`으로 남기고, 다시 설치하지 않고 앱을 한 번 더 띄운다(`devicectl device process launch`). 테스트는 첫 실행이 남긴 표시 파일로 두 번째 실행을 알아보고, 초기화 시간과 재시작 뒤 첫 질의를 잰다. 결과 파일은 `devicectl device copy from`으로 꺼낸다. 첫 실행 전에는 앱을 지워 "설치 직후"를 맞춘다.
+- **빌드 우회(커밋하지 않음):** Xcode 27.1이 pod 배포 대상 9.0~13.0을 거부해 example 앱이 시뮬레이터·기기 모두 빌드되지 않는다(아래 후보 "Xcode 27에서 `flutter build ios --simulator`가 새 앱에서도 실패한다"와 같은 원인). 측정 빌드는 로컬 `example/ios/Podfile`의 `post_install`에서 pod 배포 대상을 16.0으로 올려 만들었고, 이 변경은 PR에 넣지 않는다. 결과 조건 표에 적는다.
 
 **완료 기준**
 - 모델 두 개의 실기기 결과 JSON과 문서 갱신. 수치마다 규칙 9의 조건(모델·fingerprint, 커밋, 빌드 모드와 feature, 기기·OS·Xcode·Flutter·rustc, 데이터와 청크 수, 측정일, 충전·다른 작업 여부).

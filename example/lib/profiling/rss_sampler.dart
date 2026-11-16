@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 typedef RssReader = int Function();
@@ -53,3 +54,36 @@ class RssSummary {
         '${prefix}_samples_bytes': samplesBytes,
       };
 }
+
+/// Samples RSS on a timer while async work runs (FFI calls run off the main
+/// isolate's event loop, so the timer keeps firing), plus the process
+/// high-water mark ([ProcessInfo.maxRss]) at the end.
+class PeriodicRss {
+  PeriodicRss._(this._tracker, this._timer);
+
+  final RssTracker _tracker;
+  final Timer _timer;
+
+  static PeriodicRss start({
+    Duration every = const Duration(milliseconds: 50),
+    RssSampler? sampler,
+  }) {
+    final tracker = (sampler ?? RssSampler()).start();
+    final timer = Timer.periodic(every, (_) => tracker.sample());
+    return PeriodicRss._(tracker, timer);
+  }
+
+  /// Stops the timer. Peak covers the timer samples, not every allocation.
+  Map<String, Object?> finish({required String prefix}) {
+    _timer.cancel();
+    _tracker.sample();
+    final s = _tracker.finish();
+    return {
+      '${prefix}_start_bytes': s.startBytes,
+      '${prefix}_end_bytes': s.endBytes,
+      '${prefix}_peak_bytes': s.peakBytes,
+      '${prefix}_sample_count': s.samplesBytes.length,
+      '${prefix}_process_max_rss_bytes': ProcessInfo.maxRss,
+    };
+  }
+ }
