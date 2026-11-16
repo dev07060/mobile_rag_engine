@@ -30,13 +30,15 @@
    3. 기본 동작과 기본값은 바꾸지 않는다. 바꾸려면 성격이 다른 문서 묶음 여러 개와 모델 여러 개로 측정한 근거를 PR에 적는다. 앱 하나의 측정은 사례 한 건이지 기본값의 근거가 아니다.
    4. 문서의 재현 예시에 특정 플러그인이나 앱을 쓸 수는 있지만, 설명은 그 원인 일반으로 쓴다.
 
-## 현재 상태 (2026-11-13)
+## 현재 상태 (2026-11-16)
 
-- main: `3505825` (#135 머지). **새 배포는 보류**(규칙 5). 다음 배포는 내부 점검으로 문제를 모두 고친 뒤에 한다.
-- 0.23.0 배포 뒤 main에 머지된 것: Q1 (#132, 2026-11-09)와 D1 (#133)·S1 (#134)·B1 (#135) (셋 다 2026-11-12). 아직 배포하지 않았다. 코드 변경(Q1, S1)은 `CHANGELOG.md`의 `## Unreleased`에 있고, D1과 B1은 문서와 측정만 바꿨다.
-  - S1은 Rust 코어를 바꿨다. 다음 `rag_engine_flutter` 배포가 있어야 pub 사용자에게 닿는다.
-- 열린 PR 없음. D2 (#136)는 2026-11-13에 머지됐다.
-- **다음 순서 (2026-11-13 합의):** W1(#137) 머지 → F1(검색 평가 기반, 범위 초안) → Q2 → Q3 → Q4 → Q5. F1은 합의 대기 중인 초안이고 착수는 사용자가 번호로 지시할 때 한다(규칙 7). F2(결합 방식)는 2026-11-14에 범위 초안을 적었고 F1 머지 뒤에 할 수 있다. Q2~Q5와의 순서는 합의 때 정한다.
+- main: `77e035c` (#149 머지, 2026-11-16). **새 배포는 보류**(규칙 5). 마지막 배포는 여전히 `mobile_rag_engine` 0.23.0과 `rag_engine_flutter` 0.22.0이다.
+- 0.23.0 배포 뒤 main에 머지된 것: Q1 (#132), D1 (#133), S1 (#134), B1 (#135), D2 (#136), W1 (#137), F1 (#138), F2 (#139, #140, #143), E1 (#144), Q2 (#145, #146), Q3 (#147), Q4 (#148), Q5 (#149). 내부 점검 묶음 Q1~Q5가 모두 끝났다. 코드 변경은 `CHANGELOG.md`의 `## Unreleased`(Rust 코어 변경은 `rust_builder/CHANGELOG.md`에도)에 있고, 다음 `rag_engine_flutter` 배포가 있어야 pub 사용자에게 닿는다.
+- 진행 중: I1 (아래 절, PR 하나).
+- **다음 순서 (2026-11-16 합의):** I1 → M5(iPhone 실측, 범위 합의 전) → 사용자가 요청할 때 배포. 착수는 사용자가 번호로 지시할 때 한다(규칙 7).
+
+2026-11-13 기준으로 적었던 내용:
+- main `3505825` (#135 머지). 다음 순서는 W1 머지 → F1 → Q2 → Q3 → Q4 → Q5였고, 모두 머지됐다(위).
 
 2026-11-06 기준으로 적었던 내용:
 - 마지막 배포: `mobile_rag_engine` 0.23.0과 `rag_engine_flutter` 0.22.0 (pub.dev, 2026-11-04). R1 완료(태그 `v0.23.0`, pub 모드 확인 통과, 2026-11-06).
@@ -917,7 +919,7 @@
 ### Q5. 배포 검증 보강
 
 - **담당:** 세션 "Q5 배포 검증 보강", 브랜치 `fix/q5-release-checks`(worktree `.claude/worktrees/q5-release-checks-88a4cb`, main `f5aefc4`에서 땄다)
-- **상태:** PR #149 열림(2026-11-16), 머지 대기. 착수는 2026-11-16 사용자 "새 세션에서 Q5 착수".
+- **상태:** 완료 (#149, 2026-11-16, 머지 커밋 `77e035c`). 착수는 2026-11-16 사용자 "새 세션에서 Q5 착수".
 
 **착수 때 확인한 것 (2026-11-16, main `f5aefc4`)**
 
@@ -961,9 +963,20 @@
 
 ### I1. 실제 앱 연동 마찰 문서
 
-- **상태:** 착수 대기 (2026-11-09 사용자: "다음범위 문서에 써줘").
+- **담당:** 세션 "I1 실제 앱 연동 마찰 문서", 브랜치 `docs/i1-integration-friction`(worktree `.claude/worktrees/i1-integration-docs-149577`, main `77e035c`에서 땄다)
+- **상태:** PR 열림(2026-11-16), 머지 대기. 착수는 2026-11-16 사용자 "새 세션에서 I1 착수". 범위는 2026-11-09 사용자 "다음범위 문서에 써줘"로 적었다. 아래 "착수 때 확인한 것"으로 가중치 비교 항목을 고쳤다(규칙 4).
 - **출처:** 2026-11-09 Flutter Flame 게임(`legendary-bow-master`, 브랜치 `feats/ios-guide-qa`)에 iOS 전용 가이드 Q&A를 붙인 경험. 0.23.0, KoEn-E5-Tiny int8, Apple Foundation Models를 `RagGenerate`로 연결했고 iPhone 17(iOS 27.0.1)에서 확인했다. 패키지 코드는 고치지 않았다. 핵심 API(`initialize` → `addDocument` → `prepareAsk`)는 바로 붙었고, 시간이 든 곳은 빌드·배포 단계에서 원인을 찾는 일이었다.
 - **순서:** `troubleshooting.md`·`faq.md`·`release_build.md`를 고친 Q1(#132)과 README·가이드를 고친 D1(#133)은 머지됐다. W1과 `ask.md`가 겹치므로 W1 머지 뒤 main에서 브랜치를 딴다(규칙 3).
+
+**착수 때 확인한 것 (2026-11-16, main `77e035c`)**
+
+범위는 2026-11-09에 썼고, 그 뒤 W1(#137)·F2(#139, #140, #143)·E1(#144)·Q4(#148)·Q5(#149)가 머지됐다.
+
+| 항목 | 지금 main에서 | 정한 것 |
+|---|---|---|
+| 가중치 비교(0.2/0.8 대 0.5/0.5) | W1이 `ask`/`prepareAsk`에 `vectorWeight`/`bm25Weight`를, F2가 `initialize(defaultVectorWeight:, defaultBm25Weight:)`를 열었다. F2는 한국어·영어 공개 자료(MIRACL, KorQuAD, AutoRAG, NFCorpus, SciFact)로, E1은 앱 형태 문서 56개(직접 쓴 짧은 FAQ·릴리스 노트·사내 메모 24개 포함)와 검수한 질문 90개로 무게별 결과를 쟀다. `model_setup.md`는 2026-11-15 사용자 결정으로 무게별 수치만 적고 고르는 일은 앱에 맡긴다 | 새 비교를 하지 않는다. 처음 근거였던 게임 가이드 질문 묶음은 앱 하나의 사례라 기본값이나 권장값의 근거가 되지 않고(규칙 10.3), 짧은 문서 묶음에 대한 측정은 E1이 이미 했다. `ask.md`의 새 절은 그 측정(`model_setup.md`)을 가리키고 권장값을 적지 않는다 |
+| 인용 번호만 오는 답(`[3]`) 감지 | Q4 절에 "I1이 넘긴 … 감지는 Q4에서 다루지 않았다"고 적혀 있다. Q4(B12)는 인용 형식 읽기(`［１］`, `【1】`, 범위, 코드 안 괄호 제외)만 고쳤고, 답 본문이 인용 번호뿐인지는 보지 않는다 | I1도 다루지 않는다(코드 변경이고 범위 밖). 후보 목록에 옮겼다 |
+| I1이 고칠 문서와 겹치는 이전 변경 | Q1(#132)이 `faq.md`·`release_build.md`에 `tokenizerPath`/`modelPath`(0.23.0 뒤 배포)를, D1(#133)이 README·가이드를, W1·Q4가 `ask.md`의 짧은 문서·인용·토큰 예산 절을, Q5(#149)가 `setup`이 읽을 수 없는 Podfile에서 실패하게 했다 | 새 절은 기존 절을 링크하고 반복하지 않는다. `tokenizerPath`/`modelPath`는 "0.23.0 뒤 배포"로 적는다 |
 
 **목표:** 기존 앱(다른 플러그인이 있고, 웹 빌드도 하고, 한 플랫폼에서만 RAG를 쓰는 앱)에 붙일 때 만나는 문제를 증상으로 찾아 바로 고칠 수 있게 문서로 남긴다.
 
@@ -971,21 +984,36 @@
 - **정적 링크와 vendored 라이브러리 충돌:** `use_frameworks! :linkage => :static`으로 바꾸면 기기용·시뮬레이터용 `.a`를 따로 vendoring하는 플러그인(예: `flutter_soloud`의 `libflac_iOS-device.a`)이 SDK 구분 없이 앱 링크에 들어가 시뮬레이터 빌드가 `building for iOS Simulator, but linking in object file built for iOS`로 깨진다. 증상, 원인, `post_install`에서 `OTHER_LDFLAGS`를 `[sdk=iphoneos*]`/`[sdk=iphonesimulator*]`로 나누는 우회 예시를 `troubleshooting.md`에 적는다. 정적 링크 요구 자체는 `flutter_onnxruntime`에서 오므로 없애지 않는다.
 - **한 플랫폼에서만 쓰는 앱:** (1) 웹 빌드: 조건부 import(`if (dart.library.io)`)로 FFI 코드를 빼는 예시. (2) 모델 asset이 웹 빌드에도 같이 들어가는 문제(Flutter asset은 플랫폼별로 뺄 수 없다)와 대응: 빌드 뒤 `build/web/assets/...`에서 지우거나, Q1의 `tokenizerPath`/`modelPath`로 asset 없이 배포하는 방법. `faq.md`의 "Does it support Web?" 답을 이 내용으로 고친다.
 - **모델 파일을 git 밖에 둘 때:** 고정 revision에서 받아 Model Pack manifest의 sha256으로 확인하는 스크립트 예시와 `.gitignore` 안내를 `model_setup.md`에 넣는다.
-- **짧은 문서 묶음을 넣을 때의 요령:** 긴 절 하나가 검색 결과를 계속 차지한 사례(게임 가이드의 「강화 카드」 절)를 바탕으로, 절을 주제 하나 단위로 나누는 기준을 적는다. 기본 가중치(`vectorWeight` 0.2 / `bm25Weight` 0.8)와 0.5 / 0.5를 같은 질문 묶음으로 비교해 보고 결과가 분명할 때만 권장값을 적는다. 측정 없이 권장값을 쓰지 않는다.
+- **짧은 문서 묶음을 넣을 때의 요령:** 긴 절 하나가 검색 결과를 계속 차지한 사례(게임 가이드의 「강화 카드」 절)를 바탕으로, 절을 주제 하나 단위로 나누는 기준을 적는다. ~~기본 가중치(`vectorWeight` 0.2 / `bm25Weight` 0.8)와 0.5 / 0.5를 같은 질문 묶음으로 비교해 보고 결과가 분명할 때만 권장값을 적는다.~~ → 착수 때 바꿈: 무게는 F2·E1 측정(`model_setup.md`)을 가리키고 권장값을 적지 않는다(위 표). 측정 없이 권장값을 쓰지 않는다.
 - **생성 연결 예시:** iOS Foundation Models를 메서드 채널로 `RagGenerate`에 붙이는 최소 예시(사용 가능 여부 확인, 가드레일·컨텍스트 초과 오류를 찾은 구절 보여주기로 대체)를 `ask.md`에 넣는다. 시뮬레이터에서는 사용 가능으로 나와도 생성이 실패한다는 점도 적는다.
 
 **제외**
 - 패키지 코드 변경. 정적 링크 요구 제거, 웹 지원.
-- 답이 `[3]`처럼 인용 번호만 오는 경우 감지: Q4(인용·출력 계약)에서 함께 다룰지 착수 때 정한다.
+- 답이 `[3]`처럼 인용 번호만 오는 경우 감지. Q4도 다루지 않아 후보 목록으로 옮겼다(위 표).
 - Xcode 27 시뮬레이터 lipo 문제(위 후보에 이미 있다), 작은 모델의 지어내기(모델 문제).
 
 **완료 기준**
 - 새로 만든 Flutter 앱에 `flutter_soloud`를 함께 넣고 정적 링크로 바꿔 시뮬레이터 링크 오류를 재현한 뒤, 문서의 우회법만으로 빌드가 되는지 확인한다.
 - 조건부 import 예시로 `flutter build web`이 되고, 모델 파일이 빌드 결과에서 빠지는 것을 확인한다.
-- 가중치 비교 결과(질문, 상위 결과, 판정)를 PR 본문에 적는다.
+- ~~가중치 비교 결과(질문, 상위 결과, 판정)를 PR 본문에 적는다.~~ → 착수 때 바꿈: 새 비교 대신 기존 측정을 가리키는 이유를 PR 본문에 적는다.
 - 규칙 8의 네 항목. 문서만 바뀌므로 업그레이드 경로는 "해당 없음"과 이유를 적는다. PR 하나, CI 통과.
 
 **손대는 파일:** `docs/guides/{troubleshooting,faq,model_setup,ask,quick_start}.md`, `README.md`(필요할 때 링크만), `docs/milestones.md`
+
+**결과 (2026-11-16, 문서는 main `77e035c` 기준)**
+
+검증은 pub의 `mobile_rag_engine` 0.23.0 + `rag_engine_flutter` 0.22.0(precompiled, rustup 없음)으로 scratchpad에 새로 만든 앱에서 했다. main의 Rust 변경은 배포 전이라 쓸 수 없다. 환경: Apple M3 Pro, macOS 27.2.1, Xcode 27.1 (27A9275), Flutter 3.35.5, Dart 3.9.2, CocoaPods 1.16.2, 시뮬레이터 iPhone 16 Pro (iOS 26.4), debug 빌드. 모델: MiniLM Model Pack `stable-minilm-l6-v2-arm64-en`, fingerprint `model.onnx|384|f32+vabq:none|sha256:e9246dc32f332cb687c5d1ea0c0c51d3`. 실기기는 쓰지 않았다.
+
+| 항목 | 실행으로 확인한 것 | 문서 |
+|---|---|---|
+| 정적 링크와 vendored 라이브러리 | `flutter create` 앱 + `flutter_soloud` 3.5.4 + `setup`(정적 링크). 시뮬레이터 앱 링크에서 `ld: building for 'iOS-simulator', but linking in object file (…/libflac_iOS-device.a[2](bitmath.o)) built for 'iOS'` 재현. 문서의 `post_install` 블록만 더하면 시뮬레이터 빌드 통과(링크 인자 `-l*_iOS-simulator` 5개), 기기 SDK 빌드(서명 없이)도 통과(`-l*_iOS-device` 5개). 시뮬레이터에서 `MobileRag` 검색(1위 similarity 0.7295)과 `SoLoud.init`이 함께 동작 | `troubleshooting.md` 새 절, `quick_start.md` 링크 |
+| 웹 빌드와 모델 asset | 패키지를 직접 import하면 `flutter build web`이 패키지 안 오류 14개(`int`/`BigInt` 타입 13개, `ExternalLibrary.process` 1개)로 실패. 문서의 조건부 export로 통과. 빌드 결과 `build/web/assets/assets/mobile_rag/`에 모델 파일 3개(23.5 MB)가 들어감을 확인, 문서의 `rm -rf` 뒤 52 MB → 29 MB. 지운 빌드를 로컬 서버로 열어 화면이 뜨고 모델 파일 요청이 없음을 확인 | `faq.md` "Does it support Web?", `troubleshooting.md` 새 절 |
+| 모델 파일을 git 밖에 | 문서의 스크립트로 KoEn-E5-Tiny(rev `5cf599a8`)를 받아 manifest sha256과 일치, 두 번째 실행은 받지 않음, manifest 해시를 바꾸면 `sha256 mismatch`로 실패하고 기존 파일은 그대로. MiniLM은 파일을 지우면 `setup --check`가 종료 코드 1, `setup`이 다시 받아 같은 파일(git 차이 없음) | `model_setup.md` 새 절 |
+| 짧은 문서 묶음 | 만든 예시(카드 설명 6개가 모두 "gold"를 담고, 짧은 문서 4개). "How do I earn more gold?"의 정답 문서 순위: 한 절(679자, 청크 여러 개) 3위, 카드별로 나눠도 3위, 정답 문서 첫 줄에 질문 낱말 제목을 넣으면 두 배치 모두 1위(`prepareAsk` 기본 5개, 기본 무게). 처음 범위가 생각한 "절을 나누면 나아진다"는 이 예시에서 나오지 않아, 문서에는 관찰한 대로 적었다 | `ask.md` "Splitting your own documents" |
+| Foundation Models 예시 | 문서의 Swift·Dart 코드를 같은 앱에 넣어 Xcode 27.1로 컴파일, 시뮬레이터 실행. 이 Mac의 시뮬레이터는 `SystemLanguageModel` 사용 불가로 답해 예시가 찾은 구절 1개를 보여 주는 경로로 갔다. 생성 성공·가드레일·컨텍스트 초과 경로는 실기기가 필요해 실행하지 않았다(2026-11-09 게임 연동 때 iPhone 17에서 쓴 방식을 옮겼다) | `ask.md` "Example: Apple Foundation Models on iOS" |
+
+- **선행 조건(Xcode 27, I1 우회와 별개):** 재현 앱은 링크 단계에 닿기 전에 두 번 멈췄다. (1) `flutter build ios --simulator`가 pod 배포 대상(13.0, 11.0)을 Xcode 27이 거부해 실패 → Podfile `post_install`에서 모든 pod의 `IPHONEOS_DEPLOYMENT_TARGET`을 16.0으로 올렸다. (2) 그다음 Flutter의 lipo 검사가 `arm64 x86_64` 시뮬레이터 `Flutter.framework`를 읽지 못해 실패 → `xcodebuild … ARCHS=arm64`로 빌드했다. 둘 다 아래 후보의 Xcode 27 항목이고 문서에는 넣지 않았다. 그래서 위 시뮬레이터 결과는 `flutter build ios`가 아니라 `xcodebuild`(Debug, `ARCHS=arm64`) 빌드다.
+- **확인하지 않은 것:** 실기기 실행, Xcode 26 이하에서의 재현, `flutter_soloud` 외 플러그인, Foundation Models 생성 성공·오류 경로, main(0.23.0 뒤 변경, 영어 어간 처리 포함)에서의 짧은 문서 예시, 서비스 워커가 지운 파일을 나중에 요청하는지(브라우저 창이 서비스 워커 등록을 막았다).
 
 ### E1. 실제 앱 문서로 검색 평가 (example 앱 갱신과 함께)
 
@@ -1033,6 +1061,8 @@
 - **[높음] F2 결합 방식: 기본 하이브리드가 다국어 모델의 벡터 결과를 버린다 (2026-11-14 F1에서 MIRACL 한국어로 확인).** → F2 범위 초안으로 옮겼다(2026-11-14 사용자 "그럼 고쳐야지").
 
 - **[낮음] `search(sourceIds:)`가 범위 안 모든 청크의 본문을 읽는다 (2026-11-16 Q4 B10 측정, 고치지 않음).** 20,000청크 중 18,000청크를 범위로 주면 9.67 → 20.48 ms(Mac, 가짜 임베딩). id·벡터만 읽어 채점하고 상위 `topK`만 본문을 읽는 두 단계 스캔이 후보다(원인은 추정, 바꾸면 같은 벤치로 다시 잰다).
+- **[낮음] 답이 인용 번호뿐인 경우(`[3]`) (2026-11-09 게임 연동, I1·Q4 모두 다루지 않음, 2026-11-16 I1 착수 때 옮김).** 작은 모델이 본문 없이 `[3]`만 돌려주면 `RagAnswer.text`는 그대로 `[3]`이고 `citations`는 3번 구절을 담는다. 앱이 "답 없음"으로 다룰 수 있게 인용 표시를 뺀 본문이 비었는지 알려 주는 장치(예: getter)를 둘지, 문서 레시피로 둘지 정한다(규칙 10: 판정 기준은 앱).
+- **[중간] Xcode 27에서 `flutter build ios --simulator`가 새 앱에서도 실패한다 (2026-11-16 I1 재현 중 확인, 고치지 않음).** `flutter create` 앱 + 0.23.0 + `setup`에서 (1) pod 배포 대상 13.0·11.0(`path_provider_foundation` 등)을 Xcode 27이 거부하고(지원 범위 15.0~27.1), (2) 그것을 올리면 Flutter의 lipo 검사가 `arm64 x86_64` 시뮬레이터 `Flutter.framework`를 읽지 못한다. 아래 Xcode 27 + Flutter 3.35.5 후보의 iOS 판이다(그 후보는 macOS만 적었다). I1은 `post_install`로 pod 배포 대상 16.0, `xcodebuild … ARCHS=arm64`로 우회해 검증했고 문서에는 넣지 않았다. `troubleshooting.md`에 우회를 적을지, `setup`이 pod 배포 대상도 맞출지 정한다.
 
 착수하려면 위 형식으로 옮겨 적고 합의를 받는다.
 

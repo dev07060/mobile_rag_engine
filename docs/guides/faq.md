@@ -220,6 +220,72 @@ final response = await yourLlmService.generate(prompt);
 No. Supported platforms are **iOS, Android, macOS and Windows (x64)**. Web,
 Linux and Windows on ARM64 are not supported.
 
+An app that also builds for the web can still use the package on its other
+platforms. Two things are needed.
+
+**1. Keep the package out of the web build.** Any import of
+`package:mobile_rag_engine` that the web compiler reaches fails the build
+(see [Troubleshooting](troubleshooting.md#flutter-build-web-fails-inside-mobile_rag_engine)).
+Put the RAG code behind one file that the rest of the app imports, and choose
+the implementation with a conditional export:
+
+```dart
+// lib/guide/guide_search.dart — the rest of the app imports only this file.
+export 'guide_search_stub.dart'
+    if (dart.library.io) 'guide_search_io.dart';
+```
+
+```dart
+// lib/guide/guide_search_io.dart — iOS, Android, macOS, Windows.
+import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+
+class GuideSearch {
+  static bool get isSupported => true;
+
+  static Future<void> initialize() => MobileRag.initialize(
+        modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json'),
+      );
+
+  static Future<List<String>> search(String query) async {
+    final result = await MobileRag.instance.search(query, topK: 3);
+    return [for (final chunk in result.chunks) chunk.content];
+  }
+}
+```
+
+```dart
+// lib/guide/guide_search_stub.dart — web. No mobile_rag_engine import.
+class GuideSearch {
+  static bool get isSupported => false;
+
+  static Future<void> initialize() async {}
+
+  static Future<List<String>> search(String query) async => const [];
+}
+```
+
+Check `GuideSearch.isSupported` before showing the feature. Keep the members
+of the two classes the same, so code that uses `GuideSearch` compiles for
+every platform.
+
+**2. Keep the model files out of the web build.** Flutter bundles the assets
+listed in `pubspec.yaml` into every platform's build, so `assets/mobile_rag/`
+(about 23 MB for MiniLM, 41 MB for KoEn-E5-Tiny) also ends up in
+`build/web/assets/assets/mobile_rag/`. Either:
+
+- Remove it after the web build. The stub never loads these files:
+  ```bash
+  flutter build web
+  rm -rf build/web/assets/assets/mobile_rag
+  ```
+  Do this in the script or CI step that deploys `build/web`.
+- Or do not bundle the model at all: download it on first launch on the
+  supported platforms and pass the files with
+  `MobileRag.initialize(tokenizerPath: …, modelPath: …)`, see the
+  [Release Build Guide](release_build.md). This works only in releases after
+  0.23.0; 0.23.0 needs the model bundled, and `RagModelPack.asset(...)` always
+  does.
+
 ---
 
 ## Data

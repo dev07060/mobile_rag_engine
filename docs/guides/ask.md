@@ -145,6 +145,45 @@ What helps, in order:
    it answers. One sentence of 8 words has little for either search to work
    with.
 
+## Splitting your own documents
+
+When you write the documents yourself (a help screen, a game guide, an FAQ),
+you choose where one ends and the next begins. What to keep in mind:
+
+- **A long section takes several of the five places.** Text is cut into
+  chunks of at most `maxChunkChars` (500 by default), and each chunk competes
+  on its own. A section that lists many items becomes several chunks, and
+  when the question shares a common word with them ("gold", "upgrade"), two
+  or three of the five passages can come from that one section.
+- **Splitting alone does not move the answer up.** Splitting such a section
+  into one document per item changes which chunks fill the places, not the
+  rank of a short document that answers the question: the items still share
+  the common word.
+- **A first line that names the topic in the words people ask with does.**
+  "How to earn more gold." at the top of the gold document put it first.
+- **One topic per document** keeps each passage about one thing, so the
+  passages the model cites, and `RagPassage.sourceName`, point at the right
+  place. Pass a `name:` to `addDocument` so the source name is not null.
+
+Example (MiniLM Model Pack, `mobile_rag_engine` 0.23.0, default weights,
+`prepareAsk` with its default 5 passages; 6 upgrade-card descriptions that
+each mention "gold" and 4 short documents, on an iOS 26.4 simulator,
+2026-11-16). Rank of the "Earning gold" document for "How do I earn more
+gold?":
+
+| Layout | Rank |
+|---|---|
+| Card descriptions as one section (679 characters, more than one chunk), short documents as written | 3 (after two chunks of that section) |
+| One document per card | 3 (after two cards) |
+| One section, short documents with a title line | 1 |
+| One document per card, short documents with a title line | 1 |
+
+This is one constructed example, not a measurement. 0.23.0 does not reduce
+English words to their stem, so "earn" did not match "Earning"; releases
+after 0.23.0 do. To compare the hybrid weights on documents like these, see the
+measurements in [Model Setup](model_setup.md#korean-documents-koen-e5-tiny);
+which weight is best differs between models, languages and document sets.
+
 ## When nothing is found
 
 If no passage fits the token budget, `generate` is not called. The answer has
@@ -173,6 +212,162 @@ final answer = prepared.answer(buffer.toString());
 
 The package has no stream type of its own, because SDKs stream in different
 shapes (text deltas, accumulated text, events).
+
+## Example: Apple Foundation Models on iOS
+
+On iOS 26 and later, the on-device model of Apple's Foundation Models
+framework can be the `generate` function. It has no Dart SDK, so call it
+through a method channel. The model is not always there (older iOS, a device
+without Apple Intelligence, Apple Intelligence turned off, the model still
+downloading), and a call can fail on its safety guardrails or when the prompt
+is longer than its context window. In each case, show the passages search
+found instead of an answer.
+
+`ios/Runner/AppDelegate.swift`:
+
+```swift
+import Flutter
+import UIKit
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
+
+@main
+@objc class AppDelegate: FlutterAppDelegate {
+  override func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  ) -> Bool {
+    GeneratedPluginRegistrant.register(with: self)
+    let registrar = self.registrar(forPlugin: "OnDeviceLlm")!
+    let channel = FlutterMethodChannel(
+      name: "app/on_device_llm", binaryMessenger: registrar.messenger())
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "isAvailable":
+        result(OnDeviceLlm.isAvailable)
+      case "generate":
+        guard let prompt = call.arguments as? String else {
+          result(FlutterError(code: "bad_arguments", message: nil, details: nil))
+          return
+        }
+        Task {
+          do {
+            result(try await OnDeviceLlm.generate(prompt))
+          } catch {
+            result(FlutterError(
+              code: OnDeviceLlm.errorCode(error), message: "\(error)", details: nil))
+          }
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+}
+
+enum OnDeviceLlm {
+  static var isAvailable: Bool {
+    #if canImport(FoundationModels)
+    if #available(iOS 26.0, *),
+      case .available = SystemLanguageModel.default.availability
+    {
+      return true
+    }
+    #endif
+    return false
+  }
+
+  static func generate(_ prompt: String) async throws -> String {
+    #if canImport(FoundationModels)
+    if #available(iOS 26.0, *) {
+      let session = LanguageModelSession()
+      return try await session.respond(to: prompt).content
+    }
+    #endif
+    throw NSError(domain: "OnDeviceLlm", code: 1)
+  }
+
+  static func errorCode(_ error: Error) -> String {
+    #if canImport(FoundationModels)
+    if #available(iOS 26.0, *),
+      let error = error as? LanguageModelSession.GenerationError
+    {
+      switch error {
+      case .guardrailViolation: return "guardrail"
+      case .exceededContextWindowSize: return "context_too_long"
+      default: return "generation_failed"
+      }
+    }
+    #endif
+    return "unavailable"
+  }
+}
+```
+
+Dart:
+
+```dart
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:mobile_rag_engine/mobile_rag_engine.dart';
+
+class OnDeviceLlm {
+  static const _channel = MethodChannel('app/on_device_llm');
+
+  static Future<bool> isAvailable() async =>
+      Platform.isIOS &&
+      (await _channel.invokeMethod<bool>('isAvailable') ?? false);
+
+  static Future<String> generate(String prompt) async =>
+      await _channel.invokeMethod<String>('generate', prompt) ?? '';
+}
+
+/// What the screen shows: an answer, or the passages search found.
+sealed class GuideReply {}
+
+class Answered extends GuideReply {
+  Answered(this.answer);
+  final RagAnswer answer;
+}
+
+class PassagesOnly extends GuideReply {
+  PassagesOnly(this.passages, {this.reason});
+  final List<RagPassage> passages;
+  final String? reason;
+}
+
+Future<GuideReply> askGuide(String question) async {
+  final prepared = await MobileRag.instance.prepareAsk(question);
+  if (!prepared.hasPassages) return PassagesOnly(const []);
+  if (!await OnDeviceLlm.isAvailable()) {
+    return PassagesOnly(prepared.passages, reason: 'unavailable');
+  }
+  try {
+    return Answered(prepared.answer(await OnDeviceLlm.generate(prepared.prompt)));
+  } on PlatformException catch (e) {
+    // guardrail, context_too_long, generation_failed: show what search found.
+    return PassagesOnly(prepared.passages, reason: e.code);
+  }
+}
+```
+
+Notes:
+
+- `prepareAsk` searches before the model is asked, so the passages are ready
+  for the fallback without a second search. `askGuide` calls `isAvailable`
+  each time because availability can change while the app runs (for example
+  when the model finishes downloading).
+- The context window of the on-device model is small. If you see
+  `context_too_long`, lower `tokenBudget` or `topK`; see
+  [Token budget](#token-budget) for why engine tokens and the model's tokens
+  differ.
+- **Test generation on a device.** In the iOS Simulator, availability follows
+  the Mac, not a phone: on one Mac it reported the model as available and
+  generation still failed; on another (iOS 26.4 simulator) it reported it as
+  unavailable, so the example showed the passages.
 
 ## Tool calling instead
 

@@ -46,6 +46,15 @@ end
 
 For macOS, also set the Runner project's deployment target to 14.0 in Xcode.
 
+Adding the package to an existing app:
+
+- If the simulator build then fails with `building for iOS Simulator, but
+  linking in object file built for iOS`, another plugin ships separate device
+  and simulator libraries; see
+  [Troubleshooting](troubleshooting.md#ios-simulator-building-for-ios-simulator-but-linking-in-object-file-built-for-ios-after-switching-to-static-linkage).
+- If the app also builds for the web, keep the package and the model files
+  out of the web build; see [Does it support Web?](faq.md#q-does-it-support-web).
+
 ---
 
 ## Step 1: Add Dependency
