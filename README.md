@@ -105,7 +105,7 @@ The first success is to add a document and get non-empty context back from
 `search`, as in the example at the top. `search` waits for a pending index
 update, so you do not need to call `rebuildIndex()` first.
 
-For other languages and model choices, see the
+For Korean documents and other model choices, see the
 [Model Setup Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md).
 
 ---
