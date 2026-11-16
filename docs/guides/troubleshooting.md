@@ -90,12 +90,10 @@ keeping the model files out of the web build.
 
 ## Initialization Errors
 
-### "Failed to initialize Rust library"
+### Native library fails to load
 
-**Symptom:**
-```
-RustLibraryException: Failed to initialize native library
-```
+**Symptom:** `MobileRag.initialize` throws before any model is loaded, with an
+error about loading the `rag_engine_flutter` library.
 
 **Solution:**
 1. Run `flutter clean` and rebuild
@@ -113,10 +111,8 @@ flutter run
 
 ### "Tokenizer initialization failed"
 
-**Symptom:**
-```
-Exception: Failed to initialize tokenizer
-```
+**Symptom:** `MobileRag.initialize` throws an error that contains
+`Failed to load tokenizer`.
 
 **Causes and Solutions:**
 
@@ -144,10 +140,7 @@ await MobileRag.initialize(
 
 ### "Failed to load ONNX model"
 
-**Symptom:**
-```
-OnnxRuntimeException: Failed to create session
-```
+**Symptom:** `MobileRag.initialize` throws while ONNX Runtime opens the model.
 
 **Checklist:**
 
@@ -156,22 +149,21 @@ OnnxRuntimeException: Failed to create session
 - [ ] Verify file is not corrupted (re-download)
 - [ ] Verify model is compatible with ONNX Runtime
 
-```dart
-// The engine copies modelAsset to <app storage directory>/<basename>:
-// the application documents directory, or the application support
-// directory on Windows (0.22.0 and later).
-// Verify the resolved file the engine actually loads.
-final dir = Platform.isWindows
-    ? await getApplicationSupportDirectory()
-    : await getApplicationDocumentsDirectory();
-final file = File('${dir.path}/model.onnx');
-if (!await file.exists()) {
-  throw Exception('Model file not found at expected path: ${file.path}');
-}
+Where the engine loads the model from:
 
-// Verify file size (corruption check)
-final size = await file.length();
-print('Model size: ${size / 1024 / 1024} MB');
+- **Model Pack:** `mobile_rag_model_packs/<model sha>-<tokenizer sha>/model.onnx`
+  in the app storage directory (the application documents directory, or the
+  application support directory on Windows). SHA-256 and size are checked
+  against the manifest when the pack is installed; later launches check the
+  file sizes.
+- **`modelPath`:** exactly the path you pass.
+- **`modelAsset`:** a copy at `<app storage directory>/<file name>`.
+
+```dart
+// Check the file at the path that applies to your setup.
+final file = File(path);
+print('exists: ${await file.exists()}, '
+    'size: ${(await file.length()) / 1000000} MB');
 ```
 
 ---
@@ -248,10 +240,7 @@ see [Switching an existing database from MiniLM](model_setup.md#4-switching-an-e
 
 ### "HNSW index corrupted"
 
-**Symptom:**
-```
-Exception: Failed to search HNSW index
-```
+**Symptom:** a search throws an error from the vector index.
 
 **Solution:**
 ```dart

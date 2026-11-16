@@ -44,11 +44,13 @@ When a change modifies the Rust FFI surface or native runtime behavior, publish 
 # 1) Validate and publish the native package first
 cd rust_builder
 flutter pub publish --dry-run
+flutter pub publish
 
 # 2) After rag_engine_flutter is live on pub.dev, update the root dependency
 cd ..
 flutter pub get
 flutter pub publish --dry-run
+flutter pub publish
 ```
 
 The root package should only bump its `rag_engine_flutter` dependency after the matching native package version is available on pub.dev. This keeps CI and package resolution valid between the two releases.
@@ -125,4 +127,4 @@ flutter run -d macos
 If the Rust library isn't rebuilding even after cleaning:
 1. Check `rust_builder/macos/rag_engine_flutter.podspec` or `rust_builder/ios/rag_engine_flutter.podspec`.
 2. Ensure the `script_phase` for "Build Rust library" is not commented out.
-3. We have intentionally disabled input/output file checks in the podspec to force the build script to run every time to improve reliability.
+3. The podspec uses a phony input file so the build script runs on every build.

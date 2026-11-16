@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Prompt compression (`PromptCompressor`, `ContextBuilder.buildWithCompression`) is not an officially supported feature and may change or be removed.
 
 ### Search
-* **Short documents next to a large one are found by vector search again.** A short document stored together with a large one (for example one sentence next to a 1,800-chunk PDF) could be missing from `search` and `searchHybrid`. Building the index for collections of uniformly random vectors over 1,000 entries is slower (5,000 vectors: 1.5 s → 5.5 s on an M-series Mac).
+* **Short documents next to a large one are found by vector search again.** A short document stored together with a large one (for example one sentence next to a 1,800-chunk PDF) could be missing from `search` and `searchHybrid`. Building the index for collections of uniformly random vectors over 1,000 entries is slower (5,000 vectors: 1.5 s → 5.5 s; `hnsw_build_benchmark`, release build, macOS 27 Mac, 2026-11-12).
 * **Keyword search stems English words**: "refund" finds "Refunds", "policy" finds "policies". Only words made of ASCII letters are stemmed.
 * **Keyword search normalizes Unicode**: decomposed Hangul (NFD) and full-width letters and digits match their usual forms.
 * **Korean particles after Latin words, numbers and one-syllable nouns** match: "RAG" finds "RAG는", "2024" finds "2024년", "앱" finds "앱을".
@@ -36,13 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Answers and LLM output
 * **`promptTokenCounter`** on `ask`, `prepareAsk` and `RagSearchTool` budgets passages in your LLM's tokens instead of the embedding tokenizer's, which can differ several times.
-* **Citations**: `［１］`, `【1】`, `「1」`, `『1』`, `[1、2]` and ranges such as `[1-3]` are read. Brackets inside inline code or code blocks are not citations.
+* **Citations**: full-width and other bracket styles and ranges such as `[1-3]` are read. Brackets inside inline code or code blocks are not citations.
 
 ### Lifecycle and setup
 * `dispose()` while a document is being added no longer leaves the call waiting forever, and cancels the scheduled index rebuild.
 * `clearAllData()` waits for work in every collection, and a second `initialize` call during the first one reuses its engine.
 * `setup` edits Podfile `platform` lines that carry a comment or double quotes, and stops with the file and line to change when it cannot read a setting.
-* Prompt compression no longer crashes on text with `。` and keeps numbers such as `3.14` whole.
+* Prompt compression no longer crashes on multi-byte sentence terminators and keeps numbers such as `3.14` whole.
 
 ### Known problems
 * A short document next to a large one can still, rarely, be missing from the top vector results. The cause is not confirmed.
@@ -52,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Xcode 27: new iOS apps fail to build because some pods target iOS below 15.0, and apps from the Flutter 3.35 template exit at launch on iOS 27. See [Troubleshooting](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md).
 
 ## Known problems in earlier 0.22.x releases
-Versions 0.22.0 to 0.22.2 shipped within two days and each had problems that a fresh app would hit. They were found after publishing and fixed in the next release. Use 0.22.3 or later.
+Versions 0.22.0 to 0.22.2 each have problems that a fresh app hits. Use 0.22.3 or later.
 
 | Version | Problem | Fixed in |
 |---|---|---|

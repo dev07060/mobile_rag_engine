@@ -2,11 +2,12 @@
 
 A complete on-device RAG (Retrieval-Augmented Generation) implementation.
 
-## Repository Demo Initialization
+## Initialization
 
-This checked-in demo uses the advanced custom two-asset path. New apps should
-follow the Q8_0 Model Pack setup, `--check`, and manifest initialization in the
-package [Quick Start](../docs/guides/quick_start.md).
+Install the Model Pack with `dart run mobile_rag_engine:setup --preset
+stable-minilm-l6-v2-arm64-en`, declare `assets/mobile_rag/` in `pubspec.yaml`,
+and initialize from its manifest. See the
+[Quick Start](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/quick_start.md).
 
 ```dart
 import 'package:mobile_rag_engine/mobile_rag_engine.dart';
@@ -16,8 +17,7 @@ void main() async {
   
   // 1. Initialize MobileRag (Singleton)
   await MobileRag.initialize(
-    tokenizerAsset: 'assets/tokenizer.json',
-    modelAsset: 'assets/model.onnx',
+    modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json'),
   );
   
   runApp(const MyApp());
@@ -34,9 +34,7 @@ final result = await MobileRag.instance.addDocument(
 );
 
 print('Created ${result.chunkCount} chunks');
-
-// Rebuild HNSW index after adding documents
-await MobileRag.instance.rebuildIndex();
+// No rebuildIndex() needed: the next search waits for the index update.
 ```
 
 ## PDF & DOCX Support
@@ -66,11 +64,11 @@ final stats = await MobileRag.instance.getStats();
 print('Total sources: ${stats.sourceCount}');
 ```
 
-## Semantic Search
+## Search
 
 ```dart
-// Search for relevant chunks
-final searchResult = await MobileRag.instance.search(
+// Hybrid (vector + keyword) search with LLM-ready context
+final searchResult = await MobileRag.instance.searchHybridWithContext(
   'How to build mobile apps?',
   topK: 5,
   tokenBudget: 2000,
@@ -104,12 +102,5 @@ if (intent is UserIntent_Summary) {
 }
 ```
 
-## Performance
-
-| Operation | Time | Engine |
-|:----------|-----:|:-------|
-| Tokenization | 0.04ms | Rust |
-| HNSW Search | 0.3ms | Rust |
-| Embedding | 25-100ms | ONNX |
 
 See the full example app in the [GitHub repository](https://github.com/dev07060/mobile_rag_engine/tree/main/example).

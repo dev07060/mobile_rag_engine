@@ -1,11 +1,11 @@
 # Testing Tiers
 
-The 'mobile_rag_engine' test is divided into three layers according to the purpose.
+Tests are split into three tiers.
 
 ## 1) Unit (`test/unit`)
 
-- Objective: To verify pure Dart logic (minimize environmental dependence)
-- Features: Fast and Reproducible
+- Purpose: pure Dart logic, no native library
+- Fast and reproducible
 - Run:
 
 ```bash
@@ -14,8 +14,7 @@ The 'mobile_rag_engine' test is divided into three layers according to the purpo
 
 ## 2) Native (`test/native`)
 
-- Purpose: Verification of Rust/FFI path inclusion
-- Features: Existence of environmental dependence (primarily running on macOS runner)
+- Purpose: checks the Rust/FFI path; needs the native library (macOS and Windows runners)
 - Run:
 
 ```bash
@@ -24,8 +23,8 @@ The 'mobile_rag_engine' test is divided into three layers according to the purpo
 
 ## 3) Integration (`integration_test`)
 
-- Purpose: App Path Unit Integration Verification
-- Feature: If no test, automatic skip from CI
+- Purpose: runs the app end to end; skipped when the root `integration_test/`
+  has no tests (it has none now; the app tests live in `example/integration_test/`)
 - Run:
 
 ```bash
@@ -36,5 +35,6 @@ The 'mobile_rag_engine' test is divided into three layers according to the purpo
 
 - Ubuntu: `analyze + unit`
 - macOS: `native`
-- macOS: 'integration' (if present)
-- Platform build smoke: `android`, `ios`, `macos`
+- Windows: `native` and Rust `cargo test --lib -- --test-threads=1`
+- macOS: `integration` (skipped while there are no tests)
+- Platform build smoke: `android`, `ios`, `macos`, `windows`

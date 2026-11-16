@@ -65,9 +65,9 @@ database.
 | Area | Status | Notes |
 |:-----|:-------|:------|
 | Local document retrieval in Flutter | Supported | Use `MobileRag.initialize`, `addDocument`, `addDocumentFromFile`, and `search`. |
-| Offline semantic search | Supported | Retrieval runs locally after model/tokenizer assets are bundled. |
+| Offline semantic search | Supported | Retrieval runs locally once the model files are on the device. |
 | Hybrid search | Supported and benchmarked | HNSW vector search, BM25 keyword search, and RRF fusion are used by `searchHybridWithContext`, `searchHybrid` and `ask`; `search` is vector-only. |
-| Passage/context retrieval quality | Verified on benchmark fixtures | The 80-query passage benchmark with the default hybrid profile measured `passage_recall@10 = 0.925` and `answerable_context@10 = 0.900` with the default MiniLM Model Pack, and `0.950` / `0.9625` with KoEn-E5-Tiny. BGE-m3 (569 MB, for reference) measured `0.9625` / `0.9625` (2026-11-13). MiniLM is English-only: its vector search alone found 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](guides/model_setup.md#korean-documents-koen-e5-tiny). Conditions are below the table. |
+| Passage/context retrieval quality | Verified on benchmark fixtures | The 80-query passage benchmark with the default hybrid profile measured `passage_recall@10 = 0.925` and `answerable_context@10 = 0.900` with the default MiniLM Model Pack, and `0.950` / `0.9625` with KoEn-E5-Tiny. BGE-m3 (586 MB with tokenizer) measured `0.9625` / `0.9625`. MiniLM is English-only: with vector search alone, the answer was in the top 10 for 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](guides/model_setup.md#korean-documents-koen-e5-tiny). Conditions are below the table. |
 | Text-layer PDF-to-RAG | Verified on sample scope | The PDF-to-RAG smoke run covered `sample_eng.pdf` and `sample_kor.pdf`; all 8 PDF-derived queries reached source, passage, and answerable context at top-10 (model and date not recorded). |
 | Scanned/image-only PDFs | Detected, OCR not bundled | Extraction errors are classified as OCR-required so your UI can route to an OCR workflow. |
 | Large/table-heavy/OCR-heavy PDFs | Still being validated | Do not generalize the two-sample PDF smoke result to every PDF layout or mobile memory/latency condition. |
@@ -75,7 +75,7 @@ database.
 
 Passage numbers: 80 queries (32 English, 32 Korean, 16 mixed), a fresh
 database per model, top 10 of 100 results, profile build on an Apple M3 Pro
-Mac, `mobile_rag_engine` 0.24.0 code, measured 2026-11-16 (BGE-m3 2026-11-13).
+Mac, `mobile_rag_engine` 0.24.0 code, measured 2026-11-16.
 
 ## PDF-to-RAG Boundary
 

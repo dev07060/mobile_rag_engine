@@ -27,6 +27,7 @@ For one collection, call `MobileRag.instance.inCollection('manuals').ask(...)`.
 
 | Field | Meaning |
 |---|---|
+| `question` | The question as asked. |
 | `text` | The LLM's answer, as returned by `generate`. |
 | `passages` | The passages put in the prompt, with citation ids `"1"`, `"2"`, … |
 | `citations` | The passages the answer cites, in order of first citation. |
@@ -57,14 +58,15 @@ Each `RagPassage` has `id`, `text`, `sourceId`, `sourceName`, `chunkId` and
 ## Token budget
 
 `tokenBudget` counts tokens of the embedding model's tokenizer, not your
-LLM's. The two can differ several times, most for Korean, Thai and emoji. Counted with each model's embedding tokenizer:
+LLM's. The two can differ several times, most for Korean. Counted with each model's embedding tokenizer:
 
 | Text | MiniLM (default) | KoEn-E5-Tiny | BGE-m3 |
 |---|---|---|---|
 | 23 Korean characters | 38 | 10 | 10 |
-| 31 Thai characters | 1 | 2 | 7 |
-| 10 emoji | 1 | 2 | 11 |
 | 49 English characters | 10 | 11 | 11 |
+
+Counted with the `tokenizer.json` of each model in
+[Model Setup](model_setup.md#which-model).
 
 So 1500 engine tokens can be far more or far fewer tokens for your LLM.
 Without `promptTokenCounter` this stays so: the default budget is still
@@ -82,8 +84,8 @@ final answer = await MobileRag.instance.ask(
 ```
 
 With `promptTokenCounter`, `tokenBudget` counts the passage texts with that
-function. The most relevant passages that fit are kept whole, in relevance
-order; a passage that does not fit is left out, not cut. The counter is called
+function. Passages are kept whole, in relevance order, up to the first one
+that would go over the budget; that one and all after it are left out, not cut. The counter is called
 once per passage and must be synchronous; if your SDK only counts tokens
 asynchronously, count before calling or use an estimate. The budget covers the
 passages, not the instructions and question the prompt adds around them.
@@ -117,9 +119,9 @@ large document that matches only common words of the question ("how", "is",
 
 Keyword search reduces English words to their stem (Snowball English), so
 "How long is the refund period?" finds "Refunds are accepted within 14 days of
-purchase." even next to a 1,800-chunk PDF. A question that shares *no* word
+purchase.". A question that shares *no* word
 with the sentence still can miss it. Stemming is English-only (Korean words are
-matched as before), and like any stemmer it joins some
+matched as whole words and as two-syllable pieces), and like any stemmer it joins some
 unrelated words, such as "university" and "universe".
 
 What helps, in order:
@@ -152,7 +154,7 @@ you choose where one ends and the next begins. What to keep in mind:
   rank of a short document that answers the question: the items still share
   the common word.
 - **A first line that names the topic in the words people ask with does.**
-  "How to earn more gold." at the top of the gold document put it first.
+  For example, start a document about gold with "How to earn more gold."
 - **One topic per document** keeps each passage about one thing, so the
   passages the model cites, and `RagPassage.sourceName`, point at the right
   place. Pass a `name:` to `addDocument` so the source name is not null.

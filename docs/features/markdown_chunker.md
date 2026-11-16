@@ -7,9 +7,9 @@ The `mobile_rag_engine` provides a highly specialized **Markdown Chunker** desig
 ### 1. Structure Preservation
 The chunker respects the logical boundaries of Markdown elements. It ensures that semantic units are kept intact whenever possible.
 
-*   **Code Blocks (`code`)**: Never splits a code block in the middle of a line. If a code block exceeds the chunk size, it is split by lines, and metadata is added to link the parts (see below).
-*   **Tables (`table`)**: Never splits a table row in the middle. If a table is too large, it is split by rows while keeping each stored chunk as a raw source-backed slice.
-*   **Headers**: Headers are not treated as separate chunks but are used to build "breadcrumbs" for context (see Header Path Inheritance).
+*   **Code Blocks (`code`)**: Splits code blocks at line boundaries; a single line longer than the embedding model's token limit is split inside the line. If a code block exceeds the chunk size, it is split by lines, and metadata is added to link the parts (see below).
+*   **Tables (`table`)**: Splits tables between rows (a row longer than the token limit is split inside the row). If a table is too large, it is split by rows while keeping each stored chunk as a raw source-backed slice.
+*   **Headers**: Headers build "breadcrumbs" for context (see Header Path Inheritance). A section whose chunk has two lines or fewer gets the type `header`.
 
 ### 2. Header Path Inheritance (Context Awareness)
 One of the biggest challenges in RAG is losing context when a document is sliced. For example, a chunk containing just "Run `npm install`" is useless without knowing it belongs to the "Installation > Linux" section.
@@ -41,7 +41,7 @@ Our chunker adds **Linking Metadata** to split code blocks:
 *   `batch_index`: The sequence number (0, 1, 2...).
 *   `batch_total`: The total number of chunks.
 
-**Use Case:** This allows your UI or RAG pipeline to detect that a retrieved chunk is part of a larger code block and fetch the adjacent chunks to reconstruct the full code for the user or the LLM.
+These fields are on the chunks `TextChunker.markdown` returns. They are not stored by `addDocument`, so search results do not carry them; to get the rest of a code block from a search hit, use `adjacentChunks`.
 
 ### 4. Smart Table Splitting
 Large tables are still split on row boundaries so the engine never cuts through the middle of a row.
@@ -90,7 +90,7 @@ final chunks = await TextChunker.markdown(
 );
 
 for (final chunk in chunks) {
-  print('Type: ${chunk.chunkType}'); // text, code, table
+  print('Type: ${chunk.chunkType}'); // text, code or code:<lang>, table, header
   print('Path: ${chunk.headerPath}'); // My Guide > ...
   print('Content: ${chunk.content}');
   

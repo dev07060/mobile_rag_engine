@@ -65,7 +65,8 @@ From your Flutter project, run:
 dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en
 ```
 
-It verifies the immutable revision and creates exactly:
+It verifies the immutable revision and creates these files (it also adjusts
+the iOS and macOS host projects; see [ONNX Runtime Notes](#onnx-runtime-notes)):
 
 ```text
 assets/mobile_rag/model.onnx
@@ -102,8 +103,8 @@ The sole v1 preset is `stable-minilm-l6-v2-arm64-en`: English, arm64,
 `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`. Vector storage is Q8_0. Use
 `--repair` only to replace a file that fails its SHA-256/length check.
 
-The first success is adding documents, rebuilding the index, then searching for
-non-empty chunks/context. LLM generation is outside this package step.
+The first success is adding documents, then searching for non-empty
+chunks/context (searches wait for the pending index update). LLM generation is outside this package step.
 
 ---
 
@@ -122,8 +123,10 @@ MiniLM and adds about 18 MB to the app.
 | all-MiniLM-L6-v2 (default) | 0.014 | 0.059 | 23.5 MB |
 | KoEn-E5-Tiny (int8, arm64) | 0.762 | 0.866 | 41.2 MB |
 
-Desktop measurement (Apple M3 Pro, ONNX Runtime CPU, 2026-11), whole documents
-embedded up to 512 tokens (MiniLM with the earlier character-based limit).
+Desktop measurement on 2026-11-02 (Apple M3 Pro, ONNX Runtime CPU), with a
+standalone script that follows the engine's tokenizer and mean pooling (no
+vector index); whole documents embedded up to 512 tokens (MiniLM with the
+earlier character-based limit).
 
 KoEn-E5-Tiny only covers Korean and English. Text in other languages is likely
 to be retrieved poorly.
@@ -140,18 +143,20 @@ BASE=https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX/resolve/$REV
 
 curl -L -o model.onnx "$BASE/onnx/model_qint8_arm64.onnx"
 curl -L -o tokenizer.json "$BASE/tokenizer.json"
+cd -
 ```
 
 Check both files before writing the manifest. The two hashes must be exactly
 these:
 
 ```bash
-shasum -a 256 model.onnx tokenizer.json
+shasum -a 256 assets/mobile_rag/model.onnx assets/mobile_rag/tokenizer.json
 # d463c9b1c29f3202d510e2836265d60f9e6e6dd518c5930ba865700646489bd4  model.onnx
 # a6dd38d692ac1caa6d5dbc195d92f1f978b5c74ec60e02ed15fdf04404742fe3  tokenizer.json
 ```
 
-`dart run mobile_rag_engine:setup --check` checks only the MiniLM preset; for
+`dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en --check`
+checks only the MiniLM pack; for
 this pack, the engine checks the hashes on first launch and fails with a
 `RagModelPackException` if a file differs.
 
@@ -266,7 +271,7 @@ Answers in the top 5 at each vector weight (BM25 weight = 1 − vector weight;
 | Korean, 45 | 31 | 37 | 43 | 42 | 41 |
 
 These are measurements, not a choice. Here 0.5, 0.6 and vector only are
-within one; nothing in this test picks 0.5 over the others.
+within two; nothing in this test picks 0.5 over the others.
 Answers rise between 0.485 and 0.5, where a passage found only by vector search
 starts to outrank the fifth keyword-only result. With 45 questions per
 language, a difference of one or two is noise. Pick the weights for your own
@@ -320,14 +325,15 @@ first). See
 ### Cost
 
 KoEn-E5-Tiny has 12 layers to MiniLM's 6. Measured on one iPhone 17
-(iOS 27.0.1, profile build, 2026-11-16) with the example app, 56 app
+(iOS 27.0.1, profile build, engine commit `ffb0ab8`, 2026-11-16) with the
+example app (hybrid weights 0.2 / 0.8 for MiniLM, 0.5 / 0.5 for KoEn-E5-Tiny), 56 app
 documents (about 2,300 chunks) and 120 questions:
 
 | | MiniLM | KoEn-E5-Tiny |
 |---|---|---|
 | Query embedding, English (median / p95) | 1.5 / 2.0 ms | 2.5 / 3.7 ms |
 | Query embedding, Korean (median / p95) | 2.6 / 4.2 ms | 2.5 / 3.6 ms |
-| Whole query, embedding + search, top 5 (p95) | 3.5–4.7 ms | 4.7–4.8 ms |
+| Whole query, embedding + search + reading the chunks, top 5 (p95) | 3.5–4.7 ms | 4.7–4.8 ms |
 | Ingestion per chunk (`addDocumentFromFile`) | 4.7 ms | 6.4 ms |
 | `initialize`, first launch / later launches | 425 / 111 ms | 859 / 160 ms |
 | Memory added by `initialize` / peak RSS | 134 / 242 MB | 197 / 314 MB |
@@ -431,6 +437,7 @@ curl -L -o model.onnx "$BASE/onnx/model_int8.onnx"
 curl -L -o tokenizer.json "$BASE/tokenizer.json"
 
 shasum -a 256 model.onnx tokenizer.json
+cd -
 # fc4692db47a783252a0dba2d5601a3b9ab0c5058186eced9b963bb0e112f011a  model.onnx
 # 249df0778f236f6ece390de0de746838ef25b9d6954b68c2ee71249e0a9d8fd4  tokenizer.json
 ```
@@ -472,8 +479,9 @@ await MobileRag.initialize(
 );
 ```
 
-On first launch the engine copies and hashes both files (about 586 MB), so the
-first `initialize` takes noticeably longer than with the smaller models.
+On first launch the engine loads both files (about 586 MB) into memory to hash
+and copy them, so the first `initialize` takes noticeably longer than with the
+smaller models. This was checked only on a Mac, not on a phone.
 
 This manifest and these files were run through `MobileRag.initialize` on
 2026-11-16 (`mobile_rag_engine` 0.24.0 code, profile build, Apple M3 Pro Mac,
@@ -494,7 +502,8 @@ await MobileRag.initialize(
 );
 ```
 
-See the [Release Build guide](release_build.md) for the full example. To keep
+The [Release Build guide](release_build.md) shows the download flow (use the
+BGE-m3 URLs and hashes above). To keep
 the files out of git, use the fetch script in
 [Keeping the model files out of git](#keeping-the-model-files-out-of-git) with
 `REPO=Teradata/bge-m3` and `MODEL_FILE=onnx/model_int8.onnx`.
@@ -503,13 +512,16 @@ the files out of git, use the fetch script in
 
 ## Advanced / legacy custom ONNX assets
 
-## Model Comparison
+The sections below pass the files directly with `tokenizerAsset` / `modelAsset`
+or `tokenizerPath` / `modelPath` instead of a Model Pack.
 
-| Model | Dimensions | Size (ONNX) | Model max tokens | Languages | Best For |
-|:------|:----------:|:-----------:|:----------:|:----------|:---------|
-| [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (INT8) | **384** | ~23 MB | 256 | English | English-only apps, lightweight & fast |
-| [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX) (INT8) | **384** | ~38 MB | 512 | Korean, English | Korean apps ([recipe](#korean-documents-koen-e5-tiny)) |
-| [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~569 MB | 8,192 | See the model card | Apps that can ship a 569 MB model ([recipe](#bge-m3-model-pack)) |
+### Model Comparison
+
+| Model | Dimensions | Size (ONNX) | Model max tokens | Best For |
+|:------|:----------:|:-----------:|:----------:|:---------|
+| [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (INT8) | **384** | ~23 MB | 256 | English documents, smallest |
+| [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX) (INT8) | **384** | ~38 MB | 512 | Korean documents ([recipe](#korean-documents-koen-e5-tiny)) |
+| [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~569 MB | 8,192 | Apps that can ship a 569 MB model ([recipe](#bge-m3-model-pack)) |
 
 > **Dimension Matters**: The embedding dimension affects your vector index. Once you choose a model, all documents must use the same dimension. Switching models requires re-embedding all documents.
 
@@ -563,7 +575,8 @@ Include model files in your app bundle. Simple and works offline immediately.
 # pubspec.yaml
 flutter:
   assets:
-    - assets/mobile_rag/
+    - assets/mobile_rag/   # Model Pack
+    # - assets/            # files from "Download Instructions" above
 ```
 
 **Pros:**
@@ -640,14 +653,7 @@ Runtime setup notes:
 ### Performance Tips
 
 1. **Use INT8 quantized models** - 2-4x smaller, similar accuracy
-2. **Batch embeddings** when processing many documents:
-   ```dart
-   await EmbeddingService.embedBatch(
-     texts,
-     onProgress: (done, total) => print('$done / $total'),
-   );
-   ```
-3. **Run in isolate** for heavy processing to avoid UI jank
+2. `addDocument*` already embeds in a worker isolate, so ingestion does not block the UI.
 
 ---
 

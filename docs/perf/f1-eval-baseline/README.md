@@ -52,7 +52,7 @@ scripts/eval/run_passage_eval.sh --model-pack stable-minilm-l6-v2-arm64-en --bun
 
 새로 클론한 저장소에서 위 명령으로 MiniLM 값이 같게 나오는지 확인한 기록은 아래 "새 클론 확인"에 있다.
 
-2026-11-16 R2 배포 준비 트리(패키지 코드는 `mobile_rag_engine` 0.24.0, 브랜치 `feats/r2-release-prep`)에서 같은 Mac·조건으로 다시 돌렸다. MiniLM(청크 4679) 0.925 / 0.900 / 0.7437, KoEn-E5-Tiny(청크 4492) 0.950 / 0.9625 / 0.8099. `passage_recall@10`과 `answerable_context@10`은 위 표와 같다. BGE-m3는 `docs/guides/model_setup.md`의 Model Pack manifest 그대로 `RagModelPack.asset`으로 초기화해 돌렸다(`run_passage_eval.sh --as-model-pack`, fp `sha256:b089a980…`, 청크 4492, 752초): 0.9625 / 0.9625 / 0.8208. 언어별로 영어 29/32, 한국어 32/32, 혼합 16/16이다.
+2026-11-16 R2 배포 준비 트리(패키지 코드는 `mobile_rag_engine` 0.24.0, 브랜치 `feats/r2-release-prep`)에서 같은 Mac·조건으로 다시 돌렸다. MiniLM(청크 4679) 0.925 / 0.900 / 0.7437, KoEn-E5-Tiny(청크 4492) 0.950 / 0.9625 / 0.8099(두 실행 모두 커밋 `7ede49f`, 실행 때 바뀐 추적 파일은 `docs/guides/model_setup.md`뿐). `passage_recall@10`과 `answerable_context@10`은 위 표와 같다. 언어별(영어 32 / 한국어 32 / 혼합 16)로 MiniLM 29 / 29 / 16, KoEn 29 / 31 / 16이고, `source_recall@10`은 두 모델 모두 1.000이다. 벡터만으로는 MiniLM이 한국어 32개 중 11개, KoEn이 30개를 찾았다. BGE-m3는 `docs/guides/model_setup.md`의 Model Pack manifest 그대로 `RagModelPack.asset`으로 초기화해 돌렸다(`run_passage_eval.sh --as-model-pack`, fp `sha256:b089a980…`, 청크 4492, 752초): 0.9625 / 0.9625 / 0.8208(커밋 `2801c75`). 언어별로 영어 29/32, 한국어 32/32, 혼합 16/16이고, `source_recall@10`은 1.000이다.
 
 ## 새 클론 확인 (2026-11-13)
 

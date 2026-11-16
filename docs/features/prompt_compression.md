@@ -29,7 +29,7 @@ print('Compressed: ${context.text.length} chars');
 
 ## Semantic Sentence Selection
 
-For advanced use cases, you can use the **Semantic Sentence Selector**. This breaks chunks down into sentences and keeps only the ones most relevant to the query, discarding irrelevant fluff surrounding the key information.
+`compressWithSimilarity` splits chunks into sentences, embeds each sentence (one embedding per sentence) and keeps up to `maxSentences` sentences above `minSimilarity`.
 
 ```dart
 // 1. Get query embedding
@@ -46,8 +46,6 @@ final compressed = await PromptCompressor.compressWithSimilarity(
 ```
 
 ## How it Works
-
-The compressor runs locally on-device using Rust for high performance.
 
 1.  **Deduplication**: Removes repeated sentences across documents.
 2.  **Relevance Filtering** (`compressWithSimilarity`): Uses embedding similarity to score individual sentences within a chunk, keeping only the most salient points.

@@ -128,8 +128,8 @@ Future<void> initializeRAG() async {
 | `modelPack` | `null` | Model Pack manifest asset (recommended); use instead of `tokenizerAsset` / `modelAsset` |
 | `tokenizerPath` | `null` | Tokenizer file your app placed on disk, used with `modelPath`; see the [Release Build guide](release_build.md) |
 | `modelPath` | `null` | ONNX model file your app placed on disk, used with `tokenizerPath` |
-| `tokenizerAsset` | `null` | Advanced/legacy tokenizer asset; required with `modelAsset` when no Model Pack is supplied |
-| `modelAsset` | `null` | Advanced/legacy ONNX asset; required with `tokenizerAsset` when no Model Pack is supplied |
+| `tokenizerAsset` | `null` | Advanced/legacy tokenizer asset; required with `modelAsset` when neither `modelPack` nor `tokenizerPath`/`modelPath` is supplied |
+| `modelAsset` | `null` | Advanced/legacy ONNX asset; required with `tokenizerAsset` when neither `modelPack` nor `tokenizerPath`/`modelPath` is supplied |
 | `databaseName` | `'rag.sqlite'` | SQLite database file name |
 | `maxChunkChars` | `500` | Soft character target per chunk |
 | `overlapChars` | `30` | Boundary-snapped target overlap between chunks |

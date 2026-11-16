@@ -35,15 +35,15 @@ Yes. Performance differs from real devices, so run performance tests on physical
 | Use Case | Recommended Model |
 |:---------|:------------------|
 | English-only apps (default) | **MiniLM** (384 dim, ~23MB) |
-| Korean, or Korean and English | **KoEn-E5-Tiny** (384 dim, ~38MB); see the [recipe](model_setup.md#korean-documents-koen-e5-tiny) |
-| Larger model, if you can ship 569 MB (languages: see the model card) | **BGE-m3** (1024 dim, ~569MB) |
+| Korean, or Korean and English | **KoEn-E5-Tiny** (384 dim, ~41 MB with tokenizer); see the [recipe](model_setup.md#korean-documents-koen-e5-tiny) |
+| Larger model, if you can ship 586 MB | **BGE-m3** (1024 dim, ~586 MB with tokenizer) |
 | Quick prototyping | **MiniLM** |
 
-### Q: BGE-m3 is too large (569MB) for my app
+### Q: BGE-m3 is too large (586 MB) for my app
 
 Several options available:
 
-1. **Use a smaller model** - MiniLM (~23MB, English only, the default) or KoEn-E5-Tiny (~38MB, Korean and English)
+1. **Use a smaller model** - MiniLM (~23MB, English only, the default) or KoEn-E5-Tiny (~41 MB, for Korean documents)
 2. **Download at runtime** - Download BGE-m3 on first app launch and pass it with `tokenizerPath`/`modelPath` (0.24.0 and later; 0.23.0 needs the model bundled). See [Release Build Guide](release_build.md).
 3. **Accept the size** - check the store limits ([Google Play app size limits](https://support.google.com/googleplay/android-developer/answer/9859372))
 
@@ -63,7 +63,8 @@ Not supported yet:
 
 Validated ONNX artifacts:
 - `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/onnx/model_qint8_arm64.onnx`
-- `https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx`
+- KoEn-E5-Tiny: `https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX/resolve/5cf599a8cd6577f2f12a026130ad50132e472cfd/onnx/model_qint8_arm64.onnx`
+- BGE-m3: `https://huggingface.co/Teradata/bge-m3/resolve/53f8835700d8ff5988f30d529894940d0338ea62/onnx/model_int8.onnx` (tokenizer from the same revision)
 
 Models outside the validated list are best-effort.
 
@@ -115,15 +116,7 @@ for `clearAndRestart()` and the details.
 
 ### Q: Embedding is slow
 
-1. **Use batch processing**:
-   ```dart
-   await EmbeddingService.embedBatch(
-     texts,
-     onProgress: (done, total) => print('$done / $total'),
-   );
-   ```
-
-2. **Keep embedding off the UI thread**: `MobileRag.initialize(...)` configures the embedding worker isolate for normal app flows.
+1. **Keep embedding off the UI thread**: `MobileRag.initialize(...)` configures the embedding worker isolate for normal app flows.
 
 
 ### Q: Search is slow
@@ -307,7 +300,8 @@ there. Another database name changes the `rag` prefix.
 | `rag.dirty`, `rag.<8 hex>.dirty` | Empty markers that exist while an index update is pending |
 
 The copied model and tokenizer are in the same directory (`model.onnx`,
-`tokenizer.json`, or `mobile_rag_model_packs/` for a Model Pack).
+`tokenizer.json`, or `mobile_rag_model_packs/` for a Model Pack). Nothing is
+copied when you pass `tokenizerPath` / `modelPath`.
 
 ### Q: Can I backup/restore data?
 

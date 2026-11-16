@@ -11,7 +11,8 @@ The ONNX embedding model is the single largest contributor to your app's downloa
 | Model | ONNX Size | Impact on AAB |
 |:------|:---------:|:-------------:|
 | all-MiniLM-L6-v2 (INT8) | ~23 MB | Moderate |
-| BGE-m3 (INT8) | ~569 MB | **Too large to bundle for most apps** |
+| KoEn-E5-Tiny (INT8) | ~38 MB (41 MB with tokenizer) | Moderate |
+| BGE-m3 (INT8) | ~569 MB (586 MB with tokenizer) | **Too large to bundle for most apps** |
 
 **For development**, bundle the model in `assets/` for quick iteration.
 **For production releases**, you can download the model at runtime to keep your bundle small. How depends on the version:
@@ -30,6 +31,7 @@ The ONNX embedding model is the single largest contributor to your app's downloa
       // download never leaves a partial file at the path the engine loads.
       final partial = File('${file.path}.part');
       await download(url, partial); // your CDN / Hugging Face fetch
+      await checkSha256(partial, expectedSha256[file]); // hashes you ship
       await partial.rename(file.path);
     }
   }
@@ -40,7 +42,7 @@ The ONNX embedding model is the single largest contributor to your app's downloa
   );
   ```
 
-  Check the downloaded files against a checksum you ship with the app before the rename; the engine loads whatever is at these paths.
+  `checkSha256` stands for your own check against hashes shipped with the app (for the models in [Model Setup](model_setup.md#which-model), use the hashes listed there); the engine loads whatever is at these paths.
 
   Any change to the model file's name or content locks search until `reembedAll()` or `clearAndRestart()`, because the embedding fingerprint includes the file name and a hash of the file. Re-embedding is needed even for an update of the same model, such as a re-quantized export.
 

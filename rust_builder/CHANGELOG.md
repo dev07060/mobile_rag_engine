@@ -9,7 +9,7 @@
 * **Sources**: the duplicate check hashes the NFC text and still finds rows hashed by earlier versions; adding an already indexed document no longer marks the collection as changed; a completed source with no chunks is ingested again.
 * **Chunking**: markdown chunks are budgeted together with their `Header Path: …` line; CommonMark heading and fence rules.
 * **Reembed**: `ChunkForReembedding` gains `embedding_text`, the text ingestion embeds. An interrupted reembed is detected, and a reembed can be retargeted to another model.
-* **Compression**: `compress_text` no longer panics after a multi-byte sentence terminator and keeps `3.14` whole.
+* `compress_text` no longer panics after a multi-byte sentence terminator and keeps `3.14` whole.
 * **Engine version**: the crate version now equals the package version.
 
 ## 0.22.0

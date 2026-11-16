@@ -71,8 +71,8 @@ dependencies:
 
 > **This preset is English-only.** For Korean documents, follow the
 > [KoEn-E5-Tiny recipe](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#korean-documents-koen-e5-tiny)
-> instead of the command below; English MiniLM scores close to random on
-> Korean text.
+> instead of the command below; MiniLM's vector search finds few Korean
+> answers, so on Korean text only keyword search carries the result.
 
 ```bash
 dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en
@@ -102,8 +102,8 @@ await MobileRag.initialize(
 ```
 
 The first success is to add a document and get non-empty context back from
-`search`, as in the example at the top. `search` waits for a pending index
-update, so you do not need to call `rebuildIndex()` first.
+`searchHybridWithContext`, as in the example at the top. Searches wait for a
+pending index update, so you do not need to call `rebuildIndex()` first.
 
 For Korean documents and other model choices, see the
 [Model Setup Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md).
@@ -150,7 +150,7 @@ Future<String> addAndSearch() async {
   await MobileRag.instance.addDocumentUtf8(noteBytes, name: 'notes.md');
 
   // 2. Search with LLM-ready context
-  final result = await MobileRag.instance.search(
+  final result = await MobileRag.instance.searchHybridWithContext(
     'What is Flutter?',
     tokenBudget: 2000,
   );
@@ -265,15 +265,13 @@ print(travelHits.length);
 If you do not specify a collection, the engine uses the default `__default__`
 collection.
 
-> **Advanced Usage:** For fine-grained control, use the high-level metadata lane (`searchMeta`, `assembleContext`, `hydrateChunks`, `getChunkExcerpts`) and the public API reference. Most apps should stay on the `MobileRag` facade.
-
 ---
 
 ## Features
 
 | Category | Features |
 |:---------|:---------|
-| **Document Input** | Text-layer PDF, DOCX, Markdown and plain text (up to 50 MB per file); file-path and UTF-8 ingest fast paths |
+| **Document Input** | Text-layer PDF, DOCX, Markdown and plain text (up to 50 MiB, 52.4 MB, per file); file-path and UTF-8 ingest fast paths |
 | **Chunking** | Plain-text paragraph/line chunking with heading-aware split and tokenizer hard guard; Markdown structure-aware chunking with header-path metadata |
 | **Search** | HNSW vector + BM25 keyword hybrid search with RRF fusion; metadata-first search with explicit context/chunk hydration |
 | **Storage** | SQLite persistence, HNSW Index persistence (fast startup), connection pooling, resumable indexing |
@@ -293,9 +291,9 @@ collection.
 | Area | Current status | Evidence / boundary |
 |:-----|:---------------|:--------------------|
 | **Local Flutter RAG retrieval** | Supported | Dart facade over a native core for ingest, chunking, embedding, SQLite storage, HNSW vector search, BM25 keyword search, RRF fusion, and context assembly |
-| **Offline / on-device operation** | Supported | Models and user documents stay local after you bundle the ONNX model and tokenizer assets |
+| **Offline / on-device operation** | Supported | Models and user documents stay local once the model files are on the device (bundled, or downloaded once) |
 | **Hybrid source retrieval** | Verified on benchmark fixtures | 80-query run, default hybrid search: `source_recall@10 = 1.000` with the MiniLM Model Pack, KoEn-E5-Tiny and BGE-m3 (conditions below the table) |
-| **Passage/context retrieval** | Verified on benchmark fixtures | 80-query passage run, default hybrid search: **MiniLM Model Pack** (default) `passage_recall@10 = 0.925`, `answerable_context@10 = 0.900`; **KoEn-E5-Tiny** `passage_recall@10 = 0.950`, `answerable_context@10 = 0.9625`; **BGE-m3** `passage_recall@10 = 0.9625`, `answerable_context@10 = 0.9625`. MiniLM is English-only: its vector search alone found 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#korean-documents-koen-e5-tiny). See the note below the table for conditions |
+| **Passage/context retrieval** | Verified on benchmark fixtures | 80-query passage run, default hybrid search: **MiniLM Model Pack** (default) `passage_recall@10 = 0.925`, `answerable_context@10 = 0.900`; **KoEn-E5-Tiny** `passage_recall@10 = 0.950`, `answerable_context@10 = 0.9625`; **BGE-m3** `passage_recall@10 = 0.9625`, `answerable_context@10 = 0.9625`. MiniLM is English-only: with vector search alone, the answer was in the top 10 for 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#korean-documents-koen-e5-tiny). See the note below the table for conditions |
 | **Text-layer PDF-to-RAG** | Verified on sample scope | `sample_eng.pdf` and `sample_kor.pdf` profile run: 8/8 PDF-derived queries reached source, passage, and answerable context at top-10 (model and date not recorded) |
 | **Scanned/image-only PDFs** | Detected, not OCR-processed | OCR-required PDFs are surfaced as extraction errors so your app can route to an OCR layer; OCR is not bundled in this package |
 | **Large, table-heavy, OCR-heavy PDFs** | Still being validated | Do not treat the PDF smoke result as broad PDF robustness or mobile latency/memory proof |
@@ -313,7 +311,7 @@ build on an Apple M3 Pro Mac, 2026-11-16:
 |:------|:---:|:---:|:---:|
 | MiniLM Model Pack (default) | 29 | 29 | 16 |
 | KoEn-E5-Tiny | 29 | 31 | 16 |
-| BGE-m3 Model Pack | 29 | 32 | 16 |
+| BGE-m3 | 29 | 32 | 16 |
 
 Questions with the answer in the top 10, same 80 queries as above.
 
@@ -342,7 +340,7 @@ Larger Korean sets, same condition:
 
 Measured 2026-11-14 with the engine code of commits `28308ab` (MIRACL) and
 `04d950d` (KorQuAD, AutoRAG), before the Korean keyword changes of 0.24.0.
-MIRACL's training split was used to train both models, so their vector search
+MIRACL's training split was used to train BGE-m3 and KoEn-E5-Tiny's base model, so their vector search
 may look better there than on your documents.
 
 To install any of the three models, see

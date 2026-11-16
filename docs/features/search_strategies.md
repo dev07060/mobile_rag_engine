@@ -25,7 +25,7 @@ final result = await MobileRag.instance.searchHybridWithContext(
 ```
 
 ### 2. `diverseSources`
-**Behavior**: penalizes consecutive chunks from the same source to ensure variety. It tries to pick the best chunk from Source A, then Source B, then Source C, before going back to A.
+**Behavior**: takes the highest-ranked chunk whose source differs from the previous chunk's, so two chunks of one source are not placed next to each other while another source is left.
 **Use Case**: Summarization across multiple documents, "What do different reports say about X?".
 ```dart
 final result = await MobileRag.instance.searchHybridWithContext(
@@ -56,7 +56,7 @@ final result = await MobileRag.instance.searchHybridWithContext(
 - **Description**: The maximum number of **engine tokenizer** tokens the final `context.text` string can contain.
 - **Counting basis**: document wrappers, metadata, and markdown header-path contextual text are included in this count because the engine measures the fully rendered context string.
 - **Scope note**: This budget applies to `context.text` only. It does **not** automatically include the extra system instruction, question, or answer wrapper added later by `formatPrompt()`.
-- **Tip**: Set this based on your LLM's context window minus your prompt size. (e.g., for 4k model, use ~3000).
+- **Tip**: `tokenBudget` counts engine tokens, which can differ several times from your LLM's; see [Token budget](../guides/ask.md#token-budget).
 
 ### `adjacentChunks`
 - **Default**: `0`
@@ -82,12 +82,10 @@ await MobileRag.instance.search(query, adjacentChunks: 1);
 ## Example Scenarios
 
 ### Scenario A: Precise QA on Technical Manuals
-Technical terms matter, so boost BM25. Need exact context.
+Technical terms matter, so keep the keyword weight high (the default 0.8). Need exact context.
 ```dart
 await MobileRag.instance.searchHybridWithContext(
   'How to fix Error 505?',
-  bm25Weight: 0.7, // Boost keyword search
-  vectorWeight: 0.3,
   adjacentChunks: 1, // Get surrounding steps
   strategy: ContextStrategy.chronological, // Maintain step order
 );
