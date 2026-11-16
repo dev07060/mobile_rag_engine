@@ -45,7 +45,7 @@ Several options available:
 
 1. **Use a smaller model** - MiniLM (~23MB, English only, the default) or KoEn-E5-Tiny (~37MB, Korean and English)
 2. **Download at runtime** - Download BGE-m3 on first app launch and pass it with `tokenizerPath`/`modelPath` (0.24.0 and later; 0.23.0 needs the model bundled). See [Release Build Guide](release_build.md).
-3. **Accept the size** - iOS allows 4GB, Android Play allows 150MB AAB
+3. **Accept the size** - check the store limits ([Google Play app size limits](https://support.google.com/googleplay/android-developer/answer/9859372))
 
 See [Model Setup Guide](model_setup.md#production-deployment-strategies) for details.
 

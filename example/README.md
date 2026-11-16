@@ -39,7 +39,7 @@ vectors from different models cannot be mixed.
 ## Screens
 
 - **Main screen:** add text or a file (PDF, DOCX, Markdown, text), search, list and delete sources, switch collections.
-- **App docs (E1 questions)** in the menu: adds the E1 document set (GNOME Help pages, short app and office documents, the two sample PDFs; English and Korean) and lets you ask its 120 questions, or your own. Pick a weight setting (app default, 0.2 / 0.8, 0.5 / 0.5, 0.6 / 0.4, vector only, BM25 only) to see the top 5 that `ask` would use and whether the answer is among them. The measured results are in [`docs/perf/e1-app-docs/`](../docs/perf/e1-app-docs/README.md).
+- **App docs** in the menu: adds a set of app documents (GNOME Help pages, short app and office documents, the two sample PDFs; English and Korean) and lets you ask its 120 questions, or your own. Pick a weight setting (app default, 0.2 / 0.8, 0.5 / 0.5, 0.6 / 0.4, vector only, BM25 only) to see the top 5 that `ask` would use and whether the answer is among them.
 - **Chunking Test, Benchmark, Quality Test:** developer tools.
 
 ## Licenses of the bundled documents

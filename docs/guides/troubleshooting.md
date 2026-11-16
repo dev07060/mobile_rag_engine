@@ -374,19 +374,6 @@ example your own scene delegate), this is not the cause.
 
 ---
 
-### macOS: Code Signing Issues
-
-**Symptom:**
-```
-dyld: Library not loaded: @rpath/libonnxruntime.dylib
-```
-
-**Solution:**
-1. Enable "Hardened Runtime" in Xcode
-2. In `Signing & Capabilities` → Check `Disable Library Validation`
-
----
-
 ## Build Issues
 
 ### iOS: Transitive dependencies include statically linked binaries

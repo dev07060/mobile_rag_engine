@@ -69,9 +69,8 @@ MiniLM and adds about 17 MB to the app.
 | all-MiniLM-L6-v2 (default) | 0.014 | 0.059 | 22.4 MB |
 | KoEn-E5-Tiny (int8, arm64) | 0.762 | 0.866 | 39.3 MB |
 
-Desktop measurement, whole documents embedded up to 512 tokens (MiniLM with
-the earlier character-based limit). Method and the chunked numbers are in
-[the measurement notes](../perf/multilingual-embedding/README.md).
+Desktop measurement (Apple M3 Pro, ONNX Runtime CPU, 2026-11), whole documents
+embedded up to 512 tokens (MiniLM with the earlier character-based limit).
 
 KoEn-E5-Tiny only covers Korean and English. Text in other languages is likely
 to be retrieved poorly.
@@ -158,8 +157,8 @@ apply to every hybrid search that does not pass its own `vectorWeight` /
 `bm25Weight`.
 
 Measured in the `ask` condition (5 passages, 20 candidates per list) with
-KoEn-E5-Tiny, profile build on an Apple M3 Pro Mac, 2026-11-14 (questions with
-an answer in the top 5):
+KoEn-E5-Tiny, profile build on an Apple M3 Pro Mac, 2026-11-14, before the
+Korean keyword changes of 0.24.0 (questions with an answer in the top 5):
 
 | Questions | Vector only | 0.2 / 0.8 (default) | 0.5 / 0.5 | 0.6 / 0.4 |
 |---|---|---|---|---|
@@ -174,10 +173,7 @@ MIRACL's training split was used to train KoEn-E5-Tiny's base model, so
 vector search may look better there than on your documents. On KorQuAD and
 AutoRAG, which these models were not trained on, 0.6 / 0.4 lost answers that
 keyword search had found (KorQuAD: 12 lost, 6 gained), mostly to other
-paragraphs of the same article; 0.5 / 0.5 lost 3 and gained 4. The method and
-all numbers, including BGE-m3, are in
-[the fusion measurement](../perf/f2-fusion/f2_0_report.md) and
-[the Korean validation](../perf/f2-fusion/validation_ko.md). With the
+paragraphs of the same article; 0.5 / 0.5 lost 3 and gained 4. With the
 English-only MiniLM, raising the vector weight lost Korean answers in every
 test.
 
@@ -190,28 +186,26 @@ abstracts), same condition and setup:
 | SciFact test, 300 claims, 5,183 abstracts | 221 | 219 | 224 | 225 |
 
 Against the default, 0.5 / 0.5 gained 16 and lost 4; 0.6 / 0.4 gained 25 and
-lost 24. Details, including MiniLM and BGE-m3, are in
-[the English validation](../perf/f2-fusion/validation_en.md).
+lost 24.
 
 App-style documents: 56 documents (GNOME Help pages, short app FAQs, release
 notes and office policies, two large PDFs) in English and Korean, 90 questions
-with an answer, same condition and setup. Answers in the top 5 at each vector weight
-(BM25 weight = 1 − vector weight; 0.0 is BM25 only, 1.0 is vector only):
+with an answer, same condition, `mobile_rag_engine` 0.24.0 code, 2026-11-16.
+Answers in the top 5 at each vector weight (BM25 weight = 1 − vector weight;
+0.0 is BM25 only, 1.0 is vector only):
 
-| KoEn-E5-Tiny | 0.0 | 0.2 (default) | 0.4 | 0.5 | 0.6 | 0.8 | 1.0 |
-|---|---|---|---|---|---|---|---|
-| English, 45 | 34 | 34 | 35 | 38 | 38 | 38 | 38 |
-| Korean, 45 | 30 | 37 | 38 | 42 | 42 | 42 | 41 |
+| KoEn-E5-Tiny | 0.0 | 0.2 (default) | 0.5 | 0.6 | 1.0 |
+|---|---|---|---|---|---|
+| English, 45 | 34 | 34 | 38 | 38 | 38 |
+| Korean, 45 | 31 | 37 | 43 | 42 | 41 |
 
-These are measurements, not a choice. Here 0.5 through 0.8 score the same and
-vector only is within one; nothing in this test picks 0.5 over the others.
+These are measurements, not a choice. Here 0.5, 0.6 and vector only are
+within one; nothing in this test picks 0.5 over the others.
 Answers rise between 0.485 and 0.5, where a passage found only by vector search
 starts to outrank the fifth keyword-only result. With 45 questions per
 language, a difference of one or two is noise. Pick the weights for your own
 model, languages and documents, ideally by measuring on your own questions.
-The full grid for MiniLM, KoEn-E5-Tiny and BGE-m3 (MiniLM's English stays at
-34–38 at every weight; BGE-m3's English keeps rising up to vector only) is in
-[the app-document measurement](../perf/e1-app-docs/README.md). The example app's "App docs"
+The example app's "App docs"
 screen lets you try the weights on the same questions.
 
 You do not need to add `query: ` or `passage: ` prefixes.
@@ -276,10 +270,7 @@ Korean queries take the same time with both models: MiniLM splits Korean into
 about 2.5 times as many tokens, which cancels out its smaller size. English
 queries are about 1.7 times slower with KoEn-E5-Tiny, and ingestion about
 1.3 times slower. The first launch includes installing the Model Pack. These
-are one device's numbers; conditions and the full results are in
-[the iPhone measurement](../perf/multilingual-embedding/README.md#6-iphone-실기기-측정-m5-2026-11-16).
-On a desktop CPU (one thread), embedding a chunk took about twice as long
-with KoEn-E5-Tiny (55 ms vs 28 ms).
+are one device's numbers.
 
 ### Keeping the model files out of git
 
@@ -424,7 +415,7 @@ flutter:
 
 **Cons:**
 - Increases app download size
-- App store limits (iOS: 4GB, Android Play: 150MB AAB)
+- App store size limits (see [Google Play app size limits](https://support.google.com/googleplay/android-developer/answer/9859372))
 
 ## Custom Model Export
 
