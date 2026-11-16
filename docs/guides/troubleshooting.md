@@ -328,6 +328,54 @@ try {
 
 ---
 
+### iOS 27: the app exits right after launch
+
+**Symptom:** An app built with Xcode 27 closes as soon as it starts on an
+iOS 27 device, before any Dart code runs. The crash report shows
+`EXC_BREAKPOINT (SIGTRAP)` in UIKit's
+`_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`. With a
+debugger attached (`flutter run`, `flutter drive`), the app stops instead and
+the tool waits for a Dart VM it never finds.
+
+**Cause:** iOS 27 ends apps that have not adopted the UIScene lifecycle. The
+Flutter 3.35 `flutter create` template has no scene manifest in
+`ios/Runner/Info.plist`. This is not caused by `mobile_rag_engine`, and
+`setup` does not change `Info.plist`.
+
+**Solution:** Add a scene manifest that uses Flutter's `FlutterSceneDelegate`
+to `ios/Runner/Info.plist`, inside the top-level `<dict>`:
+
+```xml
+<key>UIApplicationSceneManifest</key>
+<dict>
+	<key>UIApplicationSupportsMultipleScenes</key>
+	<false/>
+	<key>UISceneConfigurations</key>
+	<dict>
+		<key>UIWindowSceneSessionRoleApplication</key>
+		<array>
+			<dict>
+				<key>UISceneClassName</key>
+				<string>UIWindowScene</string>
+				<key>UISceneConfigurationName</key>
+				<string>flutter</string>
+				<key>UISceneDelegateClassName</key>
+				<string>FlutterSceneDelegate</string>
+				<key>UISceneStoryboardFile</key>
+				<string>Main</string>
+			</dict>
+		</array>
+	</dict>
+</dict>
+```
+
+The example app ships this manifest. It was checked with Flutter 3.35.5 and
+Xcode 27.1 on an iPhone 17 (iOS 27.0.1), with the template `AppDelegate.swift`
+unchanged. If your `Info.plist` already has `UIApplicationSceneManifest` (for
+example your own scene delegate), this is not the cause.
+
+---
+
 ### Android: NNAPI Errors
 
 **Symptom:**
@@ -379,6 +427,35 @@ dyld: Library not loaded: @rpath/libonnxruntime.dylib
 3. Run `pod install` again.
 
 The same applies to `The plugin "flutter_onnxruntime" requires a higher minimum iOS deployment version` (or macOS): the host needs iOS 16.0 / macOS 14.0.
+
+---
+
+### Xcode 27: "deployment target ... is set to 9.0, but the range of supported deployment target versions is 15.0 to 27.1.x"
+
+**Symptom:** With Xcode 27, `flutter build ios` (device or `--simulator`)
+stops with `Encountered error while building for simulator.` (or for device)
+after a list of lines like:
+```
+Target Integrity (Xcode): The iOS Simulator deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 9.0, but the range of supported deployment target versions is 15.0 to 27.1.x.
+```
+
+**Cause:** Some pods set their own deployment target (9.0 to 13.0), and
+Xcode 27 no longer builds targets below 15.0. The `platform :ios, '16.0'`
+line that `setup` writes applies to your app, not to each pod.
+
+**Solution:** In `ios/Podfile`, raise every pod to the app's deployment target
+in the existing `post_install` block, then run `pod install` again:
+
+```ruby
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each { |c| c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0' }
+  end
+end
+```
+
+The example app's `ios/Podfile` does this.
 
 ---
 

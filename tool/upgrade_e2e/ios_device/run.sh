@@ -11,10 +11,11 @@
 #   M5_PATH          repository root of the package under test (phase B)
 #   M5_BASE_VERSION  release for phase A (default 0.23.0)
 #   M5_TEAM          Apple development team for device signing
-#   M5_PODS_DEPLOYMENT_TARGET  raise every pod's iOS deployment target (local
-#                    Xcode 27 builds reject the 9.0-13.0 targets some pods set)
-#   M5_UISCENE       1 to add a UIScene manifest with FlutterSceneDelegate
-#                    (iOS 27 ends apps without one at launch)
+#   M5_PODS_DEPLOYMENT_TARGET  every pod's iOS deployment target (default 16.0,
+#                    empty to keep; Xcode 27 rejects the 9.0-13.0 targets some
+#                    pods set)
+#   M5_UISCENE       add a UIScene manifest with FlutterSceneDelegate (default 1,
+#                    0 to skip; iOS 27 ends apps without one at launch)
 #
 # Each phase is a profile build installed with `devicectl` and started without
 # a debugger; the test writes its result to Documents, which is copied back.
@@ -73,11 +74,11 @@ case "$step" in
       perl -pi -e "s/(\s*)(PRODUCT_BUNDLE_IDENTIFIER = com\.example\.m5UpgradeApp;)/\$1DEVELOPMENT_TEAM = $M5_TEAM;\$1\$2/" \
         ios/Runner.xcodeproj/project.pbxproj
     fi
-    if [ -n "${M5_PODS_DEPLOYMENT_TARGET:-}" ]; then
-      perl -pi -e "s/^(\s*)flutter_additional_ios_build_settings\(target\)\n/\$1flutter_additional_ios_build_settings(target)\n\$1target.build_configurations.each { |c| c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '$M5_PODS_DEPLOYMENT_TARGET' }\n/" ios/Podfile
+    if [ -n "${M5_PODS_DEPLOYMENT_TARGET-16.0}" ]; then
+      perl -pi -e "s/^(\s*)flutter_additional_ios_build_settings\(target\)\n/\$1flutter_additional_ios_build_settings(target)\n\$1target.build_configurations.each { |c| c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '${M5_PODS_DEPLOYMENT_TARGET-16.0}' }\n/" ios/Podfile
       grep -q "IPHONEOS_DEPLOYMENT_TARGET" ios/Podfile
     fi
-    if [ "${M5_UISCENE:-0}" = 1 ] && ! grep -q UIApplicationSceneManifest ios/Runner/Info.plist; then
+    if [ "${M5_UISCENE:-1}" = 1 ] && ! grep -q UIApplicationSceneManifest ios/Runner/Info.plist; then
       plutil -insert UIApplicationSceneManifest -json '{"UIApplicationSupportsMultipleScenes":false,"UISceneConfigurations":{"UIWindowSceneSessionRoleApplication":[{"UISceneClassName":"UIWindowScene","UISceneConfigurationName":"flutter","UISceneDelegateClassName":"FlutterSceneDelegate","UISceneStoryboardFile":"Main"}]}}' ios/Runner/Info.plist
     fi
     mkdir -p integration_test
