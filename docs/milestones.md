@@ -1156,6 +1156,9 @@
   - Quick Start E2E를 발행 archive로(`SOURCE=archive`, Q5) Android·iOS·macOS·Windows에서.
   - `precompile_binaries.yml`을 발행할 트리에서 돌려 그 crate hash의 바이너리가 올라간 것을 확인한다. Rust를 숨긴 설치가 이 바이너리에 달려 있다.
   - 실제 기기: M5(iPhone 17, profile, 패키지 코드 `a0e1636`)의 측정과 0.23.0 → main 덮어 설치 결과를 쓴다. R2-1에서 패키지 코드를 고치면 그 뒤 커밋에서 기기 확인을 다시 한다.
+- **R2-3 결과 (2026-11-16, 발행 전, PR #155):**
+  - CI 8개 job, Quick Start E2E(archive, git), Upgrade E2E는 모두 첫 의존성 해석에서 멈춘다: 루트가 고정한 `rag_engine_flutter` 0.23.0이 pub.dev에 아직 없다(`rag_engine_flutter 0.23.0 which doesn't match any versions`). archive 모드도 `pub publish --dry-run`이 루트를 풀어야 하고, git 모드와 Upgrade E2E 하네스도 override보다 패키지를 먼저 추가한다. 고정값은 낮추지 않는다. `rag_engine_flutter` 발행 뒤 `pubspec.lock` 커밋으로 다시 돌린다(R1 #127과 같은 순서).
+  - `precompile_binaries.yml`의 플랫폼 job 셋이 같은 순간에 release를 만들다 apple job이 "Published releases must have a valid tag"로 실패했다(run 43856333202). `cargokit/build_tool`의 release 생성이 실패하면 다른 job이 만든 release를 다시 조회하게 고쳤다. crate hash 계산 대상(`src/**/*.rs`, `Cargo.toml`, `Cargo.lock`, `build.rs`, `cargokit.yaml`)이 아니라 hash는 바뀌지 않는다.
 - **R2-4. 발행 (사용자가 직접).** 순서: `rag_engine_flutter` 발행 → pub.dev 색인 대기 → 루트 `pubspec.yaml`의 고정값이 풀리는지 `flutter pub get` → `mobile_rag_engine` 발행 → PR 머지 → 머지 커밋에 태그. `rag_engine_flutter`가 발행되기 전에는 루트가 새 고정값을 풀지 못해 PR의 CI가 실패할 수 있다(이 저장소의 지금 CI에서 그런지는 확인하지 않았다). 그때 고정값을 낮춰서 CI를 맞추지 않는다. 발행은 되돌릴 수 없다.
 - **R2-5. 발행 뒤 확인 (규칙 5.3).** pub 모드 Quick Start E2E(새 버전, 4개 플랫폼)와 `no_rust_repro.yml`(새 버전, Rust 숨김·설치 양쪽). 여기서 문제가 나오면 핫픽스로 넘기지 않고 점검이 빠뜨린 것으로 원인을 적는다.
 
@@ -1215,7 +1218,7 @@
 - R2-5의 두 확인이 새 버전으로 통과한다.
 - 규칙 8의 네 항목. PR 하나.
 
-**손대는 파일:** `docs/guides/{model_setup,quick_start}.md`, `docs/features/prompt_compression.md`, `lib/services/{ask,context_builder,llm_tool,prompt_compressor}.dart`(dartdoc만), `pubspec.yaml`, `rust_builder/pubspec.yaml`, `rust_builder/rust/{Cargo.toml,Cargo.lock}`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `README.md`, `docs/guides/{quick_start,troubleshooting,release_build,faq,ask}.md`, `.github/workflows/{quickstart_e2e,upgrade_e2e}.yml`, `.github/pull_request_template.md`, `docs/milestones.md`, lockfile. R2-0은 `rust_builder/rust/src/**`의 테스트만 더할 수 있다(동작 코드는 바꾸지 않는다)
+**손대는 파일:** `docs/guides/{model_setup,quick_start}.md`, `docs/features/prompt_compression.md`, `lib/services/{ask,context_builder,llm_tool,prompt_compressor}.dart`(dartdoc만), `rust_builder/cargokit/build_tool/lib/src/precompile_binaries.dart`(release 생성 경쟁), `pubspec.yaml`, `rust_builder/pubspec.yaml`, `rust_builder/rust/{Cargo.toml,Cargo.lock}`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `README.md`, `docs/guides/{quick_start,troubleshooting,release_build,faq,ask}.md`, `.github/workflows/{quickstart_e2e,upgrade_e2e}.yml`, `.github/pull_request_template.md`, `docs/milestones.md`, lockfile. R2-0은 `rust_builder/rust/src/**`의 테스트만 더할 수 있다(동작 코드는 바꾸지 않는다)
 
 ### 아직 마일스톤으로 적지 않은 후보
 

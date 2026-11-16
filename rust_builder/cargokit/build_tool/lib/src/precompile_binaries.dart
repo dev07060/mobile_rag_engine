@@ -185,19 +185,28 @@ class PrecompileBinaries {
       release = await repo.getReleaseByTagName(repositorySlug, tagName);
     } on ReleaseNotFound {
       _log.info('Release not found - creating release $tagName');
-      release = await repo.createRelease(
-          repositorySlug,
-          CreateRelease.from(
-            tagName: tagName,
-            name: 'Precompiled binaries ${hash.substring(0, 8)}',
-            targetCommitish: null,
-            isDraft: false,
-            // Pre-release so binary-only releases never become the
-            // repository's "Latest" release; download URLs are unaffected.
-            isPrerelease: true,
-            body: 'Precompiled binaries for crate $packageName, '
-                'crate hash $hash.',
-          ));
+      try {
+        release = await repo.createRelease(
+            repositorySlug,
+            CreateRelease.from(
+              tagName: tagName,
+              name: 'Precompiled binaries ${hash.substring(0, 8)}',
+              targetCommitish: null,
+              isDraft: false,
+              // Pre-release so binary-only releases never become the
+              // repository's "Latest" release; download URLs are unaffected.
+              isPrerelease: true,
+              body: 'Precompiled binaries for crate $packageName, '
+                  'crate hash $hash.',
+            ));
+      } on GitHubError catch (e) {
+        // The precompile jobs for each platform family run in parallel; when
+        // two of them create the release at the same moment, GitHub rejects
+        // the second one. Use the release the other job created.
+        _log.info('Creating release $tagName failed ($e); fetching it again');
+        await Future.delayed(const Duration(seconds: 5));
+        release = await repo.getReleaseByTagName(repositorySlug, tagName);
+      }
     }
     return release;
   }
