@@ -32,10 +32,10 @@
 
 ## 현재 상태 (2026-11-16)
 
-- main: `77e035c` (#149 머지, 2026-11-16). **새 배포는 보류**(규칙 5). 마지막 배포는 여전히 `mobile_rag_engine` 0.23.0과 `rag_engine_flutter` 0.22.0이다.
-- 0.23.0 배포 뒤 main에 머지된 것: Q1 (#132), D1 (#133), S1 (#134), B1 (#135), D2 (#136), W1 (#137), F1 (#138), F2 (#139, #140, #143), E1 (#144), Q2 (#145, #146), Q3 (#147), Q4 (#148), Q5 (#149). 내부 점검 묶음 Q1~Q5가 모두 끝났다. 코드 변경은 `CHANGELOG.md`의 `## Unreleased`(Rust 코어 변경은 `rust_builder/CHANGELOG.md`에도)에 있고, 다음 `rag_engine_flutter` 배포가 있어야 pub 사용자에게 닿는다.
-- 진행 중: I1 (#150, 아래 절).
-- **다음 순서 (2026-11-16 합의):** I1 → M5(iPhone 실측, 범위 합의 전) → 사용자가 요청할 때 배포. 착수는 사용자가 번호로 지시할 때 한다(규칙 7).
+- main: `a0e1636` (#150 머지, 2026-11-16). **새 배포는 보류**(규칙 5). 마지막 배포는 여전히 `mobile_rag_engine` 0.23.0과 `rag_engine_flutter` 0.22.0이다.
+- 0.23.0 배포 뒤 main에 머지된 것: Q1 (#132), D1 (#133), S1 (#134), B1 (#135), D2 (#136), W1 (#137), F1 (#138), F2 (#139, #140, #143), E1 (#144), Q2 (#145, #146), Q3 (#147), Q4 (#148), Q5 (#149), I1 (#150). 내부 점검 묶음 Q1~Q5가 모두 끝났다. 코드 변경은 `CHANGELOG.md`의 `## Unreleased`(Rust 코어 변경은 `rust_builder/CHANGELOG.md`에도)에 있고, 다음 `rag_engine_flutter` 배포가 있어야 pub 사용자에게 닿는다.
+- M5 기기 측정과 기기 업그레이드 확인을 마쳤고 PR #152 검토 대기다(2026-11-16).
+- **다음 순서 (2026-11-16 합의):** M5(iPhone 실측, 범위 합의, 착수 대기) → 사용자가 요청할 때 배포. 착수는 사용자가 번호로 지시할 때 한다(규칙 7).
 
 2026-11-13 기준으로 적었던 내용:
 - main `3505825` (#135 머지). 다음 순서는 W1 머지 → F1 → Q2 → Q3 → Q4 → Q5였고, 모두 머지됐다(위).
@@ -116,23 +116,88 @@
 | b4 | **FAIL (맹점 3)** | 예산 300토큰에 출력 717토큰 (한도 470 = 300 + 결과당 40 + 50) |
 
 
-### M5. iPhone 실기기 측정 (KoEn)
+### M5. iPhone 실기기 측정 (KoEn, MiniLM)
 
-- **상태:** 범위 초안. 합의 대기. 사용자의 실기기 연결이 필요하다.
+- **담당:** 세션 "M5 iPhone 실기기 측정", 브랜치 `feats/m5-device-measure`, worktree `.claude/worktrees/m5-device-measure-c54381`, 기준 커밋 `9244bfc`(main `a0e1636` + #151, #151은 착수 때 아직 열려 있었다)
+- **상태:** 기기 측정·업그레이드 확인 완료, PR #152 검토 대기(2026-11-16 사용자 "새 세션에서 M5 착수"). 범위는 2026-11-16 합의(사용자 "M5 범위 초안 고쳐줘", "2번만 넣고 PR 올려줘"로 아래 "정한 것" 확정). 사용자의 iPhone 연결이 필요하다.
+- **순서:** I1(#150) 다음. 그 뒤는 사용자가 요청할 때 배포다.
 
-**목표:** KoEn-E5-Tiny의 실기기 지연·메모리를 잰다. 지금은 데스크톱과 시뮬레이터 수치만 있다.
+**목표:** 기본 모델(MiniLM)과 한국어 레시피 모델(KoEn-E5-Tiny int8)의 지연·색인 시간·메모리를 iPhone에서 잰다. 지금 문서의 수치는 데스크톱(Apple M3 Pro, Python)과 시뮬레이터 값이고, `model_setup.md` 비용 절은 "These numbers have not been measured on a phone yet."로 끝난다. 이 측정은 main(0.23.0 뒤 변경 포함)을 실기기에서 처음 돌리는 실행이기도 하다. Q2~Q5와 I1은 모두 "확인하지 않은 것"에 실기기를 적었다.
+
+**이 측정으로 정해지는 것**
+- `model_setup.md` 비용 절의 수치(데스크톱 55 ms 대 28 ms, 110 MB 대 60 MB)를 실측으로 바꾼다. 앱 개발자가 KoEn을 고를 때 보는 값이다.
+- 후보 "레거시 자산 확인 비용 절감"(시뮬레이터에서 KoEn 매 시작 약 250 ms)을 마일스톤으로 올릴지. 그 후보는 M5 실측을 본 뒤 판단하기로 적혀 있다.
+- 규칙 5.2의 "실제 기기 한 대 이상의 확인"과 "마지막 배포 버전이 남긴 DB에서의 업그레이드"에 쓸 실행 기록. 배포 판단 자체는 이 마일스톤에서 하지 않는다.
+
+**초안을 쓰며 확인한 것 (2026-11-16, main `a0e1636`, 파일만 읽었고 실행하지 않았다)**
+- 기존 프로파일러 `example/integration_test/query_profile_measure_test.dart`는 `tokenizerAsset: 'assets/tokenizer.json'`, `modelAsset: 'assets/model.onnx'`로 초기화한다. E1(#144) 뒤 example 앱의 모델은 `assets/models/{minilm,koen}/`에 있고 `example/assets/` 바로 아래에는 두 파일이 없다. 지금 상태로는 돌지 않을 것으로 본다(실행해 보지 않았다). 모델을 `--dart-define=EXAMPLE_MODEL=minilm|koen`(`example/lib/example_model.dart`)으로 고르게 고쳐야 한다.
+- 모델은 빌드 때 정해지므로 모델 두 개면 기기 설치가 최소 두 번이다. 업그레이드 확인까지 합치면 최소 네 번이다.
+- 메모리는 프로파일러에 `RssSampler`가 이미 있다.
+- 이전 기기 측정(온디바이스 쿼리 프로파일러 P3·P4, 0.18 무렵)은 warm 질의에서 임베딩이 약 27 ms로 가장 컸고 cold는 activate가 247 ms였다. 모델 이름이 결과에 적혀 있는지는 확인하지 않았다(규칙 9, 인용할 때 "모델 미기재" 여부를 밝힌다).
 
 **포함**
-- 기존 `query_profile_measure_test.dart` 방식(`flutter drive`)으로 MiniLM 대비 임베딩 지연, 색인 시간, 메모리를 측정
-- 결과를 `docs/perf/multilingual-embedding/`에 기록하고, `model_setup.md` 비용 절의 수치를 실측으로 바꾼다.
+- **측정 테스트 고치기:** 프로파일러가 `EXAMPLE_MODEL`로 고른 Model Pack으로 초기화하게 한다. 결과 JSON에 모델 이름과 fingerprint, 엔진 커밋, 빌드 모드, Rust feature, 기기·OS를 넣는다(규칙 9).
+- **모델별로 재는 값** (profile 빌드, 모델마다 한 번 설치. 설치·실행 방식은 아래 "착수 때 정한 것"):
+  - 초기화 시간: 앱을 새로 띄운 뒤 `MobileRag.initialize`가 끝날 때까지. 첫 설치 직후와 두 번째 실행을 나눠 적는다.
+  - 질의 임베딩 지연(warm): 한국어 질의와 영어 질의를 나눠 중앙값과 p95.
+  - 색인 시간: 같은 문서 묶음을 `addDocument`로 넣는 전체 시간과 청크당 시간, 청크 수.
+  - 질의 전체 지연: 기존 프로파일러의 구간(embed, activate, search, hydrate), cold와 warm.
+  - 메모리: 초기화 뒤 RSS와 색인·질의 중 최고치.
+- **데이터:** 한국어·영어가 모두 있는 묶음을 쓴다. example 앱에 이미 들어 있는 E1 앱 문서 묶음(`assets/corpus/e1/`, 문서 56개)과 그 질문을 쓰는 것을 기본으로 하고, 기존 프로파일러의 합성 fixture(문서 500개)는 구간 지연에 그대로 쓴다. 착수 때 fixture를 읽고 바꿀 이유가 있으면 이 절을 먼저 고친다.
+- **기록:** 결과 JSON을 `docs/perf/multilingual-embedding/results/`에 넣고, `docs/perf/multilingual-embedding/README.md`에 조건 표와 함께 절을 더한다. `model_setup.md` 비용 절을 실측값으로 바꾸고 "not been measured on a phone" 문장을 뺀다.
+- **0.23.0에서의 업그레이드를 기기에서 확인:** pub의 `mobile_rag_engine` 0.23.0 + `rag_engine_flutter` 0.22.0으로 만든 앱을 먼저 설치해 문서를 넣고, 같은 bundle id로 main 빌드를 덮어 설치한다. 덮어 설치한 뒤 초기화가 끝나는지, 넣어 둔 문서가 `listSources`에 남는지, 재임베딩 잠금(`embeddingFingerprintLock`)이 걸리지 않는지, 같은 질의의 검색 결과가 나오는지를 본다. 지금까지는 CI의 Upgrade E2E(데스크톱)만 있었다. 설치가 두 번 더 든다. 모델은 한 개로 한다(어느 모델인지는 착수 때 정해 이 절에 적는다).
+- **기기 실행 방식:** iPhone 17은 무선으로만 잡힌다. 설치 전에 미리 알리고, 수정은 모아서 설치 횟수를 줄인다. 실제 설치·실행 방식은 아래 "착수 때 정한 것"에 적었다.
 
 **제외**
-- 성능 개선 작업 (측정 결과에 따라 따로 적는다)
+- 성능 개선과 기본값 변경(측정 결과에 따라 따로 적는다, 규칙 10.3).
+- 패키지 코드(`lib/`, `rust_builder/`) 변경. 측정 중 결함이 나오면 고치지 않고 후보 목록에 재현과 함께 적는다.
+- 검색 품질 재측정(E1·F2에서 했다), BGE-m3(542 MB라 기기 측정 대상에서 뺀다).
+- `search(sourceIds:)` 기기 지연(B10), 레거시 자산 경로의 시작 시간(아래 "정한 것").
+- Android 실기기, Foundation Models 생성 경로(I1에서 확인하지 못한 것. 게임 앱 쪽 코드라 example 앱에 없다).
+- 배포와 버전 변경.
+
+**정한 것 (2026-11-16 사용자 "2번만 넣고 PR 올려줘")**
+
+초안은 기기 실행이 늘어나는 선택 항목 셋을 물었다. 둘째만 넣는다.
+
+| 항목 | 결정 | 남는 것 |
+|---|---|---|
+| `search(sourceIds:)` 기기 지연(Q4 B10) | 넣지 않는다 | 후보 "두 단계 스캔"은 Mac 수치(20,000청크 중 18,000청크 범위 9.67 → 20.48 ms, 가짜 임베딩)만으로 남는다 |
+| 0.23.0이 남긴 DB에서의 업그레이드를 기기에서 확인 | 넣는다(위 "포함") | |
+| 레거시 자산 경로(`modelAsset`/`tokenizerAsset`)의 시작 시간 | 넣지 않는다 | 후보 "레거시 자산 확인 비용 절감"은 시뮬레이터 수치(약 250 ms)만으로 남는다 |
+
+**착수 때 정한 것 (2026-11-16, 규칙 4)**
+- **업그레이드 확인 모델은 MiniLM이다.** 0.23.0의 `setup`이 설치하는 기본 Model Pack이라, 업그레이드하는 앱 대부분이 가진 상태다. 절차는 `tool/upgrade_e2e/ios_device/`(phase A는 pub 0.23.0, phase B는 같은 앱에 main을 path로 넣어 덮어 설치)다.
+- **데이터:** fixture(합성 영어 문서, 컬렉션 둘 × 500개, 질의 5개)는 그대로 cold·warm·전환 구간에 쓴다. fixture는 영어 합성문이라 언어별 값이 나오지 않으므로, 언어별 warm 값(질의 임베딩, embed·search·hydrate 구간)은 E1 질문 120개(영어 60, 한국어 60)를 E1 컬렉션(top 5, `ask` 조건)에서 잰다. 색인 시간은 E1 문서 56개(PDF 두 개 포함)로 잰다.
+- **측정 파일:** 새 파일 `example/integration_test/m5_device_measure_test.dart`. 기존 프로파일러는 Model Pack으로 초기화하게 고치고, fixture 구간 측정을 `example/lib/profiling/fixture_cells.dart`로 옮겨 두 테스트가 함께 쓴다.
+- **기기 실행 방식 (2026-11-16 사용자 "2번으로 해"):** iPhone 17에서 `flutter drive --device-connection wireless`가 설치·실행 뒤 앱의 Dart VM을 mDNS로 찾지 못했다(두 번 설치, 측정 없음). 그래서 측정 앱은 `flutter build ios --profile -t <측정 파일>`로 만들어 `xcrun devicectl device install app`으로 설치하고 `devicectl device process launch`로 띄운다. VM 연결이 필요 없고, 빌드는 같은 profile이다(Rust `vector_faer,vector_quant_i8`). 테스트는 driver 없이도 끝까지 돌고 결과를 Documents에 쓴다(시뮬레이터에서 확인).
+- **두 번째 실행:** 다시 설치하지 않고 앱을 한 번 더 띄운다(`devicectl device process launch --terminate-existing`). 테스트는 첫 실행이 남긴 표시 파일로 두 번째 실행을 알아보고, 초기화 시간과 재시작 뒤 첫 질의를 잰다. 결과 파일은 `devicectl device copy from`으로 꺼낸다. 첫 실행 전에는 앱을 지워 "설치 직후"를 맞춘다.
+- **빌드 우회(커밋하지 않음):** Xcode 27.1이 pod 배포 대상 9.0~13.0을 거부해 example 앱이 시뮬레이터·기기 모두 빌드되지 않는다(아래 후보 "Xcode 27에서 `flutter build ios --simulator`가 새 앱에서도 실패한다"와 같은 원인). 측정 빌드는 로컬 `example/ios/Podfile`의 `post_install`에서 pod 배포 대상을 16.0으로 올려 만들었다. 또 iOS 27이 UIScene 없는 앱을 실행 즉시 종료해서(아래 후보), 로컬 `example/ios/Runner/Info.plist`에 `FlutterSceneDelegate` Scene manifest를 넣었다. 업그레이드 확인 앱도 같다(`run.sh`의 `M5_PODS_DEPLOYMENT_TARGET`, `M5_UISCENE`). 두 변경 모두 PR에 넣지 않고 결과 조건 표에 적는다.
 
 **완료 기준**
-- 실기기 결과 JSON과 문서 갱신. PR 하나, CI 통과.
+- 모델 두 개의 실기기 결과 JSON과 문서 갱신. 수치마다 규칙 9의 조건(모델·fingerprint, 커밋, 빌드 모드와 feature, 기기·OS·Xcode·Flutter·rustc, 데이터와 청크 수, 측정일, 충전·다른 작업 여부).
+- 측정 테스트가 두 모델 모두에서 끝까지 돈다(profile, 실기기).
+- 데스크톱 수치와 방향이 다르면(예: KoEn 질의가 더 빠르다는 문장) 문서를 실측에 맞춘다.
+- 0.23.0 앱에서 main 빌드로 덮어 설치한 기기 실행의 결과(위 네 가지)를 기록한다. 실패하면 고치지 않고 재현과 함께 후보 목록에 적고 보고한다.
+- 규칙 8의 네 항목. 업그레이드 경로 절에는 위 기기 업그레이드 결과를 적는다. PR 하나, CI 통과.
 
-**손대는 파일:** `docs/perf/multilingual-embedding/**`, `docs/guides/model_setup.md`(비용 절), `example/integration_test/`(측정 테스트가 필요하면 새 파일)
+**결과 (2026-11-16, iPhone 17 iOS 27.0.1, profile, 엔진 `ffb0ab8` = 패키지 코드 main `a0e1636`)**
+
+조건 표와 전체 결과는 [`docs/perf/multilingual-embedding/README.md` 6절](perf/multilingual-embedding/README.md#6-iphone-실기기-측정-m5-2026-11-16), 원본은 같은 폴더의 `results/m5_iphone17_*.json`이다. 기기 한 대의 값이다.
+
+| 항목 | MiniLM | KoEn-E5-Tiny |
+|---|---|---|
+| 초기화, 설치 뒤 첫 실행 / 두 번째 실행 | 425 / 111 ms | 859 / 160 ms |
+| 질의 임베딩 warm p50, 영어 / 한국어 | 1.46 / 2.64 ms | 2.49 / 2.53 ms |
+| 색인 (E1 56문서), 전체 / 청크당 | 11.3 s, 2331청크 / 4.73 ms | 15.0 s, 2319청크 / 6.35 ms |
+| RSS 초기화 뒤 / 최고치 | 211 / 242 MB | 273 / 314 MB |
+
+- 0.23.0 → main 덮어 설치(MiniLM): 초기화 249 ms, 잠금 없음, 문서 4개 유지, 같은 질의의 상위 3개 같음. 네 항목 모두 통과.
+- `model_setup.md`의 "Queries are as fast or faster"는 한국어 질의에만 맞아서(영어는 KoEn이 약 1.7배 느림) 비용 절을 실측으로 바꿨다.
+- 레거시 자산 경로는 재지 않았으므로(위 "정한 것") 후보 "레거시 자산 확인 비용 절감"을 판단할 기기 수치는 여전히 없다. Model Pack의 두 번째 실행 초기화는 111~160 ms였다.
+- 확인하지 않은 것: 충전 여부와 다른 앱 실행 여부(기록 없음), 같은 측정의 반복 편차(모델마다 한 번), Android, release 빌드.
+
+**손대는 파일:** `example/integration_test/query_profile_measure_test.dart`(또는 새 측정 파일), `example/lib/profiling/**`, `tool/upgrade_e2e/**`(기기용 절차가 필요하면), `docs/perf/multilingual-embedding/**`, `docs/guides/model_setup.md`(비용 절), `docs/milestones.md`
 
 ### D1. 문서 정비 (README 첫 화면 + 틀린 안내 수정)
 
@@ -964,7 +1029,7 @@
 ### I1. 실제 앱 연동 마찰 문서
 
 - **담당:** 세션 "I1 실제 앱 연동 마찰 문서", 브랜치 `docs/i1-integration-friction`(worktree `.claude/worktrees/i1-integration-docs-149577`, main `77e035c`에서 땄다)
-- **상태:** PR #150 열림(2026-11-16), 머지 대기. 착수는 2026-11-16 사용자 "새 세션에서 I1 착수". 범위는 2026-11-09 사용자 "다음범위 문서에 써줘"로 적었다. 아래 "착수 때 확인한 것"으로 가중치 비교 항목을 고쳤다(규칙 4).
+- **상태:** 머지 완료 (#150, 2026-11-16). 착수는 2026-11-16 사용자 "새 세션에서 I1 착수". 범위는 2026-11-09 사용자 "다음범위 문서에 써줘"로 적었다. 아래 "착수 때 확인한 것"으로 가중치 비교 항목을 고쳤다(규칙 4).
 - **출처:** 2026-11-09 Flutter Flame 게임(`legendary-bow-master`, 브랜치 `feats/ios-guide-qa`)에 iOS 전용 가이드 Q&A를 붙인 경험. 0.23.0, KoEn-E5-Tiny int8, Apple Foundation Models를 `RagGenerate`로 연결했고 iPhone 17(iOS 27.0.1)에서 확인했다. 패키지 코드는 고치지 않았다. 핵심 API(`initialize` → `addDocument` → `prepareAsk`)는 바로 붙었고, 시간이 든 곳은 빌드·배포 단계에서 원인을 찾는 일이었다.
 - **순서:** `troubleshooting.md`·`faq.md`·`release_build.md`를 고친 Q1(#132)과 README·가이드를 고친 D1(#133)은 머지됐다. W1과 `ask.md`가 겹치므로 W1 머지 뒤 main에서 브랜치를 딴다(규칙 3).
 
@@ -1063,6 +1128,8 @@
 - **[낮음] `search(sourceIds:)`가 범위 안 모든 청크의 본문을 읽는다 (2026-11-16 Q4 B10 측정, 고치지 않음).** 20,000청크 중 18,000청크를 범위로 주면 9.67 → 20.48 ms(Mac, 가짜 임베딩). id·벡터만 읽어 채점하고 상위 `topK`만 본문을 읽는 두 단계 스캔이 후보다(원인은 추정, 바꾸면 같은 벤치로 다시 잰다).
 - **[낮음] 답이 인용 번호뿐인 경우(`[3]`) (2026-11-09 게임 연동, I1·Q4 모두 다루지 않음, 2026-11-16 I1 착수 때 옮김).** 작은 모델이 본문 없이 `[3]`만 돌려주면 `RagAnswer.text`는 그대로 `[3]`이고 `citations`는 3번 구절을 담는다. 앱이 "답 없음"으로 다룰 수 있게 인용 표시를 뺀 본문이 비었는지 알려 주는 장치(예: getter)를 둘지, 문서 레시피로 둘지 정한다(규칙 10: 판정 기준은 앱).
 - **[중간] Xcode 27에서 `flutter build ios --simulator`가 새 앱에서도 실패한다 (2026-11-16 I1 재현 중 확인, 고치지 않음).** `flutter create` 앱 + 0.23.0 + `setup`에서 (1) pod 배포 대상 13.0·11.0(`path_provider_foundation` 등)을 Xcode 27이 거부하고(지원 범위 15.0~27.1), (2) 그것을 올리면 Flutter의 lipo 검사가 `arm64 x86_64` 시뮬레이터 `Flutter.framework`를 읽지 못한다. 아래 Xcode 27 + Flutter 3.35.5 후보의 iOS 판이다(그 후보는 macOS만 적었다). I1은 `post_install`로 pod 배포 대상 16.0, `xcodebuild … ARCHS=arm64`로 우회해 검증했고 문서에는 넣지 않았다. `troubleshooting.md`에 우회를 적을지, `setup`이 pod 배포 대상도 맞출지 정한다.
+
+- **[중간] iOS 27에서 Flutter 3.35.5 템플릿 앱이 실행 즉시 종료된다 (2026-11-16 M5 실기기에서 확인, 고치지 않음).** Xcode 27.1로 빌드한 example 앱과 `flutter create` 앱이 iPhone 17(iOS 27.0.1)에서 시작하자마자 `EXC_BREAKPOINT (SIGTRAP)`으로 끝났다. 크래시 로그의 위치는 UIKit `_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`이다. UIScene 생명주기를 쓰지 않는 앱을 iOS 27이 종료하는 것으로 본다. `flutter drive --device-connection wireless`에서는 같은 앱이 디버거에 멈춰 Dart VM을 찾지 못하는 것으로 나타났다(10분 대기 뒤 재시도). `Info.plist`에 `UIApplicationSceneManifest`(`UISceneDelegateClassName` = `FlutterSceneDelegate`, Flutter 3.35.5에 있음)를 넣으니 두 앱 모두 정상 실행됐다. 패키지 코드 문제는 아니다. example 앱에 Scene manifest를 넣을지, `troubleshooting.md`나 `setup`이 안내할지 정한다. 시뮬레이터(iOS 18·26)에서는 재현되지 않는다.
 
 착수하려면 위 형식으로 옮겨 적고 합의를 받는다.
 
