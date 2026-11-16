@@ -11,7 +11,7 @@ The ONNX embedding model is the single largest contributor to your app's downloa
 | Model | ONNX Size | Impact on AAB |
 |:------|:---------:|:-------------:|
 | all-MiniLM-L6-v2 (INT8) | ~23 MB | Moderate |
-| BGE-m3 (INT8) | ~542 MB | **Too large to bundle for most apps** |
+| BGE-m3 (INT8) | ~569 MB | **Too large to bundle for most apps** |
 
 **For development**, bundle the model in `assets/` for quick iteration.
 **For production releases**, you can download the model at runtime to keep your bundle small. How depends on the version:

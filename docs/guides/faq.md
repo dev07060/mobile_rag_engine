@@ -11,7 +11,7 @@ Common questions about `mobile_rag_engine`.
 Use a Korean model. The default Model Pack (`all-MiniLM-L6-v2`) is
 English-only and scores close to random on Korean text. For Korean documents
 use **KoEn-E5-Tiny**: it covers Korean and English, has 384 dimensions like
-MiniLM, and its model and tokenizer take about 39 MB.
+MiniLM, and its model and tokenizer take about 41 MB.
 
 The `setup` command installs only the MiniLM pack, so follow
 [Korean documents: KoEn-E5-Tiny](model_setup.md#korean-documents-koen-e5-tiny):
@@ -35,15 +35,15 @@ Yes. Performance differs from real devices, so run performance tests on physical
 | Use Case | Recommended Model |
 |:---------|:------------------|
 | English-only apps (default) | **MiniLM** (384 dim, ~23MB) |
-| Korean, or Korean and English | **KoEn-E5-Tiny** (384 dim, ~37MB); see the [recipe](model_setup.md#korean-documents-koen-e5-tiny) |
-| Larger model, if you can ship 542 MB (languages: see the model card) | **BGE-m3** (1024 dim, ~542MB) |
+| Korean, or Korean and English | **KoEn-E5-Tiny** (384 dim, ~38MB); see the [recipe](model_setup.md#korean-documents-koen-e5-tiny) |
+| Larger model, if you can ship 569 MB (languages: see the model card) | **BGE-m3** (1024 dim, ~569MB) |
 | Quick prototyping | **MiniLM** |
 
-### Q: BGE-m3 is too large (542MB) for my app
+### Q: BGE-m3 is too large (569MB) for my app
 
 Several options available:
 
-1. **Use a smaller model** - MiniLM (~23MB, English only, the default) or KoEn-E5-Tiny (~37MB, Korean and English)
+1. **Use a smaller model** - MiniLM (~23MB, English only, the default) or KoEn-E5-Tiny (~38MB, Korean and English)
 2. **Download at runtime** - Download BGE-m3 on first app launch and pass it with `tokenizerPath`/`modelPath` (0.24.0 and later; 0.23.0 needs the model bundled). See [Release Build Guide](release_build.md).
 3. **Accept the size** - check the store limits ([Google Play app size limits](https://support.google.com/googleplay/android-developer/answer/9859372))
 
@@ -260,7 +260,7 @@ every platform.
 
 **2. Keep the model files out of the web build.** Flutter bundles the assets
 listed in `pubspec.yaml` into every platform's build, so `assets/mobile_rag/`
-(about 23 MB for MiniLM, 39 MB for KoEn-E5-Tiny) also ends up in
+(about 23 MB for MiniLM, 41 MB for KoEn-E5-Tiny) also ends up in
 `build/web/assets/assets/mobile_rag/`. Either:
 
 - Remove it after the web build. The stub never loads these files:

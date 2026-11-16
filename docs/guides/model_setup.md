@@ -4,6 +4,30 @@ This guide covers the recommended fixed Model Pack plus advanced custom ONNX
 assets for `mobile_rag_engine`. The Model Pack is installed during development,
 bundled with the app, and never downloaded at runtime.
 
+## Which model
+
+These three models were measured with this package. Each one installs as a
+Model Pack in `assets/mobile_rag/`; pick one per app.
+
+| Model | Dimensions | Files to bundle | How to install |
+|:------|:----------:|:---------------:|:---------------|
+| all-MiniLM-L6-v2 (default) | 384 | about 23 MB | [`setup` command](#recommended-stable-minilm-model-pack), one line |
+| KoEn-E5-Tiny, for Korean documents | 384 | about 41 MB | [download two files and write the manifest](#korean-documents-koen-e5-tiny) |
+| BGE-m3 | 1024 | about 586 MB | [download two files and write the manifest](#bge-m3-model-pack) |
+
+Measured on 80 Wikipedia questions (32 English, 32 Korean, 16 mixed, default
+hybrid search, top 10, profile build on an Apple M3 Pro Mac): MiniLM
+`passage_recall@10` 0.925 and KoEn-E5-Tiny 0.950 (2026-11-16), BGE-m3 0.9625
+(2026-11-13). MiniLM and KoEn-E5-Tiny were also measured on an iPhone 17
+(see [Cost](#cost)); BGE-m3 was not.
+
+All three use the same steps after installing: declare `assets/mobile_rag/` in
+`pubspec.yaml` and initialize with
+`modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json')`.
+Switching an app from one model to another needs the stored chunks to be
+embedded again; see
+[Switching an existing database](#4-switching-an-existing-database-from-minilm).
+
 ## Recommended: stable MiniLM Model Pack
 
 From your Flutter project, run:
@@ -62,12 +86,12 @@ MiniLM is English-only. On Korean retrieval benchmarks it scores close to
 random, so Korean apps should swap in a Korean-English model.
 [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX)
 (Apache-2.0) is the one we measured and recommend: it is 384-dimensional like
-MiniLM and adds about 17 MB to the app.
+MiniLM and adds about 18 MB to the app.
 
 | Model | Ko-StrategyQA nDCG@10 | AutoRAG nDCG@10 | ONNX + tokenizer |
 |:------|:---:|:---:|:---:|
-| all-MiniLM-L6-v2 (default) | 0.014 | 0.059 | 22.4 MB |
-| KoEn-E5-Tiny (int8, arm64) | 0.762 | 0.866 | 39.3 MB |
+| all-MiniLM-L6-v2 (default) | 0.014 | 0.059 | 23.5 MB |
+| KoEn-E5-Tiny (int8, arm64) | 0.762 | 0.866 | 41.2 MB |
 
 Desktop measurement (Apple M3 Pro, ONNX Runtime CPU, 2026-11), whole documents
 embedded up to 512 tokens (MiniLM with the earlier character-based limit).
@@ -88,6 +112,19 @@ BASE=https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX/resolve/$REV
 curl -L -o model.onnx "$BASE/onnx/model_qint8_arm64.onnx"
 curl -L -o tokenizer.json "$BASE/tokenizer.json"
 ```
+
+Check both files before writing the manifest. The two hashes must be exactly
+these:
+
+```bash
+shasum -a 256 model.onnx tokenizer.json
+# d463c9b1c29f3202d510e2836265d60f9e6e6dd518c5930ba865700646489bd4  model.onnx
+# a6dd38d692ac1caa6d5dbc195d92f1f978b5c74ec60e02ed15fdf04404742fe3  tokenizer.json
+```
+
+`dart run mobile_rag_engine:setup --check` checks only the MiniLM preset; for
+this pack, the engine checks the hashes on first launch and fails with a
+`RagModelPackException` if a file differs.
 
 ### 2. Write the Model Pack manifest
 
@@ -341,6 +378,94 @@ instead: it downloads the pinned revision and checks the hashes itself, and
 
 ---
 
+<a id="bge-m3-model-pack"></a>
+
+## BGE-m3
+
+[Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) is the INT8 ONNX
+export of BAAI's BGE-m3 (MIT license). It is the largest model measured here:
+1024 dimensions, a 569 MB model file and a 17 MB tokenizer. Its vectors take
+about 2.7 times the space of the 384-dimensional models, and the app must ship
+or download about 586 MB. Use the files below: the tokenizer must come from
+the same Teradata revision. The `tokenizer.json` in the `BAAI/bge-m3`
+repository is a different file and was not tested.
+
+### 1. Download the files
+
+```bash
+mkdir -p assets/mobile_rag && cd assets/mobile_rag
+
+REV=53f8835700d8ff5988f30d529894940d0338ea62
+BASE=https://huggingface.co/Teradata/bge-m3/resolve/$REV
+
+curl -L -o model.onnx "$BASE/onnx/model_int8.onnx"
+curl -L -o tokenizer.json "$BASE/tokenizer.json"
+
+shasum -a 256 model.onnx tokenizer.json
+# fc4692db47a783252a0dba2d5601a3b9ab0c5058186eced9b963bb0e112f011a  model.onnx
+# 249df0778f236f6ece390de0de746838ef25b9d6954b68c2ee71249e0a9d8fd4  tokenizer.json
+```
+
+### 2. Write the Model Pack manifest
+
+Save as `assets/mobile_rag/model-pack.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "preset": "bge-m3-int8",
+  "modelId": "Teradata/bge-m3",
+  "revision": "53f8835700d8ff5988f30d529894940d0338ea62",
+  "modelAsset": "assets/mobile_rag/model.onnx",
+  "tokenizerAsset": "assets/mobile_rag/tokenizer.json",
+  "modelSha256": "fc4692db47a783252a0dba2d5601a3b9ab0c5058186eced9b963bb0e112f011a",
+  "tokenizerSha256": "249df0778f236f6ece390de0de746838ef25b9d6954b68c2ee71249e0a9d8fd4",
+  "modelBytes": 568921578,
+  "tokenizerBytes": 17082799,
+  "architecture": "arm64",
+  "embeddingDimension": 1024,
+  "license": "mit",
+  "language": "see the model card"
+}
+```
+
+`architecture` must be `"arm64"`, the only value Model Pack v1 accepts. The
+same files are used on every supported platform.
+
+### 3. Bundle and initialize
+
+Declare `assets/mobile_rag/` in `pubspec.yaml` and initialize as for
+KoEn-E5-Tiny:
+
+```dart
+await MobileRag.initialize(
+  modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json'),
+);
+```
+
+On first launch the engine copies and hashes both files (about 586 MB), so the
+first `initialize` takes noticeably longer than with the smaller models.
+
+### Shipping it without bundling
+
+To keep 586 MB out of the app download, download the same two files at
+runtime, check their SHA-256 values as above, and pass the paths instead of a
+Model Pack:
+
+```dart
+await MobileRag.initialize(
+  tokenizerPath: '${support.path}/bge-m3/tokenizer.json',
+  modelPath: '${support.path}/bge-m3/model.onnx',
+);
+```
+
+See the [Release Build guide](release_build.md) for the full example. To keep
+the files out of git, use the fetch script in
+[Keeping the model files out of git](#keeping-the-model-files-out-of-git) with
+`REPO=Teradata/bge-m3` and `MODEL_FILE=onnx/model_int8.onnx`.
+
+---
+
 ## Advanced / legacy custom ONNX assets
 
 ## Model Comparison
@@ -348,15 +473,16 @@ instead: it downloads the pinned revision and checks the hashes itself, and
 | Model | Dimensions | Size (ONNX) | Model max tokens | Languages | Best For |
 |:------|:----------:|:-----------:|:----------:|:----------|:---------|
 | [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (INT8) | **384** | ~23 MB | 256 | English | English-only apps, lightweight & fast |
-| [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX) (INT8) | **384** | ~37 MB | 512 | Korean, English | Korean apps ([recipe](#korean-documents-koen-e5-tiny)) |
-| [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~542 MB | 8,192 | See the model card | Apps that can ship a 542 MB model |
+| [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX) (INT8) | **384** | ~38 MB | 512 | Korean, English | Korean apps ([recipe](#korean-documents-koen-e5-tiny)) |
+| [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~569 MB | 8,192 | See the model card | Apps that can ship a 569 MB model ([recipe](#bge-m3-model-pack)) |
 
 > **Dimension Matters**: The embedding dimension affects your vector index. Once you choose a model, all documents must use the same dimension. Switching models requires re-embedding all documents.
 
 ### Validated ONNX Artifacts
 
 - MiniLM: `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/onnx/model_qint8_arm64.onnx`
-- BGE-m3: `https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx`
+- KoEn-E5-Tiny: `https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX/resolve/5cf599a8cd6577f2f12a026130ad50132e472cfd/onnx/model_qint8_arm64.onnx`
+- BGE-m3: `https://huggingface.co/Teradata/bge-m3/resolve/53f8835700d8ff5988f30d529894940d0338ea62/onnx/model_int8.onnx` (tokenizer from the same revision)
 
 The engine cuts every input at 512 tokens, whatever the model's own limit.
 
@@ -385,11 +511,9 @@ curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-Mini
 ```bash
 mkdir -p assets && cd assets
 
-# Download INT8 quantized model (~542MB)
-curl -L -o model.onnx "https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx"
-
-# Download tokenizer (~17MB)
-curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer.json"
+# Download INT8 quantized model (~569MB) and its tokenizer (~17MB), same revision
+curl -L -o model.onnx "https://huggingface.co/Teradata/bge-m3/resolve/53f8835700d8ff5988f30d529894940d0338ea62/onnx/model_int8.onnx"
+curl -L -o tokenizer.json "https://huggingface.co/Teradata/bge-m3/resolve/53f8835700d8ff5988f30d529894940d0338ea62/tokenizer.json"
 ```
 
 ---
@@ -404,8 +528,7 @@ Include model files in your app bundle. Simple and works offline immediately.
 # pubspec.yaml
 flutter:
   assets:
-    - assets/model.onnx
-    - assets/tokenizer.json
+    - assets/mobile_rag/
 ```
 
 **Pros:**
@@ -416,6 +539,12 @@ flutter:
 **Cons:**
 - Increases app download size
 - App store size limits (see [Google Play app size limits](https://support.google.com/googleplay/android-developer/answer/9859372))
+
+### Strategy 2: Download at runtime
+
+Download the model and tokenizer on first launch, check their SHA-256 values,
+and pass `tokenizerPath` / `modelPath` to `MobileRag.initialize`. See the
+[Release Build guide](release_build.md).
 
 ## Custom Model Export
 

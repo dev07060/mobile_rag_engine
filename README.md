@@ -306,6 +306,19 @@ Mac, `mobile_rag_engine` 0.24.0 code, measured 2026-11-16. `search` is
 vector-only; `searchHybridWithContext`, `searchHybrid` and `ask` use the hybrid
 ranking these numbers describe.
 
+By language, default hybrid search, `mobile_rag_engine` 0.24.0 code, profile
+build on an Apple M3 Pro Mac, 2026-11-16:
+
+| Model | 80 Wikipedia questions, answer in top 10: English / Korean / mixed | 90 app-document questions, answer in the 5 `ask` passages: English / Korean |
+|:------|:---:|:---:|
+| MiniLM Model Pack (default) | 29 of 32 / 29 of 32 / 16 of 16 | 35 of 45 / 25 of 44 |
+| KoEn-E5-Tiny | 29 of 32 / 31 of 32 / 16 of 16 | 34 of 45 / 37 of 45 |
+
+The app documents are GNOME Help pages, short app and office documents and two
+sample PDFs. One Korean question is left out for MiniLM because its answer
+spans two MiniLM chunks. To install either model, or BGE-m3, see
+[Model Setup](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#which-model).
+
 Numbers vary by device and corpus. To measure on your own hardware, see
 [`benchmark_service`](https://github.com/dev07060/mobile_rag_engine/blob/main/lib/services/benchmark_service.dart).
 For the implementation-oriented guide, see
