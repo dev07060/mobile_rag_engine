@@ -269,6 +269,73 @@ tokens with this tokenizer. Loading the model and tokenizer takes about
 110 MB of memory, against about 60 MB for MiniLM. These numbers have not been
 measured on a phone yet.
 
+### Keeping the model files out of git
+
+The model and tokenizer are binary files of tens of megabytes. To keep them
+out of your repository, commit only `model-pack.json`, which already records
+the revision and the SHA-256 of both files, and ignore the two files:
+
+```gitignore
+# .gitignore
+assets/mobile_rag/model.onnx
+assets/mobile_rag/tokenizer.json
+```
+
+Then fetch them after cloning and before every build on a clean machine (CI),
+with a script that downloads the revision named in the manifest and refuses a
+file whose hash differs:
+
+```bash
+#!/usr/bin/env bash
+# scripts/fetch_rag_model.sh — download the model files at the revision pinned
+# in model-pack.json and check them against the manifest's sha256 values.
+set -euo pipefail
+
+DIR=assets/mobile_rag
+MANIFEST="$DIR/model-pack.json"
+REPO=exp-models/dragonkue-KoEn-E5-Tiny-ONNX
+MODEL_FILE=onnx/model_qint8_arm64.onnx
+
+field() { sed -n "s/.*\"$1\": *\"\([^\"]*\)\".*/\1/p" "$MANIFEST"; }
+sha256() { shasum -a 256 "$1" | cut -d' ' -f1; }
+
+REV=$(field revision)
+BASE="https://huggingface.co/$REPO/resolve/$REV"
+
+fetch() { # <remote path> <local file> <manifest sha256 key>
+  local want got
+  want=$(field "$3")
+  if [ -f "$2" ] && [ "$(sha256 "$2")" = "$want" ]; then
+    echo "ok (already there) $2"
+    return
+  fi
+  curl -fL --retry 3 -o "$2.part" "$BASE/$1"
+  got=$(sha256 "$2.part")
+  if [ "$got" != "$want" ]; then
+    rm -f "$2.part"
+    echo "sha256 mismatch for $2: got $got, $MANIFEST has $want" >&2
+    exit 1
+  fi
+  mv "$2.part" "$2"
+  echo "ok $2"
+}
+
+fetch "$MODEL_FILE" "$DIR/model.onnx" modelSha256
+fetch tokenizer.json "$DIR/tokenizer.json" tokenizerSha256
+```
+
+Run it from the project root. A second run downloads nothing while the files
+match. On a mismatch it exits with an error and leaves the existing file
+alone, so a changed upstream file cannot reach your build; the engine checks
+the same hashes again on first launch. `shasum` ships with macOS and most
+Linux images; use `sha256sum` where it does not. For another model, change
+`REPO` and `MODEL_FILE` and write its manifest as in step 2.
+
+For the MiniLM pack, ignore the same two files and run
+`dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en`
+instead: it downloads the pinned revision and checks the hashes itself, and
+`--check` exits with an error while a file is missing.
+
 ---
 
 ## Advanced / legacy custom ONNX assets

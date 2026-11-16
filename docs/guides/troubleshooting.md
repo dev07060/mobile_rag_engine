@@ -64,6 +64,27 @@ flutter run
 
 ---
 
+### `flutter build web` fails inside `mobile_rag_engine`
+
+**Symptom:** The app builds for iOS or Android, but `flutter build web` stops
+with errors in the package's own files, such as:
+```
+…/mobile_rag_engine-0.23.0/lib/services/rag_engine.dart:152:14:
+Error: The argument type 'int' can't be assigned to the parameter type 'BigInt'.
+Error: Compilation failed.
+```
+
+**Cause:** Web is not supported. The package's native bindings do not compile
+for the web, so any import of `package:mobile_rag_engine` that the web build
+can reach breaks it.
+
+**Solution:** Import the package only in code that the web build does not
+compile, with a conditional import; see
+[Does it support Web?](faq.md#q-does-it-support-web) for the example and for
+keeping the model files out of the web build.
+
+---
+
 ## Initialization Errors
 
 ### "Failed to initialize Rust library"
@@ -358,6 +379,74 @@ dyld: Library not loaded: @rpath/libonnxruntime.dylib
 3. Run `pod install` again.
 
 The same applies to `The plugin "flutter_onnxruntime" requires a higher minimum iOS deployment version` (or macOS): the host needs iOS 16.0 / macOS 14.0.
+
+---
+
+### iOS Simulator: "building for iOS Simulator, but linking in object file built for iOS" after switching to static linkage
+
+**Symptom:** The app also uses a plugin that ships separate prebuilt `.a`
+libraries for devices and for the simulator. Device builds work, but after
+`setup` (or you) switched the Podfile to `use_frameworks! :linkage => :static`,
+the simulator build stops at the app's link step:
+```
+ld: building for 'iOS-simulator', but linking in object file (…/libflac_iOS-device.a[2](bitmath.o)) built for 'iOS'
+clang: error: linker command failed with exit code 1
+```
+Older Xcode versions word it `building for iOS Simulator, but linking in
+object file built for iOS`. The example comes from `flutter_soloud` 3.5.4,
+whose `ios/libs` has `lib*_iOS-device.a` and `lib*_iOS-simulator.a` for each
+audio codec.
+
+**Cause:** The plugin's podspec lists only the device libraries as
+`vendored_libraries` and adds the simulator ones through SDK-conditional
+linker flags on its own target. With static linkage the plugin becomes part of
+the app executable, and CocoaPods adds every vendored library to the app
+target's `OTHER_LDFLAGS` (`Pods-Runner.*.xcconfig`) without an SDK condition,
+so simulator builds link the device libraries.
+
+**Solution:** Keep static linkage: `mobile_rag_engine` needs it because ONNX
+Runtime (through `flutter_onnxruntime`) is a static binary. In `ios/Podfile`,
+add this to the existing `post_install` block, after
+`flutter_additional_ios_build_settings`. It moves the device libraries from
+the app's linker flags into a setting that applies only to device builds, and
+links the simulator libraries of the same name for the simulator:
+
+```ruby
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+  end
+
+  # Link prebuilt *_iOS-device libraries only for devices and their
+  # *_iOS-simulator counterparts only for the simulator.
+  installer.aggregate_targets.each do |aggregate|
+    aggregate.xcconfigs.each do |config_name, config|
+      device_libs = config.libraries.select { |lib| lib.end_with?('_iOS-device') }
+      next if device_libs.empty?
+      device_libs.each { |lib| config.libraries.delete(lib) }
+      config.other_linker_flags[:simple] << '$(SDK_VENDORED_LIBS)'
+      config.attributes['SDK_VENDORED_LIBS[sdk=iphoneos*]'] =
+        device_libs.map { |lib| %(-l"#{lib}") }.join(' ')
+      config.attributes['SDK_VENDORED_LIBS[sdk=iphonesimulator*]'] =
+        device_libs.map { |lib| %(-l"#{lib.sub('_iOS-device', '_iOS-simulator')}") }.join(' ')
+      config.save_as(aggregate.xcconfig_path(config_name))
+    end
+  end
+end
+```
+
+Then run `pod install` (or build again). In
+`ios/Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig`,
+`OTHER_LDFLAGS` should no longer contain `-l"…_iOS-device"`, and
+`SDK_VENDORED_LIBS[sdk=iphoneos*]` / `SDK_VENDORED_LIBS[sdk=iphonesimulator*]`
+should list the two sets.
+
+For another plugin, look at its `ios/*.podspec` and `ios/libs`: if the
+library names end in something other than `_iOS-device` / `_iOS-simulator`,
+change the two suffixes in the snippet. If the plugin's simulator libraries
+are not in a directory that its podspec puts on the library search path, the
+link fails with `library '…' not found` instead; ask the plugin to ship an
+XCFramework, which carries both builds and needs no workaround.
 
 ---
 
