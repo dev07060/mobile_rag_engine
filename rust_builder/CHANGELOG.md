@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.23.0
+* Used by `mobile_rag_engine` 0.24.0.
+* **HNSW file format 2**: an existing `.hnsw` file is not reused; the first activation after upgrading rebuilds the index from the database.
+* **Known problems**: see the `mobile_rag_engine` 0.24.0 changelog (HNSW search width with few candidates, rare miss of a short document next to a large cluster, Korean particle rule on two-syllable words, Xcode 27 source builds on macOS).
 * **Engine version**: the crate version is now the `rag_engine_flutter` package version (it was `0.8.0`), so the `last_engine_version` a database records on every boot names the release that wrote it. A test keeps the two equal. The value is a trace only; no migration, rebuild or lock reads it, so existing databases open as before.
 * **Vector search**: new `search_chunks_in_sources(collection_id, query_embedding, top_k, source_ids)` scores every chunk of the given sources (exact scan, i8 when stored, else f32) and returns cosine `similarity`, the same unit as `search_chunks_in_collection`. An empty `source_ids` searches the whole collection. Bindings regenerated with `flutter_rust_bridge_codegen` 2.13.0.
 * **Search handle**: with `adjacent_chunks > 0`, `search_meta_hybrid` keeps the hits in rank order and appends the neighbors that were not hits (the best hit's first, each hit's in chunk order) instead of sorting everything by source id and chunk index. `hit_meta` and `assemble_context` with `RelevanceFirst` follow that order, so a neighbor no longer takes the place of a hit in a tight budget. `Chronological` still sorts by source and chunk index.

@@ -179,8 +179,8 @@ gold?":
 | One document per card, short documents with a title line | 1 |
 
 This is one constructed example, not a measurement. 0.23.0 does not reduce
-English words to their stem, so "earn" did not match "Earning"; releases
-after 0.23.0 do. To compare the hybrid weights on documents like these, see the
+English words to their stem, so "earn" did not match "Earning"; 0.24.0
+and later do. To compare the hybrid weights on documents like these, see the
 measurements in [Model Setup](model_setup.md#korean-documents-koen-e5-tiny);
 which weight is best differs between models, languages and document sets.
 

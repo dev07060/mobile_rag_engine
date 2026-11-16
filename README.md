@@ -64,7 +64,7 @@ enterprise apps where user data must stay on the device.
 
 ```yaml
 dependencies:
-  mobile_rag_engine: ^0.23.0
+  mobile_rag_engine: ^0.24.0
 ```
 
 ### 2. Install the verified Model Pack
@@ -302,8 +302,8 @@ collection.
 
 Passage numbers: 80 queries (32 English, 32 Korean, 16 multilingual), a
 fresh database per model, profile build on an Apple Silicon Mac, measured
-2026-11-12. They include a vector-index fix that reaches pub.dev users with
-the next `rag_engine_flutter` release. Full conditions and per-language
+2026-11-12. They include a vector-index fix released in `mobile_rag_engine` 0.24.0
+(`rag_engine_flutter` 0.23.0). Full conditions and per-language
 results are in the
 [passage benchmark report](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/perf/passage-benchmark-2026-11/README.md).
 

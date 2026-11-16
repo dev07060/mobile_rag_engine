@@ -16,7 +16,7 @@ The ONNX embedding model is the single largest contributor to your app's downloa
 **For development**, bundle the model in `assets/` for quick iteration.
 **For production releases**, you can download the model at runtime to keep your bundle small. How depends on the version:
 
-- **Releases after 0.23.0:** download the model and tokenizer to files of your choice, then pass their paths. Nothing is copied from assets, and the model does not need to be in `pubspec.yaml`.
+- **0.24.0 and later:** download the model and tokenizer to files of your choice, then pass their paths. Nothing is copied from assets, and the model does not need to be in `pubspec.yaml`.
 
   ```dart
   final support = await getApplicationSupportDirectory();
@@ -44,7 +44,7 @@ The ONNX embedding model is the single largest contributor to your app's downloa
 
   Any change to the model file's name or content locks search until `reembedAll()` or `clearAndRestart()`, because the embedding fingerprint includes the file name and a hash of the file. Re-embedding is needed even for an update of the same model, such as a re-quantized export.
 
-- **0.23.0: shipping without the bundled model fails.** Bundle the model in every build, or stay on 0.22.3. Up to 0.22.3, you could leave `assets/model.onnx` out of `pubspec.yaml`, download the model to `<app storage directory>/model.onnx` yourself (the application documents directory, or the application support directory on Windows), and call `MobileRag.initialize(modelAsset: 'assets/model.onnx')`: the engine skipped the asset copy because the file already existed. 0.23.0 reads the bundled asset on every launch to check that the copy is current, so this setup fails in `MobileRag.initialize` with `Unable to load asset`. If you bundle the model in debug builds and remove it only for release, debug runs keep working and only the release build fails. Releases after 0.23.0 accept this setup again, but new code should pass `tokenizerPath`/`modelPath`. `RagModelPack.asset(...)` always needs the model bundled.
+- **0.23.0: shipping without the bundled model fails.** Bundle the model in every build, or stay on 0.22.3. Up to 0.22.3, you could leave `assets/model.onnx` out of `pubspec.yaml`, download the model to `<app storage directory>/model.onnx` yourself (the application documents directory, or the application support directory on Windows), and call `MobileRag.initialize(modelAsset: 'assets/model.onnx')`: the engine skipped the asset copy because the file already existed. 0.23.0 reads the bundled asset on every launch to check that the copy is current, so this setup fails in `MobileRag.initialize` with `Unable to load asset`. If you bundle the model in debug builds and remove it only for release, debug runs keep working and only the release build fails. 0.24.0 and later accept this setup again, but new code should pass `tokenizerPath`/`modelPath`. `RagModelPack.asset(...)` always needs the model bundled.
 
 ---
 

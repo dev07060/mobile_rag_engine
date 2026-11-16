@@ -62,7 +62,7 @@ Adding the package to an existing app:
 ```yaml
 # pubspec.yaml
 dependencies:
-  mobile_rag_engine: ^0.23.0
+  mobile_rag_engine: ^0.24.0
 ```
 
 ```bash

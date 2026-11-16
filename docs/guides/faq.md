@@ -46,7 +46,7 @@ Yes, but it's **3-5x slower than real devices**. Always run performance tests on
 Several options available:
 
 1. **Use a smaller model** - MiniLM (~23MB, English only, the default) or KoEn-E5-Tiny (~37MB, Korean and English)
-2. **Download at runtime** - Download BGE-m3 on first app launch and pass it with `tokenizerPath`/`modelPath` (releases after 0.23.0; 0.23.0 needs the model bundled). See [Release Build Guide](release_build.md).
+2. **Download at runtime** - Download BGE-m3 on first app launch and pass it with `tokenizerPath`/`modelPath` (0.24.0 and later; 0.23.0 needs the model bundled). See [Release Build Guide](release_build.md).
 3. **Accept the size** - iOS allows 4GB, Android Play allows 150MB AAB
 
 See [Model Setup Guide](model_setup.md#production-deployment-strategies) for details.
@@ -282,8 +282,8 @@ listed in `pubspec.yaml` into every platform's build, so `assets/mobile_rag/`
 - Or do not bundle the model at all: download it on first launch on the
   supported platforms and pass the files with
   `MobileRag.initialize(tokenizerPath: …, modelPath: …)`, see the
-  [Release Build Guide](release_build.md). This works only in releases after
-  0.23.0; 0.23.0 needs the model bundled, and `RagModelPack.asset(...)` always
+  [Release Build Guide](release_build.md). This works only in 0.24.0 and
+  later; 0.23.0 needs the model bundled, and `RagModelPack.asset(...)` always
   does.
 
 ---
