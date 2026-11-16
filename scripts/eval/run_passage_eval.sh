@@ -17,6 +17,9 @@
 #                     bundles (F2; build first: scripts/f2/build_en_validation_bundles.py)
 #                     e1 = E1 app-document bundle (GNOME Help, short docs, sample PDFs;
 #                     committed, rebuilt by scripts/e1/build_e1_bundle.py)
+# --as-model-pack     with --model DIR: initialize through DIR/model-pack.json
+#                     (RagModelPack.asset) instead of the two asset paths; the
+#                     manifest's asset paths are pointed at the copied files
 # --name              label used in file names (default: model directory name)
 # --out               result directory (default: build/eval_results/<time>_<name>_<bundle>)
 # --timeout-minutes N harness time limit (default 90)
@@ -34,7 +37,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MODEL_DIR="" ; MODEL_PACK="" ; BUNDLE="80" ; NAME="" ; OUT="" ; DUMP=false ; TIMEOUT=90 ; INIT_WEIGHTS=""
+MODEL_DIR="" ; MODEL_PACK="" ; BUNDLE="80" ; NAME="" ; OUT="" ; DUMP=false ; TIMEOUT=90 ; INIT_WEIGHTS="" ; AS_PACK=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --model) MODEL_DIR="$2"; shift 2;;
@@ -45,7 +48,8 @@ while [[ $# -gt 0 ]]; do
     --dump-candidates) DUMP=true; shift;;
     --timeout-minutes) TIMEOUT="$2"; shift 2;;
     --init-weights) INIT_WEIGHTS="$2"; shift 2;;
-    -h|--help) sed -n '2,33p' "$0"; exit 0;;
+    --as-model-pack) AS_PACK=true; shift;;
+    -h|--help) sed -n '2,36p' "$0"; exit 0;;
     *) echo "unknown argument: $1" >&2; exit 2;;
   esac
 done
@@ -121,6 +125,20 @@ else
   [[ -f "$MODEL_DIR/model-pack.json" ]] && cp "$MODEL_DIR/model-pack.json" "$WORK/assets/eval_model/"
   NAME="${NAME:-$(basename "$MODEL_DIR")}"
 fi
+PACK_ASSET=""
+if $AS_PACK; then
+  [[ -n "$MODEL_DIR" && -f "$WORK/assets/eval_model/model-pack.json" ]] || {
+    echo "--as-model-pack needs --model DIR with model-pack.json" >&2; exit 2; }
+  python3 - "$WORK/assets/eval_model/model-pack.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+m = json.load(open(p))
+m["modelAsset"] = "assets/eval_model/model.onnx"
+m["tokenizerAsset"] = "assets/eval_model/tokenizer.json"
+json.dump(m, open(p, "w"), indent=2)
+PY
+  PACK_ASSET=assets/eval_model/model-pack.json
+fi
 OUT="${OUT:-$ROOT/build/eval_results/${STAMP}_${NAME}_${BUNDLE}}"
 mkdir -p "$OUT"
 
@@ -181,7 +199,8 @@ set +e
   --dart-define=EVAL_INIT_VECTOR_WEIGHT="${INIT_WEIGHTS%%,*}" \
   --dart-define=EVAL_INIT_BM25_WEIGHT="${INIT_WEIGHTS#*,}" \
   --dart-define=EVAL_MODEL_ASSET=assets/eval_model/model.onnx \
-  --dart-define=EVAL_TOKENIZER_ASSET=assets/eval_model/tokenizer.json) > "$LOG" 2>&1
+  --dart-define=EVAL_TOKENIZER_ASSET=assets/eval_model/tokenizer.json \
+  --dart-define=EVAL_MODEL_PACK_ASSET="$PACK_ASSET") > "$LOG" 2>&1
 RC=$?
 set -e
 ELAPSED=$(( $(date +%s) - START ))

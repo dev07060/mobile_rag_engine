@@ -6,19 +6,17 @@ Common questions about `mobile_rag_engine`.
 
 ## General
 
-### Q: Does it support Korean?
+### Q: How do I search Korean documents?
 
-**Yes, with a Korean model.** The default Model Pack (`all-MiniLM-L6-v2`) is
+Use a Korean model. The default Model Pack (`all-MiniLM-L6-v2`) is
 English-only and scores close to random on Korean text. For Korean documents
 use **KoEn-E5-Tiny**: it covers Korean and English, has 384 dimensions like
-MiniLM, and its model and tokenizer take about 39 MB.
+MiniLM, and its model and tokenizer take about 41 MB.
 
 The `setup` command installs only the MiniLM pack, so follow
 [Korean documents: KoEn-E5-Tiny](model_setup.md#korean-documents-koen-e5-tiny):
 download the two files, write the Model Pack manifest, and initialize with it.
 
-KoEn-E5-Tiny covers only Korean and English. For other languages, see the
-[model comparison](model_setup.md#model-comparison).
 
 ### Q: Does it work offline?
 
@@ -26,7 +24,7 @@ KoEn-E5-Tiny covers only Korean and English. For other languages, see the
 
 ### Q: Can I test on iOS Simulator?
 
-Yes, but it's **3-5x slower than real devices**. Always run performance tests on physical hardware.
+Yes. Performance differs from real devices, so run performance tests on physical hardware.
 
 ---
 
@@ -37,17 +35,17 @@ Yes, but it's **3-5x slower than real devices**. Always run performance tests on
 | Use Case | Recommended Model |
 |:---------|:------------------|
 | English-only apps (default) | **MiniLM** (384 dim, ~23MB) |
-| Korean, or Korean and English | **KoEn-E5-Tiny** (384 dim, ~37MB); see the [recipe](model_setup.md#korean-documents-koen-e5-tiny) |
-| Other languages, or many languages mixed | **BGE-m3** (1024 dim, ~542MB) |
+| Korean, or Korean and English | **KoEn-E5-Tiny** (384 dim, ~41 MB with tokenizer); see the [recipe](model_setup.md#korean-documents-koen-e5-tiny) |
+| Larger model, if you can ship 586 MB | **BGE-m3** (1024 dim, ~586 MB with tokenizer) |
 | Quick prototyping | **MiniLM** |
 
-### Q: BGE-m3 is too large (542MB) for my app
+### Q: BGE-m3 is too large (586 MB) for my app
 
 Several options available:
 
-1. **Use a smaller model** - MiniLM (~23MB, English only, the default) or KoEn-E5-Tiny (~37MB, Korean and English)
-2. **Download at runtime** - Download BGE-m3 on first app launch and pass it with `tokenizerPath`/`modelPath` (releases after 0.23.0; 0.23.0 needs the model bundled). See [Release Build Guide](release_build.md).
-3. **Accept the size** - iOS allows 4GB, Android Play allows 150MB AAB
+1. **Use a smaller model** - MiniLM (~23MB, English only, the default) or KoEn-E5-Tiny (~41 MB, for Korean documents)
+2. **Download at runtime** - Download BGE-m3 on first app launch and pass it with `tokenizerPath`/`modelPath` (0.24.0 and later; 0.23.0 needs the model bundled). See [Release Build Guide](release_build.md).
+3. **Accept the size** - check the store limits ([Google Play app size limits](https://support.google.com/googleplay/android-developer/answer/9859372))
 
 See [Model Setup Guide](model_setup.md#production-deployment-strategies) for details.
 
@@ -64,8 +62,9 @@ Not supported yet:
 - Models requiring extra mandatory inputs such as `position_ids`
 
 Validated ONNX artifacts:
-- `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model_qint8_arm64.onnx`
-- `https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx`
+- `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/onnx/model_qint8_arm64.onnx`
+- KoEn-E5-Tiny: `https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX/resolve/5cf599a8cd6577f2f12a026130ad50132e472cfd/onnx/model_qint8_arm64.onnx`
+- BGE-m3: `https://huggingface.co/Teradata/bge-m3/resolve/53f8835700d8ff5988f30d529894940d0338ea62/onnx/model_int8.onnx` (tokenizer from the same revision)
 
 Models outside the validated list are best-effort.
 
@@ -107,7 +106,7 @@ if (rag.isEmbeddingFingerprintLocked) {
 }
 ```
 
-`regenerateAllEmbeddings()` and `rebuildIndex()` do not remove the lock. See
+`MobileRag.instance.engine.regenerateAllEmbeddings()` and `rebuildIndex()` do not remove the lock. See
 [Data Migration & Re-embedding](../features/index_management.md#3-data-migration--re-embedding)
 for `clearAndRestart()` and the details.
 
@@ -117,17 +116,8 @@ for `clearAndRestart()` and the details.
 
 ### Q: Embedding is slow
 
-1. **Use batch processing**:
-   ```dart
-   await EmbeddingService.embedBatch(
-     texts,
-     onProgress: (done, total) => print('$done / $total'),
-   );
-   ```
+1. **Keep embedding off the UI thread**: `MobileRag.initialize(...)` configures the embedding worker isolate for normal app flows.
 
-2. **Keep embedding off the UI thread**: `MobileRag.initialize(...)` configures the embedding worker isolate for normal app flows.
-
-3. **Use INT8 quantized models** - 2-4x faster
 
 ### Q: Search is slow
 
@@ -148,19 +138,12 @@ in the Ask guide for the three things that help.
 
 - **Prefer file-path ingest for large local files**: Use `addDocumentFromFile(path)` for text-layer PDFs, DOCX, Markdown, and text files when you have a stable path. Scanned/image-only PDFs need OCR before indexing.
 - **Use UTF-8 ingest when bytes are already loaded**: Use `addDocumentUtf8(bytes)` for text/Markdown bytes instead of converting them to a Dart `String` first.
-- **Limit document count**: 10K+ may cause degradation.
 - **Use INT8 models**: Smaller models reduce memory pressure.
 - **Rebuild index periodically**: Call `MobileRag.instance.rebuildIndex()` when you need deterministic index freshness.
 
 ### Q: Which dispose API should I use?
 
-For deterministic cleanup in advanced flows, prefer:
-
-```dart
-await EmbeddingService.disposeAsync();
-```
-
-`EmbeddingService.dispose()` remains for backward compatibility, but it is fire-and-forget.
+Use `await MobileRag.dispose();`. It waits for the embedding worker and closes the database. Call `EmbeddingService.disposeAsync()` only if your app uses `EmbeddingService` directly.
 
 ### Q: What happens if I pass invalid config/search values?
 
@@ -282,8 +265,8 @@ listed in `pubspec.yaml` into every platform's build, so `assets/mobile_rag/`
 - Or do not bundle the model at all: download it on first launch on the
   supported platforms and pass the files with
   `MobileRag.initialize(tokenizerPath: …, modelPath: …)`, see the
-  [Release Build Guide](release_build.md). This works only in releases after
-  0.23.0; 0.23.0 needs the model bundled, and `RagModelPack.asset(...)` always
+  [Release Build Guide](release_build.md). This works only in 0.24.0 and
+  later; 0.23.0 needs the model bundled, and `RagModelPack.asset(...)` always
   does.
 
 ---
@@ -317,7 +300,8 @@ there. Another database name changes the `rag` prefix.
 | `rag.dirty`, `rag.<8 hex>.dirty` | Empty markers that exist while an index update is pending |
 
 The copied model and tokenizer are in the same directory (`model.onnx`,
-`tokenizer.json`, or `mobile_rag_model_packs/` for a Model Pack).
+`tokenizer.json`, or `mobile_rag_model_packs/` for a Model Pack). Nothing is
+copied when you pass `tokenizerPath` / `modelPath`.
 
 ### Q: Can I backup/restore data?
 
@@ -351,4 +335,4 @@ Restoring `rag.sqlite` without `rag.vec` fails in `MobileRag.initialize` with
 
 ### Q: What's the maximum document count?
 
-Tested with **10,000+ documents**. Actual limits depend on device memory.
+There is no fixed limit; it depends on device memory and chunk count.

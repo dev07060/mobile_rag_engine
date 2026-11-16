@@ -4,6 +4,59 @@ This guide covers the recommended fixed Model Pack plus advanced custom ONNX
 assets for `mobile_rag_engine`. The Model Pack is installed during development,
 bundled with the app, and never downloaded at runtime.
 
+## Which model
+
+These three models were measured with this package. Each one installs as a
+Model Pack in `assets/mobile_rag/`; pick one per app.
+
+| Model | Dimensions | Files to bundle | How to install |
+|:------|:----------:|:---------------:|:---------------|
+| all-MiniLM-L6-v2 (default) | 384 | about 23 MB | [`setup` command](#recommended-stable-minilm-model-pack), one line |
+| KoEn-E5-Tiny, for Korean documents | 384 | about 41 MB | [download two files and write the manifest](#korean-documents-koen-e5-tiny) |
+| BGE-m3 | 1024 | about 586 MB | [download two files and write the manifest](#bge-m3-model-pack) |
+
+Measured on 80 Wikipedia questions (32 English, 32 Korean, 16 mixed, default
+hybrid search, top 10, profile build on an Apple M3 Pro Mac): MiniLM
+`passage_recall@10` 0.925, KoEn-E5-Tiny 0.950 and BGE-m3 0.9625, all on
+2026-11-16 with `mobile_rag_engine` 0.24.0 code; BGE-m3 was initialized from the
+manifest in [BGE-m3](#bge-m3-model-pack).
+
+On two larger English sets (NFCorpus, 3,633 documents; SciFact, 5,183
+abstracts):
+
+| Model | NFCorpus, 323 questions | SciFact, 300 claims |
+|:------|:---:|:---:|
+| MiniLM Model Pack (default) | 207 | 226 |
+| KoEn-E5-Tiny | 207 | 219 |
+| BGE-m3 | 205 | 224 |
+
+Questions with the answer in the 5 `ask` passages, default hybrid search,
+profile build on an Apple M3 Pro Mac, 2026-11-14, engine commit `3f9df80`
+(before 0.24.0, whose BM25 normalization and passage order changes were not
+re-measured here). Both sets are biomedical paper abstracts; MiniLM's SciFact
+number may be inflated, because its training data includes citation pairs
+from the same paper collection.
+
+Larger Korean sets, same condition:
+
+| Model | MIRACL Korean dev, 213 questions (5,000 / 15,000 passages) | KorQuAD 1.0 dev, 500 questions | AutoRAG Korean, 114 questions |
+|:------|:---:|:---:|:---:|
+| MiniLM Model Pack (default) | not run (English-only model) | not run | not run |
+| KoEn-E5-Tiny | 167 / 165 | 483 | 112 |
+| BGE-m3 | 173 / 166 | 482 | 111 |
+
+Measured 2026-11-14 with the engine code of commits `28308ab` (MIRACL) and
+`04d950d` (KorQuAD, AutoRAG), before the Korean keyword changes of 0.24.0.
+MIRACL's training split was used to train both models, so their vector search
+may look better there than on your documents.
+
+All three use the same steps after installing: declare `assets/mobile_rag/` in
+`pubspec.yaml` and initialize with
+`modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json')`.
+Switching an app from one model to another needs the stored chunks to be
+embedded again; see
+[Switching an existing database](#4-switching-an-existing-database-from-minilm).
+
 ## Recommended: stable MiniLM Model Pack
 
 From your Flutter project, run:
@@ -12,7 +65,8 @@ From your Flutter project, run:
 dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en
 ```
 
-It verifies the immutable revision and creates exactly:
+It verifies the immutable revision and creates these files (it also adjusts
+the iOS and macOS host projects; see [ONNX Runtime Notes](#onnx-runtime-notes)):
 
 ```text
 assets/mobile_rag/model.onnx
@@ -49,8 +103,8 @@ The sole v1 preset is `stable-minilm-l6-v2-arm64-en`: English, arm64,
 `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`. Vector storage is Q8_0. Use
 `--repair` only to replace a file that fails its SHA-256/length check.
 
-The first success is adding documents, rebuilding the index, then searching for
-non-empty chunks/context. LLM generation is outside this package step.
+The first success is adding documents, then searching for non-empty
+chunks/context (searches wait for the pending index update). LLM generation is outside this package step.
 
 ---
 
@@ -62,19 +116,20 @@ MiniLM is English-only. On Korean retrieval benchmarks it scores close to
 random, so Korean apps should swap in a Korean-English model.
 [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX)
 (Apache-2.0) is the one we measured and recommend: it is 384-dimensional like
-MiniLM and adds about 17 MB to the app.
+MiniLM and adds about 18 MB to the app.
 
 | Model | Ko-StrategyQA nDCG@10 | AutoRAG nDCG@10 | ONNX + tokenizer |
 |:------|:---:|:---:|:---:|
-| all-MiniLM-L6-v2 (default) | 0.014 | 0.059 | 22.4 MB |
-| KoEn-E5-Tiny (int8, arm64) | 0.762 | 0.866 | 39.3 MB |
+| all-MiniLM-L6-v2 (default) | 0.014 | 0.059 | 23.5 MB |
+| KoEn-E5-Tiny (int8, arm64) | 0.762 | 0.866 | 41.2 MB |
 
-Desktop measurement, whole documents embedded up to 512 tokens (MiniLM with
-the earlier character-based limit). Method and the chunked numbers are in
-[the measurement notes](../perf/multilingual-embedding/README.md).
+Desktop measurement on 2026-11-02 (Apple M3 Pro, ONNX Runtime CPU), with a
+standalone script that follows the engine's tokenizer and mean pooling (no
+vector index); whole documents embedded up to 512 tokens (MiniLM with the
+earlier character-based limit).
 
-KoEn-E5-Tiny only covers Korean and English. Text in other scripts, such as
-Japanese or Chinese, is likely to be retrieved poorly.
+KoEn-E5-Tiny only covers Korean and English. Text in other languages is likely
+to be retrieved poorly.
 
 ### 1. Download the files
 
@@ -88,7 +143,22 @@ BASE=https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX/resolve/$REV
 
 curl -L -o model.onnx "$BASE/onnx/model_qint8_arm64.onnx"
 curl -L -o tokenizer.json "$BASE/tokenizer.json"
+cd -
 ```
+
+Check both files before writing the manifest. The two hashes must be exactly
+these:
+
+```bash
+shasum -a 256 assets/mobile_rag/model.onnx assets/mobile_rag/tokenizer.json
+# d463c9b1c29f3202d510e2836265d60f9e6e6dd518c5930ba865700646489bd4  model.onnx
+# a6dd38d692ac1caa6d5dbc195d92f1f978b5c74ec60e02ed15fdf04404742fe3  tokenizer.json
+```
+
+`dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en --check`
+checks only the MiniLM pack; for
+this pack, the engine checks the hashes on first launch and fails with a
+`RagModelPackException` if a file differs.
 
 ### 2. Write the Model Pack manifest
 
@@ -158,8 +228,8 @@ apply to every hybrid search that does not pass its own `vectorWeight` /
 `bm25Weight`.
 
 Measured in the `ask` condition (5 passages, 20 candidates per list) with
-KoEn-E5-Tiny, profile build on an Apple M3 Pro Mac, 2026-11-14 (questions with
-an answer in the top 5):
+KoEn-E5-Tiny, profile build on an Apple M3 Pro Mac, 2026-11-14, before the
+Korean keyword changes of 0.24.0 (questions with an answer in the top 5):
 
 | Questions | Vector only | 0.2 / 0.8 (default) | 0.5 / 0.5 | 0.6 / 0.4 |
 |---|---|---|---|---|
@@ -174,10 +244,7 @@ MIRACL's training split was used to train KoEn-E5-Tiny's base model, so
 vector search may look better there than on your documents. On KorQuAD and
 AutoRAG, which these models were not trained on, 0.6 / 0.4 lost answers that
 keyword search had found (KorQuAD: 12 lost, 6 gained), mostly to other
-paragraphs of the same article; 0.5 / 0.5 lost 3 and gained 4. The method and
-all numbers, including BGE-m3, are in
-[the F2-0 report](../perf/f2-fusion/f2_0_report.md) and
-[the Korean validation](../perf/f2-fusion/validation_ko.md). With the
+paragraphs of the same article; 0.5 / 0.5 lost 3 and gained 4. With the
 English-only MiniLM, raising the vector weight lost Korean answers in every
 test.
 
@@ -190,34 +257,29 @@ abstracts), same condition and setup:
 | SciFact test, 300 claims, 5,183 abstracts | 221 | 219 | 224 | 225 |
 
 Against the default, 0.5 / 0.5 gained 16 and lost 4; 0.6 / 0.4 gained 25 and
-lost 24. Details, including MiniLM and BGE-m3, are in
-[the English validation](../perf/f2-fusion/validation_en.md).
+lost 24.
 
 App-style documents: 56 documents (GNOME Help pages, short app FAQs, release
 notes and office policies, two large PDFs) in English and Korean, 90 questions
-with an answer, same condition and setup. The questions were drafted in-session
-for this test; review verdicts were drafted in-session and confirmed by the
-maintainer. Answers in the top 5 at each vector weight
-(BM25 weight = 1 − vector weight; 0.0 is BM25 only, 1.0 is vector only):
+with an answer, same condition, `mobile_rag_engine` 0.24.0 code, 2026-11-16.
+Answers in the top 5 at each vector weight (BM25 weight = 1 − vector weight;
+0.0 is BM25 only, 1.0 is vector only):
 
-| KoEn-E5-Tiny | 0.0 | 0.2 (default) | 0.4 | 0.5 | 0.6 | 0.8 | 1.0 |
-|---|---|---|---|---|---|---|---|
-| English, 45 | 34 | 34 | 35 | 38 | 38 | 38 | 38 |
-| Korean, 45 | 30 | 37 | 38 | 42 | 42 | 42 | 41 |
+| KoEn-E5-Tiny | 0.0 | 0.2 (default) | 0.5 | 0.6 | 1.0 |
+|---|---|---|---|---|---|
+| English, 45 | 34 | 34 | 38 | 38 | 38 |
+| Korean, 45 | 31 | 37 | 43 | 42 | 41 |
 
-These are measurements, not a choice. Here 0.5 through 0.8 score the same and
-vector only is within one; nothing in this test picks 0.5 over the others.
+These are measurements, not a choice. Here 0.5, 0.6 and vector only are
+within two; nothing in this test picks 0.5 over the others.
 Answers rise between 0.485 and 0.5, where a passage found only by vector search
 starts to outrank the fifth keyword-only result. With 45 questions per
 language, a difference of one or two is noise. Pick the weights for your own
 model, languages and documents, ideally by measuring on your own questions.
-The full grid for MiniLM, KoEn-E5-Tiny and BGE-m3 (MiniLM's English stays at
-34–38 at every weight; BGE-m3's English keeps rising up to vector only) is in
-[the E1 report](../perf/e1-app-docs/README.md). The example app's "App docs"
+The example app's "App docs"
 screen lets you try the weights on the same questions.
 
-You do not need to add `query: ` or `passage: ` prefixes. With KoEn-E5-Tiny
-they change scores by 0.002 or less.
+You do not need to add `query: ` or `passage: ` prefixes.
 
 ### 4. Switching an existing database from MiniLM
 
@@ -263,14 +325,15 @@ first). See
 ### Cost
 
 KoEn-E5-Tiny has 12 layers to MiniLM's 6. Measured on one iPhone 17
-(iOS 27.0.1, profile build, 2026-11-16) with the example app, 56 app
+(iOS 27.0.1, profile build, engine commit `ffb0ab8`, 2026-11-16) with the
+example app (hybrid weights 0.2 / 0.8 for MiniLM, 0.5 / 0.5 for KoEn-E5-Tiny), 56 app
 documents (about 2,300 chunks) and 120 questions:
 
 | | MiniLM | KoEn-E5-Tiny |
 |---|---|---|
 | Query embedding, English (median / p95) | 1.5 / 2.0 ms | 2.5 / 3.7 ms |
 | Query embedding, Korean (median / p95) | 2.6 / 4.2 ms | 2.5 / 3.6 ms |
-| Whole query, embedding + search, top 5 (p95) | 3.5–4.7 ms | 4.7–4.8 ms |
+| Whole query, embedding + search + reading the chunks, top 5 (p95) | 3.5–4.7 ms | 4.7–4.8 ms |
 | Ingestion per chunk (`addDocumentFromFile`) | 4.7 ms | 6.4 ms |
 | `initialize`, first launch / later launches | 425 / 111 ms | 859 / 160 ms |
 | Memory added by `initialize` / peak RSS | 134 / 242 MB | 197 / 314 MB |
@@ -279,10 +342,7 @@ Korean queries take the same time with both models: MiniLM splits Korean into
 about 2.5 times as many tokens, which cancels out its smaller size. English
 queries are about 1.7 times slower with KoEn-E5-Tiny, and ingestion about
 1.3 times slower. The first launch includes installing the Model Pack. These
-are one device's numbers; conditions and the full results are in
-[the M5 report](../perf/multilingual-embedding/README.md#6-iphone-실기기-측정-m5-2026-11-16).
-On a desktop CPU (one thread), embedding a chunk took about twice as long
-with KoEn-E5-Tiny (55 ms vs 28 ms).
+are one device's numbers.
 
 ### Keeping the model files out of git
 
@@ -353,31 +413,129 @@ instead: it downloads the pinned revision and checks the hashes itself, and
 
 ---
 
+<a id="bge-m3-model-pack"></a>
+
+## BGE-m3
+
+[Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) is the INT8 ONNX
+export of BAAI's BGE-m3 (MIT license). It is the largest model measured here:
+1024 dimensions, a 569 MB model file and a 17 MB tokenizer. Its vectors take
+about 2.7 times the space of the 384-dimensional models, and the app must ship
+or download about 586 MB. Use the files below: the tokenizer must come from
+the same Teradata revision. The `tokenizer.json` in the `BAAI/bge-m3`
+repository is a different file and was not tested.
+
+### 1. Download the files
+
+```bash
+mkdir -p assets/mobile_rag && cd assets/mobile_rag
+
+REV=53f8835700d8ff5988f30d529894940d0338ea62
+BASE=https://huggingface.co/Teradata/bge-m3/resolve/$REV
+
+curl -L -o model.onnx "$BASE/onnx/model_int8.onnx"
+curl -L -o tokenizer.json "$BASE/tokenizer.json"
+
+shasum -a 256 model.onnx tokenizer.json
+cd -
+# fc4692db47a783252a0dba2d5601a3b9ab0c5058186eced9b963bb0e112f011a  model.onnx
+# 249df0778f236f6ece390de0de746838ef25b9d6954b68c2ee71249e0a9d8fd4  tokenizer.json
+```
+
+### 2. Write the Model Pack manifest
+
+Save as `assets/mobile_rag/model-pack.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "preset": "bge-m3-int8",
+  "modelId": "Teradata/bge-m3",
+  "revision": "53f8835700d8ff5988f30d529894940d0338ea62",
+  "modelAsset": "assets/mobile_rag/model.onnx",
+  "tokenizerAsset": "assets/mobile_rag/tokenizer.json",
+  "modelSha256": "fc4692db47a783252a0dba2d5601a3b9ab0c5058186eced9b963bb0e112f011a",
+  "tokenizerSha256": "249df0778f236f6ece390de0de746838ef25b9d6954b68c2ee71249e0a9d8fd4",
+  "modelBytes": 568921578,
+  "tokenizerBytes": 17082799,
+  "architecture": "arm64",
+  "embeddingDimension": 1024,
+  "license": "mit",
+  "language": "see the model card"
+}
+```
+
+`architecture` must be `"arm64"`, the only value Model Pack v1 accepts. The
+same files are used on every supported platform.
+
+### 3. Bundle and initialize
+
+Declare `assets/mobile_rag/` in `pubspec.yaml` and initialize as for
+KoEn-E5-Tiny:
+
+```dart
+await MobileRag.initialize(
+  modelPack: const RagModelPack.asset('assets/mobile_rag/model-pack.json'),
+);
+```
+
+On first launch the engine loads both files (about 586 MB) into memory to hash
+and copy them, so the first `initialize` takes noticeably longer than with the
+smaller models. This was checked only on a Mac, not on a phone.
+
+This manifest and these files were run through `MobileRag.initialize` on
+2026-11-16 (`mobile_rag_engine` 0.24.0 code, profile build, Apple M3 Pro Mac,
+macOS 27.2.1): the pack was checked and copied, 4492 chunks were indexed, and
+the 80 Wikipedia questions gave `passage_recall@10` 0.9625 with default hybrid
+search.
+
+### Shipping it without bundling
+
+To keep 586 MB out of the app download, download the same two files at
+runtime, check their SHA-256 values as above, and pass the paths instead of a
+Model Pack:
+
+```dart
+await MobileRag.initialize(
+  tokenizerPath: '${support.path}/bge-m3/tokenizer.json',
+  modelPath: '${support.path}/bge-m3/model.onnx',
+);
+```
+
+The [Release Build guide](release_build.md) shows the download flow (use the
+BGE-m3 URLs and hashes above). To keep
+the files out of git, use the fetch script in
+[Keeping the model files out of git](#keeping-the-model-files-out-of-git) with
+`REPO=Teradata/bge-m3` and `MODEL_FILE=onnx/model_int8.onnx`.
+
+---
+
 ## Advanced / legacy custom ONNX assets
 
-## Model Comparison
+The sections below pass the files directly with `tokenizerAsset` / `modelAsset`
+or `tokenizerPath` / `modelPath` instead of a Model Pack.
 
-| Model | Dimensions | Size (ONNX) | Max Tokens | Languages | Best For |
-|:------|:----------:|:-----------:|:----------:|:----------|:---------|
-| [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (INT8) | **384** | ~23 MB | 256 | English | English-only apps, lightweight & fast |
-| [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX) (INT8) | **384** | ~37 MB | 512 | Korean, English | Korean apps ([recipe](#korean-documents-koen-e5-tiny)) |
-| [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~542 MB | 8,194 | 100+ (multilingual) | Korean, CJK, mixed-language apps |
+### Model Comparison
+
+| Model | Dimensions | Size (ONNX) | Model max tokens | Best For |
+|:------|:----------:|:-----------:|:----------:|:---------|
+| [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (INT8) | **384** | ~23 MB | 256 | English documents, smallest |
+| [KoEn-E5-Tiny](https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX) (INT8) | **384** | ~38 MB | 512 | Korean documents ([recipe](#korean-documents-koen-e5-tiny)) |
+| [Teradata/bge-m3](https://huggingface.co/Teradata/bge-m3) (INT8) | **1024** | ~569 MB | 8,192 | Apps that can ship a 569 MB model ([recipe](#bge-m3-model-pack)) |
 
 > **Dimension Matters**: The embedding dimension affects your vector index. Once you choose a model, all documents must use the same dimension. Switching models requires re-embedding all documents.
 
 ### Validated ONNX Artifacts
 
 - MiniLM: `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/onnx/model_qint8_arm64.onnx`
-- BGE-m3: `https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx`
+- KoEn-E5-Tiny: `https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX/resolve/5cf599a8cd6577f2f12a026130ad50132e472cfd/onnx/model_qint8_arm64.onnx`
+- BGE-m3: `https://huggingface.co/Teradata/bge-m3/resolve/53f8835700d8ff5988f30d529894940d0338ea62/onnx/model_int8.onnx` (tokenizer from the same revision)
 
-These are the regression-tested artifacts for each patch release.
+The engine cuts every input at 512 tokens, whatever the model's own limit.
 
-Compatibility improvements introduced in the `0.14.x` hardening patches remain available in current releases:
-- models requiring `token_type_ids` are now supported without re-export
-- the engine reads ONNX `inputNames` and injects zero `token_type_ids` only when required
-
-Additional models outside this list are supported on a best-effort basis.
-Validated examples during this compatibility patch: `all-MiniLM-L6-v2/onnx`, `intfloat/e5-small-v2`.
+Models that need `token_type_ids` work without re-export: the engine reads the
+ONNX input names and passes zero `token_type_ids` only when the model requires
+them. Models outside this list are best-effort.
 
 ---
 
@@ -395,16 +553,14 @@ curl -L -o model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L
 curl -L -o tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer.json"
 ```
 
-### BGE-m3 (Multilingual — Korean, CJK, etc.)
+### BGE-m3
 
 ```bash
 mkdir -p assets && cd assets
 
-# Download INT8 quantized model (~542MB)
-curl -L -o model.onnx "https://huggingface.co/Teradata/bge-m3/resolve/main/onnx/model_int8.onnx"
-
-# Download tokenizer (~17MB)
-curl -L -o tokenizer.json "https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer.json"
+# Download INT8 quantized model (~569MB) and its tokenizer (~17MB), same revision
+curl -L -o model.onnx "https://huggingface.co/Teradata/bge-m3/resolve/53f8835700d8ff5988f30d529894940d0338ea62/onnx/model_int8.onnx"
+curl -L -o tokenizer.json "https://huggingface.co/Teradata/bge-m3/resolve/53f8835700d8ff5988f30d529894940d0338ea62/tokenizer.json"
 ```
 
 ---
@@ -419,8 +575,8 @@ Include model files in your app bundle. Simple and works offline immediately.
 # pubspec.yaml
 flutter:
   assets:
-    - assets/model.onnx
-    - assets/tokenizer.json
+    - assets/mobile_rag/   # Model Pack
+    # - assets/            # files from "Download Instructions" above
 ```
 
 **Pros:**
@@ -430,7 +586,13 @@ flutter:
 
 **Cons:**
 - Increases app download size
-- App store limits (iOS: 4GB, Android Play: 150MB AAB)
+- App store size limits (see [Google Play app size limits](https://support.google.com/googleplay/android-developer/answer/9859372))
+
+### Strategy 2: Download at runtime
+
+Download the model and tokenizer on first launch, check their SHA-256 values,
+and pass `tokenizerPath` / `modelPath` to `MobileRag.initialize`. See the
+[Release Build guide](release_build.md).
 
 ## Custom Model Export
 
@@ -491,33 +653,17 @@ Runtime setup notes:
 ### Performance Tips
 
 1. **Use INT8 quantized models** - 2-4x smaller, similar accuracy
-2. **Batch embeddings** when processing many documents:
-   ```dart
-   await EmbeddingService.embedBatch(
-     texts,
-     onProgress: (done, total) => print('$done / $total'),
-   );
-   ```
-3. **Run in isolate** for heavy processing to avoid UI jank
+2. `addDocument*` already embeds in a worker isolate, so ingestion does not block the UI.
 
 ---
 
 ## Troubleshooting
 
-### "Failed to load ONNX model"
-
-- Ensure model file exists at the specified path
-- Check file is not corrupted (re-download if needed)
-- Verify model is ONNX format (not PyTorch .bin or .safetensors)
-
-### "Tokenizer initialization failed"
-
-- Ensure `tokenizer.json` file exists
-- File must be HuggingFace tokenizers format (not SentencePiece)
+Model loading and tokenizer errors are covered in [Troubleshooting](troubleshooting.md#initialization-errors).
 
 ### iOS Simulator Limitations
 
-ONNX Runtime works on iOS Simulator but without hardware acceleration. Expect ~3-5x slower inference compared to physical devices.
+Performance in the simulator differs from a device; measure on a physical device.
 
 ### Android Emulator
 

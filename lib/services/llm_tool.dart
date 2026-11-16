@@ -55,7 +55,7 @@ class RagSearchTool {
   ///
   /// Without [promptTokenCounter], [tokenBudget] counts tokens of the
   /// embedding model's tokenizer, which can differ several times from the
-  /// LLM's count, especially for Korean, Japanese, Chinese, Thai and emoji.
+  /// LLM's count, especially for Korean.
   /// With it, [tokenBudget] counts passage texts with [promptTokenCounter],
   /// keeping the most relevant passages that fit; passages are not cut.
   ///

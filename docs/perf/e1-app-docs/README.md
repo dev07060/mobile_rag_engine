@@ -220,6 +220,19 @@ E1과 같은 PR로 example 앱을 바꿨다(범위는 `docs/milestones.md` E1).
 
 - 하네스는 `example/integration_test/hybrid_passage_relevance_measure_test.dart`이고 `example/lib/profiling/`만 import한다.
 
+### 0.24.0 코드로 다시 돌린 결과 (2026-11-16)
+
+R2 배포 준비 트리에서 같은 Mac·도구로 MiniLM과 KoEn을 다시 돌렸다(커밋 `6b5b68f`, 청크 MiniLM 2,331 / KoEn 2,319, 234초 / 53초). 실행이 끝날 때 `rust_builder/rust/src/api/bm25_search.rs`가 바뀐 추적 파일로 기록됐는데, 이는 바로 다음에 돌린 한국어 조사 규칙을 끈 비교 빌드를 준비하던 변경이다. 두 실행의 결과는 규칙을 끈 실행과 다르다(KoEn 한국어 BM25만 31 대 30). 답 있는 질문 중 상위 5개에 정답이 든 수, 벡터 무게별:
+
+| | 0.0 (BM25만) | 0.2 (기본) | 0.5 | 0.6 | 1.0 (벡터만) |
+|---|---|---|---|---|---|
+| KoEn 영어 45 | 34 | 34 | 38 | 38 | 38 |
+| KoEn 한국어 45 | 31 | 37 | 43 | 42 | 41 |
+| MiniLM 영어 45 | 34 | 35 | 36 | 36 | 38 |
+| MiniLM 한국어 44 | 30 | 25 | 20 | 7 | 2 |
+
+BGE-m3는 다시 돌리지 않았다. `docs/guides/model_setup.md`의 앱 문서 표는 이 KoEn 줄이다.
+
 ## 다시 만들기
 
 ```bash

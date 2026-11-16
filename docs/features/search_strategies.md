@@ -25,7 +25,7 @@ final result = await MobileRag.instance.searchHybridWithContext(
 ```
 
 ### 2. `diverseSources`
-**Behavior**: penalizes consecutive chunks from the same source to ensure variety. It tries to pick the best chunk from Source A, then Source B, then Source C, before going back to A.
+**Behavior**: takes the highest-ranked chunk whose source differs from the previous chunk's, so two chunks of one source are not placed next to each other while another source is left.
 **Use Case**: Summarization across multiple documents, "What do different reports say about X?".
 ```dart
 final result = await MobileRag.instance.searchHybridWithContext(
@@ -56,7 +56,7 @@ final result = await MobileRag.instance.searchHybridWithContext(
 - **Description**: The maximum number of **engine tokenizer** tokens the final `context.text` string can contain.
 - **Counting basis**: document wrappers, metadata, and markdown header-path contextual text are included in this count because the engine measures the fully rendered context string.
 - **Scope note**: This budget applies to `context.text` only. It does **not** automatically include the extra system instruction, question, or answer wrapper added later by `formatPrompt()`.
-- **Tip**: Set this based on your LLM's context window minus your prompt size. (e.g., for 4k model, use ~3000).
+- **Tip**: `tokenBudget` counts engine tokens, which can differ several times from your LLM's; see [Token budget](../guides/ask.md#token-budget).
 
 ### `adjacentChunks`
 - **Default**: `0`
@@ -64,14 +64,14 @@ final result = await MobileRag.instance.searchHybridWithContext(
 - **Use Case**: recovering lost context.
 - **Example**: If a chunk says "It returns true.", fetching adjacent chunks reveals *what* function returns true.
 ```dart
-// Fetch context: [Prev Chunk] + [Match] + [Next Chunk]
+// Hits first in rank order, then their neighbors (ContextStrategy.chronological for document order)
 await MobileRag.instance.search(query, adjacentChunks: 1);
 ```
 
 ### `vectorWeight` vs `bm25Weight`
-- **Default**: `0.2`, `0.8`
+- **Default**: `0.2`, `0.8`, or the `defaultVectorWeight` / `defaultBm25Weight` passed to `MobileRag.initialize`
 - **Description**: Controls the balance between Semantic Search (Vector) and Keyword Search (BM25).
-- **Formula**: `Final Score = (VectorRank * vectorWeight) + (BM25Rank * bm25Weight)` (Rank fusion)
+- **Formula**: `score = vectorWeight / (60 + vectorRank) + bm25Weight / (60 + bm25Rank)` (reciprocal rank fusion)
 - **Validation**:
     - Values outside `0.0 ~ 1.0` are clamped at runtime.
     - If both become `0`, defaults (`0.2`, `0.8`) are restored.
@@ -82,12 +82,10 @@ await MobileRag.instance.search(query, adjacentChunks: 1);
 ## Example Scenarios
 
 ### Scenario A: Precise QA on Technical Manuals
-Technical terms matter, so boost BM25. Need exact context.
+Technical terms matter, so keep the keyword weight high (the default 0.8). Need exact context.
 ```dart
 await MobileRag.instance.searchHybridWithContext(
   'How to fix Error 505?',
-  bm25Weight: 0.7, // Boost keyword search
-  vectorWeight: 0.3,
   adjacentChunks: 1, // Get surrounding steps
   strategy: ContextStrategy.chronological, // Maintain step order
 );

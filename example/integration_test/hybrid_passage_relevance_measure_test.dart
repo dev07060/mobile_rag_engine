@@ -56,6 +56,9 @@ const _tokenizerAsset = String.fromEnvironment(
   'EVAL_TOKENIZER_ASSET',
   defaultValue: 'assets/tokenizer.json',
 );
+// When set, initialize through this Model Pack manifest instead of the two
+// asset paths above (same files, checked and copied by the pack resolver).
+const _modelPackAsset = String.fromEnvironment('EVAL_MODEL_PACK_ASSET');
 // F2: default hybrid weights given to MobileRag.initialize. When set, the run
 // also checks the public path: prepareAsk without weights must return the
 // same passages as prepareAsk with these weights.
@@ -82,7 +85,10 @@ void main() {
     () async {
       _assertProfileMode();
       // ignore: avoid_print
-      print('PASSAGE_EVAL model=$_modelAsset manifest=$_manifestAsset');
+      print(
+        'PASSAGE_EVAL model=$_modelAsset modelPack=$_modelPackAsset '
+        'manifest=$_manifestAsset',
+      );
 
       final manifest = RelevanceSourceManifest.parse(
         await rootBundle.loadString(_manifestAsset),
@@ -104,8 +110,11 @@ void main() {
         await _deleteDbFiles(_dbName);
       }
       await MobileRag.initialize(
-        tokenizerAsset: _tokenizerAsset,
-        modelAsset: _modelAsset,
+        tokenizerAsset: _modelPackAsset.isEmpty ? _tokenizerAsset : null,
+        modelAsset: _modelPackAsset.isEmpty ? _modelAsset : null,
+        modelPack: _modelPackAsset.isEmpty
+            ? null
+            : RagModelPack.asset(_modelPackAsset),
         databaseName: _dbName,
         deferIndexWarmup: true,
         // 0.2 / 0.8 are the package defaults (kDefaultVectorWeight /
@@ -297,11 +306,13 @@ void main() {
 
         // ignore: avoid_print
         print('HYBRID_PASSAGE_RELEVANCE_EXPORT_DIR ${export.dirPath}');
-        final stats = await MobileRag.instance.inCollection(_collectionId).getStats();
+        final stats = await MobileRag.instance
+            .inCollection(_collectionId)
+            .getStats();
         if (_noAnswerAsset.isNotEmpty) {
-          for (final raw in (await rootBundle.loadString(_noAnswerAsset))
-              .split('\n')
-              .where((l) => l.trim().isNotEmpty)) {
+          for (final raw in (await rootBundle.loadString(
+            _noAnswerAsset,
+          )).split('\n').where((l) => l.trim().isNotEmpty)) {
             final item = jsonDecode(raw) as Map<String, dynamic>;
             final query = item['query'] as String;
             final embedding = await EmbeddingService.embed(query);
@@ -948,7 +959,6 @@ class _ExportedPassageArtifacts {
   });
 }
 
-
 // ---- F-3: `ask` condition -------------------------------------------------
 // `MobileRag.ask` -> RagSearchTool -> searchHybridWithContext(topK: 5,
 // tokenBudget: 1500) -> searchMetaHybrid(topK 5, collection filter, so 20
@@ -963,7 +973,10 @@ final _noAnswerRows = <Map<String, Object?>>[];
 const _noAnswerAsset = String.fromEnvironment('F1_NO_ANSWER_ASSET');
 // Large bundles with a large model (BGE-m3, 15,000 MIRACL passages) index for
 // well over the default 90 minutes.
-const _timeoutMinutes = int.fromEnvironment('EVAL_TIMEOUT_MINUTES', defaultValue: 90);
+const _timeoutMinutes = int.fromEnvironment(
+  'EVAL_TIMEOUT_MINUTES',
+  defaultValue: 90,
+);
 
 class _AskOutcome {
   const _AskOutcome(
@@ -1051,18 +1064,17 @@ Future<void> _writeAskRows({
   for (final row in _askRows) {
     byProfile.putIfAbsent(row['profile']! as String, () => []).add(row);
   }
-  double mean(List<Map<String, Object?>> rows, String key) =>
-      rows.isEmpty
-          ? 0
-          : rows.map((r) => (r[key]! as num).toDouble()).reduce((a, b) => a + b) /
-              rows.length;
+  double mean(List<Map<String, Object?>> rows, String key) => rows.isEmpty
+      ? 0
+      : rows.map((r) => (r[key]! as num).toDouble()).reduce((a, b) => a + b) /
+            rows.length;
   double top100At(List<Map<String, Object?>> rows, int k) => rows.isEmpty
       ? 0
       : rows.where((r) {
-            final rank = r['top100_gold_rank']! as int;
-            return rank > 0 && rank <= k;
-          }).length /
-          rows.length;
+              final rank = r['top100_gold_rank']! as int;
+              return rank > 0 && rank <= k;
+            }).length /
+            rows.length;
   final summary = <String, Object?>{};
   for (final entry in byProfile.entries) {
     final rows = entry.value;
@@ -1114,7 +1126,6 @@ Future<void> _writeAskRows({
   // ignore: avoid_print
   print('F3_ASK_FILE $path');
 }
-
 
 // ---- F-7: candidate lists for offline fusion comparison -------------------
 // The engine's hybrid search (`compute_hybrid_rrf_scores` in

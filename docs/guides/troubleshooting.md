@@ -11,7 +11,7 @@ Solutions for common issues when using `mobile_rag_engine`.
 **Cause:** Your app resolved 0.20.x. The Model Pack `setup` command and
 `RagModelPack` exist only in 0.21.0 and later.
 
-**Solution:** Use `mobile_rag_engine: ^0.23.0`, or stay on 0.20.x and follow
+**Solution:** Use `mobile_rag_engine: ^0.24.0`, or stay on 0.20.x and follow
 the
 [`v0.20.1` README](https://github.com/dev07060/mobile_rag_engine/blob/v0.20.1/README.md#installation),
 which downloads the model files manually and initializes with
@@ -34,9 +34,12 @@ Cargokit uses them **only when `rustup` is not installed**; with `rustup` on
   did not match the package's public key. Retry on a clean network; do not
   bypass the check.
 - 0.20.x and earlier never shipped binaries, so they always need Rust. Upgrade
-  to `^0.23.0`.
+  to `^0.24.0`.
 
 **Errors from `cargo` / `rustup` (Rust installed, source build):**
+- With Xcode 27, macOS profile and release builds from source fail with
+  `can't find crate for dyn_stack_macros` (or `paste`). Build without `rustup`
+  on `PATH` to use the precompiled binaries.
 1. Make sure Rust stable is current: `rustup default stable`. Cargokit adds the
    Rust targets it needs through `rustup`.
 2. iOS/macOS: make sure Xcode and its command line tools are installed.
@@ -69,7 +72,7 @@ flutter run
 **Symptom:** The app builds for iOS or Android, but `flutter build web` stops
 with errors in the package's own files, such as:
 ```
-…/mobile_rag_engine-0.23.0/lib/services/rag_engine.dart:152:14:
+…/mobile_rag_engine-<version>/lib/services/rag_engine.dart:152:14:
 Error: The argument type 'int' can't be assigned to the parameter type 'BigInt'.
 Error: Compilation failed.
 ```
@@ -87,12 +90,10 @@ keeping the model files out of the web build.
 
 ## Initialization Errors
 
-### "Failed to initialize Rust library"
+### Native library fails to load
 
-**Symptom:**
-```
-RustLibraryException: Failed to initialize native library
-```
+**Symptom:** `MobileRag.initialize` throws before any model is loaded, with an
+error about loading the `rag_engine_flutter` library.
 
 **Solution:**
 1. Run `flutter clean` and rebuild
@@ -110,10 +111,8 @@ flutter run
 
 ### "Tokenizer initialization failed"
 
-**Symptom:**
-```
-Exception: Failed to initialize tokenizer
-```
+**Symptom:** `MobileRag.initialize` throws an error that contains
+`Failed to load tokenizer`.
 
 **Causes and Solutions:**
 
@@ -141,10 +140,7 @@ await MobileRag.initialize(
 
 ### "Failed to load ONNX model"
 
-**Symptom:**
-```
-OnnxRuntimeException: Failed to create session
-```
+**Symptom:** `MobileRag.initialize` throws while ONNX Runtime opens the model.
 
 **Checklist:**
 
@@ -153,22 +149,21 @@ OnnxRuntimeException: Failed to create session
 - [ ] Verify file is not corrupted (re-download)
 - [ ] Verify model is compatible with ONNX Runtime
 
-```dart
-// The engine copies modelAsset to <app storage directory>/<basename>:
-// the application documents directory, or the application support
-// directory on Windows (0.22.0 and later).
-// Verify the resolved file the engine actually loads.
-final dir = Platform.isWindows
-    ? await getApplicationSupportDirectory()
-    : await getApplicationDocumentsDirectory();
-final file = File('${dir.path}/model.onnx');
-if (!await file.exists()) {
-  throw Exception('Model file not found at expected path: ${file.path}');
-}
+Where the engine loads the model from:
 
-// Verify file size (corruption check)
-final size = await file.length();
-print('Model size: ${size / 1024 / 1024} MB');
+- **Model Pack:** `mobile_rag_model_packs/<model sha>-<tokenizer sha>/model.onnx`
+  in the app storage directory (the application documents directory, or the
+  application support directory on Windows). SHA-256 and size are checked
+  against the manifest when the pack is installed; later launches check the
+  file sizes.
+- **`modelPath`:** exactly the path you pass.
+- **`modelAsset`:** a copy at `<app storage directory>/<file name>`.
+
+```dart
+// Check the file at the path that applies to your setup.
+final file = File(path);
+print('exists: ${await file.exists()}, '
+    'size: ${(await file.length()) / 1000000} MB');
 ```
 
 ---
@@ -245,10 +240,7 @@ see [Switching an existing database from MiniLM](model_setup.md#4-switching-an-e
 
 ### "HNSW index corrupted"
 
-**Symptom:**
-```
-Exception: Failed to search HNSW index
-```
+**Symptom:** a search throws an error from the vector index.
 
 **Solution:**
 ```dart
@@ -295,10 +287,9 @@ try {
    );
    ```
 
-2. **Limit file size** (50MB recommended):
+2. **Limit file size** (the parser accepts up to 50 MB per file):
    ```dart
-   final bytes = await file.readAsBytes();
-   if (bytes.length > 50 * 1024 * 1024) {
+   if (await file.length() > 50 * 1024 * 1024) {
      throw Exception('File too large');
    }
    ```
@@ -317,14 +308,10 @@ try {
 
 ### iOS Simulator: Slow Performance
 
-**Cause:** Simulator cannot use Neural Engine
+**Cause:** The simulator runs on the Mac's CPU and does not reflect device performance.
 
-**Solution:** Run performance tests on **physical devices**
-
-| Environment | Expected Performance |
-|:------------|:--------------------|
-| iPhone 14 (A15) | ~30ms/embedding |
-| iOS Simulator | ~150ms/embedding |
+**Solution:** Run performance tests on **physical devices**. Device numbers are in
+[Model Setup](model_setup.md#cost).
 
 ---
 
@@ -373,40 +360,6 @@ The example app ships this manifest. It was checked with Flutter 3.35.5 and
 Xcode 27.1 on an iPhone 17 (iOS 27.0.1), with the template `AppDelegate.swift`
 unchanged. If your `Info.plist` already has `UIApplicationSceneManifest` (for
 example your own scene delegate), this is not the cause.
-
----
-
-### Android: NNAPI Errors
-
-**Symptom:**
-```
-W/onnxruntime: NNAPI execution provider failed
-```
-
-**Solution:** This is just a warning. It automatically falls back to CPU. Safe to ignore.
-
-For persistent issues on specific devices, reduce thread count:
-```dart
-// Limit ONNX threads to reduce CPU/heat
-await MobileRag.initialize(
-  tokenizerAsset: 'assets/tokenizer.json',
-  modelAsset: 'assets/model.onnx',
-  embeddingIntraOpNumThreads: 1, // Minimal CPU usage
-);
-```
-
----
-
-### macOS: Code Signing Issues
-
-**Symptom:**
-```
-dyld: Library not loaded: @rpath/libonnxruntime.dylib
-```
-
-**Solution:**
-1. Enable "Hardened Runtime" in Xcode
-2. In `Signing & Capabilities` → Check `Disable Library Validation`
 
 ---
 

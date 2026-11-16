@@ -1,4 +1,4 @@
-# Multi-Collection (v1)
+# Multi-Collection
 
 Mobile RAG Engine supports collection-scoped workflows so you can separate data domains (for example `business`, `travel`, `personal`) without splitting databases.
 

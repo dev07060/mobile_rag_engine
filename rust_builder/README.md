@@ -17,7 +17,7 @@ This package is automatically included as a dependency of `mobile_rag_engine`. Y
 
 ```yaml
 dependencies:
-  mobile_rag_engine:
+  mobile_rag_engine: ^0.24.0
 ```
 
 ## Requirements

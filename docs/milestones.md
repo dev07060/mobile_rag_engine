@@ -32,10 +32,10 @@
 
 ## 현재 상태 (2026-11-16)
 
-- main: `5450f4e` (#153 머지, 2026-11-16). **새 배포는 보류**(규칙 5). 마지막 배포는 여전히 `mobile_rag_engine` 0.23.0과 `rag_engine_flutter` 0.22.0이다.
+- main: `6b5b68f` (#154 머지, 2026-11-16). **R2 착수** (2026-11-16 사용자가 R2를 지시하고 버전 `rag_engine_flutter` 0.23.0, `mobile_rag_engine` 0.24.0을 확인). 브랜치 `feats/r2-release-prep`. 마지막 배포는 아직 `mobile_rag_engine` 0.23.0과 `rag_engine_flutter` 0.22.0이다.
 - 0.23.0 배포 뒤 main에 머지된 것: Q1 (#132), D1 (#133), S1 (#134), B1 (#135), D2 (#136), W1 (#137), F1 (#138), F2 (#139, #140, #143), E1 (#144), Q2 (#145, #146), Q3 (#147), Q4 (#148), Q5 (#149), I1 (#150), M5 (#151, #152), iOS 27 example 수정 (#153). 코드 변경은 `CHANGELOG.md`의 `## Unreleased`(Rust 코어 변경은 `rust_builder/CHANGELOG.md`에도)에 있고, 다음 `rag_engine_flutter` 배포가 있어야 pub 사용자에게 닿는다.
-- 열린 PR 없음. 적어 둔 마일스톤은 모두 머지됐다.
-- **다음 순서:** R2(배포, 범위 합의, 착수 대기). 착수는 사용자가 번호로 지시할 때 한다(규칙 7).
+- 열린 PR: R2 배포 준비 PR 하나.
+- **다음 순서:** R2-3 확인 → R2-4 사용자 발행 → R2-5 발행 뒤 확인.
 
 2026-11-13 기준으로 적었던 내용:
 - main `3505825` (#135 머지). 다음 순서는 W1 머지 → F1 → Q2 → Q3 → Q4 → Q5였고, 모두 머지됐다(위).
@@ -1120,7 +1120,8 @@
 
 ### R2. 배포 (`rag_engine_flutter` + `mobile_rag_engine`, 0.23.0 뒤 변경 전부)
 
-- **상태:** 범위 합의 (2026-11-16). 사용자 "배포 마일스톤 초안 써줘"로 적었고, "4번만 넣고 PR 올려줘"로 아래 "정한 것"을 확정했다. 착수 대기(규칙 7). 버전 번호는 초안 제안 그대로이고 착수 때 사용자에게 확인한다.
+- **상태:** 진행 중 (2026-11-16 착수). 범위는 사용자 "배포 마일스톤 초안 써줘", "4번만 넣고 PR 올려줘"로 확정했다. 버전은 착수 때 사용자가 `rag_engine_flutter` 0.23.0, `mobile_rag_engine` 0.24.0으로 확인했다. R2-0에서 조사 규칙이 두 음절 낱말에도 걸리는 것을 확인했고, 사용자가 "남기고 Known problems에 적은 뒤 R2-1부터 진행해"로 정했다.
+- **담당:** 세션 "R2 배포 준비", 브랜치 `feats/r2-release-prep`, worktree `.claude/worktrees/r2-release-prep-0e8c75`, 기준 main `6b5b68f`.
 - **기준:** main `5450f4e`(#153). 패키지 코드(`lib/`, `rust_builder/`, `bin/`, `pubspec.yaml`)는 M5가 iPhone에서 돌린 `a0e1636`과 같다(2026-11-16 `git diff`로 확인). #152와 #153은 example 앱, 측정 파일, 문서만 바꿨다.
 
 **목표:** 0.23.0(2026-11-04) 뒤 main에 쌓인 변경을 pub.dev에 낸다. Rust 코어가 바뀌었으므로 `rag_engine_flutter`와 `mobile_rag_engine`을 함께 낸다. 규칙 5의 세 조건을 발행 전에 채우고, 발행은 사용자가 직접 한다.
@@ -1149,11 +1150,16 @@
   - 문서의 "0.23.0 뒤 배포" 표현을 버전 번호로 바꾼다: `docs/guides/release_build.md`, `faq.md`, `ask.md`(2026-11-16 grep으로 찾은 곳. 착수 때 다시 찾는다).
   - 발행 뒤 기준 버전 갱신: `upgrade_e2e.yml`의 기준 목록, `.github/pull_request_template.md`, 규칙 8.1의 "마지막 배포 버전". 새 버전은 발행된 뒤에야 pub에서 받을 수 있으므로 이 커밋은 발행 뒤에 넣는다.
   - `docs/milestones.md`: 이 절의 결과, "현재 상태" 절, M5 상태 줄("PR #152 검토 대기" → 머지 완료).
+  - 지원 언어와 압축 기능 표시(문서만, 동작 변경 없음, 아래 "정한 것" 6): 중국어·일본어를 지원하거나 겨냥하는 것으로 읽히는 문장을 사용자 문서(README, `docs/guides/`, `docs/features/`)와 `lib/`의 dartdoc에서 뺀다. 지원 언어를 밝히는 문장은 넣지 않는다(2026-11-16 사용자 "지원 언어 관련 내용도 다 빼 문서에서"). BGE-m3는 언어를 적지 않고 모델 카드를 가리킨다. README Features 목록에서 Prompt Compression을 빼고, `docs/features/prompt_compression.md` 맨 위에 정식 지원 기능이 아니고 바뀌거나 빠질 수 있다고 적는다. `@experimental`·`@Deprecated`는 넣지 않고 API는 그대로 둔다. CHANGELOG 0.24.0에는 압축 기능 한 줄만 적는다. 이미 머지된 수정(`。` panic, 문맥 자르기, 코너 괄호 인용)의 항목은 사실로 남기고 지원을 약속하는 문장만 고친다. 내부 기록(`docs/perf/`, `docs/reports/`, 이 문서), 코드 식별자, 테스트 데이터, 0.23.0 이전 CHANGELOG 항목은 바꾸지 않는다.
 - **R2-3. 발행 전 확인 (규칙 5.2).** 배포 준비 커밋에서 다시 돌린다.
   - CI 전체와 Upgrade E2E(0.23.0, 0.22.3 기준).
   - Quick Start E2E를 발행 archive로(`SOURCE=archive`, Q5) Android·iOS·macOS·Windows에서.
   - `precompile_binaries.yml`을 발행할 트리에서 돌려 그 crate hash의 바이너리가 올라간 것을 확인한다. Rust를 숨긴 설치가 이 바이너리에 달려 있다.
   - 실제 기기: M5(iPhone 17, profile, 패키지 코드 `a0e1636`)의 측정과 0.23.0 → main 덮어 설치 결과를 쓴다. R2-1에서 패키지 코드를 고치면 그 뒤 커밋에서 기기 확인을 다시 한다.
+- **사용자 문서 검수 (2026-11-16 사용자 "다른 문서도 싹 다검수해", 문서만):** README, `docs/guides/`, `docs/features/`, `docs/local-rag-engine.md`, `docs/test/`, `DEVELOPMENT.md`를 코드와 CHANGELOG 0.24.0에 대조해, 없는 API·0.24.0 이전 동작·조건 없는 수치·내부 경위·깨진 링크를 고쳤다. README와 `local-rag-engine.md`의 80개 질의 수치는 0.24.0 코드로 다시 쟀다(MiniLM 0.925 / 0.900, KoEn-E5-Tiny 0.950 / 0.9625, 2026-11-16, `docs/perf/f1-eval-baseline/README.md`). CHANGELOG 0.24.0은 앱에 필요한 내용만 남기고 줄였다(2026-11-16 사용자 "분량조절하고 쓸데없는 내용 다 지워"). README에 언어별 결과 표를 넣고, `model_setup.md`에 테스트한 세 모델(MiniLM, KoEn-E5-Tiny, BGE-m3)의 설치 절을 맞췄다(2026-11-16 사용자 "언어별 표도 README에 넣어 그리고 … 설치할 수 있는 가이드도 철저하게 안내 해"). BGE-m3는 테스트한 Teradata revision `53f88357…`의 모델·tokenizer로 Model Pack manifest를 적었고(예전 안내의 `BAAI/bge-m3` tokenizer는 테스트한 파일과 다르다), 두 manifest(KoEn, BGE-m3)를 `RagModelPackResolver`로 설치·해시 검증했다. 엔진으로 BGE-m3 Model Pack을 초기화해 검색하는 것은 해 보지 않았다(같은 파일로 `tokenizerAsset`/`modelAsset` 경로 측정은 2026-11-13).
+- **R2-3 결과 (2026-11-16, 발행 전, PR #155):**
+  - CI 8개 job, Quick Start E2E(archive, git), Upgrade E2E는 모두 첫 의존성 해석에서 멈춘다: 루트가 고정한 `rag_engine_flutter` 0.23.0이 pub.dev에 아직 없다(`rag_engine_flutter 0.23.0 which doesn't match any versions`). archive 모드도 `pub publish --dry-run`이 루트를 풀어야 하고, git 모드와 Upgrade E2E 하네스도 override보다 패키지를 먼저 추가한다. 고정값은 낮추지 않는다. `rag_engine_flutter` 발행 뒤 `pubspec.lock` 커밋으로 다시 돌린다(R1 #127과 같은 순서).
+  - `precompile_binaries.yml`의 플랫폼 job 셋이 같은 순간에 release를 만들다 apple job이 "Published releases must have a valid tag"로 실패했다(run 43856333202). `cargokit/build_tool`의 release 생성이 실패하면 다른 job이 만든 release를 다시 조회하게 고쳤다. crate hash 계산 대상(`src/**/*.rs`, `Cargo.toml`, `Cargo.lock`, `build.rs`, `cargokit.yaml`)이 아니라 hash는 바뀌지 않는다.
 - **R2-4. 발행 (사용자가 직접).** 순서: `rag_engine_flutter` 발행 → pub.dev 색인 대기 → 루트 `pubspec.yaml`의 고정값이 풀리는지 `flutter pub get` → `mobile_rag_engine` 발행 → PR 머지 → 머지 커밋에 태그. `rag_engine_flutter`가 발행되기 전에는 루트가 새 고정값을 풀지 못해 PR의 CI가 실패할 수 있다(이 저장소의 지금 CI에서 그런지는 확인하지 않았다). 그때 고정값을 낮춰서 CI를 맞추지 않는다. 발행은 되돌릴 수 없다.
 - **R2-5. 발행 뒤 확인 (규칙 5.3).** pub 모드 Quick Start E2E(새 버전, 4개 플랫폼)와 `no_rust_repro.yml`(새 버전, Rust 숨김·설치 양쪽). 여기서 문제가 나오면 핫픽스로 넘기지 않고 점검이 빠뜨린 것으로 원인을 적는다.
 
@@ -1166,8 +1172,25 @@
 | [중간] Xcode 27에서 macOS profile/release의 Rust 소스 빌드 실패 | 남긴다 | precompiled 바이너리를 쓰는 설치는 피한다. rustup이 있는 Mac에서 소스로 빌드할 때만 만난다. 고칠 곳(cargokit linker 설정 등)을 정하지 않았다 |
 | [중간] Xcode 27에서 새 앱의 iOS 빌드 실패(pod 배포 대상) | 남긴다(문서로 안내) | #153은 example 앱과 `troubleshooting.md`만 고쳤다. `setup`이 사용자 앱의 pod 대상까지 올리지는 않는다 |
 | [중간] iOS 27에서 템플릿 앱이 실행 즉시 종료 | 남긴다(문서로 안내) | 패키지 결함이 아니다. #153이 example과 `troubleshooting.md`에 반영했다 |
-| Q3의 한 음절 조사 규칙이 두 음절 명사(`결과`, `평가`, `정의`)에도 걸리는지 | **배포 전에 확인한다 (R2-0)** | 코드 리뷰에서 나온 우려이고 확인하지 않았다. 후보 목록에도 없다 |
+| Q3의 한 음절 조사 규칙이 두 음절 명사(`결과`, `평가`, `정의`)에도 걸리는지 | 확인했다(R2-0). 걸린다. **남긴다** (2026-11-16 사용자) | 아래 "R2-0 결과". E1 기본 무게에서 규칙을 꺼도 맞힌 수가 같다. Known problems에 적었다 |
 | [낮음] 항목 전부, 성능 후보, 이름 변경(`estimatedTokens`) | 남긴다 | 이번 배포의 변경과 맞물리지 않는다 |
+
+**R2-0 결과 (2026-11-16, 코드 변경 없음)**
+
+- **토큰** (`cargo test --lib`의 임시 테스트, 커밋하지 않음, rustc 1.91.1): `결과` → `결`, `결과`; `평가` → `평`, `평가`; `정의` → `정`, `정의`; `지도` → `지`, `지도`; `경로` → `경`, `경로`. 낱말 전체 토큰은 남고, 틀린 한 음절 토큰이 더해진다. 조사가 붙은 형태(`결과를`)에서는 걸리지 않는다. 그래서 정확히 같은 낱말은 그대로 맞고, 첫 음절이 같은 다른 낱말과 겹친다(질의 `정의`가 "정도 차이"를, `지도`가 "지가 상승"을 찾는다).
+- **E1 색인에서 걸리는 정도** (MiniLM 색인 2,331청크, 규칙을 Python으로 다시 구현해 셈): 한국어 청크 198개 중 126개에 걸리는 낱말이 있다. 두 음절 낱말에서 304번, 서로 다른 낱말 125개(`또는`, `추가`, `휴가`, `증가`, `경로`, `정의`, `함께` 등. 정상인 명사+조사 `창을`·`키를`·`앱이`도 섞여 있다). 한국어 질문 45개 중 25개에 걸리는 낱말이 있다(`같이`·`따로`·`새로` 같은 부사 포함).
+- **E1 다시 돌림** (엔진 `6b5b68f`, profile, `vector_faer,vector_quant_i8`, Apple M3 Pro / macOS 27.2.1 / Xcode 27.1 / Flutter 3.35.5 / rustc 1.91.1, `scripts/eval/run_passage_eval.sh --bundle e1 --dump-candidates`, `ask` 조건 top 5·목록당 20개, MiniLM Model Pack `sha256:e9246dc3…` 2,331청크, KoEn-E5-Tiny `sha256:fd688b15…` 2,319청크, 다른 작업 없음): 두 모델 모두 `e1_report.py`의 모든 칸이 #147의 Q3 뒤(`6a6ce96`) 값과 같다.
+- **규칙만 끈 임시 빌드와 비교** (같은 조건, 커밋하지 않음). 한국어, 지금 / 규칙 끔:
+
+| 모델 | 0.2/0.8 (기본) | 0.5/0.5 | BM25만 | 벡터만 |
+|---|---|---|---|---|
+| MiniLM (44문항) | 25 / 25 (+e1q-100, −e1q-104) | 20 / 22 (−e1q-065, −e1q-077) | 30 / 29 (+e1q-087) | 2 / 2 |
+| KoEn-E5-Tiny (45문항) | 37 / 37 | 43 / 42 (+e1q-078) | 31 / 30 (+e1q-087) | 41 / 41 |
+
+  영어는 같다. 45문항으로는 잡음과 구분되지 않는다. 규칙 덕에 맞힌 것은 의도한 경우(`앱을` → `앱`, `군을` → `군`)이고, 잃은 세 문항이 어느 토큰 때문인지는 추적하지 않았다.
+- **판정:** 남긴다(2026-11-16 사용자). CHANGELOG 0.24.0 Known problems에 적었다. 고치면 따로 마일스톤이다(규칙 2).
+
+**R2-1 결과:** 위 표의 "남긴다" 항목 중 [중간] 다섯 개와 R2-0 항목을 `CHANGELOG.md` 0.24.0의 "Known problems"에 적었다(`rust_builder/CHANGELOG.md` 0.23.0은 그 절을 가리킨다). [낮음] 항목은 이번 변경과 맞물리지 않아 CHANGELOG에 적지 않았다.
 
 **제외**
 - 새 기능, 성능 개선, 기본값 변경.
@@ -1186,6 +1209,7 @@
 | 3 | Xcode 27에서 새 앱의 iOS 빌드를 `setup`이 고치게 함 | 넣지 않는다. `troubleshooting.md` 안내로 낸다 |
 | 4 | Q3 조사 규칙 확인 | 넣는다(R2-0) |
 | 5 | release 빌드로 기기 실행을 한 번 더 | 넣지 않는다. M5의 profile 결과로 갈음한다 |
+| 6 | 중국어·일본어 지원 표시와 prompt compression의 정식 기능 표시 (2026-11-16 사용자 "이럴거면 compress 기능 그냥 정식 표시 하지마 그리고 중국어 일본어 같은거 정식 지원할 생각 없어", "중국어 일본어 정식 지원에서 다 빼") | 넣는다(R2-2, 문서만). 지원 언어 문장은 넣지 않는다. 압축 API는 바꾸지 않는다 |
 
 **완료 기준**
 - R2-0의 확인 결과가 이 절에 적혀 있다.
@@ -1195,7 +1219,7 @@
 - R2-5의 두 확인이 새 버전으로 통과한다.
 - 규칙 8의 네 항목. PR 하나.
 
-**손대는 파일:** `pubspec.yaml`, `rust_builder/pubspec.yaml`, `rust_builder/rust/{Cargo.toml,Cargo.lock}`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `README.md`, `docs/guides/{quick_start,troubleshooting,release_build,faq,ask}.md`, `.github/workflows/{quickstart_e2e,upgrade_e2e}.yml`, `.github/pull_request_template.md`, `docs/milestones.md`, lockfile. R2-0은 `rust_builder/rust/src/**`의 테스트만 더할 수 있다(동작 코드는 바꾸지 않는다)
+**손대는 파일:** `docs/guides/{model_setup,quick_start}.md`, `docs/features/prompt_compression.md`, `lib/services/{ask,context_builder,llm_tool,prompt_compressor}.dart`(dartdoc만), `rust_builder/cargokit/build_tool/lib/src/precompile_binaries.dart`(release 생성 경쟁), `pubspec.yaml`, `rust_builder/pubspec.yaml`, `rust_builder/rust/{Cargo.toml,Cargo.lock}`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `README.md`, `docs/guides/{quick_start,troubleshooting,release_build,faq,ask}.md`, `.github/workflows/{quickstart_e2e,upgrade_e2e}.yml`, `.github/pull_request_template.md`, `docs/milestones.md`, lockfile. R2-0은 `rust_builder/rust/src/**`의 테스트만 더할 수 있다(동작 코드는 바꾸지 않는다)
 
 ### 아직 마일스톤으로 적지 않은 후보
 

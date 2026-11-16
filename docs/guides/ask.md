@@ -5,7 +5,7 @@ builds a prompt with numbered passages, calls a generation function you
 supply, and returns the answer with the passages it cites. The package does
 not call any LLM itself; you pass your own SDK or HTTP call.
 
-> Requires `mobile_rag_engine` 0.23.0 or later.
+> Requires `mobile_rag_engine` 0.24.0 or later.
 
 ## Ask
 
@@ -27,6 +27,7 @@ For one collection, call `MobileRag.instance.inCollection('manuals').ask(...)`.
 
 | Field | Meaning |
 |---|---|
+| `question` | The question as asked. |
 | `text` | The LLM's answer, as returned by `generate`. |
 | `passages` | The passages put in the prompt, with citation ids `"1"`, `"2"`, … |
 | `citations` | The passages the answer cites, in order of first citation. |
@@ -50,24 +51,22 @@ Each `RagPassage` has `id`, `text`, `sourceId`, `sourceName`, `chunkId` and
 - **Default prompt:** an instruction to answer only from the passages, cite
   them like `[1]`, say when they do not contain the answer, and answer in the
   language of the question; then each passage as `[id] source name` and its
-  text; then the question. Five short passages came to about 440 tokens.
+  text; then the question.
 - **Your own prompt:** pass `buildPrompt: (question, passages) => ...`. Ask
   the model to cite passage ids in brackets so `citations` can find them.
 
 ## Token budget
 
 `tokenBudget` counts tokens of the embedding model's tokenizer, not your
-LLM's. The two can differ several times, most for Korean, Japanese, Chinese,
-Thai and emoji. Counted with the embedding tokenizer through `countTokens`:
+LLM's. The two can differ several times, most for Korean. Counted with each model's embedding tokenizer:
 
 | Text | MiniLM (default) | KoEn-E5-Tiny | BGE-m3 |
 |---|---|---|---|
 | 23 Korean characters | 38 | 10 | 10 |
-| 21 Japanese characters | 20 | 4 | 14 |
-| 20 Chinese characters | 19 | 6 | 15 |
-| 31 Thai characters | 1 | 2 | 7 |
-| 10 emoji | 1 | 2 | 11 |
 | 49 English characters | 10 | 11 | 11 |
+
+Counted with the `tokenizer.json` of each model in
+[Model Setup](model_setup.md#which-model).
 
 So 1500 engine tokens can be far more or far fewer tokens for your LLM.
 Without `promptTokenCounter` this stays so: the default budget is still
@@ -85,23 +84,21 @@ final answer = await MobileRag.instance.ask(
 ```
 
 With `promptTokenCounter`, `tokenBudget` counts the passage texts with that
-function. The most relevant passages that fit are kept whole, in relevance
-order; a passage that does not fit is left out, not cut. The counter is called
+function. Passages are kept whole, in relevance order, up to the first one
+that would go over the budget; that one and all after it are left out, not cut. The counter is called
 once per passage and must be synchronous; if your SDK only counts tokens
 asynchronously, count before calling or use an estimate. The budget covers the
 passages, not the instructions and question the prompt adds around them.
 `prepareAsk`, `CollectionRag.ask` / `prepareAsk` and
 `RagSearchTool.fromMobileRag` / `fromCollection` take the same parameter.
-`PromptCompressor.compress` takes `tokenCounter` for `maxTokens`, which is
-otherwise estimated at 4 characters per token.
 
 ## Citations
 
 `citations` reads these forms from the answer:
 
 - `[1]`, `[1, 2]`, `[1][2]`
-- full-width `［１］`, lenticular `【1】` and the CJK corner brackets `「1」`,
-  `『1』`, which models answering in Korean, Japanese or Chinese often write
+- full-width `［１］`, lenticular `【1】` and the corner brackets `「1」`,
+  `『1』`, which some models write instead of `[1]`
 - ids separated by `、` or `，` (`[1、2]`), and ranges (`[1-3]`, `[1–3]`,
   `[1~3]`), which cite every given id in the range
 
@@ -122,23 +119,20 @@ large document that matches only common words of the question ("how", "is",
 
 Keyword search reduces English words to their stem (Snowball English), so
 "How long is the refund period?" finds "Refunds are accepted within 14 days of
-purchase." even next to a 1,800-chunk PDF. A question that shares *no* word
-with the sentence still can miss it. Stemming is English-only (Korean, Japanese and
-Chinese words are matched as before), and like any stemmer it joins some
+purchase.". A question that shares *no* word
+with the sentence still can miss it. Stemming is English-only (Korean words are
+matched as whole words and as two-syllable pieces), and like any stemmer it joins some
 unrelated words, such as "university" and "universe".
 
 What helps, in order:
 
 1. **Store short documents in their own collection** and ask that collection:
-   `MobileRag.instance.inCollection('faq').ask(question)`. The large document's
+   `MobileRag.instance.inCollection('faq').ask(question, generate: myLlm.generate)`. The large document's
    chunks are then not in the candidate list at all. This is the reliable
    option.
 2. **Raise the vector weight for that question**:
-   `ask(question, vectorWeight: 0.5, bm25Weight: 0.5)`. On "How many days do I
-   have to return an item?", which shares only "days" with the sentence, the
-   defaults put it second among the five passages and 0.5/0.5 put it first.
-   Which weights are best depends on the embedding model (on an 80-question
-   measurement, raising the vector weight helped two models and hurt a third),
+   `ask(question, generate: myLlm.generate, vectorWeight: 0.5, bm25Weight: 0.5)`.
+   Which weights are best depends on the embedding model and the documents,
    so measure before changing them everywhere. To change them for every call,
    pass `defaultVectorWeight` / `defaultBm25Weight` to `MobileRag.initialize`.
 3. **Give the short document a few more words** — a title line, or the question
@@ -151,7 +145,7 @@ When you write the documents yourself (a help screen, a game guide, an FAQ),
 you choose where one ends and the next begins. What to keep in mind:
 
 - **A long section takes several of the five places.** Text is cut into
-  chunks of at most `maxChunkChars` (500 by default), and each chunk competes
+  chunks of about `maxChunkChars` (500 by default), and each chunk competes
   on its own. A section that lists many items becomes several chunks, and
   when the question shares a common word with them ("gold", "upgrade"), two
   or three of the five passages can come from that one section.
@@ -160,29 +154,14 @@ you choose where one ends and the next begins. What to keep in mind:
   rank of a short document that answers the question: the items still share
   the common word.
 - **A first line that names the topic in the words people ask with does.**
-  "How to earn more gold." at the top of the gold document put it first.
+  For example, start a document about gold with "How to earn more gold."
 - **One topic per document** keeps each passage about one thing, so the
   passages the model cites, and `RagPassage.sourceName`, point at the right
   place. Pass a `name:` to `addDocument` so the source name is not null.
 
-Example (MiniLM Model Pack, `mobile_rag_engine` 0.23.0, default weights,
-`prepareAsk` with its default 5 passages; 6 upgrade-card descriptions that
-each mention "gold" and 4 short documents, on an iOS 26.4 simulator,
-2026-11-16). Rank of the "Earning gold" document for "How do I earn more
-gold?":
-
-| Layout | Rank |
-|---|---|
-| Card descriptions as one section (679 characters, more than one chunk), short documents as written | 3 (after two chunks of that section) |
-| One document per card | 3 (after two cards) |
-| One section, short documents with a title line | 1 |
-| One document per card, short documents with a title line | 1 |
-
-This is one constructed example, not a measurement. 0.23.0 does not reduce
-English words to their stem, so "earn" did not match "Earning"; releases
-after 0.23.0 do. To compare the hybrid weights on documents like these, see the
-measurements in [Model Setup](model_setup.md#korean-documents-koen-e5-tiny);
-which weight is best differs between models, languages and document sets.
+To compare the hybrid weights on documents like these, see the measurements in
+[Model Setup](model_setup.md#korean-documents-koen-e5-tiny); which weight is
+best differs between models and document sets.
 
 ## When nothing is found
 
@@ -365,9 +344,7 @@ Notes:
   [Token budget](#token-budget) for why engine tokens and the model's tokens
   differ.
 - **Test generation on a device.** In the iOS Simulator, availability follows
-  the Mac, not a phone: on one Mac it reported the model as available and
-  generation still failed; on another (iOS 26.4 simulator) it reported it as
-  unavailable, so the example showed the passages.
+  the Mac, and generation can fail even when the model is reported available.
 
 ## Tool calling instead
 

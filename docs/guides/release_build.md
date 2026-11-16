@@ -11,12 +11,13 @@ The ONNX embedding model is the single largest contributor to your app's downloa
 | Model | ONNX Size | Impact on AAB |
 |:------|:---------:|:-------------:|
 | all-MiniLM-L6-v2 (INT8) | ~23 MB | Moderate |
-| BGE-m3 (INT8) | ~542 MB | **Exceeds Play Store 150 MB limit** |
+| KoEn-E5-Tiny (INT8) | ~38 MB (41 MB with tokenizer) | Moderate |
+| BGE-m3 (INT8) | ~569 MB (586 MB with tokenizer) | **Too large to bundle for most apps** |
 
 **For development**, bundle the model in `assets/` for quick iteration.
 **For production releases**, you can download the model at runtime to keep your bundle small. How depends on the version:
 
-- **Releases after 0.23.0:** download the model and tokenizer to files of your choice, then pass their paths. Nothing is copied from assets, and the model does not need to be in `pubspec.yaml`.
+- **0.24.0 and later:** download the model and tokenizer to files of your choice, then pass their paths. Nothing is copied from assets, and the model does not need to be in `pubspec.yaml`.
 
   ```dart
   final support = await getApplicationSupportDirectory();
@@ -30,6 +31,7 @@ The ONNX embedding model is the single largest contributor to your app's downloa
       // download never leaves a partial file at the path the engine loads.
       final partial = File('${file.path}.part');
       await download(url, partial); // your CDN / Hugging Face fetch
+      await checkSha256(partial, expectedSha256[file]); // hashes you ship
       await partial.rename(file.path);
     }
   }
@@ -40,24 +42,17 @@ The ONNX embedding model is the single largest contributor to your app's downloa
   );
   ```
 
-  Check the downloaded files against a checksum you ship with the app before the rename; the engine loads whatever is at these paths.
+  `checkSha256` stands for your own check against hashes shipped with the app (for the models in [Model Setup](model_setup.md#which-model), use the hashes listed there); the engine loads whatever is at these paths.
 
   Any change to the model file's name or content locks search until `reembedAll()` or `clearAndRestart()`, because the embedding fingerprint includes the file name and a hash of the file. Re-embedding is needed even for an update of the same model, such as a re-quantized export.
 
-- **0.23.0: shipping without the bundled model fails.** Bundle the model in every build, or stay on 0.22.3. Up to 0.22.3, you could leave `assets/model.onnx` out of `pubspec.yaml`, download the model to `<app storage directory>/model.onnx` yourself (the application documents directory, or the application support directory on Windows), and call `MobileRag.initialize(modelAsset: 'assets/model.onnx')`: the engine skipped the asset copy because the file already existed. 0.23.0 reads the bundled asset on every launch to check that the copy is current, so this setup fails in `MobileRag.initialize` with `Unable to load asset`. If you bundle the model in debug builds and remove it only for release, debug runs keep working and only the release build fails. Releases after 0.23.0 accept this setup again, but new code should pass `tokenizerPath`/`modelPath`. `RagModelPack.asset(...)` always needs the model bundled.
+- **0.23.0:** shipping without the bundled model fails with `Unable to load asset`. Upgrade to `^0.24.0`. `RagModelPack.asset(...)` always needs the model bundled.
 
 ---
 
 ## Native Library Sizes
 
-The following are bundled automatically and cannot be removed:
-
-| Library | Per-arch Size (compressed) | Source |
-|:--------|:--------------------------:|:-------|
-| `librag_engine_flutter.so` | ~6 MiB | Rust core (this package) |
-| `libflutter.so` | ~5 MiB | Flutter engine |
-| `libonnxruntime.so` | ~3 MiB | ONNX Runtime |
-| `libpdfium.so` | ~2 MiB | pdfrx (if used) |
+The Rust core, the Flutter engine and ONNX Runtime are bundled automatically and cannot be removed.
 
 ---
 
@@ -78,7 +73,7 @@ flutter build appbundle --release
 
 ## Bundle Verification
 
-After building, inspect your AAB to confirm prohibited files are absent:
+If you download the model at runtime, inspect your AAB to confirm the model is not bundled:
 
 ```bash
 # List contents and check for large unexpected files
@@ -91,7 +86,6 @@ If nothing is printed, your bundle is clean.
 
 ## Summary Checklist
 
-- [ ] ONNX model is **not** listed in `pubspec.yaml` assets (use runtime download)
-- [ ] `tokenizer.json` is listed in `pubspec.yaml` assets (small, safe to bundle)
+- [ ] If you download the model at runtime (`tokenizerPath`/`modelPath`): the model is not listed in `pubspec.yaml` assets
 - [ ] `dart run pdfrx:remove_wasm_modules` run before release build (if using pdfrx)
-- [ ] AAB does not contain `model.onnx`, `pdfium.wasm`, or `.DS_Store`
+- [ ] AAB does not contain `pdfium.wasm` or `.DS_Store` (nor `model.onnx` when you download it at runtime)

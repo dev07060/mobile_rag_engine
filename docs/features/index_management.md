@@ -28,13 +28,11 @@ for (final source in sources) {
 ```
 
 ### Delete a source
-Deleting a source removes it from the database immediately. The search index (HNSW) will lazily filter it out until the next rebuild.
+Deleting a source removes it from the database immediately. The index is rebuilt automatically after a short debounce or before the next search (see §5).
 
 ```dart
 await MobileRag.instance.removeSource(sourceId);
 ```
-
-**Note:** If you delete a significant portion of your data (e.g., >50%), it's recommended to call `MobileRag.instance.rebuildIndex()` to reclaim memory and optimize search performance.
 
 ## 3. Data Migration & Re-embedding
 
@@ -93,10 +91,8 @@ if (rag.isEmbeddingFingerprintLocked) {
 }
 ```
 
-With `mobile_rag_engine` 0.23.0 and earlier, a document whose content matches
-a kept source comes back with no chunks ("Source ingestion already in
-progress"). There, call `removeSource(source.id.toInt())`
-for each source in `listSources()` before adding the documents again.
+On 0.23.0 and earlier, call `removeSource(source.id.toInt())` for each source
+in `listSources()` before adding the documents again.
 
 `reembedAll()` and `clearAndRestart()` throw `StateError` when there is no
 lock. `engine.regenerateAllEmbeddings()` and `rebuildIndex()` do not remove

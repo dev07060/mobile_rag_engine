@@ -8,7 +8,7 @@ Every document added to the engine is assigned a unique `sourceId` (integer). Wh
 
 ## API Usage
 
-Both `search` and `searchHybrid` (and their usage in `searchHybridWithContext`) support the `sourceIds` parameter.
+`search`, `searchHybrid` and `searchHybridWithContext` take `sourceIds`.
 
 ### Basic Filtering
 
@@ -117,13 +117,13 @@ Future<void> _search() async {
 | :--- | :--- |
 | **Chat with Document** | Allows users to upload a PDF and ask questions *only* about that PDF, ignoring other documents in the database. |
 | **Context Switching** | If your app supports multiple projects or workspaces, use source IDs to isolate search to the active workspace without needing separate databases. |
-| **Performance** | Searching a subset of the index is generally faster, as the engine skips irrelevant chunks immediately. |
-| **Precision** | Prevents "hallucinations" or irrelevant answers from unrelated documents (e.g., searching for "setup" in a router manual won't return results from a microwave manual). |
-| **Exact Recall** | When searching a single document, the engine can switch to an exhaustive scan, guaranteeing 100% recall even for obscure queries that might be missed by an approximate global search. |
+| **Performance** | Scoping to a few sources is fast. Scoping to most of a large collection is slower than a search without `sourceIds`, because every chunk of those sources is compared. |
+| **Precision** | Keeps results to the selected documents (e.g., searching for "setup" in a router manual won't return results from a microwave manual). |
+| **Exact comparison** | With `sourceIds`, the engine compares every chunk of those sources instead of using the approximate index. |
 
 ## Notes
 
-- **Source ID Persistence**: Source IDs are stable within the SQLite database. However, if you delete and re-add a document, it will get a *new* Source ID.
+- **Source ID Persistence**: Source IDs are stable while the source exists. A removed source's id can be given to a document added later, so do not keep ids after `removeSource`; read them again with `listSources()`.
 - **Metadata**: You can store custom metadata (e.g., `{"category": "finance"}`) when adding documents, but currently, native filtering is strictly by `sourceId`. You can use `listSources()` to find all IDs matching your metadata criteria in Dart, and then pass those IDs to the search function.
 
 ## Screenshots

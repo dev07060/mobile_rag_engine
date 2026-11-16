@@ -27,7 +27,8 @@ final result = await MobileRag.instance.search(
     - `[Match Index - 1]` (Previous chunk)
     - `[Match Index]` (The search result itself)
     - `[Match Index + 1]` (Next chunk)
-- These chunks are automatically combined or returned in the `chunks` list depending on implementation (in `mobile_rag_engine`, they are usually flattened into the results list).
+- Results list the hits first in rank order, then the neighbors that were not hits (each hit's neighbors in chunk order). With a tight `tokenBudget`, neighbors do not push a hit out under `ContextStrategy.relevanceFirst`; use `ContextStrategy.chronological` for document order.
+- Neighbors that were not hits have `similarity` 0.
 
 **Note:** This increases the number of chunks returned and consumes more tokens if you are building an LLM context.
 
@@ -40,7 +41,8 @@ You need the `sourceId` and `chunkIndex` from an existing `ChunkSearchResult`.
 
 ```dart
 // Assume you have a search result
-final chunk = searchResults.first;
+final result = await MobileRag.instance.search('battery life');
+final chunk = result.chunks.first;
 final currentSourceId = chunk.sourceId;
 final currentIndex = chunk.chunkIndex; // The sequential index of this chunk in the doc
 ```

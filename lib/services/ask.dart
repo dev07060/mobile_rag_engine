@@ -139,8 +139,8 @@ String defaultAskPrompt(String question, List<RagPassage> passages) {
 }
 
 /// Opening and closing brackets read as citations: `[1]`, full-width
-/// `［1］`, lenticular `【1】`, and the CJK corner brackets `「1」` and `『1』`
-/// that models answering in Korean, Japanese or Chinese often use. Corner
+/// `［1］`, lenticular `【1】`, and the corner brackets `「1」` and `『1』`
+/// that some models use instead of `[1]`. Corner
 /// brackets also quote words (`「결전」`), so only digits count, and only ids
 /// that were given to the model.
 const _brackets = {'[': ']', '［': '］', '【': '】', '「': '」', '『': '』'};

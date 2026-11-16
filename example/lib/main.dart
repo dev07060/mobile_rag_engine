@@ -148,7 +148,7 @@ class _MyAppState extends State<MyApp> {
                 itemBuilder: (context) => const [
                   PopupMenuItem(
                     value: _FeatureMenuAction.appDocs,
-                    child: Text('App docs (E1 questions)'),
+                    child: Text('App docs'),
                   ),
                   PopupMenuItem(
                     value: _FeatureMenuAction.chunkingTest,
