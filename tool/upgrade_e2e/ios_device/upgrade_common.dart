@@ -37,6 +37,10 @@ Future<File> stateFile() async => File(
   '${(await getApplicationDocumentsDirectory()).path}/m5_upgrade_phase_a.json',
 );
 
+Future<File> resultFile() async => File(
+  '${(await getApplicationDocumentsDirectory()).path}/m5_upgrade_phase_b.json',
+);
+
 Future<void> initializeEngine() => MobileRag.initialize(
   modelPack: const RagModelPack.asset(modelPackAsset),
   databaseName: databaseName,

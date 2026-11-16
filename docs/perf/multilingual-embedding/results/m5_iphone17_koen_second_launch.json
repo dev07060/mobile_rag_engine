@@ -1,0 +1,87 @@
+{
+ "milestone": "M5",
+ "launch": "second",
+ "rehearsal": false,
+ "conditions": {
+  "model_id": "koen",
+  "model_label": "KoEn-E5-Tiny",
+  "model_pack_id": "exp-models/dragonkue-KoEn-E5-Tiny-ONNX",
+  "model_pack_revision": "5cf599a8cd6577f2f12a026130ad50132e472cfd",
+  "model_sha256": "d463c9b1c29f3202d510e2836265d60f9e6e6dd518c5930ba865700646489bd4",
+  "tokenizer_sha256": "a6dd38d692ac1caa6d5dbc195d92f1f978b5c74ec60e02ed15fdf04404742fe3",
+  "model_bytes": 38275821,
+  "embedding_fingerprint": "model.onnx|384|f32+vabq:none|sha256:fd688b1508532505ba91c93eb4ef9413",
+  "engine_commit": "ffb0ab8292683f3cd00341552605a71e4c8cb7a9",
+  "build_mode": "profile",
+  "debug_build": false,
+  "rust_features": "vector_faer,vector_quant_i8",
+  "native_allocator": "system",
+  "device": "iPhone 17 (iPhone18,3), iOS 27.0.1 (24A446)",
+  "os": "ios",
+  "os_version": "Version 27.0.1 (Build 24A446)",
+  "cpu_count": 6,
+  "dart_version": "3.9.2 (stable) (Wed Aug 27 03:49:40 2025 -0700) on \"ios_arm64\"",
+  "host_toolchain": "Xcode 27.1 (27A9275); Flutter 3.35.5 (ac4e799d23); rustc 1.91.1 (ed61e7d7e)",
+  "run_note": "charging: not stated; other apps: not stated; Mac: only this run",
+  "thread_level": "medium",
+  "vector_weight": 0.5,
+  "bm25_weight": 0.5,
+  "measured_at_utc": "2026-11-16T02:41:17.508642Z"
+ },
+ "documents_entries_before_init": [
+  "m5_koen.sqlite",
+  "m5_koen.sqlite-shm",
+  "m5_koen.sqlite-wal",
+  "m5_koen.vec",
+  "m5_koen_first_1794796832711.json",
+  "m5_koen_first_done.json",
+  "m5_koen_hnsw_87e1abd3.hnsw",
+  "m5_koen_hnsw_88e1ad66.hnsw",
+  "m5_koen_hnsw_ef1d81bf.hnsw",
+  "mobile_rag_model_packs"
+ ],
+ "init_ms": 160.235,
+ "rss_init_start_bytes": 77643776,
+ "rss_init_end_bytes": 269582336,
+ "rss_init_peak_bytes": 269582336,
+ "rss_init_sample_count": 5,
+ "rss_init_process_max_rss_bytes": 269582336,
+ "rss_after_init_bytes": 269582336,
+ "fingerprint_lock": null,
+ "e1_sources_after_restart": 56,
+ "first_query_after_restart": {
+  "query_id": "e1q-061",
+  "ms": {
+   "activate": 23.541,
+   "embed": 3.022,
+   "search": 0.959,
+   "hydrate": 0.314
+  },
+  "hits": 5,
+  "activation": {
+   "activate_total_nanos": 23471208,
+   "activate_count": 1,
+   "bm25_rebuild_nanos": 20805584,
+   "bm25_rebuild_count": 1,
+   "hnsw_load_nanos": 2313584,
+   "hnsw_load_count": 1,
+   "hnsw_load_success_count": 1,
+   "hnsw_load_miss_count": 0,
+   "hnsw_rebuild_nanos": 0,
+   "hnsw_rebuild_count": 0,
+   "hnsw_save_nanos": 0,
+   "hnsw_save_count": 0
+  }
+ },
+ "second_query_after_restart": {
+  "query_id": "e1q-001",
+  "ms": {
+   "embed": 2.22,
+   "search": 0.901,
+   "hydrate": 0.314
+  },
+  "hits": 5
+ },
+ "rss_after_queries_bytes": 277905408,
+ "process_max_rss_bytes": 277905408
+}

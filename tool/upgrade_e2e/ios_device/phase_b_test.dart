@@ -34,7 +34,7 @@ void main() {
           (top[q] as List).first == (before['top_sources'][q] as List).first,
       ].every((same) => same),
     };
-    log('PHASE_B ${jsonEncode({
+    final record = {
       'init_ms': initMs,
       'fingerprint_before': before['fingerprint'],
       'fingerprint_after': MobileRag.instance.currentEmbeddingFingerprint,
@@ -43,7 +43,9 @@ void main() {
       'top_sources_before': before['top_sources'],
       'top_sources_after': top,
       'checks': checks,
-    })}');
+    };
+    await (await resultFile()).writeAsString(jsonEncode(record), flush: true);
+    log('PHASE_B ${jsonEncode(record)}');
     for (final c in checks.entries) {
       expect(c.value, isTrue, reason: c.key);
     }

@@ -262,12 +262,27 @@ first). See
 
 ### Cost
 
-KoEn-E5-Tiny has 12 layers to MiniLM's 6. On a desktop CPU, embedding a chunk
-takes about twice as long (55 ms vs 28 ms, one thread), so ingestion is
-slower. Queries are as fast or faster, because Korean text needs far fewer
-tokens with this tokenizer. Loading the model and tokenizer takes about
-110 MB of memory, against about 60 MB for MiniLM. These numbers have not been
-measured on a phone yet.
+KoEn-E5-Tiny has 12 layers to MiniLM's 6. Measured on one iPhone 17
+(iOS 27.0.1, profile build, 2026-11-16) with the example app, 56 app
+documents (about 2,300 chunks) and 120 questions:
+
+| | MiniLM | KoEn-E5-Tiny |
+|---|---|---|
+| Query embedding, English (median / p95) | 1.5 / 2.0 ms | 2.5 / 3.7 ms |
+| Query embedding, Korean (median / p95) | 2.6 / 4.2 ms | 2.5 / 3.6 ms |
+| Whole query, embedding + search, top 5 (p95) | 3.5–4.7 ms | 4.7–4.8 ms |
+| Ingestion per chunk (`addDocumentFromFile`) | 4.7 ms | 6.4 ms |
+| `initialize`, first launch / later launches | 425 / 111 ms | 859 / 160 ms |
+| Memory added by `initialize` / peak RSS | 134 / 242 MB | 197 / 314 MB |
+
+Korean queries take the same time with both models: MiniLM splits Korean into
+about 2.5 times as many tokens, which cancels out its smaller size. English
+queries are about 1.7 times slower with KoEn-E5-Tiny, and ingestion about
+1.3 times slower. The first launch includes installing the Model Pack. These
+are one device's numbers; conditions and the full results are in
+[the M5 report](../perf/multilingual-embedding/README.md#6-iphone-실기기-측정-m5-2026-11-16).
+On a desktop CPU (one thread), embedding a chunk took about twice as long
+with KoEn-E5-Tiny (55 ms vs 28 ms).
 
 ### Keeping the model files out of git
 

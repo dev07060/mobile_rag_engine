@@ -1,0 +1,79 @@
+{
+ "milestone": "M5",
+ "check": "upgrade from mobile_rag_engine 0.23.0 + rag_engine_flutter 0.22.0 (pub.dev) to the package under test, installed over it on the device",
+ "conditions": {
+  "device": "iPhone 17 (iPhone18,3), iOS 27.0.1 (24A446)",
+  "app": "flutter create app com.example.m5UpgradeApp, MiniLM Model Pack (stable-minilm-l6-v2-arm64-en)",
+  "phase_a_package": "mobile_rag_engine 0.23.0, rag_engine_flutter 0.22.0 (pub.dev)",
+  "phase_b_package": "path dependency on engine commit ffb0ab8 (package code = main a0e1636), rag_engine_flutter path override",
+  "build_mode": "profile",
+  "install": "xcrun devicectl device install app (keeps the data container), no reinstall in between",
+  "host_toolchain": "Xcode 27.1 (27A9275); Flutter 3.35.5 (ac4e799d23); rustc 1.91.1 (ed61e7d7e)",
+  "local_build_workarounds": "pod IPHONEOS_DEPLOYMENT_TARGET 16.0; UIApplicationSceneManifest with FlutterSceneDelegate",
+  "date": "2026-11-16"
+ },
+ "phase_a": {
+  "fingerprint": "model.onnx|384|f32+vabq:none|sha256:e9246dc32f332cb687c5d1ea0c0c51d3",
+  "sources": [
+   "backup_en.txt",
+   "night_ko.txt",
+   "refund_ko.txt",
+   "sqlite_en.txt"
+  ],
+  "top_sources": {
+   "How do readers keep working while a writer commits?": [
+    "sqlite_en.txt",
+    "backup_en.txt",
+    "night_ko.txt"
+   ],
+   "환불은 며칠 안에 신청해야 하나요?": [
+    "refund_ko.txt",
+    "night_ko.txt",
+    "backup_en.txt"
+   ]
+  }
+ },
+ "phase_b": {
+  "init_ms": 249,
+  "fingerprint_before": "model.onnx|384|f32+vabq:none|sha256:e9246dc32f332cb687c5d1ea0c0c51d3",
+  "fingerprint_after": "model.onnx|384|f32+vabq:none|sha256:e9246dc32f332cb687c5d1ea0c0c51d3",
+  "lock": null,
+  "sources": [
+   "backup_en.txt",
+   "night_ko.txt",
+   "refund_ko.txt",
+   "sqlite_en.txt"
+  ],
+  "top_sources_before": {
+   "How do readers keep working while a writer commits?": [
+    "sqlite_en.txt",
+    "backup_en.txt",
+    "night_ko.txt"
+   ],
+   "환불은 며칠 안에 신청해야 하나요?": [
+    "refund_ko.txt",
+    "night_ko.txt",
+    "backup_en.txt"
+   ]
+  },
+  "top_sources_after": {
+   "How do readers keep working while a writer commits?": [
+    "sqlite_en.txt",
+    "backup_en.txt",
+    "night_ko.txt"
+   ],
+   "환불은 며칠 안에 신청해야 하나요?": [
+    "refund_ko.txt",
+    "night_ko.txt",
+    "backup_en.txt"
+   ]
+  },
+  "checks": {
+   "initialized": true,
+   "lock_is_null": true,
+   "sources_kept": true,
+   "search_returns_results": true,
+   "top_source_unchanged": true
+  }
+ }
+}

@@ -1,6 +1,6 @@
 // M5 (docs/milestones.md): iPhone measurement for one Model Pack per install.
 //
-// First launch after install (`flutter drive`):
+// First launch after install:
 //   initialize time and memory, E1 app-document ingestion (time, chunks,
 //   memory), warm query embedding by language (E1 questions), warm query
 //   segments by language (E1 collection), and the synthetic two-collection
@@ -9,21 +9,32 @@
 //   initialize time and memory with the database from the first launch, and
 //   the first query after the restart (cold activate) in the E1 collection.
 //
-// Results go to Documents/m5_<model>_<launch>_<ts>.json and to the log as
-// `M5_JSON` lines. The second launch is detected by the marker file
-// Documents/m5_<model>_first_done.json, which the first launch writes last.
+// Results go to Documents/m5_<model>_<launch>_<ts>.json (and to the log as
+// `M5_JSON` lines when a debugger is attached). The second launch is detected
+// by the marker file Documents/m5_<model>_first_done.json, which the first
+// launch writes last.
 //
-//   cd example && flutter drive --profile \
-//     --driver=test_driver/integration_test.dart \
-//     --target=integration_test/m5_device_measure_test.dart \
+// The test needs no driver, so a profile build can be installed and started
+// directly (this is how M5 ran on an iPhone, docs/milestones.md):
+//
+//   cd example && flutter build ios --profile \
+//     -t integration_test/m5_device_measure_test.dart \
 //     --dart-define=EXAMPLE_MODEL=minilm|koen \
 //     --dart-define=ENGINE_COMMIT=$(git rev-parse HEAD) \
 //     --dart-define=DEVICE_LABEL=... --dart-define=HOST_TOOLCHAIN=... \
-//     --dart-define=RUN_NOTE=... -d <device-id>
+//     --dart-define=RUN_NOTE=...
+//   xcrun devicectl device uninstall app --device <id> com.example.mobileRagEngineExample
+//   xcrun devicectl device install app --device <id> build/ios/iphoneos/Runner.app
+//   xcrun devicectl device process launch --device <id> com.example.mobileRagEngineExample
+//   # second launch: the same launch command with --terminate-existing
+//   xcrun devicectl device copy from --device <id> --domain-type appDataContainer \
+//     --domain-identifier com.example.mobileRagEngineExample \
+//     --source Documents/<result file> --destination .
 //
-// Profile mode only: debug builds use the fallback Rust backend. A simulator
-// rehearsal may pass --dart-define=M5_REHEARSAL=true to run in debug; its
-// numbers are marked `rehearsal` and are not results.
+// `flutter drive --profile` with the same target also works where the Dart VM
+// can be reached. Profile mode only: debug builds use the fallback Rust
+// backend. A simulator rehearsal may pass --dart-define=M5_REHEARSAL=true to
+// run in debug; its numbers are marked `rehearsal` and are not results.
 
 import 'dart:convert';
 import 'dart:io';

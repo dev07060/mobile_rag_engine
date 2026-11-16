@@ -7,7 +7,7 @@
   - `bench_latency.py`: 로드 시간·지연·메모리
 - 원본 결과: [`results/`](results/)
 - 환경: Apple M3 Pro, Python 3.12, onnxruntime 1.31.1, tokenizers 0.23.3 (CPU EP)
-- **기기(iPhone) 측정은 아직 하지 않았다.** 아래 지연·메모리는 데스크톱 기준이다.
+- 1~5절의 지연·메모리는 데스크톱과 시뮬레이터 기준이다. iPhone 실측은 [6절](#6-iphone-실기기-측정-m5-2026-11-16)에 있다.
 
 ## 요약
 
@@ -135,7 +135,7 @@ batch 1, padding 없음, 50회 측정의 p50. 청크는 256 토큰이다.
 | e5-small int8 | 112.6MB | 16.3MB | 291ms | 4.3 / 1.9ms | 59.4 / 17.5ms | **+344MB** | +267MB |
 | e5-small-ko-v2 int8 | 112.6MB | 16.3MB | 293ms | 4.3 / 1.9ms | 59.4 / 17.5ms | **+344MB** | +267MB |
 
-- KoEn은 12층이라 6층인 MiniLM보다 청크 임베딩이 약 2배 느리다. 계획의 통과 기준(MiniLM의 2배 이하)에 겨우 들어온다. 질의는 토큰이 적어 오히려 더 빠르다.
+- KoEn은 12층이라 6층인 MiniLM보다 청크 임베딩이 약 2배 느리다. 계획의 통과 기준(MiniLM의 2배 이하)에 겨우 들어온다. 질의는 토큰이 적어 오히려 더 빠르다. (iPhone에서는 한국어 질의만 같은 속도였고 영어 질의는 KoEn이 약 1.7배 느렸다. 6절)
 - e5-small 계열의 토크나이저 로드 메모리(+344MB)는 엔진이 쓰는 Rust `tokenizers` 크레이트에서도 비슷할 가능성이 높다. Python 바인딩도 같은 Rust 구현이다. iOS의 메모리 제한을 고려하면 위험하다. ORT 그래프 최적화 수준(ALL/BASIC/DISABLE)을 바꿔도 세션 메모리는 그대로였다.
 
 ## 4. 계획에 반영할 결론
@@ -167,8 +167,87 @@ batch 1, padding 없음, 50회 측정의 p50. 청크는 256 토큰이다.
 - MiniLM 기준선은 12분 제한 안에 색인을 끝내지 못했다. MiniLM 토크나이저는 한글을 거의 글자 단위로 쪼개 청크가 훨씬 많아진다. MiniLM 점수는 1절의 데스크톱 값(AutoRAG 0.059)을 기준으로 삼는다.
 - 이 실행 중 레거시 자산 경로의 버그를 발견했다. 토크나이저를 고정 이름으로 복사하고, 파일이 이미 있으면 다시 복사하지 않는다. 그래서 KoEn 실행 뒤 MiniLM을 실행하니 KoEn 토크나이저가 남아 실패했다. [docs/milestones.md](../../milestones.md)의 대기 목록에 올렸다.
 
+## 6. iPhone 실기기 측정 (M5, 2026-11-16)
+
+MiniLM(기본 Model Pack)과 KoEn-E5-Tiny(int8)를 iPhone에서 쟀다. 마일스톤은 [`docs/milestones.md`](../../milestones.md)의 M5다. 기기 한 대, 모델마다 한 번 설치한 결과이고, 기기 일반의 값으로 보지 않는다.
+
+### 조건
+
+| 항목 | 값 |
+|---|---|
+| 엔진 코드 | `ffb0ab8` (패키지 코드 `lib/`, `rust_builder/`는 main `a0e1636`과 같다. 측정 파일만 더한 커밋) |
+| 측정 파일 | `example/integration_test/m5_device_measure_test.dart` |
+| 앱 | example 앱(`com.example.mobileRagEngineExample`), `--dart-define=EXAMPLE_MODEL=minilm\|koen`, `ThreadUseLevel.medium`, 하이브리드 가중치 MiniLM 0.2/0.8(엔진 기본), KoEn 0.5/0.5(example 앱 값) |
+| 빌드 | **profile** (`flutter build ios --profile`), Rust feature `vector_faer,vector_quant_i8`, 할당자 system |
+| 설치·실행 | `xcrun devicectl device install app` 뒤 `devicectl device process launch`(디버거 없음). 측정 전에 앱을 지웠다. 두 번째 실행은 다시 설치하지 않고 앱만 다시 띄웠다 |
+| 기기 | iPhone 17 (iPhone18,3), iOS 27.0.1 (24A446), 무선 연결 |
+| 호스트 | Xcode 27.1 (27A9275), Flutter 3.35.5 (`ac4e799d23`), rustc 1.91.1 |
+| 로컬 빌드 우회 (커밋하지 않음) | pod 배포 대상 16.0(Xcode 27이 9.0~13.0 거부), `Info.plist`에 `FlutterSceneDelegate` Scene manifest(iOS 27이 UIScene 없는 앱을 실행 즉시 종료) |
+| 충전·다른 작업 | 기록하지 않았다(사용자에게 묻지 못함). Mac은 이 측정만 돌렸다 |
+| 측정일 | 2026-11-16 (MiniLM 10:32, KoEn 11:40 KST) |
+
+모델과 데이터:
+
+| 모델 | 파일 | fingerprint | E1 청크 (영어 / 한국어) |
+|---|---|---|---|
+| MiniLM | `stable-minilm-l6-v2-arm64-en` Model Pack (all-MiniLM-L6-v2 int8, 23 MB) | `model.onnx\|384\|f32+vabq:none\|sha256:e9246dc3…` | 2331 (2129 / 202) |
+| KoEn-E5-Tiny | `model_qint8_arm64.onnx` rev `5cf599a8` (38 MB), [레시피](../../guides/model_setup.md#korean-documents-koen-e5-tiny)의 Model Pack | `model.onnx\|384\|f32+vabq:none\|sha256:fd688b15…` | 2319 (2129 / 190) |
+
+- 색인: E1 앱 문서 56개(영어 28, 한국어 28, PDF 두 개 포함, `example/assets/corpus/e1/`)를 `addDocumentFromFile`로 넣고 `rebuildIndex(force: true)`.
+- 질의: E1 질문 120개(영어 60, 한국어 60, 답 없는 질문 포함). warm은 5개를 버린 뒤 120개 전부를 한 번씩 잰 값이다.
+- 구간 지연: 기존 프로파일러의 합성 fixture(컬렉션 둘 × 문서 500개, 영어 질의 5개)를 함께 돌렸다.
+- 원본: [`results/m5_iphone17_*.json`](results/). 각 파일에 모든 표본과 조건이 있다.
+
+### 결과
+
+| 항목 | MiniLM | KoEn-E5-Tiny |
+|---|---|---|
+| 초기화, 설치 뒤 첫 실행 (Model Pack 설치 포함) | 425 ms | 859 ms |
+| 초기화, 두 번째 실행 (같은 DB, 문서 1056개) | 111 ms | 160 ms |
+| 질의 임베딩 warm, 영어 p50 / p95 | 1.46 / 1.98 ms | 2.49 / 3.68 ms |
+| 질의 임베딩 warm, 한국어 p50 / p95 | 2.64 / 4.21 ms | 2.53 / 3.63 ms |
+| 질의 평균 토큰, 영어 / 한국어 | 12.4 / 32.6 | 13.2 / 13.8 |
+| 질의 전체 warm (E1, top 5, embed+search+hydrate), 영어 p50 / p95 | 2.51 / 3.46 ms | 3.60 / 4.77 ms |
+| 질의 전체 warm, 한국어 p50 / p95 | 3.60 / 4.72 ms | 3.65 / 4.73 ms |
+| 색인 전체 (56문서, 자산 복사와 rebuild 포함) | 11.3 s | 15.0 s |
+| `addDocumentFromFile` 청크당, 전체 / 영어 / 한국어 | 4.73 / 3.53 / 17.3 ms | 6.35 / 5.83 / 12.2 ms |
+| `rebuildIndex` | 203 ms | 216 ms |
+| 재시작 뒤 첫 질의 activate (E1 컬렉션, 디스크에서) | 21 ms | 24 ms |
+| RSS: 초기화 직전 → 직후 | 77 → 211 MB | 76 → 273 MB |
+| RSS 최고치: 색인 중 / 질의 중 / 프로세스 전체 | 240 / 206 / 242 MB | 314 / 277 / 314 MB |
+
+fixture 구간 지연 (p50 / p95, ms):
+
+| 구간 | MiniLM | KoEn-E5-Tiny |
+|---|---|---|
+| pure_cold activate (DB에서 색인 재구성, 1회) | 23.5 | 24.6 |
+| switching_cold activate (디스크에서 읽기) | 4.89 / 5.57 | 4.66 / 5.58 |
+| pure_warm embed / search / hydrate | 0.98 / 0.55 / 0.14 | 1.89 / 0.59 / 0.13 |
+| filtered pure_warm search (`sourceIds` 3개) | 0.29 / 0.35 | 0.35 / 0.39 |
+
+### 관찰
+
+- **질의 지연은 수 ms이고 임베딩이 가장 크다.** warm 질의 전체가 p95 5 ms 아래다. 검색(search)은 1 ms 안팎이다.
+- **한국어 질의는 두 모델이 같은 속도다.** MiniLM은 한국어를 거의 글자 단위로 쪼개 토큰이 2.5배(32.6 대 13.8)라, 6층이어도 12층인 KoEn과 시간이 같다. **영어 질의는 KoEn이 약 1.7배 느리다**(2.49 대 1.46 ms). 데스크톱 3절의 "질의는 토큰이 적어 오히려 더 빠르다"는 한국어 질의에만 맞는다.
+- **색인은 KoEn이 청크당 약 1.34배 느리다.** 데스크톱(1스레드)의 약 2배보다 작다. 한국어 문서는 MiniLM이 청크를 더 많이 만들고(202 대 190) 청크당 시간도 길다.
+- **메모리는 KoEn이 초기화 뒤 약 62 MB, 최고치 약 72 MB 더 크다.** 초기화가 늘린 RSS는 MiniLM 134 MB, KoEn 197 MB다. 데스크톱의 "약 60 MB 대 110 MB"(모델·토크나이저 로드)와 방향은 같고 차이는 비슷하다.
+- **첫 실행 초기화의 대부분은 Model Pack 설치다.** 두 번째 실행은 MiniLM 111 ms, KoEn 160 ms다. 레거시 자산 경로(`modelAsset`/`tokenizerAsset`)는 이 측정에 넣지 않았다(M5 "정한 것"). 그래서 후보 "레거시 자산 확인 비용 절감"을 판단할 기기 수치는 아직 없다.
+- **재시작 뒤 첫 질의:** activate 21~24 ms 중 약 21 ms가 BM25 재구성이다(HNSW 읽기는 0.3~2.3 ms). 이전 프로파일러 기록([on-device query profiler](../ondevice-query-profiler/) P3·P4)의 cold activate 247 ms와 warm 임베딩 약 27 ms는 엔진 버전과 조건이 다르고 모델이 적혀 있는지 확인하지 않아 비교하지 않는다.
+
+### 0.23.0에서의 업그레이드 (같은 기기)
+
+`tool/upgrade_e2e/ios_device/`로 확인했다. 원본은 [`results/m5_iphone17_upgrade_from_0_23_0.json`](results/m5_iphone17_upgrade_from_0_23_0.json)이다.
+1. `flutter create` 앱(`com.example.m5UpgradeApp`)에 pub의 `mobile_rag_engine` 0.23.0 + `rag_engine_flutter` 0.22.0, MiniLM Model Pack을 넣었다. profile로 설치해 문서 4개(영어 2, 한국어 2)를 넣고 질의 두 개의 상위 결과를 남겼다.
+2. 같은 앱의 의존성을 엔진 `ffb0ab8` path로 바꿔, 지우지 않고 덮어 설치했다.
+
+| 확인 | 결과 |
+|---|---|
+| 초기화가 끝난다 | 통과 (249 ms) |
+| `embeddingFingerprintLock`이 null | 통과. fingerprint는 전후 모두 `…sha256:e9246dc3…` |
+| 문서 4개가 `listSources`에 남는다 | 통과 |
+| 같은 질의가 결과를 돌려주고 1위가 같다 | 통과 (두 질의 모두 상위 3개가 같다) |
+
 ## 남은 측정
 
-- iPhone 실기기: 로드 시간, warm embed 지연, 메모리 최고치. 기존 [on-device query profiler](../ondevice-query-profiler/)를 재사용한다.
 - 엔진 Rust `tokenizers`로 KoEn tokenizer.json을 로드했을 때 Python과 토큰 ID가 같은지 확인한다(교차 검증).
 - 512 고정 시 영어(MiniLM) 품질·지연 변화: 회귀가 없는지 확인한다.
