@@ -43,7 +43,7 @@ enterprise apps where user data must stay on the device.
 - **Hybrid search with measured quality.** HNSW vector search and BM25 keyword
   search are fused into one ranking. On an 80-query English/Korean benchmark,
   the right passage is in the top 10 for 92.5% of queries with the default
-  MiniLM Model Pack and 95% with KoEn-E5-Tiny (see
+  MiniLM Model Pack, 95% with KoEn-E5-Tiny and 96.25% with BGE-m3 (see
   [Supported and verified scope](#supported-and-verified-scope)).
 - **Works with any LLM.** There is no LLM inside. `searchHybridWithContext` returns
   context within a token budget, and `ask` takes your own generation function, so a
@@ -294,8 +294,8 @@ collection.
 |:-----|:---------------|:--------------------|
 | **Local Flutter RAG retrieval** | Supported | Dart facade over a native core for ingest, chunking, embedding, SQLite storage, HNSW vector search, BM25 keyword search, RRF fusion, and context assembly |
 | **Offline / on-device operation** | Supported | Models and user documents stay local after you bundle the ONNX model and tokenizer assets |
-| **Hybrid source retrieval** | Verified on benchmark fixtures | 80-query run, default hybrid search: `source_recall@10 = 1.000` with both the MiniLM Model Pack and KoEn-E5-Tiny (conditions below the table) |
-| **Passage/context retrieval** | Verified on benchmark fixtures | 80-query passage run, default hybrid search: **MiniLM Model Pack** (default) `passage_recall@10 = 0.925`, `answerable_context@10 = 0.900`; **KoEn-E5-Tiny** `passage_recall@10 = 0.950`, `answerable_context@10 = 0.9625`. MiniLM is English-only: its vector search alone found 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#korean-documents-koen-e5-tiny). See the note below the table for conditions |
+| **Hybrid source retrieval** | Verified on benchmark fixtures | 80-query run, default hybrid search: `source_recall@10 = 1.000` with the MiniLM Model Pack, KoEn-E5-Tiny and BGE-m3 (conditions below the table) |
+| **Passage/context retrieval** | Verified on benchmark fixtures | 80-query passage run, default hybrid search: **MiniLM Model Pack** (default) `passage_recall@10 = 0.925`, `answerable_context@10 = 0.900`; **KoEn-E5-Tiny** `passage_recall@10 = 0.950`, `answerable_context@10 = 0.9625`; **BGE-m3** `passage_recall@10 = 0.9625`, `answerable_context@10 = 0.9625`. MiniLM is English-only: its vector search alone found 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#korean-documents-koen-e5-tiny). See the note below the table for conditions |
 | **Text-layer PDF-to-RAG** | Verified on sample scope | `sample_eng.pdf` and `sample_kor.pdf` profile run: 8/8 PDF-derived queries reached source, passage, and answerable context at top-10 (model and date not recorded) |
 | **Scanned/image-only PDFs** | Detected, not OCR-processed | OCR-required PDFs are surfaced as extraction errors so your app can route to an OCR layer; OCR is not bundled in this package |
 | **Large, table-heavy, OCR-heavy PDFs** | Still being validated | Do not treat the PDF smoke result as broad PDF robustness or mobile latency/memory proof |
@@ -309,15 +309,14 @@ ranking these numbers describe.
 By language, default hybrid search, `mobile_rag_engine` 0.24.0 code, profile
 build on an Apple M3 Pro Mac, 2026-11-16:
 
-| Model | 80 Wikipedia questions, answer in top 10: English / Korean / mixed | 90 app-document questions, answer in the 5 `ask` passages: English / Korean |
-|:------|:---:|:---:|
-| MiniLM Model Pack (default) | 29 of 32 / 29 of 32 / 16 of 16 | 35 of 45 / 25 of 44 |
-| KoEn-E5-Tiny | 29 of 32 / 31 of 32 / 16 of 16 | 34 of 45 / 37 of 45 |
-| BGE-m3 Model Pack | 29 of 32 / 32 of 32 / 16 of 16 | not run on 0.24.0 code |
+| Model | English, 32 | Korean, 32 | Mixed, 16 |
+|:------|:---:|:---:|:---:|
+| MiniLM Model Pack (default) | 29 | 29 | 16 |
+| KoEn-E5-Tiny | 29 | 31 | 16 |
+| BGE-m3 Model Pack | 29 | 32 | 16 |
 
-The app documents are GNOME Help pages, short app and office documents and two
-sample PDFs. One Korean question is left out for MiniLM because its answer
-spans two MiniLM chunks. To install any of the three models, see
+Questions with the answer in the top 10, same 80 queries as above. To install
+any of the three models, see
 [Model Setup](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#which-model).
 
 Numbers vary by device and corpus. To measure on your own hardware, see

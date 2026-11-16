@@ -19,8 +19,7 @@ Measured on 80 Wikipedia questions (32 English, 32 Korean, 16 mixed, default
 hybrid search, top 10, profile build on an Apple M3 Pro Mac): MiniLM
 `passage_recall@10` 0.925, KoEn-E5-Tiny 0.950 and BGE-m3 0.9625, all on
 2026-11-16 with `mobile_rag_engine` 0.24.0 code; BGE-m3 was initialized from the
-manifest in [BGE-m3](#bge-m3-model-pack). MiniLM and KoEn-E5-Tiny were also measured on an iPhone 17
-(see [Cost](#cost)); BGE-m3 was not.
+manifest in [BGE-m3](#bge-m3-model-pack).
 
 All three use the same steps after installing: declare `assets/mobile_rag/` in
 `pubspec.yaml` and initialize with
