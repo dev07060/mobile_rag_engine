@@ -68,7 +68,7 @@ class PromptCompressor {
   /// [level] - Compression aggressiveness.
   /// [maxTokens] - Target maximum tokens. Without [tokenCounter] this is an
   ///   estimate of 4 characters per token, which can be several times off
-  ///   for Korean, Japanese, Chinese, Thai or emoji.
+  ///   for Korean, Thai or emoji.
   /// [language] - Language for stopword filtering ("ko" or "en").
   /// [tokenCounter] - Counts tokens as your LLM does. When given, the text is
   ///   cut at sentence boundaries until it has at most [maxTokens] tokens by

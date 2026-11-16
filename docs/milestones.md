@@ -1150,6 +1150,7 @@
   - 문서의 "0.23.0 뒤 배포" 표현을 버전 번호로 바꾼다: `docs/guides/release_build.md`, `faq.md`, `ask.md`(2026-11-16 grep으로 찾은 곳. 착수 때 다시 찾는다).
   - 발행 뒤 기준 버전 갱신: `upgrade_e2e.yml`의 기준 목록, `.github/pull_request_template.md`, 규칙 8.1의 "마지막 배포 버전". 새 버전은 발행된 뒤에야 pub에서 받을 수 있으므로 이 커밋은 발행 뒤에 넣는다.
   - `docs/milestones.md`: 이 절의 결과, "현재 상태" 절, M5 상태 줄("PR #152 검토 대기" → 머지 완료).
+  - 지원 언어와 압축 기능 표시(문서만, 동작 변경 없음, 아래 "정한 것" 6): 중국어·일본어를 지원하거나 겨냥하는 것으로 읽히는 문장을 사용자 문서(README, `docs/guides/`, `docs/features/`)와 `lib/`의 dartdoc에서 뺀다. README와 `model_setup.md`에 지원 언어는 한국어와 영어이고, 그 밖의 언어는 앱이 넣는 임베딩 모델에 달려 있으며 확인하거나 지원하지 않는다고 적는다. BGE-m3는 잰 언어(한국어, 영어)로 설명한다. README Features 목록에서 Prompt Compression을 빼고, `docs/features/prompt_compression.md` 맨 위에 정식 지원 기능이 아니고 바뀌거나 빠질 수 있다고 적는다. `@experimental`·`@Deprecated`는 넣지 않고 API는 그대로 둔다. CHANGELOG 0.24.0에 한 항목으로 적는다. 이미 머지된 수정(`。` panic, 문맥 자르기, 코너 괄호 인용)의 항목은 사실로 남기고 지원을 약속하는 문장만 고친다. 내부 기록(`docs/perf/`, `docs/reports/`, 이 문서), 코드 식별자, 테스트 데이터, 0.23.0 이전 CHANGELOG 항목은 바꾸지 않는다.
 - **R2-3. 발행 전 확인 (규칙 5.2).** 배포 준비 커밋에서 다시 돌린다.
   - CI 전체와 Upgrade E2E(0.23.0, 0.22.3 기준).
   - Quick Start E2E를 발행 archive로(`SOURCE=archive`, Q5) Android·iOS·macOS·Windows에서.
@@ -1204,6 +1205,7 @@
 | 3 | Xcode 27에서 새 앱의 iOS 빌드를 `setup`이 고치게 함 | 넣지 않는다. `troubleshooting.md` 안내로 낸다 |
 | 4 | Q3 조사 규칙 확인 | 넣는다(R2-0) |
 | 5 | release 빌드로 기기 실행을 한 번 더 | 넣지 않는다. M5의 profile 결과로 갈음한다 |
+| 6 | 중국어·일본어 지원 표시와 prompt compression의 정식 기능 표시 (2026-11-16 사용자 "이럴거면 compress 기능 그냥 정식 표시 하지마 그리고 중국어 일본어 같은거 정식 지원할 생각 없어", "중국어 일본어 정식 지원에서 다 빼") | 넣는다(R2-2, 문서만). 지원 언어는 한국어와 영어. 압축 API는 바꾸지 않는다 |
 
 **완료 기준**
 - R2-0의 확인 결과가 이 절에 적혀 있다.
@@ -1213,7 +1215,7 @@
 - R2-5의 두 확인이 새 버전으로 통과한다.
 - 규칙 8의 네 항목. PR 하나.
 
-**손대는 파일:** `pubspec.yaml`, `rust_builder/pubspec.yaml`, `rust_builder/rust/{Cargo.toml,Cargo.lock}`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `README.md`, `docs/guides/{quick_start,troubleshooting,release_build,faq,ask}.md`, `.github/workflows/{quickstart_e2e,upgrade_e2e}.yml`, `.github/pull_request_template.md`, `docs/milestones.md`, lockfile. R2-0은 `rust_builder/rust/src/**`의 테스트만 더할 수 있다(동작 코드는 바꾸지 않는다)
+**손대는 파일:** `docs/guides/{model_setup,quick_start}.md`, `docs/features/prompt_compression.md`, `lib/services/{ask,context_builder,llm_tool,prompt_compressor}.dart`(dartdoc만), `pubspec.yaml`, `rust_builder/pubspec.yaml`, `rust_builder/rust/{Cargo.toml,Cargo.lock}`, `CHANGELOG.md`, `rust_builder/CHANGELOG.md`, `README.md`, `docs/guides/{quick_start,troubleshooting,release_build,faq,ask}.md`, `.github/workflows/{quickstart_e2e,upgrade_e2e}.yml`, `.github/pull_request_template.md`, `docs/milestones.md`, lockfile. R2-0은 `rust_builder/rust/src/**`의 테스트만 더할 수 있다(동작 코드는 바꾸지 않는다)
 
 ### 아직 마일스톤으로 적지 않은 후보
 

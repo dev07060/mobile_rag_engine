@@ -1,5 +1,7 @@
 # Prompt Compression (REFRAG)
 
+> **Not an officially supported feature.** `PromptCompressor` and `ContextBuilder.buildWithCompression` may change or be removed in a later release.
+
 Mobile RAG Engine includes a built-in **Prompt Compressor** inspired by REFRAG principles. This feature reduces the token count of your retrieved context, allowing you to fit more information into the LLM's context window or save on API costs.
 
 ## Why use Prompt Compression?

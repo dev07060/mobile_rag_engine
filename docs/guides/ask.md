@@ -57,14 +57,11 @@ Each `RagPassage` has `id`, `text`, `sourceId`, `sourceName`, `chunkId` and
 ## Token budget
 
 `tokenBudget` counts tokens of the embedding model's tokenizer, not your
-LLM's. The two can differ several times, most for Korean, Japanese, Chinese,
-Thai and emoji. Counted with the embedding tokenizer through `countTokens`:
+LLM's. The two can differ several times, most for Korean, Thai and emoji. Counted with the embedding tokenizer through `countTokens`:
 
 | Text | MiniLM (default) | KoEn-E5-Tiny | BGE-m3 |
 |---|---|---|---|
 | 23 Korean characters | 38 | 10 | 10 |
-| 21 Japanese characters | 20 | 4 | 14 |
-| 20 Chinese characters | 19 | 6 | 15 |
 | 31 Thai characters | 1 | 2 | 7 |
 | 10 emoji | 1 | 2 | 11 |
 | 49 English characters | 10 | 11 | 11 |
@@ -100,8 +97,8 @@ otherwise estimated at 4 characters per token.
 `citations` reads these forms from the answer:
 
 - `[1]`, `[1, 2]`, `[1][2]`
-- full-width `［１］`, lenticular `【1】` and the CJK corner brackets `「1」`,
-  `『1』`, which models answering in Korean, Japanese or Chinese often write
+- full-width `［１］`, lenticular `【1】` and the corner brackets `「1」`,
+  `『1』`, which some models write instead of `[1]`
 - ids separated by `、` or `，` (`[1、2]`), and ranges (`[1-3]`, `[1–3]`,
   `[1~3]`), which cite every given id in the range
 
@@ -123,8 +120,8 @@ large document that matches only common words of the question ("how", "is",
 Keyword search reduces English words to their stem (Snowball English), so
 "How long is the refund period?" finds "Refunds are accepted within 14 days of
 purchase." even next to a 1,800-chunk PDF. A question that shares *no* word
-with the sentence still can miss it. Stemming is English-only (Korean, Japanese and
-Chinese words are matched as before), and like any stemmer it joins some
+with the sentence still can miss it. Stemming is English-only (Korean words are
+matched as before), and like any stemmer it joins some
 unrelated words, such as "university" and "universe".
 
 What helps, in order:

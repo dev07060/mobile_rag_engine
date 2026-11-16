@@ -688,8 +688,8 @@ Answer:''';
   }
 
   /// A sentence ends after `.`, `!`, `?` or `…` followed by whitespace (so
-  /// `3.14` and `v1.2.3` are not cut), and always after `。！？｡`, which CJK
-  /// text writes without a following space. Closing quotes and brackets
+  /// `3.14` and `v1.2.3` are not cut), and always after `。！？｡`, which are
+  /// written without a following space. Closing quotes and brackets
   /// stay with the sentence. This is the rule `compress_text` uses.
   static final _sentenceEnd = RegExp(
     '(?:[.!?…]["\'\\)\\]\u2019\u201d」』）]*(?=\\s)|[。！？｡]["\'\\)\\]\u2019\u201d」』）]*)',
