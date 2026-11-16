@@ -17,8 +17,9 @@ Model Pack in `assets/mobile_rag/`; pick one per app.
 
 Measured on 80 Wikipedia questions (32 English, 32 Korean, 16 mixed, default
 hybrid search, top 10, profile build on an Apple M3 Pro Mac): MiniLM
-`passage_recall@10` 0.925 and KoEn-E5-Tiny 0.950 (2026-11-16), BGE-m3 0.9625
-(2026-11-13). MiniLM and KoEn-E5-Tiny were also measured on an iPhone 17
+`passage_recall@10` 0.925, KoEn-E5-Tiny 0.950 and BGE-m3 0.9625, all on
+2026-11-16 with `mobile_rag_engine` 0.24.0 code; BGE-m3 was initialized from the
+manifest in [BGE-m3](#bge-m3-model-pack). MiniLM and KoEn-E5-Tiny were also measured on an iPhone 17
 (see [Cost](#cost)); BGE-m3 was not.
 
 All three use the same steps after installing: declare `assets/mobile_rag/` in
@@ -445,6 +446,12 @@ await MobileRag.initialize(
 
 On first launch the engine copies and hashes both files (about 586 MB), so the
 first `initialize` takes noticeably longer than with the smaller models.
+
+This manifest and these files were run through `MobileRag.initialize` on
+2026-11-16 (`mobile_rag_engine` 0.24.0 code, profile build, Apple M3 Pro Mac,
+macOS 27.2.1): the pack was checked and copied, 4492 chunks were indexed, and
+the 80 Wikipedia questions gave `passage_recall@10` 0.9625 with default hybrid
+search.
 
 ### Shipping it without bundling
 

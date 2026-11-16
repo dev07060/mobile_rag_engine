@@ -313,10 +313,11 @@ build on an Apple M3 Pro Mac, 2026-11-16:
 |:------|:---:|:---:|
 | MiniLM Model Pack (default) | 29 of 32 / 29 of 32 / 16 of 16 | 35 of 45 / 25 of 44 |
 | KoEn-E5-Tiny | 29 of 32 / 31 of 32 / 16 of 16 | 34 of 45 / 37 of 45 |
+| BGE-m3 Model Pack | 29 of 32 / 32 of 32 / 16 of 16 | not run on 0.24.0 code |
 
 The app documents are GNOME Help pages, short app and office documents and two
 sample PDFs. One Korean question is left out for MiniLM because its answer
-spans two MiniLM chunks. To install either model, or BGE-m3, see
+spans two MiniLM chunks. To install any of the three models, see
 [Model Setup](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#which-model).
 
 Numbers vary by device and corpus. To measure on your own hardware, see
