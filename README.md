@@ -85,22 +85,29 @@ Pick the embedding model for your documents' language:
 
 | Your documents | Model | Size | Install |
 |:---------------|:------|:----:|:--------|
-| English | MiniLM Model Pack (default) | about 23 MB | the `setup` command below |
-| Korean, or Korean and English | KoEn-E5-Tiny | about 41 MB | [KoEn-E5-Tiny guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#korean-documents-koen-e5-tiny) |
+| English | MiniLM Model Pack (default) | about 23 MB | `--preset stable-minilm-l6-v2-arm64-en` |
+| Korean, or Korean and English | KoEn-E5-Tiny | about 41 MB | `--preset koen-e5-tiny-arm64-koen` |
 | Highest accuracy, larger apps | BGE-m3 | about 586 MB | [BGE-m3 guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#bge-m3-model-pack) |
 
 For English documents:
 
 ```bash
 dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en
-dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en --check
 ```
 
+For Korean, or Korean and English, documents:
+
+```bash
+dart run mobile_rag_engine:setup --preset koen-e5-tiny-arm64-koen
+```
+
+Add `--check` to the same command to verify the installed files.
+
 `setup` writes `assets/mobile_rag/model.onnx`, `tokenizer.json` and
-`model-pack.json`, and applies the iOS and macOS host settings the native
-dependencies need (Podfile platform, static framework linkage and deployment
-target), printing each change. Every model installs into the same directory, so
-add it to your app assets:
+`model-pack.json` at a pinned revision with checked hashes, and applies the iOS
+and macOS host settings the native dependencies need (Podfile platform, static
+framework linkage and deployment target), printing each change. Add the
+directory to your app assets:
 
 ```yaml
 flutter:

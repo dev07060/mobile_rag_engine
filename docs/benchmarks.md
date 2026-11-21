@@ -11,7 +11,7 @@ To run the same measurements on your own documents and hardware, see
 | Model | Best for | Files to bundle | Install |
 |:------|:---------|:---------------:|:--------|
 | all-MiniLM-L6-v2 Model Pack (default) | English | about 23 MB | [one `setup` command](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#recommended-stable-minilm-model-pack) |
-| KoEn-E5-Tiny | Korean, or Korean and English | about 41 MB | [two files and a manifest](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#korean-documents-koen-e5-tiny) |
+| KoEn-E5-Tiny | Korean, or Korean and English | about 41 MB | [one `setup` command](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#korean-documents-koen-e5-tiny) |
 | BGE-m3 | Highest accuracy, larger apps | about 586 MB | [two files and a manifest](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/model_setup.md#bge-m3-model-pack) |
 
 ## Highlights

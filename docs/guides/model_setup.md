@@ -12,7 +12,7 @@ Model Pack in `assets/mobile_rag/`; pick one per app.
 | Model | Dimensions | Files to bundle | How to install |
 |:------|:----------:|:---------------:|:---------------|
 | all-MiniLM-L6-v2 (default) | 384 | about 23 MB | [`setup` command](#recommended-stable-minilm-model-pack), one line |
-| KoEn-E5-Tiny, for Korean documents | 384 | about 41 MB | [download two files and write the manifest](#korean-documents-koen-e5-tiny) |
+| KoEn-E5-Tiny, for Korean documents | 384 | about 41 MB | [`setup` command](#korean-documents-koen-e5-tiny), one line |
 | BGE-m3 | 1024 | about 586 MB | [download two files and write the manifest](#bge-m3-model-pack) |
 
 On an 80-question English/Korean benchmark, the right passage is in the top 10
@@ -69,9 +69,10 @@ await MobileRag.initialize(
 );
 ```
 
-The sole v1 preset is `stable-minilm-l6-v2-arm64-en`: English, arm64,
+The `stable-minilm-l6-v2-arm64-en` preset is English, arm64,
 384-dimensional, Apache-2.0 MiniLM at revision
-`1110a243fdf4706b3f48f1d95db1a4f5529b4d41`. Vector storage is Q8_0. Use
+`1110a243fdf4706b3f48f1d95db1a4f5529b4d41`. For Korean documents, use the
+[`koen-e5-tiny-arm64-koen`](#korean-documents-koen-e5-tiny) preset. Vector storage is Q8_0. Use
 `--repair` only to replace a file that fails its SHA-256/length check.
 
 The first success is adding documents, then searching for non-empty
@@ -102,67 +103,30 @@ earlier character-based limit).
 KoEn-E5-Tiny only covers Korean and English. Text in other languages is likely
 to be retrieved poorly.
 
-### 1. Download the files
+### 1. Install the files
 
-Pin the revision so the files cannot change under you:
-
-```bash
-mkdir -p assets/mobile_rag && cd assets/mobile_rag
-
-REV=5cf599a8cd6577f2f12a026130ad50132e472cfd
-BASE=https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX/resolve/$REV
-
-curl -L -o model.onnx "$BASE/onnx/model_qint8_arm64.onnx"
-curl -L -o tokenizer.json "$BASE/tokenizer.json"
-cd -
-```
-
-Check both files before writing the manifest. The two hashes must be exactly
-these:
+From your Flutter project, run:
 
 ```bash
-shasum -a 256 assets/mobile_rag/model.onnx assets/mobile_rag/tokenizer.json
-# d463c9b1c29f3202d510e2836265d60f9e6e6dd518c5930ba865700646489bd4  model.onnx
-# a6dd38d692ac1caa6d5dbc195d92f1f978b5c74ec60e02ed15fdf04404742fe3  tokenizer.json
+dart run mobile_rag_engine:setup --preset koen-e5-tiny-arm64-koen
 ```
 
-`dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en --check`
-checks only the MiniLM pack; for
-this pack, the engine checks the hashes on first launch and fails with a
-`RagModelPackException` if a file differs.
+It downloads the model and tokenizer at the pinned revision
+`5cf599a8cd6577f2f12a026130ad50132e472cfd`, checks their SHA-256 and length,
+and writes `model.onnx`, `tokenizer.json` and `model-pack.json` to
+`assets/mobile_rag/`. Like the MiniLM preset, it also applies the iOS and macOS
+host settings. Use `--output` to install somewhere else inside the project.
 
-### 2. Write the Model Pack manifest
+### 2. Check the files
 
-The `setup` command installs only the MiniLM pack, so write
-`assets/mobile_rag/model-pack.json` yourself. The engine checks both files
-against these hashes and lengths on first launch:
-
-```json
-{
-  "schemaVersion": 1,
-  "preset": "koen-e5-tiny-arm64-koen",
-  "modelId": "exp-models/dragonkue-KoEn-E5-Tiny-ONNX",
-  "revision": "5cf599a8cd6577f2f12a026130ad50132e472cfd",
-  "modelAsset": "assets/mobile_rag/model.onnx",
-  "tokenizerAsset": "assets/mobile_rag/tokenizer.json",
-  "modelSha256": "d463c9b1c29f3202d510e2836265d60f9e6e6dd518c5930ba865700646489bd4",
-  "tokenizerSha256": "a6dd38d692ac1caa6d5dbc195d92f1f978b5c74ec60e02ed15fdf04404742fe3",
-  "modelBytes": 38275821,
-  "tokenizerBytes": 2931715,
-  "architecture": "arm64",
-  "embeddingDimension": 384,
-  "license": "apache-2.0",
-  "language": "Korean, English"
-}
+```bash
+dart run mobile_rag_engine:setup --preset koen-e5-tiny-arm64-koen --check
 ```
 
-Use a Model Pack rather than `modelAsset`/`tokenizerAsset`. In
-`mobile_rag_engine` 0.22.3 and earlier, those parameters copy the tokenizer to a
-fixed file name and skip the copy when that file already exists, so an app that
-previously ran MiniLM would keep MiniLM's tokenizer. 0.23.0 and later refresh a
-stale copy, but they load and hash the bundled files on every launch to check.
-A Model Pack is stored under its hashes, is always the one you bundled, and
-skips that check once installed.
+The preset writes the same `model-pack.json` that earlier versions of this
+guide had you write by hand, so an app set up that way passes `--check` and
+needs no change. The engine also checks both files against the manifest on
+first launch and fails with a `RagModelPackException` if one differs.
 
 ### 3. Bundle and initialize
 
@@ -327,60 +291,17 @@ assets/mobile_rag/model.onnx
 assets/mobile_rag/tokenizer.json
 ```
 
-Then fetch them after cloning and before every build on a clean machine (CI),
-with a script that downloads the revision named in the manifest and refuses a
-file whose hash differs:
+Then run the `setup` command after cloning and before every build on a clean
+machine (CI):
 
 ```bash
-#!/usr/bin/env bash
-# scripts/fetch_rag_model.sh — download the model files at the revision pinned
-# in model-pack.json and check them against the manifest's sha256 values.
-set -euo pipefail
-
-DIR=assets/mobile_rag
-MANIFEST="$DIR/model-pack.json"
-REPO=exp-models/dragonkue-KoEn-E5-Tiny-ONNX
-MODEL_FILE=onnx/model_qint8_arm64.onnx
-
-field() { sed -n "s/.*\"$1\": *\"\([^\"]*\)\".*/\1/p" "$MANIFEST"; }
-sha256() { shasum -a 256 "$1" | cut -d' ' -f1; }
-
-REV=$(field revision)
-BASE="https://huggingface.co/$REPO/resolve/$REV"
-
-fetch() { # <remote path> <local file> <manifest sha256 key>
-  local want got
-  want=$(field "$3")
-  if [ -f "$2" ] && [ "$(sha256 "$2")" = "$want" ]; then
-    echo "ok (already there) $2"
-    return
-  fi
-  curl -fL --retry 3 -o "$2.part" "$BASE/$1"
-  got=$(sha256 "$2.part")
-  if [ "$got" != "$want" ]; then
-    rm -f "$2.part"
-    echo "sha256 mismatch for $2: got $got, $MANIFEST has $want" >&2
-    exit 1
-  fi
-  mv "$2.part" "$2"
-  echo "ok $2"
-}
-
-fetch "$MODEL_FILE" "$DIR/model.onnx" modelSha256
-fetch tokenizer.json "$DIR/tokenizer.json" tokenizerSha256
+dart run mobile_rag_engine:setup --preset koen-e5-tiny-arm64-koen
 ```
 
-Run it from the project root. A second run downloads nothing while the files
-match. On a mismatch it exits with an error and leaves the existing file
-alone, so a changed upstream file cannot reach your build; the engine checks
-the same hashes again on first launch. `shasum` ships with macOS and most
-Linux images; use `sha256sum` where it does not. For another model, change
-`REPO` and `MODEL_FILE` and write its manifest as in step 2.
-
-For the MiniLM pack, ignore the same two files and run
-`dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en`
-instead: it downloads the pinned revision and checks the hashes itself, and
-`--check` exits with an error while a file is missing.
+It downloads nothing while the files match the pinned hashes, and fails
+without touching an existing file that differs (add `--repair` to replace it),
+so a changed upstream file cannot reach your build. `--check` exits with an
+error while a file is missing. The same works for the MiniLM preset.
 
 ---
 
