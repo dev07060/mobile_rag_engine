@@ -15,40 +15,11 @@ Model Pack in `assets/mobile_rag/`; pick one per app.
 | KoEn-E5-Tiny, for Korean documents | 384 | about 41 MB | [download two files and write the manifest](#korean-documents-koen-e5-tiny) |
 | BGE-m3 | 1024 | about 586 MB | [download two files and write the manifest](#bge-m3-model-pack) |
 
-Measured on 80 Wikipedia questions (32 English, 32 Korean, 16 mixed, default
-hybrid search, top 10, profile build on an Apple M3 Pro Mac): MiniLM
-`passage_recall@10` 0.925, KoEn-E5-Tiny 0.950 and BGE-m3 0.9625, all on
-2026-11-16 with `mobile_rag_engine` 0.24.0 code; BGE-m3 was initialized from the
-manifest in [BGE-m3](#bge-m3-model-pack).
-
-On two larger English sets (NFCorpus, 3,633 documents; SciFact, 5,183
-abstracts):
-
-| Model | NFCorpus, 323 questions | SciFact, 300 claims |
-|:------|:---:|:---:|
-| MiniLM Model Pack (default) | 207 | 226 |
-| KoEn-E5-Tiny | 207 | 219 |
-| BGE-m3 | 205 | 224 |
-
-Questions with the answer in the 5 `ask` passages, default hybrid search,
-profile build on an Apple M3 Pro Mac, 2026-11-14, engine commit `3f9df80`
-(before 0.24.0, whose BM25 normalization and passage order changes were not
-re-measured here). Both sets are biomedical paper abstracts; MiniLM's SciFact
-number may be inflated, because its training data includes citation pairs
-from the same paper collection.
-
-Larger Korean sets, same condition:
-
-| Model | MIRACL Korean dev, 213 questions (5,000 / 15,000 passages) | KorQuAD 1.0 dev, 500 questions | AutoRAG Korean, 114 questions |
-|:------|:---:|:---:|:---:|
-| MiniLM Model Pack (default) | not run (English-only model) | not run | not run |
-| KoEn-E5-Tiny | 167 / 165 | 483 | 112 |
-| BGE-m3 | 173 / 166 | 482 | 111 |
-
-Measured 2026-11-14 with the engine code of commits `28308ab` (MIRACL) and
-`04d950d` (KorQuAD, AutoRAG), before the Korean keyword changes of 0.24.0.
-MIRACL's training split was used to train both models, so their vector search
-may look better there than on your documents.
+On an 80-question English/Korean benchmark, the right passage is in the top 10
+for 92.5% of questions with MiniLM, 95% with KoEn-E5-Tiny and 96.25% with
+BGE-m3. Results on NFCorpus, SciFact, MIRACL, KorQuAD and AutoRAG, with the
+measurement conditions, are in
+[Benchmarks](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/benchmarks.md).
 
 All three use the same steps after installing: declare `assets/mobile_rag/` in
 `pubspec.yaml` and initialize with
