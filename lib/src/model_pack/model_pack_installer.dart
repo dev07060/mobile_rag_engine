@@ -8,7 +8,7 @@ import 'package:mobile_rag_engine/model_pack.dart';
 /// Downloads an immutable artifact. Tests can provide an in-memory downloader.
 typedef ModelPackDownloader = Future<List<int>> Function(Uri url);
 
-/// The single supported Model Pack v1 preset.
+/// The default Model Pack v1 preset, for English documents.
 class StableMiniLmL6V2Arm64EnPreset {
   static const id = 'stable-minilm-l6-v2-arm64-en';
   static const modelId = 'sentence-transformers/all-MiniLM-L6-v2';
@@ -45,8 +45,45 @@ class StableMiniLmL6V2Arm64EnPreset {
   ).copyWithAssets(modelAsset, tokenizerAsset);
 }
 
-/// Artifact metadata used by the installer. The default is the sole public
-/// preset; injecting one in tests keeps installer tests completely offline.
+/// The Model Pack v1 preset for Korean, or Korean and English, documents.
+class KoEnE5TinyArm64KoEnPreset {
+  static const id = 'koen-e5-tiny-arm64-koen';
+  static const modelId = 'exp-models/dragonkue-KoEn-E5-Tiny-ONNX';
+  static const revision = '5cf599a8cd6577f2f12a026130ad50132e472cfd';
+  static const modelSha256 =
+      'd463c9b1c29f3202d510e2836265d60f9e6e6dd518c5930ba865700646489bd4';
+  static const tokenizerSha256 =
+      'a6dd38d692ac1caa6d5dbc195d92f1f978b5c74ec60e02ed15fdf04404742fe3';
+  static const modelBytes = 38275821;
+  static const tokenizerBytes = 2931715;
+  static const modelUrl =
+      'https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX/resolve/$revision/onnx/model_qint8_arm64.onnx';
+  static const tokenizerUrl =
+      'https://huggingface.co/exp-models/dragonkue-KoEn-E5-Tiny-ONNX/resolve/$revision/tokenizer.json';
+
+  static RagModelPackManifest manifest({
+    required String modelAsset,
+    required String tokenizerAsset,
+  }) => const RagModelPackManifest(
+    schemaVersion: 1,
+    preset: id,
+    modelId: modelId,
+    revision: revision,
+    modelAsset: '',
+    tokenizerAsset: '',
+    modelSha256: modelSha256,
+    tokenizerSha256: tokenizerSha256,
+    modelBytes: modelBytes,
+    tokenizerBytes: tokenizerBytes,
+    architecture: 'arm64',
+    embeddingDimension: 384,
+    license: 'apache-2.0',
+    language: 'Korean, English',
+  ).copyWithAssets(modelAsset, tokenizerAsset);
+}
+
+/// Artifact metadata used by the installer. Injecting one in tests keeps
+/// installer tests completely offline.
 class ModelPackPresetDefinition {
   const ModelPackPresetDefinition({
     required this.id,
@@ -70,6 +107,16 @@ class ModelPackPresetDefinition {
     modelUrl: Uri.parse(StableMiniLmL6V2Arm64EnPreset.modelUrl),
     tokenizerUrl: Uri.parse(StableMiniLmL6V2Arm64EnPreset.tokenizerUrl),
   );
+
+  static final koEnE5Tiny = ModelPackPresetDefinition(
+    id: KoEnE5TinyArm64KoEnPreset.id,
+    manifest: KoEnE5TinyArm64KoEnPreset.manifest,
+    modelUrl: Uri.parse(KoEnE5TinyArm64KoEnPreset.modelUrl),
+    tokenizerUrl: Uri.parse(KoEnE5TinyArm64KoEnPreset.tokenizerUrl),
+  );
+
+  /// Every preset `setup --preset` accepts.
+  static final all = [stableMiniLm, koEnE5Tiny];
 }
 
 extension on RagModelPackManifest {
@@ -94,19 +141,20 @@ extension on RagModelPackManifest {
   );
 }
 
-/// Installs and verifies the immutable MiniLM assets during app development.
+/// Installs and verifies the immutable preset assets during app development.
 class ModelPackInstaller {
   ModelPackInstaller({
     required this.projectDirectory,
     ModelPackDownloader? downloader,
     ModelPackPresetDefinition? presetDefinition,
   }) : _downloader = downloader ?? _httpDownload,
-       _presetDefinition =
-           presetDefinition ?? ModelPackPresetDefinition.stableMiniLm;
+       _presets = presetDefinition == null
+           ? ModelPackPresetDefinition.all
+           : [presetDefinition];
 
   final Directory projectDirectory;
   final ModelPackDownloader _downloader;
-  final ModelPackPresetDefinition _presetDefinition;
+  final List<ModelPackPresetDefinition> _presets;
 
   static Future<List<int>> _httpDownload(Uri url) async {
     final client = HttpClient();
@@ -138,10 +186,14 @@ class ModelPackInstaller {
     bool check = false,
     bool repair = false,
   }) async {
-    if (preset != _presetDefinition.id) {
+    final presetDefinition = _presets
+        .where((candidate) => candidate.id == preset)
+        .firstOrNull;
+    if (presetDefinition == null) {
       throw RagModelPackException(
         RagModelPackErrorCode.unsupportedPreset,
-        'Only ${_presetDefinition.id} is supported.',
+        'Unknown preset $preset. Supported presets: '
+        '${_presets.map((candidate) => candidate.id).join(', ')}.',
       );
     }
     if (check && repair) {
@@ -166,7 +218,7 @@ class ModelPackInstaller {
         ? projectDirectory.absolute.path
         : '${projectDirectory.absolute.path}${Platform.pathSeparator}';
     final assetDirectory = outputDirectory.path.substring(rootPrefix.length);
-    final manifest = _presetDefinition.manifest(
+    final manifest = presetDefinition.manifest(
       modelAsset: _assetPath(assetDirectory, 'model.onnx'),
       tokenizerAsset: _assetPath(assetDirectory, 'tokenizer.json'),
     );
@@ -190,14 +242,14 @@ class ModelPackInstaller {
       file: model,
       bytes: manifest.modelBytes,
       hash: manifest.modelSha256,
-      url: _presetDefinition.modelUrl,
+      url: presetDefinition.modelUrl,
       repair: repair,
     );
     await _installArtifact(
       file: tokenizer,
       bytes: manifest.tokenizerBytes,
       hash: manifest.tokenizerSha256,
-      url: _presetDefinition.tokenizerUrl,
+      url: presetDefinition.tokenizerUrl,
       repair: repair,
     );
     await _writeAtomically(

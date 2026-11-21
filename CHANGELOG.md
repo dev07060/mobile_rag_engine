@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+* **KoEn-E5-Tiny installs with one command**: `dart run mobile_rag_engine:setup --preset koen-e5-tiny-arm64-koen`. It writes the same `model-pack.json` as the manual steps in earlier guides, so existing apps need no change.
+* pub.dev lists Android, iOS, macOS and Windows as the supported platforms (Linux was shown before but is not supported).
+
 ## 0.24.0
 * Requires `rag_engine_flutter: 0.23.0` and `flutter_onnxruntime` 1.8.3 or later.
 * **Upgrading from 0.23.0**:
