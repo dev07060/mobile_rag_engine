@@ -323,6 +323,8 @@ Right passage in the top 10, 80 questions over Wikipedia articles (32 English,
 | KoEn-E5-Tiny | about 41 MB | 95% | 31 |
 | BGE-m3 | about 586 MB | 96.25% | 32 |
 
+MiniLM and KoEn-E5-Tiny give the same results on an iPhone 17 as on a Mac.
+
 On public datasets, with the answer in the 5 passages `ask` sends to the LLM:
 
 | Dataset | Best result | BM25 keyword search alone |
@@ -332,7 +334,8 @@ On public datasets, with the answer in the 5 passages `ask` sends to the LLM:
 | SciFact, 300 English claims | 226 (MiniLM) | 211 |
 | NFCorpus, 323 English questions | 207 (MiniLM, KoEn-E5-Tiny) | 199 |
 
-<sub>Profile builds on an Apple M3 Pro Mac, 2026-11. Per-model results, MIRACL,
+<sub>Profile builds on an Apple M3 Pro Mac, 2026-11; the 80-question set also on
+an iPhone 17 (iOS 27.2.1) with MiniLM and KoEn-E5-Tiny. Per-model results, MIRACL,
 dataset notes and the exact engine commits are in
 [Benchmarks](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/benchmarks.md).
 To measure on your own documents and devices, use

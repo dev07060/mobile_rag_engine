@@ -48,9 +48,20 @@ MiniLM is an English model: with vector search alone it finds 11 of the 32
 Korean answers, and BM25 brings the hybrid result to 29. For Korean documents,
 use KoEn-E5-Tiny or BGE-m3.
 
-Conditions: `mobile_rag_engine` 0.24.0 code, profile build on an Apple M3 Pro
-Mac, 2026-11-16. `searchHybridWithContext`, `searchHybrid` and `ask` use this
-hybrid ranking; `search` is vector-only.
+**Same results on iPhone 17.** The MiniLM and KoEn-E5-Tiny Model Packs,
+installed with `setup --preset`, give the same `passage_recall@10`, the same
+per-language counts and the same chunk counts on an iPhone 17 as on the Mac.
+`answerable_context@10` for KoEn-E5-Tiny was 0.975 on the iPhone, one question
+more than on the Mac. On the phone, a whole run (indexing about 4,500 chunks,
+then searching the 80 questions with five weight settings) took about a minute
+per model.
+
+Conditions: `mobile_rag_engine` 0.24.0 code, profile builds on an Apple M3 Pro
+Mac (2026-11-16) and on an iPhone 17 with iOS 27.2.1 (MiniLM and KoEn-E5-Tiny,
+2026-11-22). BGE-m3 was measured on the Mac only. `searchHybridWithContext`,
+`searchHybrid` and `ask` use this hybrid ranking; `search` is vector-only.
+Records:
+[`f1-eval-baseline`](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/perf/f1-eval-baseline/README.md#iphone-17에서-같은-80개-묶음-2026-11-22).
 
 ## Public English datasets
 

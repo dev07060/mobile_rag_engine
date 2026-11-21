@@ -54,6 +54,34 @@ scripts/eval/run_passage_eval.sh --model-pack stable-minilm-l6-v2-arm64-en --bun
 
 2026-11-16 R2 배포 준비 트리(패키지 코드는 `mobile_rag_engine` 0.24.0, 브랜치 `feats/r2-release-prep`)에서 같은 Mac·조건으로 다시 돌렸다. MiniLM(청크 4679) 0.925 / 0.900 / 0.7437, KoEn-E5-Tiny(청크 4492) 0.950 / 0.9625 / 0.8099(두 실행 모두 커밋 `7ede49f`, 실행 때 바뀐 추적 파일은 `docs/guides/model_setup.md`뿐). `passage_recall@10`과 `answerable_context@10`은 위 표와 같다. 언어별(영어 32 / 한국어 32 / 혼합 16)로 MiniLM 29 / 29 / 16, KoEn 29 / 31 / 16이고, `source_recall@10`은 두 모델 모두 1.000이다. 벡터만으로는 MiniLM이 한국어 32개 중 11개, KoEn이 30개를 찾았다. BGE-m3는 `docs/guides/model_setup.md`의 Model Pack manifest 그대로 `RagModelPack.asset`으로 초기화해 돌렸다(`run_passage_eval.sh --as-model-pack`, fp `sha256:b089a980…`, 청크 4492, 752초): 0.9625 / 0.9625 / 0.8208(커밋 `2801c75`). 언어별로 영어 29/32, 한국어 32/32, 혼합 16/16이고, `source_recall@10`은 1.000이다.
 
+## iPhone 17에서 같은 80개 묶음 (2026-11-22)
+
+같은 하네스와 묶음을 iPhone 17에서 MiniLM과 KoEn-E5-Tiny로 돌렸다. 두 모델 모두 `dart run mobile_rag_engine:setup --preset`으로 받은 Model Pack을 `RagModelPack.asset`으로 초기화했다.
+
+| 항목 | 값 |
+|---|---|
+| 기기 | iPhone 17 (iPhone18,3), iOS 27.2.1 (24B156), 무선 연결 |
+| 빌드 | profile (`flutter build ios --profile -t integration_test/hybrid_passage_relevance_measure_test.dart`), Rust feature `vector_faer,vector_quant_i8` |
+| 엔진 코드 | `f99a9ac` (브랜치 `feats/koen-preset-readme`, 패키지 코드는 0.24.0에 KoEn 프리셋만 더함) |
+| 호스트 | Xcode 27.1 (27A9275), Flutter 3.35.5, rustc 1.91.1 |
+| 모델 | MiniLM 프리셋 `stable-minilm-l6-v2-arm64-en` (fp `sha256:e9246dc3…`), KoEn 프리셋 `koen-e5-tiny-arm64-koen` (fp `sha256:fd688b15…`). 두 fingerprint 모두 위 Mac 실행과 같다 |
+| 실행 | `devicectl`로 설치하고 디버거 없이 실행했다. 결과는 앱 Documents에서 꺼냈다. 걸린 시간은 MiniLM 57초, KoEn 63초(색인 포함) |
+| 로컬 우회 (커밋하지 않음) | 빌드 복사본(`build/eval_app_ios/`)에만 평가 자산을 선언했다. 서명은 `--no-codesign`으로 빌드한 뒤 유효한 개발 인증서와 기존 프로파일로 `codesign`했다(번들 ID `com.legendarybow.legendaryBowMaster`). 예제 앱 프로파일의 인증서가 폐기됐고, Xcode에 계정이 없어 새 프로파일을 만들 수 없었다 |
+
+default_hybrid, topK 100:
+
+| 모델 | 청크 | `passage_recall@10` / `answerable_context@10` / `passage_mrr@10` | 영어 / 한국어 / 혼합 |
+|---|---|---|---|
+| MiniLM, iPhone 17 | 4679 | 0.925 / 0.900 / 0.7431 | 29 / 29 / 16 |
+| MiniLM, Mac (2026-11-16) | 4679 | 0.925 / 0.900 / 0.7437 | 29 / 29 / 16 |
+| KoEn-E5-Tiny, iPhone 17 | 4492 | 0.950 / 0.975 / 0.8087 | 29 / 31 / 16 |
+| KoEn-E5-Tiny, Mac (2026-11-16) | 4492 | 0.950 / 0.9625 / 0.8099 | 29 / 31 / 16 |
+
+- `passage_recall@10`, 언어별 개수, 청크 수, `source_recall@10`(1.000)이 Mac과 같다. 벡터만으로 찾은 한국어 질문 수도 같다(MiniLM 11/32, KoEn 30/32).
+- 달랐던 값: KoEn의 `answerable_context@10`이 iPhone에서 한 질의 많고(0.975), 두 모델의 MRR이 소수 셋째 자리에서 다르다. Mac에서도 같은 모델의 두 실행 사이에 MRR이 달랐다(KoEn 0.8168 / 0.8099). HNSW를 새로 만들 때 근사 결과가 조금씩 달라지는 것으로 보인다.
+- 원본 요약: [`results/iphone17_minilm_80.json`](results/iphone17_minilm_80.json), [`results/iphone17_koen_80.json`](results/iphone17_koen_80.json). 실행 조건, 다섯 가중치의 집계, 질의별 정답 순위가 들어 있다.
+- BGE-m3는 iPhone에서 돌리지 않았다.
+
 ## 새 클론 확인 (2026-11-13)
 
 - 브랜치 `feats/f1-eval-baseline`의 `32ced9f`를 새 디렉터리에 `git clone`하고, Rust 빌드 캐시 없이 다음 한 명령을 돌렸다.
