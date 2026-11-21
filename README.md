@@ -15,9 +15,10 @@ on the device: no server, no API cost, no network round-trip for retrieval.
 |:--|:--|
 | **Accurate** | The right passage is in the top 10 for 92.5–96% of an 80-question English/Korean benchmark |
 | **Korean-ready** | The answer passage is in the top 5 for 483 of 500 KorQuAD 1.0 questions, with a 41 MB model |
+| **Fast on a phone** | A whole query (embedding, search and reading the chunks) takes under 5 ms (p95) on an iPhone 17 |
 | **Private** | Documents, embeddings and the index stay on the device; retrieval makes no network calls |
 
-<sub>Measured with the supported embedding models; datasets, conditions and baselines are in [Benchmarks](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/benchmarks.md).</sub>
+<sub>Search quality and on-device speed are measured with the supported embedding models; datasets, devices and conditions are in [Benchmarks](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/benchmarks.md).</sub>
 
 ```dart
 final rag = MobileRag.instance; // after MobileRag.initialize, see Installation
@@ -336,6 +337,19 @@ dataset notes and the exact engine commits are in
 [Benchmarks](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/benchmarks.md).
 To measure on your own documents and devices, use
 [`benchmark_service`](https://github.com/dev07060/mobile_rag_engine/blob/main/lib/services/benchmark_service.dart).</sub>
+
+On an iPhone 17, with 56 app documents (about 2,300 chunks) and 120 English and
+Korean questions:
+
+| | MiniLM (default) | KoEn-E5-Tiny |
+|:--|:---:|:---:|
+| Query embedding, median | 1.5–2.6 ms | 2.5 ms |
+| Whole query, top 5, p95 | 3.5–4.7 ms | 4.7–4.8 ms |
+| Ingestion per chunk | 4.7 ms | 6.4 ms |
+| `initialize`, later launches | 111 ms | 160 ms |
+| Peak memory (RSS) | 242 MB | 314 MB |
+
+<sub>iOS 27.0.1, profile build, 2026-11-16. Ranges cover English and Korean questions.</sub>
 
 For the implementation-oriented guide, see the
 [Flutter Local RAG Engine Guide](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/local-rag-engine.md).

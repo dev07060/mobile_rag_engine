@@ -373,7 +373,7 @@ await MobileRag.initialize(
 
 On first launch the engine loads both files (about 586 MB) into memory to hash
 and copy them, so the first `initialize` takes noticeably longer than with the
-smaller models. This was checked only on a Mac, not on a phone.
+smaller models.
 
 This manifest and these files were run through `MobileRag.initialize` on
 2026-11-16 (`mobile_rag_engine` 0.24.0 code, profile build, Apple M3 Pro Mac,

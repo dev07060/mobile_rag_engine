@@ -93,6 +93,30 @@ documents.
 Conditions: 2026-11-14, engine commits `28308ab` (MIRACL) and `04d950d`
 (KorQuAD, AutoRAG).
 
+## On-device speed and memory (iPhone 17)
+
+56 app documents in English and Korean (about 2,300 chunks, two of them PDFs)
+indexed with `addDocumentFromFile`, then 120 questions (60 English, 60 Korean)
+searched in the `ask` condition (top 5).
+
+| | MiniLM Model Pack (default) | KoEn-E5-Tiny |
+|:--|:---:|:---:|
+| Query embedding, English (median / p95) | 1.5 / 2.0 ms | 2.5 / 3.7 ms |
+| Query embedding, Korean (median / p95) | 2.6 / 4.2 ms | 2.5 / 3.6 ms |
+| Whole query: embedding, search and reading the chunks, top 5 (p95) | 3.5–4.7 ms | 4.7–4.8 ms |
+| Ingestion per chunk | 4.7 ms | 6.4 ms |
+| `initialize`, first launch / later launches | 425 / 111 ms | 859 / 160 ms |
+| Memory added by `initialize` / peak RSS | 134 / 242 MB | 197 / 314 MB |
+
+The first launch includes installing the Model Pack. Korean queries take the
+same time with both models, because MiniLM splits Korean into about 2.5 times
+as many tokens.
+
+Conditions: iPhone 17 (iOS 27.0.1), profile build, engine commit `ffb0ab8`,
+example app (hybrid weights 0.2 / 0.8 for MiniLM, 0.5 / 0.5 for
+KoEn-E5-Tiny), 2026-11-16. Records:
+[`multilingual-embedding` section 6](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/perf/multilingual-embedding/README.md#6-iphone-실기기-측정-m5-2026-11-16).
+
 ## Text-layer PDFs
 
 `sample_eng.pdf` and `sample_kor.pdf` from `example/`: 8 of 8 questions written
