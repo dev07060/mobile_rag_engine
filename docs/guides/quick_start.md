@@ -22,7 +22,9 @@ CocoaPods hosts need iOS 16.0 / macOS 14.0 deployment targets and static
 framework linkage. The `setup` command in Step 2 applies these to the
 generated app and prints each change, so you can skip this section. If you ran
 `setup --skip-host-config`, set them in the Podfile and
-keep the rest of the generated Podfile unchanged:
+keep the rest of the generated Podfile unchanged. Xcode 27 also rejects pods
+that keep a lower target (Flutter's own pod stays at iOS 13.0), so raise those
+in `post_install`:
 
 ```ruby
 # ios/Podfile
@@ -31,6 +33,18 @@ platform :ios, '16.0'
 target 'Runner' do
   use_frameworks! :linkage => :static
   # flutter_install_all_ios_pods ...
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      current = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_s
+      if current.match?(/\A\d+(\.\d+)*\z/) && Gem::Version.new(current) < Gem::Version.new('16.0')
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+      end
+    end
+  end
 end
 ```
 
@@ -44,7 +58,9 @@ target 'Runner' do
 end
 ```
 
-For macOS, also set the Runner project's deployment target to 14.0 in Xcode.
+For macOS, also set the Runner project's deployment target to 14.0 in Xcode,
+and add the same `post_install` block with `flutter_additional_macos_build_settings`,
+`MACOSX_DEPLOYMENT_TARGET` and `'14.0'`.
 
 Adding the package to an existing app:
 
@@ -86,8 +102,9 @@ lengths and SHA-256 hashes before the app initializes them.
 
 `setup` also updates `ios/` and `macos/` when they exist: it raises
 the Podfile `platform` and the Runner deployment target to iOS 16.0 / macOS
-14.0 when they are lower, and switches `use_frameworks!` to
-`:linkage => :static`. `--check` fails while any of these are still pending.
+14.0 when they are lower, switches `use_frameworks!` to
+`:linkage => :static`, and adds a `post_install` step that raises pods below
+that target. `--check` fails while any of these are still pending.
 Pass `--skip-host-config` to manage the host projects yourself.
 
 > Need Korean documents? Follow

@@ -183,6 +183,74 @@ void main() {
         ),
       );
     });
+
+    test('built-in presets include MiniLM and KoEn-E5-Tiny', () {
+      expect(ModelPackPresetDefinition.all.map((preset) => preset.id), [
+        'stable-minilm-l6-v2-arm64-en',
+        'koen-e5-tiny-arm64-koen',
+      ]);
+      final manifest = KoEnE5TinyArm64KoEnPreset.manifest(
+        modelAsset: 'assets/mobile_rag/model.onnx',
+        tokenizerAsset: 'assets/mobile_rag/tokenizer.json',
+      );
+      // Same manifest the Model Setup guide documented for the manual recipe,
+      // so apps that wrote it by hand pass `setup --check`.
+      expect(
+        RagModelPackManifest.fromJsonString(
+          manifest.toJsonString(),
+        ).toJsonString(),
+        manifest.toJsonString(),
+      );
+      expect(manifest.preset, 'koen-e5-tiny-arm64-koen');
+      expect(manifest.embeddingDimension, 384);
+      expect(manifest.language, 'Korean, English');
+      expect(manifest.modelBytes, 38275821);
+      expect(manifest.tokenizerBytes, 2931715);
+    });
+
+    test('selects the KoEn-E5-Tiny preset by id', () async {
+      final requested = <Uri>[];
+      final subject = ModelPackInstaller(
+        projectDirectory: project,
+        downloader: (url) async {
+          requested.add(url);
+          return [0];
+        },
+      );
+      await expectLater(
+        subject.install(preset: KoEnE5TinyArm64KoEnPreset.id),
+        throwsA(
+          isA<RagModelPackException>().having(
+            (error) => error.code,
+            'code',
+            RagModelPackErrorCode.assetLengthMismatch,
+          ),
+        ),
+      );
+      expect(requested, [Uri.parse(KoEnE5TinyArm64KoEnPreset.modelUrl)]);
+    });
+
+    test('rejects an unknown preset and lists the supported ones', () async {
+      await expectLater(
+        ModelPackInstaller(projectDirectory: project).install(preset: 'nope'),
+        throwsA(
+          isA<RagModelPackException>()
+              .having(
+                (error) => error.code,
+                'code',
+                RagModelPackErrorCode.unsupportedPreset,
+              )
+              .having(
+                (error) => error.message,
+                'message',
+                allOf(
+                  contains('stable-minilm-l6-v2-arm64-en'),
+                  contains('koen-e5-tiny-arm64-koen'),
+                ),
+              ),
+        ),
+      );
+    });
   });
 
   test(

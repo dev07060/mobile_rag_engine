@@ -6,7 +6,11 @@ import 'package:mobile_rag_engine/src/model_pack/model_pack_installer.dart';
 Future<void> main(List<String> arguments) async {
   if (arguments.contains('--help') || arguments.contains('-h')) {
     stdout.writeln(
-      'Usage: dart run mobile_rag_engine:setup --preset stable-minilm-l6-v2-arm64-en [--output assets/mobile_rag] [--check|--repair] [--skip-host-config]',
+      'Usage: dart run mobile_rag_engine:setup --preset <preset> [--output assets/mobile_rag] [--check|--repair] [--skip-host-config]\n'
+      '\n'
+      'Presets:\n'
+      '  ${StableMiniLmL6V2Arm64EnPreset.id}  English (all-MiniLM-L6-v2, about 23 MB)\n'
+      '  ${KoEnE5TinyArm64KoEnPreset.id}       Korean, or Korean and English (KoEn-E5-Tiny, about 41 MB)',
     );
     return;
   }

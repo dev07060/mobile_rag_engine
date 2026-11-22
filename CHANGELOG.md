@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+* **KoEn-E5-Tiny installs with one command**: `dart run mobile_rag_engine:setup --preset koen-e5-tiny-arm64-koen`. It writes the same `model-pack.json` as the manual steps in earlier guides, so existing apps need no change.
+* pub.dev lists Android, iOS, macOS and Windows as the supported platforms (Linux was shown before but is not supported).
+* **Xcode 27**: `setup` adds a Podfile `post_install` step that raises pods below iOS 16.0 / macOS 14.0. Without it, a new app fails with "Target Integrity ... is set to 13.0", because Flutter's own pod keeps iOS 13.0. Apps set up with 0.24.0 get the step by running `setup` again.
+
 ## 0.24.0
 * Requires `rag_engine_flutter: 0.23.0` and `flutter_onnxruntime` 1.8.3 or later.
 * **Upgrading from 0.23.0**:

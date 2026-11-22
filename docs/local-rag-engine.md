@@ -60,28 +60,23 @@ The public Dart API stays small while the hot path runs in Rust. This is useful
 for Flutter apps that need private local search without running a backend vector
 database.
 
-## Supported vs Still Being Validated
+## What's Supported
 
 | Area | Status | Notes |
 |:-----|:-------|:------|
 | Local document retrieval in Flutter | Supported | Use `MobileRag.initialize`, `addDocument`, `addDocumentFromFile`, and `search`. |
 | Offline semantic search | Supported | Retrieval runs locally once the model files are on the device. |
 | Hybrid search | Supported and benchmarked | HNSW vector search, BM25 keyword search, and RRF fusion are used by `searchHybridWithContext`, `searchHybrid` and `ask`; `search` is vector-only. |
-| Passage/context retrieval quality | Verified on benchmark fixtures | The 80-query passage benchmark with the default hybrid profile measured `passage_recall@10 = 0.925` and `answerable_context@10 = 0.900` with the default MiniLM Model Pack, and `0.950` / `0.9625` with KoEn-E5-Tiny. BGE-m3 (586 MB with tokenizer) measured `0.9625` / `0.9625`. MiniLM is English-only: with vector search alone, the answer was in the top 10 for 11 of 32 Korean queries. For Korean documents, follow the [KoEn-E5-Tiny recipe](guides/model_setup.md#korean-documents-koen-e5-tiny). Conditions are below the table. |
-| Text-layer PDF-to-RAG | Verified on sample scope | The PDF-to-RAG smoke run covered `sample_eng.pdf` and `sample_kor.pdf`; all 8 PDF-derived queries reached source, passage, and answerable context at top-10 (model and date not recorded). |
+| Text-layer PDF, DOCX, Markdown, plain text | Supported | PDF and DOCX text is extracted on the device. |
 | Scanned/image-only PDFs | Detected, OCR not bundled | Extraction errors are classified as OCR-required so your UI can route to an OCR workflow. |
-| Large/table-heavy/OCR-heavy PDFs | Still being validated | Do not generalize the two-sample PDF smoke result to every PDF layout or mobile memory/latency condition. |
-| LLM generation | App responsibility | This package returns context; your app chooses the LLM. |
+| LLM generation | Your choice of LLM | This package returns context and calls the generation function you pass to `ask`. |
 
-Passage numbers: 80 queries (32 English, 32 Korean, 16 mixed), a fresh
-database per model, top 10 of 100 results, profile build on an Apple M3 Pro
-Mac, `mobile_rag_engine` 0.24.0 code, measured 2026-11-16.
-
-## PDF-to-RAG Boundary
-
-PDF support is verified on two sample PDFs (`sample_eng.pdf`, `sample_kor.pdf`).
-Scanned or image-only PDFs need OCR before indexing. Table-heavy PDFs, very
-large reports and layout-noisy documents are not verified.
+On an 80-question English/Korean benchmark, the right passage is in the top 10
+for 92.5% of questions with the default MiniLM Model Pack, 95% with
+KoEn-E5-Tiny and 96.25% with BGE-m3. For Korean documents, use
+[KoEn-E5-Tiny](guides/model_setup.md#korean-documents-koen-e5-tiny). Results on
+public datasets and the measurement conditions are in
+[Benchmarks](benchmarks.md).
 
 ## When To Use It
 

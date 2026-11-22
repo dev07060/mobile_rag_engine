@@ -13,9 +13,12 @@ English-only and scores close to random on Korean text. For Korean documents
 use **KoEn-E5-Tiny**: it covers Korean and English, has 384 dimensions like
 MiniLM, and its model and tokenizer take about 41 MB.
 
-The `setup` command installs only the MiniLM pack, so follow
-[Korean documents: KoEn-E5-Tiny](model_setup.md#korean-documents-koen-e5-tiny):
-download the two files, write the Model Pack manifest, and initialize with it.
+Install it with one command, then initialize with the same `model-pack.json`
+path (see [Korean documents: KoEn-E5-Tiny](model_setup.md#korean-documents-koen-e5-tiny)):
+
+```bash
+dart run mobile_rag_engine:setup --preset koen-e5-tiny-arm64-koen
+```
 
 
 ### Q: Does it work offline?
@@ -35,7 +38,7 @@ Yes. Performance differs from real devices, so run performance tests on physical
 | Use Case | Recommended Model |
 |:---------|:------------------|
 | English-only apps (default) | **MiniLM** (384 dim, ~23MB) |
-| Korean, or Korean and English | **KoEn-E5-Tiny** (384 dim, ~41 MB with tokenizer); see the [recipe](model_setup.md#korean-documents-koen-e5-tiny) |
+| Korean, or Korean and English | **KoEn-E5-Tiny** (384 dim, ~41 MB with tokenizer); install with `setup --preset koen-e5-tiny-arm64-koen` ([guide](model_setup.md#korean-documents-koen-e5-tiny)) |
 | Larger model, if you can ship 586 MB | **BGE-m3** (1024 dim, ~586 MB with tokenizer) |
 | Quick prototyping | **MiniLM** |
 
