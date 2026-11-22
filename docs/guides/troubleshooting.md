@@ -6,6 +6,48 @@ Solutions for common issues when using `mobile_rag_engine`.
 
 ## Install and First Build
 
+### ONNX Runtime download fails (temporary)
+
+> This section is temporary. It will be removed when Microsoft's download
+> hosts work again.
+
+**Symptom:**
+
+- iOS / macOS: `pod install` fails with `curl: (60) SSL: no alternative
+  certificate subject name matches target host name 'download.onnxruntime.ai'`
+  while downloading `onnxruntime-c` or `onnxruntime-objc`.
+- Windows: the build fails while downloading
+  `github.com/microsoft/onnxruntime/releases/download/.../onnxruntime-win-x64-*.zip`.
+
+**Cause:** `flutter_onnxruntime` downloads ONNX Runtime from Microsoft's hosts.
+Since 2026-11-17 the `microsoft/onnxruntime` GitHub repository returns 404, and
+since about 2026-11-21 `download.onnxruntime.ai` serves a certificate for a
+different host. Neither is caused by `mobile_rag_engine`, and no fix on our side
+is available yet.
+
+**Who is affected:**
+
+| Case | Result |
+| :--- | :--- |
+| Android | Works (ONNX Runtime comes from Maven Central) |
+| Apps already built and shipped | Not affected |
+| iOS / macOS with ONNX Runtime already in the CocoaPods cache | `pod install` works |
+| Windows with an existing `build/windows` folder that already holds ONNX Runtime | Build works |
+| First iOS / macOS / Windows build on a machine without those caches | Fails |
+
+**What to do now:**
+
+- Keep the caches: do not run `pod cache clean --all`, delete
+  `~/Library/Caches/CocoaPods`, or run `flutter clean` on Windows until the
+  hosts are back.
+- Otherwise, wait and retry later. Enabling Swift Package Manager does not help:
+  its ONNX Runtime package also downloads from `download.onnxruntime.ai`
+  (checked on 2026-11-23).
+- Status:
+  [flutter_onnxruntime#80](https://github.com/masicai/flutter_onnxruntime/issues/80).
+
+---
+
 ### `setup` command or `RagModelPack` not found
 
 **Cause:** Your app resolved 0.20.x. The Model Pack `setup` command and
