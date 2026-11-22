@@ -61,9 +61,9 @@ scripts/eval/run_passage_eval.sh --model-pack stable-minilm-l6-v2-arm64-en --bun
 | 항목 | 값 |
 |---|---|
 | 기기 | iPhone 17 (iPhone18,3), iOS 27.2.1 (24B156), 무선 연결 |
-| 빌드 | profile (`flutter build ios --profile -t integration_test/hybrid_passage_relevance_measure_test.dart`), Rust feature `vector_faer,vector_quant_i8` |
+| 빌드 | profile (`flutter build ios --profile -t integration_test/hybrid_passage_relevance_measure_test.dart`). Rust 라이브러리는 로컬에서 빌드하지 않았다. 호스트에 rustup이 없어서 cargokit이 서명 검증된 precompiled 바이너리(GitHub 릴리스 `precompiled_<crate hash>`)를 받아 썼다. feature는 `cargokit.yaml` 설정상 `vector_faer,vector_quant_i8`이지만, 바이너리에서 직접 확인하지는 않았다 |
 | 엔진 코드 | `f99a9ac` (브랜치 `feats/koen-preset-readme`, 패키지 코드는 0.24.0에 KoEn 프리셋만 더함) |
-| 호스트 | Xcode 27.1 (27A9275), Flutter 3.35.5, rustc 1.91.1 |
+| 호스트 | Xcode 27.1 (27A9275), Flutter 3.35.5, Rust 툴체인 없음 |
 | 모델 | MiniLM 프리셋 `stable-minilm-l6-v2-arm64-en` (fp `sha256:e9246dc3…`), KoEn 프리셋 `koen-e5-tiny-arm64-koen` (fp `sha256:fd688b15…`). 두 fingerprint 모두 위 Mac 실행과 같다 |
 | 실행 | `devicectl`로 설치하고 디버거 없이 실행했다. 결과는 앱 Documents에서 꺼냈다. 걸린 시간은 MiniLM 57초, KoEn 63초(색인 포함) |
 | 로컬 우회 (커밋하지 않음) | 빌드 복사본(`build/eval_app_ios/`)에만 평가 자산을 선언했다. 서명은 `--no-codesign`으로 빌드한 뒤 유효한 개발 인증서와 기존 프로파일로 `codesign`했다(번들 ID `com.legendarybow.legendaryBowMaster`). 예제 앱 프로파일의 인증서가 폐기됐고, Xcode에 계정이 없어 새 프로파일을 만들 수 없었다 |
