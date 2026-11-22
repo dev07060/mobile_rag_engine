@@ -381,6 +381,17 @@ example your own scene delegate), this is not the cause.
 
 The same applies to `The plugin "flutter_onnxruntime" requires a higher minimum iOS deployment version` (or macOS): the host needs iOS 16.0 / macOS 14.0.
 
+### iOS: Deployment target is set to 13.0 (Xcode 27)
+
+**Symptom:**
+```
+Target Integrity (Xcode): The iOS deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 13.0, but the range of supported deployment target versions is 15.0 to 27.1.x.
+```
+
+**Cause:** Xcode 27 rejects pods that target below iOS 15.0. Flutter's own pod and some plugins (such as `path_provider_foundation`) keep 13.0 even after the app is raised to 16.0.
+
+**Solution:** Run `dart run mobile_rag_engine:setup --preset <preset>` again with a release after 0.24.0; it adds a `post_install` step to the Podfile that raises pods below 16.0 (14.0 on macOS). On 0.24.0 or with `--skip-host-config`, add the `post_install` block from [Quick Start](quick_start.md) by hand and run `pod install` again.
+
 ---
 
 ### Xcode 27: "deployment target ... is set to 9.0, but the range of supported deployment target versions is 15.0 to 27.1.x"

@@ -15,6 +15,12 @@ target 'Runner' do
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+  end
+end
 ''';
 
 const _macosPodfile = '''
@@ -25,7 +31,25 @@ target 'Runner' do
 
   flutter_install_all_macos_pods File.dirname(File.realpath(__FILE__))
 end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_macos_build_settings(target)
+  end
+end
 ''';
+
+/// The block setup adds after the per-pod call in `post_install`.
+String _podTargets(String hook, String setting, String minimum) =>
+    '''
+    $hook(target)
+    # Added by mobile_rag_engine setup: raise pods below $minimum, which newer Xcode versions reject.
+    target.build_configurations.each do |config|
+      current = config.build_settings['$setting'].to_s
+      if current.match?(/\\A\\d+(\\.\\d+)*\\z/) && Gem::Version.new(current) < Gem::Version.new('$minimum')
+        config.build_settings['$setting'] = '$minimum'
+      end
+    end''';
 
 String _pbxproj(String setting, String version) =>
     '''
@@ -79,7 +103,9 @@ void main() {
     expect(changes.map((c) => c.path), [
       'ios/Podfile',
       'ios/Podfile',
+      'ios/Podfile',
       'ios/Runner.xcodeproj/project.pbxproj',
+      'macos/Podfile',
       'macos/Podfile',
       'macos/Podfile',
       'macos/Runner.xcodeproj/project.pbxproj',
@@ -88,7 +114,15 @@ void main() {
       await iosPodfile.readAsString(),
       _iosPodfile
           .replaceFirst("# platform :ios, '13.0'", "platform :ios, '16.0'")
-          .replaceFirst('use_frameworks!', _staticFrameworks),
+          .replaceFirst('use_frameworks!', _staticFrameworks)
+          .replaceFirst(
+            '    flutter_additional_ios_build_settings(target)',
+            _podTargets(
+              'flutter_additional_ios_build_settings',
+              'IPHONEOS_DEPLOYMENT_TARGET',
+              '16.0',
+            ),
+          ),
     );
     expect(
       await iosProject.readAsString(),
@@ -98,7 +132,15 @@ void main() {
       await macosPodfile.readAsString(),
       _macosPodfile
           .replaceFirst("'10.15'", "'14.0'")
-          .replaceFirst('use_frameworks!', _staticFrameworks),
+          .replaceFirst('use_frameworks!', _staticFrameworks)
+          .replaceFirst(
+            '    flutter_additional_macos_build_settings(target)',
+            _podTargets(
+              'flutter_additional_macos_build_settings',
+              'MACOSX_DEPLOYMENT_TARGET',
+              '14.0',
+            ),
+          ),
     );
     expect(
       await macosProject.readAsString(),
@@ -130,6 +172,7 @@ void main() {
     expect(changes.map((c) => c.description), [
       contains('commented out'),
       contains(':linkage => :static'),
+      contains('post_install'),
     ]);
     expect(await file.readAsString(), _iosPodfile);
   });

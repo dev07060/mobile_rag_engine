@@ -4,13 +4,16 @@ import 'dart:io';
 ///
 /// `flutter_onnxruntime` requires iOS 16.0 and macOS 14.0, while
 /// `flutter create` still generates iOS 13.0 and macOS 10.15 projects, so a
-/// fresh app fails in `pod install` until both are raised.
+/// fresh app fails in `pod install` until both are raised. Some pods (Flutter
+/// itself, `path_provider_foundation`) keep their own lower targets, which
+/// Xcode 27 rejects, so the Podfile also raises those.
 class AppleHostPlatform {
   const AppleHostPlatform._({
     required this.directory,
     required this.podPlatform,
     required this.buildSetting,
     required this.minimum,
+    required this.podBuildSettingsHook,
   });
 
   static const ios = AppleHostPlatform._(
@@ -18,6 +21,7 @@ class AppleHostPlatform {
     podPlatform: 'ios',
     buildSetting: 'IPHONEOS_DEPLOYMENT_TARGET',
     minimum: '16.0',
+    podBuildSettingsHook: 'flutter_additional_ios_build_settings',
   );
 
   static const macos = AppleHostPlatform._(
@@ -25,6 +29,7 @@ class AppleHostPlatform {
     podPlatform: 'osx',
     buildSetting: 'MACOSX_DEPLOYMENT_TARGET',
     minimum: '14.0',
+    podBuildSettingsHook: 'flutter_additional_macos_build_settings',
   );
 
   static const all = [ios, macos];
@@ -40,6 +45,10 @@ class AppleHostPlatform {
 
   /// The lowest deployment target the native dependencies accept.
   final String minimum;
+
+  /// The per-pod call in the generated Podfile's `post_install` block, such
+  /// as `flutter_additional_ios_build_settings`.
+  final String podBuildSettingsHook;
 }
 
 /// A file that needs, or received, a host setting change.
@@ -109,7 +118,8 @@ class _PodfileLine {
 }
 
 /// Applies the iOS and macOS host settings the package needs: the minimum
-/// deployment targets and static framework linkage in the Podfile.
+/// deployment targets, static framework linkage in the Podfile, and a
+/// `post_install` step that raises pods below the minimum.
 ///
 /// Only targets below the minimum are changed, so newer targets and the rest
 /// of the Podfile and Xcode project are left as they are. Host platforms the
@@ -288,8 +298,64 @@ class AppleHostConfigurator {
       }
     }
 
+    _raisePodTargets(lines, platform, path, changes);
+
     final updated = lines.join(newline);
     return updated == content ? null : updated;
+  }
+
+  /// First line of the block [_raisePodTargets] adds; also how a Podfile
+  /// that already has the block is recognized.
+  static String _podTargetsMarker(AppleHostPlatform platform) =>
+      '# Added by mobile_rag_engine setup: raise pods below '
+      '${platform.minimum}, which newer Xcode versions reject.';
+
+  /// Adds, after the Flutter template's per-pod call in `post_install`, a
+  /// block that raises each pod target below the minimum. Pods that already
+  /// target higher, or set the target through a variable, are left alone. A
+  /// Podfile without the template call is left as it is.
+  void _raisePodTargets(
+    List<String> lines,
+    AppleHostPlatform platform,
+    String path,
+    List<AppleHostChange> changes,
+  ) {
+    final marker = _podTargetsMarker(platform);
+    if (lines.any((line) => line.trim() == marker)) {
+      return;
+    }
+    final hook = RegExp(
+      '^${platform.podBuildSettingsHook}[ \\t]*\\(?[ \\t]*(\\w+)[ \\t]*\\)?\$',
+    );
+    for (var i = 0; i < lines.length; i++) {
+      final line = _PodfileLine.parse(lines[i]);
+      final call = hook.firstMatch(line.code.trim());
+      if (call == null) {
+        continue;
+      }
+      final target = call.group(1)!;
+      final setting = "config.build_settings['${platform.buildSetting}']";
+      final minimum = "'${platform.minimum}'";
+      final indent = line.indent;
+      lines.insertAll(i + 1, [
+        '$indent$marker',
+        '$indent$target.build_configurations.each do |config|',
+        '$indent  current = $setting.to_s',
+        '$indent  if current.match?(/\\A\\d+(\\.\\d+)*\\z/) && '
+            'Gem::Version.new(current) < Gem::Version.new($minimum)',
+        '$indent    $setting = $minimum',
+        '$indent  end',
+        '${indent}end',
+      ]);
+      changes.add(
+        AppleHostChange(
+          path,
+          'raised pods below ${platform.minimum} in `post_install` '
+          '(Xcode 27 rejects their lower targets)',
+        ),
+      );
+      return;
+    }
   }
 
   String? _updatePbxproj(

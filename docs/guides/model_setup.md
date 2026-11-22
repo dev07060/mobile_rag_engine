@@ -533,6 +533,9 @@ Runtime setup notes:
   `use_frameworks! :linkage => :static` in the Runner target.
 - Set the macOS Runner project's deployment target to 14.0 as well as
   `platform :osx, '14.0'` in its Podfile.
+- Xcode 27 rejects pods whose own target stays lower (Flutter's pod keeps iOS
+  13.0), so raise pod targets in the Podfile's `post_install`. See
+  [Quick Start](quick_start.md) for the block.
 - From 0.22.1, `dart run mobile_rag_engine:setup` applies the settings above
   to the generated iOS and macOS hosts (`--skip-host-config` turns this off).
 - Android release builds must keep the ONNX Runtime classes from R8. From

@@ -107,7 +107,8 @@ Add `--check` to the same command to verify the installed files.
 `setup` writes `assets/mobile_rag/model.onnx`, `tokenizer.json` and
 `model-pack.json` at a pinned revision with checked hashes, and applies the iOS
 and macOS host settings the native dependencies need (Podfile platform, static
-framework linkage and deployment target), printing each change. Add the
+framework linkage, and the deployment targets of the app and its pods),
+printing each change. Add the
 directory to your app assets:
 
 ```yaml
@@ -389,7 +390,9 @@ stable and its first build takes longer.
 CocoaPods builds on iOS and macOS need static framework linkage
 (`use_frameworks! :linkage => :static`) and deployment targets of iOS 16.0+ and
 macOS 14.0+, while `flutter create` generates iOS 13.0 / macOS 10.15 with
-dynamic frameworks. The `setup` command above applies these settings for you.
+dynamic frameworks. Xcode 27 also rejects pods that stay at iOS 13.0, such as
+Flutter's own, so the Podfile raises those too. The `setup` command above
+applies these settings for you.
 The package also ships the Android R8 keep rule for ONNX Runtime, the iOS/macOS
 release linker settings, 16 KB Android page alignment and an iOS privacy
 manifest. If a build fails, see
