@@ -60,6 +60,11 @@ enterprise apps where user data must stay on the device.
 
 ## Installation
 
+> **Temporary (since 2026-11-17):** Microsoft's ONNX Runtime download hosts are
+> down, so a first iOS, macOS or Windows build can fail while fetching ONNX
+> Runtime. Android is not affected. See
+> [ONNX Runtime download fails](https://github.com/dev07060/mobile_rag_engine/blob/main/docs/guides/troubleshooting.md#onnx-runtime-download-fails-temporary).
+
 ### 1. Add the dependency
 
 ```yaml
